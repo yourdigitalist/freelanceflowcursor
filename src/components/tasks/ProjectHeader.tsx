@@ -1,8 +1,14 @@
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Clock, DollarSign, Calendar, CheckSquare } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Clock, DollarSign, Calendar, CheckSquare, ArrowLeft, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { Project, Task, ProjectStatus } from './types';
 import { format } from 'date-fns';
 
@@ -23,8 +29,6 @@ export function ProjectHeader({
   onEdit,
   onDelete,
 }: ProjectHeaderProps) {
-  const navigate = useNavigate();
-
   const doneStatuses = statuses.filter(s => s.is_done_status).map(s => s.id);
   const completedTasks = tasks.filter(t => t.status_id && doneStatuses.includes(t.status_id)).length;
 
@@ -54,21 +58,23 @@ export function ProjectHeader({
     <div className="space-y-6">
       {/* Top Header */}
       <div className="flex items-start gap-4">
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/projects">Back to Projects</Link>
+        <Button variant="ghost" size="icon" asChild className="shrink-0">
+          <Link to="/projects" aria-label="Back to projects">
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
         </Button>
 
-        <div className="flex items-center gap-3 flex-1">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           <div
-            className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-lg shrink-0"
             style={{ backgroundColor: project.icon_color || '#9B63E9' }}
           >
             {project.icon_emoji || '📁'}
           </div>
 
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
+              <h1 className="text-2xl font-bold tracking-tight truncate">{project.name}</h1>
               <Badge className={getStatusColor(project.status || 'active')} variant="secondary">
                 {getStatusLabel(project.status || 'active')}
               </Badge>
@@ -79,23 +85,36 @@ export function ProjectHeader({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {onEdit && (
-            <Button variant="outline" size="sm" onClick={onEdit}>
-              Edit
-            </Button>
-          )}
-          {onDelete && (
-            <Button variant="outline" size="sm" className="text-destructive border-destructive hover:bg-destructive/10" onClick={onDelete}>
-              Delete
-            </Button>
-          )}
+        <div className="flex items-center gap-2 shrink-0">
           <Button variant="outline" size="sm" asChild>
             <Link to={`/invoices/new?project=${project.id}`}>Create Invoice</Link>
           </Button>
           <Button size="sm" asChild>
             <Link to={`/time?project=${project.id}`}>Log Time</Link>
           </Button>
+          {(onEdit || onDelete) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {onEdit && (
+                  <DropdownMenuItem onClick={onEdit}>
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Edit
+                  </DropdownMenuItem>
+                )}
+                {onDelete && (
+                  <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
