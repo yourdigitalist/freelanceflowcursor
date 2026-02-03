@@ -1,0 +1,19 @@
+project_id = "mtgocbkjrfpffzjkhmox"
+
+[functions.get-review]
+verify_jwt = false
+
+[functions.submit-review-comment]
+verify_jwt = false
+
+[functions.update-review-status]
+verify_jwt = false
+
+[functions.upload-review-file]
+verify_jwt = false
+
+[functions.send-invoice]
+verify_jwt = false
+
+[functions.send-review-request]
+verify_jwt = false

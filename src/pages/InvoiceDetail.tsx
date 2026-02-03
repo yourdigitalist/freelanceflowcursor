@@ -1,0 +1,1189 @@
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/lib/auth';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useToast } from '@/hooks/use-toast';
+import { ArrowLeft, Plus, Trash2, Send, DollarSign, Mail, Loader2, Eye, Clock, Printer } from 'lucide-react';
+import { format } from 'date-fns';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { ScrollArea } from '@/components/ui/scroll-area';
+
+interface InvoiceItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+  time_entry_id?: string;
+}
+
+interface Invoice {
+  id: string;
+  invoice_number: string;
+  status: string;
+  issue_date: string;
+  due_date: string | null;
+  subtotal: number;
+  tax_rate: number;
+  tax_amount: number;
+  total: number;
+  notes: string | null;
+  invoice_footer: string | null;
+  client_id: string | null;
+  project_id: string | null;
+  clients: { 
+    name: string; 
+    email: string | null; 
+    phone: string | null;
+    company: string | null;
+    tax_id: string | null;
+    street: string | null;
+    city: string | null;
+    state: string | null;
+    postal_code: string | null;
+    country: string | null;
+  } | null;
+}
+
+interface UserProfile {
+  full_name: string | null;
+  email: string | null;
+  company_name: string | null;
+  business_name: string | null;
+  business_logo: string | null;
+  business_email: string | null;
+  business_phone: string | null;
+  business_address: string | null;
+  business_street?: string | null;
+  business_street2?: string | null;
+  business_city?: string | null;
+  business_state?: string | null;
+  business_postal_code?: string | null;
+  business_country?: string | null;
+  tax_id: string | null;
+  invoice_show_quantity: boolean | null;
+  invoice_show_rate: boolean | null;
+  invoice_footer: string | null;
+  invoice_notes_default: string | null;
+  invoice_email_message_default: string | null;
+}
+
+interface Tax {
+  id: string;
+  name: string;
+  rate: number;
+  is_default: boolean;
+}
+
+interface UnbilledEntry {
+  id: string;
+  description: string | null;
+  duration_minutes: number;
+  hourly_rate: number | null;
+  project_id: string;
+  project_name: string;
+  start_time: string;
+}
+
+export default function InvoiceDetail() {
+  const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [items, setItems] = useState<InvoiceItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [selectedTaxId, setSelectedTaxId] = useState<string>('');
+  const [taxes, setTaxes] = useState<Tax[]>([]);
+  const [notes, setNotes] = useState('');
+  const [invoiceFooter, setInvoiceFooter] = useState('');
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  
+  // Send invoice modal state
+  const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  const [sendingInvoice, setSendingInvoice] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
+  
+  // Preview modal state
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  
+  // Import unbilled time entries modal
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [unbilledEntries, setUnbilledEntries] = useState<UnbilledEntry[]>([]);
+  const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
+  const [defaultHourlyRate, setDefaultHourlyRate] = useState(75);
+
+  useEffect(() => {
+    if (user && id) {
+      fetchInvoice();
+      fetchItems();
+      fetchProfile();
+      fetchTaxes();
+    }
+  }, [user, id]);
+
+  const fetchProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('full_name, email, company_name, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_show_quantity, invoice_show_rate, invoice_footer, invoice_notes_default, invoice_email_message_default, hourly_rate')
+        .eq('user_id', user!.id)
+        .maybeSingle();
+      if (!error && data) {
+        setProfile(data);
+        setDefaultHourlyRate(data.hourly_rate || 75);
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    }
+  };
+
+  const fetchTaxes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('taxes')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setTaxes(data || []);
+      
+      // Set default tax
+      const defaultTax = data?.find(t => t.is_default);
+      if (defaultTax) {
+        setSelectedTaxId(defaultTax.id);
+      }
+    } catch (error) {
+      console.error('Error fetching taxes:', error);
+    }
+  };
+
+  const fetchInvoice = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          clients(name, email, phone, company, tax_id, street, city, state, postal_code, country)
+        `)
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) {
+        navigate('/invoices');
+        return;
+      }
+      setInvoice(data);
+      setNotes(data.notes || '');
+      setInvoiceFooter((data as Invoice).invoice_footer ?? '');
+      // Pre-fill recipient email from client
+      if (data.clients?.email) {
+        setRecipientEmail(data.clients.email);
+      }
+    } catch (error) {
+      console.error('Error fetching invoice:', error);
+    }
+  };
+
+  const fetchItems = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', id)
+        .order('created_at');
+
+      if (error) throw error;
+      setItems(data || []);
+    } catch (error) {
+      console.error('Error fetching items:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchUnbilledEntries = async () => {
+    if (!invoice?.client_id) {
+      toast({
+        title: 'No client selected',
+        description: 'Please assign a client to this invoice first',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      // Get projects for this client
+      const { data: clientProjects, error: projectsError } = await supabase
+        .from('projects')
+        .select('id, name')
+        .eq('client_id', invoice.client_id);
+
+      if (projectsError) throw projectsError;
+      
+      if (!clientProjects || clientProjects.length === 0) {
+        toast({
+          title: 'No projects found',
+          description: 'This client has no projects with time entries',
+        });
+        return;
+      }
+
+      const projectIds = clientProjects.map(p => p.id);
+      const projectMap = Object.fromEntries(clientProjects.map(p => [p.id, p.name]));
+
+      // Get unbilled time entries for these projects
+      const { data: entries, error: entriesError } = await supabase
+        .from('time_entries')
+        .select('id, description, duration_minutes, hourly_rate, project_id, start_time')
+        .in('project_id', projectIds)
+        .eq('billing_status', 'unbilled')
+        .eq('billable', true)
+        .order('project_id')
+        .order('start_time');
+
+      if (entriesError) throw entriesError;
+
+      const entriesWithProjects = (entries || []).map(e => ({
+        ...e,
+        project_name: projectMap[e.project_id!] || 'Unknown'
+      }));
+
+      setUnbilledEntries(entriesWithProjects);
+      setSelectedEntries(new Set(entriesWithProjects.map(e => e.id)));
+      setIsImportModalOpen(true);
+    } catch (error: any) {
+      toast({
+        title: 'Error fetching time entries',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const importSelectedEntries = async () => {
+    const entriesToImport = unbilledEntries.filter(e => selectedEntries.has(e.id));
+    
+    if (entriesToImport.length === 0) {
+      toast({
+        title: 'No entries selected',
+        description: 'Please select at least one time entry to import',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      // Group by project
+      const groupedByProject = entriesToImport.reduce((acc, entry) => {
+        if (!acc[entry.project_name]) {
+          acc[entry.project_name] = [];
+        }
+        acc[entry.project_name].push(entry);
+        return acc;
+      }, {} as Record<string, UnbilledEntry[]>);
+
+      // Create invoice items
+      const newItems: any[] = [];
+      for (const [projectName, entries] of Object.entries(groupedByProject)) {
+        for (const entry of entries) {
+          const hours = entry.duration_minutes / 60;
+          const rate = entry.hourly_rate || defaultHourlyRate;
+          newItems.push({
+            invoice_id: id,
+            description: `${projectName}: ${entry.description || 'Time entry from ' + format(new Date(entry.start_time), 'MMM d')}`,
+            quantity: parseFloat(hours.toFixed(2)),
+            unit_price: rate,
+            amount: parseFloat((hours * rate).toFixed(2)),
+          });
+        }
+      }
+
+      const { data: insertedItems, error: insertError } = await supabase
+        .from('invoice_items')
+        .insert(newItems)
+        .select();
+
+      if (insertError) throw insertError;
+
+      // Update time entries to mark as billed
+      const { error: updateError } = await supabase
+        .from('time_entries')
+        .update({ 
+          billing_status: 'billed',
+          invoice_id: id 
+        })
+        .in('id', Array.from(selectedEntries));
+
+      if (updateError) throw updateError;
+
+      toast({ title: `Imported ${entriesToImport.length} time entries` });
+      setIsImportModalOpen(false);
+      fetchItems();
+    } catch (error: any) {
+      toast({
+        title: 'Error importing entries',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const addItem = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('invoice_items')
+        .insert({
+          invoice_id: id,
+          description: 'New item',
+          quantity: 1,
+          unit_price: 0,
+          amount: 0,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      setItems([...items, data]);
+    } catch (error: any) {
+      toast({
+        title: 'Error adding item',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const updateItem = async (itemId: string, field: string, value: string | number) => {
+    const updatedItems = items.map((item) => {
+      if (item.id === itemId) {
+        const updated = { ...item, [field]: value };
+        if (field === 'quantity' || field === 'unit_price') {
+          updated.amount = Number(updated.quantity) * Number(updated.unit_price);
+        }
+        return updated;
+      }
+      return item;
+    });
+    setItems(updatedItems);
+  };
+
+  const deleteItem = async (itemId: string) => {
+    try {
+      const { error } = await supabase
+        .from('invoice_items')
+        .delete()
+        .eq('id', itemId);
+
+      if (error) throw error;
+      setItems(items.filter((i) => i.id !== itemId));
+    } catch (error: any) {
+      toast({
+        title: 'Error deleting item',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const saveInvoice = async () => {
+    setSaving(true);
+    try {
+      // Save all items
+      for (const item of items) {
+        const { error } = await supabase
+          .from('invoice_items')
+          .update({
+            description: item.description,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            amount: item.amount,
+          })
+          .eq('id', item.id);
+        if (error) throw error;
+      }
+
+      // Calculate totals
+      const subtotal = items.reduce((sum, item) => sum + Number(item.amount), 0);
+      const selectedTax = taxes.find(t => t.id === selectedTaxId);
+      const taxRate = selectedTax?.rate || 0;
+      const taxAmount = subtotal * (taxRate / 100);
+      const total = subtotal + taxAmount;
+
+      // Save invoice
+      const { error } = await supabase
+        .from('invoices')
+        .update({
+          subtotal,
+          tax_rate: taxRate,
+          tax_amount: taxAmount,
+          total,
+          notes,
+          invoice_footer: invoiceFooter.trim() || null,
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({ title: 'Invoice saved' });
+      fetchInvoice();
+    } catch (error: any) {
+      toast({
+        title: 'Error saving invoice',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const markAsSent = async () => {
+    try {
+      const { error } = await supabase
+        .from('invoices')
+        .update({ status: 'sent' })
+        .eq('id', id);
+
+      if (error) throw error;
+      toast({ title: 'Invoice marked as sent' });
+      fetchInvoice();
+    } catch (error: any) {
+      toast({
+        title: 'Error updating invoice',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const markAsPaid = async () => {
+    try {
+      // Update invoice status
+      const { error: invoiceError } = await supabase
+        .from('invoices')
+        .update({ status: 'paid' })
+        .eq('id', id);
+
+      if (invoiceError) throw invoiceError;
+
+      // Update linked time entries to paid
+      const { error: entriesError } = await supabase
+        .from('time_entries')
+        .update({ billing_status: 'paid' })
+        .eq('invoice_id', id);
+
+      if (entriesError) throw entriesError;
+
+      toast({ title: 'Invoice marked as paid' });
+      fetchInvoice();
+    } catch (error: any) {
+      toast({
+        title: 'Error updating invoice',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSendInvoice = async () => {
+    if (!recipientEmail) {
+      toast({
+        title: 'Email required',
+        description: 'Please enter the recipient email address',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSendingInvoice(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await supabase.functions.invoke('send-invoice', {
+        body: {
+          invoiceId: id,
+          recipientEmail,
+          senderName: profile?.full_name || profile?.company_name || 'Your Business',
+          senderEmail: profile?.email || user?.email,
+          message: emailMessage,
+        },
+      });
+
+      if (response.error) throw response.error;
+
+      toast({ title: 'Invoice sent successfully!' });
+      setIsSendModalOpen(false);
+      setEmailMessage('');
+      fetchInvoice();
+    } catch (error: any) {
+      console.error('Send invoice error:', error);
+      toast({
+        title: 'Failed to send invoice',
+        description: error.message || 'Please try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setSendingInvoice(false);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return 'bg-success/10 text-success';
+      case 'sent':
+        return 'bg-primary/10 text-primary';
+      case 'draft':
+        return 'bg-muted text-muted-foreground';
+      case 'overdue':
+        return 'bg-destructive/10 text-destructive';
+      default:
+        return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  const subtotal = items.reduce((sum, item) => sum + Number(item.amount), 0);
+  const selectedTax = taxes.find(t => t.id === selectedTaxId);
+  const taxRate = selectedTax?.rate || 0;
+  const taxAmount = subtotal * (taxRate / 100);
+  const total = subtotal + taxAmount;
+
+  const showQuantity = profile?.invoice_show_quantity ?? true;
+  const showRate = profile?.invoice_show_rate ?? true;
+
+  // Resolve merge tags for default email message: {{client_name}}, {{invoice_number}}, {{total}}, {{due_date}}
+  const resolveEmailMessage = (template: string) => {
+    if (!template?.trim()) return '';
+    return template
+      .replace(/\{\{client_name\}\}/gi, invoice?.clients?.name ?? '')
+      .replace(/\{\{invoice_number\}\}/gi, invoice?.invoice_number ?? '')
+      .replace(/\{\{total\}\}/gi, total > 0 ? `$${total.toFixed(2)}` : (invoice?.total != null ? `$${Number(invoice.total).toFixed(2)}` : ''))
+      .replace(/\{\{due_date\}\}/gi, invoice?.due_date ? format(new Date(invoice.due_date), 'MMMM d, yyyy') : '');
+  };
+
+  const previewNotes = notes.trim() || profile?.invoice_notes_default?.trim() || '';
+  const previewFooter = invoiceFooter.trim() || profile?.invoice_footer?.trim() || '';
+  const previewClientMessage = emailMessage.trim() || resolveEmailMessage(profile?.invoice_email_message_default ?? '');
+
+  const formatClientAddress = (client: Invoice['clients']) => {
+    if (!client) return '';
+    const parts = [
+      client.street,
+      client.city && client.state ? `${client.city}, ${client.state}` : client.city || client.state,
+      client.postal_code,
+      client.country
+    ].filter(Boolean);
+    return parts.join('\n');
+  };
+
+  const formatBusinessAddress = (p: UserProfile | null) => {
+    if (!p) return '';
+    const parts = [p.business_street, p.business_street2, p.business_city, p.business_state, p.business_postal_code, p.business_country].filter(Boolean);
+    if (parts.length) return parts.join('\n');
+    return p.business_address || '';
+  };
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-muted rounded w-1/4" />
+          <div className="h-4 bg-muted rounded w-1/2" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!invoice) return null;
+
+  return (
+    <AppLayout>
+      <div className="space-y-6 max-w-4xl">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/invoices')}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold">{invoice.invoice_number}</h1>
+              <Badge className={getStatusColor(invoice.status)}>
+                {invoice.status}
+              </Badge>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setIsPreviewOpen(true)}>
+              <Eye className="mr-2 h-4 w-4" />
+              Preview
+            </Button>
+            {invoice.clients?.email && (
+              <Button onClick={() => {
+                if (!emailMessage.trim() && profile?.invoice_email_message_default) {
+                  setEmailMessage(resolveEmailMessage(profile.invoice_email_message_default));
+                }
+                setIsSendModalOpen(true);
+              }}>
+                <Mail className="mr-2 h-4 w-4" />
+                Send to Client
+              </Button>
+            )}
+            {invoice.status === 'draft' && (
+              <Button variant="outline" onClick={markAsSent}>
+                <Send className="mr-2 h-4 w-4" />
+                Mark as Sent
+              </Button>
+            )}
+            {invoice.status === 'sent' && (
+              <Button variant="outline" onClick={markAsPaid}>
+                <DollarSign className="mr-2 h-4 w-4" />
+                Mark as Paid
+              </Button>
+            )}
+            <Button variant="outline" onClick={saveInvoice} disabled={saving}>
+              {saving ? 'Saving...' : 'Save Invoice'}
+            </Button>
+          </div>
+        </div>
+
+        {/* Invoice Details */}
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* From - Business Details */}
+              <div>
+                <h3 className="font-semibold mb-2">From</h3>
+                <div className="text-sm text-muted-foreground">
+                  {profile?.business_logo && (
+                    <img 
+                      src={profile.business_logo} 
+                      alt="Business logo" 
+                      className="h-12 mb-2 object-contain"
+                    />
+                  )}
+                  <p className="font-medium text-foreground">
+                    {profile?.business_name || profile?.company_name || profile?.full_name || 'Your Business'}
+                  </p>
+                  {formatBusinessAddress(profile) && (
+                    <p className="whitespace-pre-line">{formatBusinessAddress(profile)}</p>
+                  )}
+                  {(profile?.business_email || profile?.email) && (
+                    <p>{profile.business_email || profile.email}</p>
+                  )}
+                  {profile?.business_phone && <p>{profile.business_phone}</p>}
+                  {profile?.tax_id && (
+                    <p className="mt-1">Tax ID: {profile.tax_id}</p>
+                  )}
+                </div>
+              </div>
+              
+              {/* Bill To - Client Details */}
+              <div>
+                <h3 className="font-semibold mb-2">Bill To</h3>
+                {invoice.clients ? (
+                  <div className="text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">{invoice.clients.name}</p>
+                    {invoice.clients.company && <p>{invoice.clients.company}</p>}
+                    {formatClientAddress(invoice.clients) && (
+                      <p className="whitespace-pre-line">{formatClientAddress(invoice.clients)}</p>
+                    )}
+                    {invoice.clients.email && <p>{invoice.clients.email}</p>}
+                    {invoice.clients.phone && <p>{invoice.clients.phone}</p>}
+                    {invoice.clients.tax_id && (
+                      <p className="mt-1">Tax ID: {invoice.clients.tax_id}</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No client selected</p>
+                )}
+              </div>
+            </div>
+            
+            {/* Invoice Dates */}
+            <div className="mt-6 pt-6 border-t border-border">
+              <div className="flex flex-wrap gap-6 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Issue Date:</span>{' '}
+                  <span className="font-medium">{format(new Date(invoice.issue_date), 'MMM d, yyyy')}</span>
+                </div>
+                {invoice.due_date && (
+                  <div>
+                    <span className="text-muted-foreground">Due Date:</span>{' '}
+                    <span className="font-medium">{format(new Date(invoice.due_date), 'MMM d, yyyy')}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Line Items */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Line Items</CardTitle>
+            <div className="flex gap-2">
+              {invoice.client_id && (
+                <Button variant="outline" size="sm" onClick={fetchUnbilledEntries}>
+                  <Clock className="mr-2 h-4 w-4" />
+                  Import Time
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={addItem}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Item
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground">
+                <div className={showQuantity && showRate ? "col-span-5" : "col-span-7"}>Item</div>
+                {showQuantity && <div className="col-span-2">Qty</div>}
+                {showRate && <div className="col-span-2">Rate</div>}
+                <div className="col-span-2 text-right">Amount</div>
+                <div className="col-span-1"></div>
+              </div>
+
+              {/* Items */}
+              {items.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No items yet. Add your first line item or import from time entries.
+                </div>
+              ) : (
+                items.map((item) => (
+                  <div key={item.id} className="grid grid-cols-12 gap-4 items-center">
+                    <div className={showQuantity && showRate ? "col-span-5" : "col-span-7"}>
+                      <Input
+                        value={item.description}
+                        onChange={(e) => updateItem(item.id, 'description', e.target.value)}
+                        placeholder="Item description"
+                      />
+                    </div>
+                    {showQuantity && (
+                      <div className="col-span-2">
+                        <Input
+                          type="number"
+                          value={item.quantity}
+                          onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                    )}
+                    {showRate && (
+                      <div className="col-span-2">
+                        <Input
+                          type="number"
+                          value={item.unit_price}
+                          onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                    )}
+                    <div className="col-span-2 text-right font-medium">
+                      ${(Number(item.quantity) * Number(item.unit_price)).toFixed(2)}
+                    </div>
+                    <div className="col-span-1 text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => deleteItem(item.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+
+              {/* Totals */}
+              <div className="border-t pt-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-medium">${subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Tax</span>
+                    <Select
+                      value={selectedTaxId || 'none'}
+                      onValueChange={(v) => setSelectedTaxId(v === 'none' ? '' : v)}
+                    >
+                      <SelectTrigger className="w-40 h-8">
+                        <SelectValue placeholder="Select tax" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No tax</SelectItem>
+                        {taxes.map((tax) => (
+                          <SelectItem key={tax.id} value={tax.id}>
+                            {tax.name} ({tax.rate}%)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <span className="font-medium">${taxAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-lg font-bold border-t pt-2">
+                  <span>Total</span>
+                  <span>${total.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Notes */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle>Notes</CardTitle>
+            <p className="text-sm text-muted-foreground">Shown on the PDF. Leave empty to use the default from Invoice Settings.</p>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder={profile?.invoice_notes_default ? 'Leave empty to use default from settings' : 'Add any notes or payment instructions...'}
+              rows={4}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Footer (per-invoice override) */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle>Footer</CardTitle>
+            <p className="text-sm text-muted-foreground">Shown at the bottom of the PDF. Leave empty to use the default from Invoice Settings.</p>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              value={invoiceFooter}
+              onChange={(e) => setInvoiceFooter(e.target.value)}
+              placeholder={profile?.invoice_footer ? 'Leave empty to use default from settings' : 'e.g. Thank you for your business!'}
+              rows={2}
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Preview Modal */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh]">
+          <DialogHeader className="flex flex-row items-center justify-between">
+            <DialogTitle>Invoice Preview</DialogTitle>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => window.print()}>
+                <Printer className="mr-2 h-4 w-4" />
+                Print
+              </Button>
+              <Button size="sm" onClick={() => {
+                setIsPreviewOpen(false);
+                if (!emailMessage.trim() && profile?.invoice_email_message_default) {
+                  setEmailMessage(resolveEmailMessage(profile.invoice_email_message_default));
+                }
+                setIsSendModalOpen(true);
+              }}>
+                <Mail className="mr-2 h-4 w-4" />
+                Send Invoice
+              </Button>
+            </div>
+          </DialogHeader>
+          <ScrollArea className="max-h-[calc(90vh-120px)]">
+            <div className="bg-white p-8 rounded-lg border">
+              {/* Invoice Header */}
+              <div className="flex justify-between items-start mb-8">
+                <div>
+                  {profile?.business_logo && (
+                    <img src={profile.business_logo} alt="Logo" className="h-12 mb-2" />
+                  )}
+                  <p className="font-bold text-lg">
+                    {profile?.business_name || profile?.company_name || profile?.full_name}
+                  </p>
+                  {formatBusinessAddress(profile) && (
+                    <p className="text-sm text-gray-600 whitespace-pre-line">{formatBusinessAddress(profile)}</p>
+                  )}
+                  {(profile?.business_email || profile?.email) && (
+                    <p className="text-sm text-gray-600">{profile.business_email || profile.email}</p>
+                  )}
+                  {profile?.business_phone && (
+                    <p className="text-sm text-gray-600">{profile.business_phone}</p>
+                  )}
+                  {profile?.tax_id && (
+                    <p className="text-sm text-gray-600">Tax ID: {profile.tax_id}</p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <h2 className="text-2xl font-bold mb-2">INVOICE</h2>
+                  <p className="text-primary font-medium">{invoice.invoice_number}</p>
+                  <Badge className={getStatusColor(invoice.status)} variant="secondary">
+                    {invoice.status.toUpperCase()}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Bill To & Dates */}
+              <div className="flex justify-between mb-8">
+                <div>
+                  <p className="text-sm text-primary font-medium mb-1">Bill To</p>
+                  {invoice.clients && (
+                    <>
+                      <p className="font-medium">{invoice.clients.name}</p>
+                      {invoice.clients.company && <p className="text-sm text-gray-600">{invoice.clients.company}</p>}
+                      {invoice.clients.email && <p className="text-sm text-gray-600">{invoice.clients.email}</p>}
+                      {formatClientAddress(invoice.clients) && (
+                        <p className="text-sm text-gray-600 whitespace-pre-line">{formatClientAddress(invoice.clients)}</p>
+                      )}
+                      {invoice.clients.tax_id && (
+                        <p className="text-sm text-gray-600">Tax ID: {invoice.clients.tax_id}</p>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="text-right">
+                  <div className="mb-2">
+                    <p className="text-sm text-primary font-medium">Issue Date</p>
+                    <p className="font-medium">{format(new Date(invoice.issue_date), 'MMMM d, yyyy')}</p>
+                  </div>
+                  {invoice.due_date && (
+                    <div>
+                      <p className="text-sm text-primary font-medium">Due Date</p>
+                      <p className="font-medium">{format(new Date(invoice.due_date), 'MMMM d, yyyy')}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Line Items */}
+              <table className="w-full mb-8">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-2 text-sm text-primary font-medium">Description</th>
+                    {showQuantity && <th className="text-center py-2 text-sm text-primary font-medium">Qty</th>}
+                    {showRate && <th className="text-right py-2 text-sm text-primary font-medium">Rate</th>}
+                    <th className="text-right py-2 text-sm text-primary font-medium">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.id} className="border-b border-gray-100">
+                      <td className="py-3">{item.description}</td>
+                      {showQuantity && <td className="py-3 text-center">{item.quantity}</td>}
+                      {showRate && <td className="py-3 text-right">${Number(item.unit_price).toFixed(2)}</td>}
+                      <td className="py-3 text-right font-medium">${Number(item.amount).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Totals */}
+              <div className="flex justify-end mb-8">
+                <div className="w-64">
+                  <div className="flex justify-between py-2 text-sm">
+                    <span className="text-gray-600">Subtotal</span>
+                    <span className="font-medium">${subtotal.toFixed(2)}</span>
+                  </div>
+                  {selectedTax && (
+                    <div className="flex justify-between py-2 text-sm">
+                      <span className="text-gray-600">{selectedTax.name} ({selectedTax.rate}%)</span>
+                      <span className="font-medium">${taxAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between py-2 border-t border-gray-200 text-lg">
+                    <span className="font-bold">Total</span>
+                    <span className="font-bold text-primary">${total.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes (matches PDF: invoice notes or default from settings) */}
+              {previewNotes && (
+                <div className="border-t pt-4 mb-4">
+                  <p className="text-sm text-primary font-medium mb-1">Notes</p>
+                  <p className="text-sm text-gray-600 whitespace-pre-line">{previewNotes}</p>
+                </div>
+              )}
+              {/* Footer (matches PDF: per-invoice override or default from settings) */}
+              {previewFooter && (
+                <div className="text-center text-sm text-muted-foreground pt-4 border-t">
+                  {previewFooter}
+                </div>
+              )}
+              {/* Message to client (what will be in the email body) */}
+              {previewClientMessage && (
+                <div className="border-t pt-4 mt-4">
+                  <p className="text-sm text-primary font-medium mb-1">Message to client (email)</p>
+                  <p className="text-sm text-gray-600 whitespace-pre-line">{previewClientMessage}</p>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Time Entries Modal */}
+      <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Import Unbilled Time Entries</DialogTitle>
+            <DialogDescription>
+              Select time entries to add to this invoice
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[calc(90vh-200px)]">
+            {unbilledEntries.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No unbilled time entries found for this client's projects
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {Object.entries(
+                  unbilledEntries.reduce((acc, entry) => {
+                    if (!acc[entry.project_name]) acc[entry.project_name] = [];
+                    acc[entry.project_name].push(entry);
+                    return acc;
+                  }, {} as Record<string, UnbilledEntry[]>)
+                ).map(([projectName, entries]) => (
+                  <div key={projectName} className="border rounded-lg p-3">
+                    <h4 className="font-medium mb-2">{projectName}</h4>
+                    {entries.map((entry) => {
+                      const hours = entry.duration_minutes / 60;
+                      const rate = entry.hourly_rate || defaultHourlyRate;
+                      return (
+                        <div key={entry.id} className="flex items-center gap-3 py-2 border-b last:border-0">
+                          <Checkbox
+                            checked={selectedEntries.has(entry.id)}
+                            onCheckedChange={(checked) => {
+                              const newSet = new Set(selectedEntries);
+                              if (checked) {
+                                newSet.add(entry.id);
+                              } else {
+                                newSet.delete(entry.id);
+                              }
+                              setSelectedEntries(newSet);
+                            }}
+                          />
+                          <div className="flex-1">
+                            <p className="text-sm">{entry.description || 'No description'}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {format(new Date(entry.start_time), 'MMM d, yyyy')}
+                            </p>
+                          </div>
+                          <div className="text-right text-sm">
+                            <p>{hours.toFixed(2)}h × ${rate}</p>
+                            <p className="font-medium">${(hours * rate).toFixed(2)}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+          <div className="flex justify-between items-center pt-4 border-t">
+            <p className="text-sm text-muted-foreground">
+              {selectedEntries.size} entries selected
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setIsImportModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={importSelectedEntries} disabled={selectedEntries.size === 0}>
+                Import Selected
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Invoice Modal */}
+      <Dialog open={isSendModalOpen} onOpenChange={setIsSendModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send Invoice</DialogTitle>
+            <DialogDescription>
+              Send this invoice to your client via email with a PDF attachment.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="recipient-email">Recipient Email</Label>
+              <Input
+                id="recipient-email"
+                type="email"
+                value={recipientEmail}
+                onChange={(e) => setRecipientEmail(e.target.value)}
+                placeholder="client@example.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email-message">Personal Message (optional)</Label>
+              <Textarea
+                id="email-message"
+                value={emailMessage}
+                onChange={(e) => setEmailMessage(e.target.value)}
+                placeholder="Add a personal message to include in the email..."
+                rows={3}
+              />
+            </div>
+            <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground mb-1">Invoice Summary</p>
+              <p>Invoice: {invoice.invoice_number}</p>
+              <p>Amount: ${total.toFixed(2)}</p>
+              {invoice.due_date && (
+                <p>Due: {format(new Date(invoice.due_date), 'MMM d, yyyy')}</p>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setIsSendModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSendInvoice} disabled={sendingInvoice}>
+              {sendingInvoice ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Mail className="mr-2 h-4 w-4" />
+                  Send Invoice
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </AppLayout>
+  );
+}
