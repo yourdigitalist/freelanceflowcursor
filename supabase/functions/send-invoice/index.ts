@@ -206,7 +206,7 @@ serve(async (req) => {
       return yPos;
     }
     const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 20;
+    const margin = 40;
     const spacing = {
       lineHeight: 5.5,
       sectionGap: 12,
@@ -277,9 +277,11 @@ serve(async (req) => {
 
     // Header: INVOICE title, number, dates, status (right side) — fixed at top
     let rightY = 14;
-    doc.setFontSize(22);
-    doc.setTextColor(155, 99, 233);
+    doc.setFontSize(24);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
     doc.text("INVOICE", pageWidth - margin, rightY, { align: "right" });
+    doc.setFont("helvetica", "normal");
     rightY += 6;
     doc.setFontSize(10);
     doc.setTextColor(60, 60, 60);
@@ -288,7 +290,7 @@ serve(async (req) => {
     const issueDateStr = new Date(invoice.issue_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
     doc.setFontSize(9);
     doc.text(`Issue Date: ${issueDateStr}`, pageWidth - margin, rightY, { align: "right" });
-    rightY += 5;
+    rightY += 6;
     const dueDateStr = invoice.due_date ? new Date(invoice.due_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : null;
     if (dueDateStr) {
       doc.text(`Due Date: ${dueDateStr}`, pageWidth - margin, rightY, { align: "right" });
@@ -324,8 +326,28 @@ serve(async (req) => {
       doc.text(businessPhone, margin, fromY);
       fromY += lineHeight;
     }
-    if (businessAddress) {
+    if (profile?.business_street) {
+      fromY += lineHeight;
+      doc.text(profile.business_street, margin, fromY);
+    }
+    if (profile?.business_street2) {
+      fromY += lineHeight;
+      doc.text(profile.business_street2, margin, fromY);
+    }
+    if (profile?.business_city || profile?.business_state || profile?.business_postal_code) {
+      fromY += lineHeight;
+      const cityLine = [profile?.business_city, profile?.business_state, profile?.business_postal_code]
+        .filter(Boolean)
+        .join(", ");
+      doc.text(cityLine, margin, fromY);
+    }
+    if (profile?.business_country) {
+      fromY += lineHeight;
+      doc.text(profile.business_country, margin, fromY);
+    }
+    if (!profile?.business_street && !profile?.business_street2 && !profile?.business_city && !profile?.business_country && businessAddress) {
       const addressLines = doc.splitTextToSize(businessAddress, 78);
+      fromY += lineHeight;
       doc.text(addressLines, margin, fromY);
       fromY += addressLines.length * lineHeight;
     }
@@ -362,10 +384,27 @@ serve(async (req) => {
       doc.text(client.phone, billToX, billToY);
       billToY += lineHeight;
     }
-    const clientAddressParts = [client?.street, client?.street2, client?.city, [client?.state, client?.postal_code].filter(Boolean).join(" "), client?.country].filter(Boolean);
-    const clientAddress = clientAddressParts.length > 0 ? clientAddressParts.join(", ") : (client?.address || "");
-    if (clientAddress) {
-      const clientAddrLines = doc.splitTextToSize(clientAddress, 72);
+    if (client?.street) {
+      doc.text(client.street, billToX, billToY);
+      billToY += lineHeight;
+    }
+    if (client?.street2) {
+      doc.text(client.street2, billToX, billToY);
+      billToY += lineHeight;
+    }
+    if (client?.city || client?.state || client?.postal_code) {
+      const cityLine = [client?.city, client?.state, client?.postal_code]
+        .filter(Boolean)
+        .join(", ");
+      doc.text(cityLine, billToX, billToY);
+      billToY += lineHeight;
+    }
+    if (client?.country) {
+      doc.text(client.country, billToX, billToY);
+      billToY += lineHeight;
+    }
+    if (!client?.street && !client?.street2 && !client?.city && !client?.country && (client?.address || "")) {
+      const clientAddrLines = doc.splitTextToSize(client?.address || "", 72);
       doc.text(clientAddrLines, billToX, billToY);
       billToY += clientAddrLines.length * lineHeight;
     }
@@ -447,7 +486,7 @@ serve(async (req) => {
 
     // Notes — sequential at yPos, then advance by actual height
     const notesText = invoice.notes?.trim() || profile?.invoice_notes_default?.trim() || "";
-    yPos += beforeFooter;
+    yPos += 8;
     if (notesText) {
       yPos = checkPageBreak(doc, yPos, lineHeight * 4, margin);
       doc.setFontSize(9);
@@ -464,7 +503,7 @@ serve(async (req) => {
     // Bank details — sequential at yPos
     const bankText = (invoice.bank_details && invoice.bank_details.trim()) || [profile?.bank_name, profile?.bank_account_number && `Account: ${profile.bank_account_number}`, profile?.bank_routing_number && `Routing: ${profile.bank_routing_number}`, profile?.payment_instructions].filter(Boolean).join("\n");
     if (bankText.trim()) {
-      yPos += 8;
+      yPos += 6;
       yPos = checkPageBreak(doc, yPos, lineHeight * 4, margin);
       doc.setFontSize(9);
       doc.setTextColor(150, 150, 150);
@@ -481,7 +520,7 @@ serve(async (req) => {
     const footerText = invoice.invoice_footer?.trim() || profile?.invoice_footer?.trim() || "";
     console.log("[send-invoice] yPos before footer:", yPos);
     if (footerText) {
-      yPos += 8;
+      yPos += 6;
       const footerLines = doc.splitTextToSize(footerText, pageWidth - 2 * margin);
       yPos = checkPageBreak(doc, yPos, footerLines.length * lineHeight + 4, margin);
       doc.setDrawColor(220, 220, 220);

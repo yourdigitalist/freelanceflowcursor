@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, FileText, DollarSign, Calendar, MoreVertical, Pencil, Trash2, Send, Clock } from 'lucide-react';
+import { Plus, Search, FileText, DollarSign, Calendar, MoreVertical, Pencil, Trash2, Send, Clock, Download, Upload } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +40,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  downloadCsv,
+  parseCsv,
+  getInvoicesTemplateRows,
+  INVOICES_CSV_HEADERS,
+} from '@/lib/csv';
 
 interface Client {
   id: string;
@@ -96,6 +102,9 @@ export default function Invoices() {
   const [filterClientId, setFilterClientId] = useState<string>('all');
   const [filterProjectId, setFilterProjectId] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) {
@@ -284,6 +293,99 @@ export default function Invoices() {
     return true;
   });
 
+  const handleDownloadTemplate = () => {
+    downloadCsv('invoices_template.csv', getInvoicesTemplateRows());
+    toast({ title: 'Template downloaded' });
+  };
+
+  const handleExportCsv = () => {
+    const rows = [
+      INVOICES_CSV_HEADERS,
+      ...filteredInvoices.map((inv) => [
+        inv.invoice_number,
+        inv.issue_date,
+        inv.due_date ?? '',
+        inv.status ?? '',
+        inv.clients?.name ?? '',
+        inv.projects?.name ?? '',
+        inv.notes ?? '',
+      ]),
+    ];
+    downloadCsv(`invoices_export_${format(new Date(), 'yyyy-MM-dd')}.csv`, rows);
+    toast({ title: `Exported ${filteredInvoices.length} invoices` });
+  };
+
+  const handleImportCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setImporting(true);
+    try {
+      const rows = await parseCsv(file);
+      if (rows.length < 2) {
+        toast({ title: 'No data rows in file', variant: 'destructive' });
+        return;
+      }
+      const header = rows[0].map((h) => h.toLowerCase().replace(/\s/g, '_'));
+      const dataRows = rows.slice(1);
+      const invoiceNumberIdx = header.indexOf('invoice_number');
+      const issueDateIdx = header.indexOf('issue_date');
+      const dueDateIdx = header.indexOf('due_date');
+      const statusIdx = header.indexOf('status');
+      const clientNameIdx = header.indexOf('client_name');
+      const projectNameIdx = header.indexOf('project_name');
+      const notesIdx = header.indexOf('notes');
+      if (invoiceNumberIdx === -1 || issueDateIdx === -1) {
+        toast({ title: 'CSV must have invoice_number and issue_date columns', variant: 'destructive' });
+        return;
+      }
+      const defaultTax = taxes[0];
+      let created = 0;
+      for (const row of dataRows) {
+        const invoiceNumber = row[invoiceNumberIdx]?.trim();
+        const issueDate = row[issueDateIdx]?.trim();
+        if (!invoiceNumber || !issueDate) continue;
+        let clientId: string | null = null;
+        const clientName = clientNameIdx >= 0 ? row[clientNameIdx]?.trim() : '';
+        if (clientName) {
+          const client = clients.find((c) => c.name === clientName);
+          clientId = client?.id ?? null;
+        }
+        let projectId: string | null = null;
+        const projectName = projectNameIdx >= 0 ? row[projectNameIdx]?.trim() : '';
+        if (projectName) {
+          const project = projects.find((p) => p.name === projectName);
+          projectId = project?.id ?? null;
+        }
+        const dueDate = dueDateIdx >= 0 ? row[dueDateIdx]?.trim() || null : null;
+        const status = (statusIdx >= 0 ? row[statusIdx]?.trim() : 'draft') || 'draft';
+        const notes = notesIdx >= 0 ? row[notesIdx]?.trim() || null : null;
+        const { error } = await supabase.from('invoices').insert({
+          invoice_number: invoiceNumber,
+          issue_date: issueDate,
+          due_date: dueDate || null,
+          status: status,
+          client_id: clientId,
+          project_id: projectId,
+          notes,
+          subtotal: 0,
+          tax_rate: defaultTax?.rate ?? 0,
+          tax_amount: 0,
+          total: 0,
+          user_id: user.id,
+        });
+        if (!error) created++;
+      }
+      setImportDialogOpen(false);
+      if (importFileInputRef.current) importFileInputRef.current.value = '';
+      toast({ title: `Imported ${created} invoices` });
+      fetchInvoices();
+    } catch (err: any) {
+      toast({ title: 'Import failed', description: err?.message, variant: 'destructive' });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'paid':
@@ -319,6 +421,27 @@ export default function Invoices() {
               Create and manage invoices
             </p>
           </div>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Download className="mr-2 h-4 w-4" />
+                  CSV
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleDownloadTemplate}>
+                  Download template
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportCsv}>
+                  Export CSV {filteredInvoices.length > 0 ? `(${filteredInvoices.length})` : ''}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setImportDialogOpen(true)}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Import CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -408,7 +531,36 @@ export default function Invoices() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
+
+        <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Import invoices from CSV</DialogTitle>
+              <DialogDescription>
+                Upload a CSV with columns: invoice_number, issue_date, due_date, status, client_name, project_name, notes. Use the template for the correct format.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <input
+                ref={importFileInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={handleImportCsv}
+              />
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={importing}
+                onClick={() => importFileInputRef.current?.click()}
+              >
+                {importing ? 'Importing…' : 'Choose CSV file'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Stats */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

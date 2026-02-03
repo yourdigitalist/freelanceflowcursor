@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, FolderKanban, Calendar, Clock, MoreVertical, Pencil, Trash2, LayoutGrid, List } from 'lucide-react';
+import { Plus, Search, FolderKanban, Calendar, Clock, MoreVertical, Pencil, Trash2, LayoutGrid, List, Download } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +35,7 @@ import {
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { EmojiPicker } from '@/components/ui/emoji-picker';
+import { downloadCsv, getTasksTemplateRows, TASKS_CSV_HEADERS } from '@/lib/csv';
 
 interface Client {
   id: string;
@@ -78,6 +79,9 @@ export default function Projects() {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [selectedEmoji, setSelectedEmoji] = useState('📁');
   const [selectedColor, setSelectedColor] = useState('#9B63E9');
+  const [exportTasksDialogOpen, setExportTasksDialogOpen] = useState(false);
+  const [exportTaskProjectId, setExportTaskProjectId] = useState<string>('all');
+  const [exportingTasks, setExportingTasks] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -268,6 +272,51 @@ export default function Projects() {
     setIsDialogOpen(true);
   };
 
+  const handleDownloadTaskTemplate = () => {
+    downloadCsv('tasks_template.csv', getTasksTemplateRows());
+    toast({ title: 'Template downloaded' });
+  };
+
+  const handleExportAllTasks = async () => {
+    if (!user) return;
+    setExportingTasks(true);
+    try {
+      let query = supabase
+        .from('tasks')
+        .select('*, projects(name)')
+        .order('created_at', { ascending: false });
+      if (exportTaskProjectId !== 'all') {
+        query = query.eq('project_id', exportTaskProjectId);
+      }
+      const { data: tasksData, error } = await query;
+      if (error) throw error;
+      const tasks = (tasksData || []) as Array<{ project_id: string; title: string; description: string | null; status: string; status_id: string | null; priority: string | null; due_date: string | null; estimated_hours: number | null; projects: { name: string } | null }>;
+      const projectIds = [...new Set(tasks.map((t) => t.project_id))];
+      const { data: statusesData } = await supabase.from('project_statuses').select('id, name').in('project_id', projectIds);
+      const statusIdToName = new Map<string, string>();
+      (statusesData || []).forEach((s: { id: string; name: string }) => statusIdToName.set(s.id, s.name));
+      const rows = [
+        TASKS_CSV_HEADERS,
+        ...tasks.map((t) => [
+          t.title,
+          t.description ?? '',
+          (t.status_id && statusIdToName.get(t.status_id)) ?? t.status ?? '',
+          t.priority ?? '',
+          t.due_date ?? '',
+          String(t.estimated_hours ?? ''),
+          (t.projects as { name: string } | null)?.name ?? '',
+        ]),
+      ];
+      downloadCsv(`tasks_export_${format(new Date(), 'yyyy-MM-dd')}.csv`, rows);
+      toast({ title: `Exported ${tasks.length} tasks` });
+      setExportTasksDialogOpen(false);
+    } catch (err: any) {
+      toast({ title: 'Export failed', description: err?.message, variant: 'destructive' });
+    } finally {
+      setExportingTasks(false);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -279,6 +328,23 @@ export default function Projects() {
               Manage your active and completed projects
             </p>
           </div>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Download className="mr-2 h-4 w-4" />
+                  CSV
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleDownloadTaskTemplate}>
+                  Download task template
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setExportTasksDialogOpen(true)}>
+                  Export all tasks
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
             setIsDialogOpen(open);
             if (!open) {
@@ -435,7 +501,38 @@ export default function Projects() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
+
+        <Dialog open={exportTasksDialogOpen} onOpenChange={setExportTasksDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Export tasks to CSV</DialogTitle>
+              <DialogDescription>
+                Choose a project to export only that project&apos;s tasks, or export all tasks.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Project</Label>
+                <Select value={exportTaskProjectId} onValueChange={setExportTaskProjectId}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All projects</SelectItem>
+                    {filteredProjects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button className="w-full" disabled={exportingTasks} onClick={handleExportAllTasks}>
+                {exportingTasks ? 'Exporting…' : 'Export CSV'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Filters */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">

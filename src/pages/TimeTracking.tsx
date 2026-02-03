@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Clock, Play, Square, Calendar, Trash2, Pencil, DollarSign, Filter } from 'lucide-react';
+import { Plus, Clock, Play, Square, Calendar, Trash2, Pencil, DollarSign, Filter, Download, Upload } from 'lucide-react';
 import { format, differenceInMinutes, parseISO, startOfWeek, endOfWeek, subDays, startOfMonth, endOfMonth } from 'date-fns';
 import {
   Table,
@@ -35,6 +35,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  downloadCsv,
+  parseCsv,
+  getTimeEntriesTemplateRows,
+  TIME_ENTRIES_CSV_HEADERS,
+} from '@/lib/csv';
 
 interface Project {
   id: string;
@@ -105,6 +117,9 @@ export default function TimeTracking() {
   const [dialogDescription, setDialogDescription] = useState<string>('');
   const [dialogDate, setDialogDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [dialogBillable, setDialogBillable] = useState(true);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) {
@@ -509,6 +524,99 @@ export default function TimeTracking() {
   const totalHours = filteredEntries.reduce((sum, e) => sum + (e.duration_minutes || 0), 0) / 60;
   const billableHours = filteredEntries.filter(e => e.billable).reduce((sum, e) => sum + (e.duration_minutes || 0), 0) / 60;
 
+  const handleDownloadTimeTemplate = () => {
+    downloadCsv('time_entries_template.csv', getTimeEntriesTemplateRows());
+    toast({ title: 'Template downloaded' });
+  };
+
+  const handleExportTimeCsv = () => {
+    const rows = [
+      TIME_ENTRIES_CSV_HEADERS,
+      ...filteredEntries.map((e) => [
+        e.start_time,
+        e.end_time ?? '',
+        String(e.duration_minutes ?? ''),
+        e.description ?? '',
+        e.billable ? 'true' : 'false',
+        String(e.hourly_rate ?? ''),
+        e.projects?.name ?? '',
+        e.tasks?.title ?? '',
+      ]),
+    ];
+    downloadCsv(`time_entries_export_${format(new Date(), 'yyyy-MM-dd')}.csv`, rows);
+    toast({ title: `Exported ${filteredEntries.length} time entries` });
+  };
+
+  const handleImportTimeCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setImporting(true);
+    try {
+      const rows = await parseCsv(file);
+      if (rows.length < 2) {
+        toast({ title: 'No data rows in file', variant: 'destructive' });
+        return;
+      }
+      const header = rows[0].map((h) => h.toLowerCase().replace(/\s/g, '_'));
+      const dataRows = rows.slice(1);
+      const startIdx = header.indexOf('start_time');
+      const endIdx = header.indexOf('end_time');
+      const durationIdx = header.indexOf('duration_minutes');
+      const descIdx = header.indexOf('description');
+      const billableIdx = header.indexOf('billable');
+      const rateIdx = header.indexOf('hourly_rate');
+      const projectIdx = header.indexOf('project_name');
+      const taskIdx = header.indexOf('task_title');
+      if (startIdx === -1) {
+        toast({ title: 'CSV must have start_time column', variant: 'destructive' });
+        return;
+      }
+      let created = 0;
+      for (const row of dataRows) {
+        const startTime = row[startIdx]?.trim();
+        if (!startTime) continue;
+        let projectId: string | null = null;
+        const projectName = projectIdx >= 0 ? row[projectIdx]?.trim() : '';
+        if (projectName) {
+          const proj = projects.find((p) => p.name === projectName);
+          projectId = proj?.id ?? null;
+        }
+        let taskId: string | null = null;
+        const taskTitle = taskIdx >= 0 ? row[taskIdx]?.trim() : '';
+        if (taskTitle && projectId) {
+          const { data: taskData } = await supabase.from('tasks').select('id').eq('project_id', projectId).eq('title', taskTitle).maybeSingle();
+          taskId = taskData?.id ?? null;
+        }
+        const endTime = endIdx >= 0 ? row[endIdx]?.trim() || null : null;
+        const duration = durationIdx >= 0 ? (parseInt(row[durationIdx], 10) || null) : null;
+        const description = descIdx >= 0 ? row[descIdx]?.trim() || null : null;
+        const billable = billableIdx >= 0 ? row[billableIdx]?.toLowerCase() !== 'false' && row[billableIdx] !== '0' : true;
+        const hourlyRate = rateIdx >= 0 ? (parseFloat(row[rateIdx]) || null) : null;
+        const { error } = await supabase.from('time_entries').insert({
+          start_time: startTime,
+          end_time: endTime,
+          duration_minutes: duration,
+          description,
+          billable,
+          hourly_rate: hourlyRate,
+          project_id: projectId,
+          task_id: taskId,
+          billing_status: billable ? 'unbilled' : 'not_billable',
+          user_id: user.id,
+        });
+        if (!error) created++;
+      }
+      setImportDialogOpen(false);
+      if (importFileInputRef.current) importFileInputRef.current.value = '';
+      toast({ title: `Imported ${created} time entries` });
+      fetchEntries();
+    } catch (err: any) {
+      toast({ title: 'Import failed', description: err?.message, variant: 'destructive' });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -520,6 +628,27 @@ export default function TimeTracking() {
               Log and manage your billable hours
             </p>
           </div>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Download className="mr-2 h-4 w-4" />
+                  CSV
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleDownloadTimeTemplate}>
+                  Download template
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportTimeCsv}>
+                  Export CSV {filteredEntries.length > 0 ? `(${filteredEntries.length})` : ''}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setImportDialogOpen(true)}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Import CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={() => openLogDialog()}>
@@ -663,7 +792,25 @@ export default function TimeTracking() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
+
+        <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Import time entries from CSV</DialogTitle>
+              <DialogDescription>
+                Upload a CSV with columns: start_time, end_time, duration_minutes, description, billable, hourly_rate, project_name, task_title. Use the template for the correct format.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <input ref={importFileInputRef} type="file" accept=".csv" className="hidden" onChange={handleImportTimeCsv} />
+              <Button variant="outline" className="w-full" disabled={importing} onClick={() => importFileInputRef.current?.click()}>
+                {importing ? 'Importing…' : 'Choose CSV file'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Timer Card */}
         <Card className="border-0 shadow-sm">

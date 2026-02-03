@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Clock, DollarSign, Calendar, CheckSquare, ArrowLeft, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { Clock, DollarSign, Calendar, CheckSquare, ArrowLeft, MoreVertical, Pencil, Trash2, Download, Upload } from 'lucide-react';
 import { Project, Task, ProjectStatus } from './types';
 import { format } from 'date-fns';
 
@@ -19,6 +19,10 @@ interface ProjectHeaderProps {
   totalHours: number;
   onEdit?: () => void;
   onDelete?: () => void;
+  onDownloadTaskTemplate?: () => void;
+  onExportTasksCsv?: () => void;
+  onOpenImportTasks?: () => void;
+  exportTaskCount?: number;
 }
 
 export function ProjectHeader({
@@ -28,6 +32,10 @@ export function ProjectHeader({
   totalHours,
   onEdit,
   onDelete,
+  onDownloadTaskTemplate,
+  onExportTasksCsv,
+  onOpenImportTasks,
+  exportTaskCount = 0,
 }: ProjectHeaderProps) {
   const doneStatuses = statuses.filter(s => s.is_done_status).map(s => s.id);
   const completedTasks = tasks.filter(t => t.status_id && doneStatuses.includes(t.status_id)).length;
@@ -86,6 +94,28 @@ export function ProjectHeader({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {(onDownloadTaskTemplate || onExportTasksCsv || onOpenImportTasks) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4 mr-2" />
+                  CSV
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onDownloadTaskTemplate}>
+                  Download template
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onExportTasksCsv}>
+                  Export tasks {exportTaskCount > 0 ? `(${exportTaskCount})` : ''}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onOpenImportTasks}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <Button variant="outline" size="sm" asChild>
             <Link to={`/invoices/new?project=${project.id}`}>Create Invoice</Link>
           </Button>
