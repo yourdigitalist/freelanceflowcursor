@@ -2,7 +2,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Clock, MessageSquare, Calendar } from 'lucide-react';
+import { Clock, MessageSquare, Calendar, GripVertical } from 'lucide-react';
 import { Task, ProjectStatus, PRIORITY_OPTIONS } from './types';
 import { format } from 'date-fns';
 
@@ -34,14 +34,22 @@ export function TaskCard({ task, status, commentCount = 0, onClick, isDragging }
     <Card
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
       className={`bg-card border shadow-sm cursor-pointer hover:shadow-md transition-shadow ${
         isDragging ? 'opacity-50 shadow-lg' : ''
       }`}
       onClick={onClick}
     >
-      <CardContent className="p-3 space-y-2">
+      <CardContent className="p-3 space-y-2 flex flex-row gap-2">
+        {/* Drag handle - prevents click from being captured by dnd-kit so card click opens sheet */}
+        <div
+          {...attributes}
+          {...listeners}
+          className="touch-none cursor-grab active:cursor-grabbing shrink-0 self-start mt-0.5 rounded p-0.5 hover:bg-muted/80"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <div className="flex-1 min-w-0">
         <h4 className="font-medium text-sm leading-tight">
           {task.title}
         </h4>
@@ -73,6 +81,7 @@ export function TaskCard({ task, status, commentCount = 0, onClick, isDragging }
               {commentCount}
             </span>
           )}
+        </div>
         </div>
       </CardContent>
     </Card>

@@ -131,7 +131,7 @@ export default function Dashboard() {
         `)
         .eq('status', 'active')
         .order('created_at', { ascending: false })
-        .limit(3);
+        .limit(4);
 
       // Get task counts for each project
       const projectsWithTasks = await Promise.all(

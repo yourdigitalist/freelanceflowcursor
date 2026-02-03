@@ -8,7 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, Trash2, Pencil, Check, X } from 'lucide-react';
+import { Loader2, Plus, Trash2, Pencil, Check, X, ChevronDown } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Table,
   TableBody,
@@ -18,6 +24,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
+const MERGE_TAGS = [
+  { tag: '{{client_name}}', label: 'Client Name' },
+  { tag: '{{invoice_number}}', label: 'Invoice Number' },
+  { tag: '{{project_name}}', label: 'Project Name' },
+  { tag: '{{due_date}}', label: 'Due Date' },
+  { tag: '{{business_name}}', label: 'Business Name' },
+  { tag: '{{total}}', label: 'Total' },
+];
+
 interface InvoiceProfile {
   hourly_rate: number | null;
   invoice_prefix: string | null;
@@ -26,6 +41,11 @@ interface InvoiceProfile {
   invoice_email_message_default: string | null;
   invoice_show_quantity: boolean | null;
   invoice_show_rate: boolean | null;
+  invoice_email_subject_default: string | null;
+  reminder_enabled: boolean | null;
+  reminder_days_before: number | null;
+  reminder_subject_default: string | null;
+  reminder_body_default: string | null;
 }
 
 interface Tax {
@@ -47,6 +67,8 @@ export default function InvoiceSettings() {
   const [newTaxName, setNewTaxName] = useState('');
   const [newTaxRate, setNewTaxRate] = useState('');
   const [editingTax, setEditingTax] = useState<Tax | null>(null);
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderDaysBefore, setReminderDaysBefore] = useState(1);
 
   useEffect(() => {
     if (user) {
@@ -59,12 +81,16 @@ export default function InvoiceSettings() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('hourly_rate, invoice_prefix, invoice_notes_default, invoice_footer, invoice_email_message_default, invoice_show_quantity, invoice_show_rate')
+        .select('hourly_rate, invoice_prefix, invoice_notes_default, invoice_footer, invoice_email_message_default, invoice_show_quantity, invoice_show_rate, invoice_email_subject_default, reminder_enabled, reminder_days_before, reminder_subject_default, reminder_body_default')
         .eq('user_id', user!.id)
         .maybeSingle();
 
       if (error) throw error;
       setProfile(data);
+      if (data) {
+        setReminderEnabled(!!data.reminder_enabled);
+        setReminderDaysBefore(data.reminder_days_before ?? 1);
+      }
     } catch (error) {
       console.error('Error fetching invoice settings:', error);
     } finally {
@@ -99,6 +125,11 @@ export default function InvoiceSettings() {
       invoice_email_message_default: formData.get('invoice_email_message_default') as string || null,
       invoice_show_quantity: formData.get('invoice_show_quantity') === 'on',
       invoice_show_rate: formData.get('invoice_show_rate') === 'on',
+      invoice_email_subject_default: formData.get('invoice_email_subject_default') as string || null,
+      reminder_enabled: reminderEnabled,
+      reminder_days_before: reminderDaysBefore,
+      reminder_subject_default: formData.get('reminder_subject_default') as string || null,
+      reminder_body_default: formData.get('reminder_body_default') as string || null,
     };
 
     try {
@@ -330,18 +361,132 @@ export default function InvoiceSettings() {
                 This text appears at the bottom of every invoice (can be overridden per invoice)
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Email Templates */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle>Email Templates</CardTitle>
+            <CardDescription>
+              Templates for invoice and reminder emails. Use the placeholders below in subject and body.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="invoice_email_message_default">Default message for client (email)</Label>
+              <Label htmlFor="invoice_email_subject_default">Default Invoice Email Subject</Label>
+              <Input
+                id="invoice_email_subject_default"
+                name="invoice_email_subject_default"
+                defaultValue={profile?.invoice_email_subject_default ?? 'Invoice {{invoice_number}} from {{business_name}}'}
+                placeholder="Invoice {{invoice_number}} from {{business_name}}"
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="invoice_email_message_default">Default Invoice Email Body</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" className="h-8">
+                      Insert placeholder <ChevronDown className="ml-1 h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {MERGE_TAGS.map(({ tag, label }) => (
+                      <DropdownMenuItem
+                        key={tag}
+                        onSelect={() => {
+                          const ta = document.getElementById('invoice_email_message_default') as HTMLTextAreaElement;
+                          if (ta) {
+                            const start = ta.selectionStart;
+                            const end = ta.selectionEnd;
+                            const v = ta.value;
+                            ta.value = v.slice(0, start) + tag + v.slice(end);
+                            ta.dispatchEvent(new Event('input', { bubbles: true }));
+                          }
+                        }}
+                      >
+                        {label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
               <Textarea
                 id="invoice_email_message_default"
                 name="invoice_email_message_default"
                 defaultValue={profile?.invoice_email_message_default || ''}
                 placeholder="Hi {{client_name}}, please find attached invoice {{invoice_number}} for {{total}}. Due by {{due_date}}."
-                rows={3}
+                rows={4}
               />
-              <p className="text-xs text-muted-foreground">
-                Pre-fills the email body when sending an invoice. Use: {'{{client_name}}'}, {'{{invoice_number}}'}, {'{{total}}'}, {'{{due_date}}'}
-              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reminder_subject_default">Default Reminder Email Subject</Label>
+              <Input
+                id="reminder_subject_default"
+                name="reminder_subject_default"
+                defaultValue={profile?.reminder_subject_default ?? 'Reminder: Invoice {{invoice_number}} Due Soon'}
+                placeholder="Reminder: Invoice {{invoice_number}} Due Soon"
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="reminder_body_default">Default Reminder Email Body</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" className="h-8">
+                      Insert placeholder <ChevronDown className="ml-1 h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {MERGE_TAGS.map(({ tag, label }) => (
+                      <DropdownMenuItem key={tag} onSelect={() => {
+                        const ta = document.getElementById('reminder_body_default') as HTMLTextAreaElement;
+                        if (ta) { const s = ta.selectionStart, e = ta.selectionEnd, v = ta.value; ta.value = v.slice(0, s) + tag + v.slice(e); ta.dispatchEvent(new Event('input', { bubbles: true })); }
+                      }}>{label}</DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <Textarea
+                id="reminder_body_default"
+                name="reminder_body_default"
+                defaultValue={profile?.reminder_body_default ?? `Hi {{client_name}},\nThis is a friendly reminder that invoice {{invoice_number}} for {{project_name}} is due on {{due_date}}.\nPlease let us know if you have any questions.`}
+                placeholder="Reminder message..."
+                rows={4}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Reminder Settings */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle>Reminder Settings</CardTitle>
+            <CardDescription>Automated reminders based on due dates</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="reminder_enabled">Enable Automatic Reminders</Label>
+                <p className="text-sm text-muted-foreground">Send reminder emails before invoice due date</p>
+              </div>
+              <Switch
+                id="reminder_enabled"
+                checked={reminderEnabled}
+                onCheckedChange={setReminderEnabled}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reminder_days_before">Send Reminder (days before due date)</Label>
+              <Input
+                id="reminder_days_before"
+                type="number"
+                min={1}
+                max={30}
+                value={reminderDaysBefore}
+                onChange={(e) => setReminderDaysBefore(Math.max(1, parseInt(e.target.value, 10) || 1))}
+              />
             </div>
           </CardContent>
         </Card>

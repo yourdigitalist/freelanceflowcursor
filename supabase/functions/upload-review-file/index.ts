@@ -27,7 +27,7 @@ const MAGIC_BYTES: Record<string, number[][]> = {
   'application/pdf': [[0x25, 0x50, 0x44, 0x46]], // %PDF
 };
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 
 // Rate limiting configuration
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
@@ -167,7 +167,7 @@ serve(async (req) => {
     // 1. Check file size
     if (file.size > MAX_FILE_SIZE) {
       return new Response(
-        JSON.stringify({ error: `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB` }),
+        JSON.stringify({ error: `File too large. Maximum size is 2MB` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

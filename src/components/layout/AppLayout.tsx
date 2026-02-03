@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { LayoutDashboard, Users, FolderKanban, Clock, FileText, Settings, LogOut, Menu, ChevronDown, ChevronLeft, Bell, Sparkles, ArrowRight, ChevronUp, Eye } from 'lucide-react';
+import { LayoutDashboard, Users, User, FolderKanban, Clock, FileText, LogOut, Menu, ChevronDown, ChevronLeft, Bell, Sparkles, ArrowRight, ChevronUp, Eye, Building2, Globe, CreditCard, HardDrive } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TrialBanner } from './TrialBanner';
 interface AppLayoutProps {
@@ -22,6 +22,7 @@ interface Profile {
   first_name: string | null;
   last_name: string | null;
   full_name: string | null;
+  email: string | null;
   avatar_url: string | null;
   subscription_status: string | null;
 }
@@ -57,7 +58,7 @@ export function AppLayout({
       if (!user) return;
       const {
         data
-      } = await supabase.from('profiles').select('first_name, last_name, full_name, avatar_url, subscription_status').eq('user_id', user.id).single();
+      } = await supabase.from('profiles').select('first_name, last_name, full_name, email, avatar_url, subscription_status').eq('user_id', user.id).single();
       setProfile(data);
     };
     if (user) {
@@ -83,7 +84,7 @@ export function AppLayout({
   const isOnTrial = profile?.subscription_status === 'trial';
   return <div className="min-h-screen bg-background flex flex-col">
       {/* Trial Banner */}
-      {isOnTrial && <TrialBanner onUpgrade={() => navigate('/settings?tab=subscription')} />}
+      {isOnTrial && <TrialBanner onUpgrade={() => navigate('/settings/subscription')} />}
 
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && <div className={cn("fixed inset-0 z-40 bg-black/50 lg:hidden", isOnTrial && "top-[40px]")} onClick={() => setSidebarOpen(false)} />}
@@ -159,7 +160,7 @@ export function AppLayout({
             </Link>}
 
           {/* Upgrade Button - only show for trial/free users */}
-          {!sidebarCollapsed && isOnTrial && <Link to="/settings?tab=subscription" className="upgrade-gradient rounded-lg p-3 block hover:opacity-90 transition-opacity">
+          {!sidebarCollapsed && isOnTrial && <Link to="/settings/subscription" className="upgrade-gradient rounded-lg p-3 block hover:opacity-90 transition-opacity">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
@@ -192,27 +193,53 @@ export function AppLayout({
                   </>}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="top" className="w-56">
-              <div className="flex items-center gap-2 p-2">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={profile?.avatar_url || undefined} />
-                  <AvatarFallback className="bg-success text-success-foreground text-xs">
-                    {userInitials}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col space-y-0.5">
-                  <p className="text-sm font-medium">{userName}</p>
-                </div>
+            <DropdownMenuContent align="end" side="top" className="w-64">
+              <div className="p-3 space-y-2">
+                <p className="text-sm font-semibold leading-none">{userName}</p>
+                <p className="text-xs text-muted-foreground truncate">{profile?.email || user?.email}</p>
+                <span className="inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 text-xs font-medium px-2.5 py-0.5">
+                  {profile?.subscription_status === 'active' ? 'Business' : profile?.subscription_status === 'trial' ? 'Trial' : 'Free Plan'}
+                </span>
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link to="/settings" className="cursor-pointer">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
+                <Link to="/settings/profile" className="cursor-pointer">
+                  <User className="mr-2 h-4 w-4" />
+                  Profile
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/settings/business" className="cursor-pointer">
+                  <Building2 className="mr-2 h-4 w-4" />
+                  Company Settings
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/settings/invoices" className="cursor-pointer">
+                  <FileText className="mr-2 h-4 w-4" />
+                  Invoice Settings
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/settings/locale" className="cursor-pointer">
+                  <Globe className="mr-2 h-4 w-4" />
+                  Personal Preferences
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/settings/subscription" className="cursor-pointer">
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Billing & Subscription
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/settings/storage" className="cursor-pointer">
+                  <HardDrive className="mr-2 h-4 w-4" />
+                  Storage
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut} className="text-destructive cursor-pointer">
+              <DropdownMenuItem onClick={handleSignOut} className="text-destructive cursor-pointer focus:text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign out
               </DropdownMenuItem>
@@ -223,12 +250,12 @@ export function AppLayout({
 
       {/* Main content */}
       <div className={cn("flex-1 transition-all duration-200", sidebarCollapsed ? "lg:pl-16" : "lg:pl-64")}>
-        {/* Top bar - minimal so no empty white box */}
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-card/80 backdrop-blur-md px-4 lg:px-6">
-          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
+        {/* Mobile top bar only - hidden on desktop to avoid empty white box */}
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-card/80 backdrop-blur-md px-4 lg:hidden">
+          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="lg:hidden ml-auto">
+          <Button variant="ghost" size="icon" className="ml-auto">
             <Bell className="h-5 w-5" />
           </Button>
         </header>

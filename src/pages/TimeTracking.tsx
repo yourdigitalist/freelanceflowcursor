@@ -96,6 +96,9 @@ export default function TimeTracking() {
   // Dialog state
   const [dialogProject, setDialogProject] = useState<string>('');
   const [dialogTask, setDialogTask] = useState<string>('');
+  const [dialogTimeMode, setDialogTimeMode] = useState<'start_end' | 'manual'>('manual');
+  const [dialogStartTime, setDialogStartTime] = useState<string>('09:00');
+  const [dialogEndTime, setDialogEndTime] = useState<string>('17:00');
   const [dialogHours, setDialogHours] = useState<string>('');
   const [dialogDescription, setDialogDescription] = useState<string>('');
   const [dialogDate, setDialogDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
@@ -281,14 +284,27 @@ export default function TimeTracking() {
       setEditingEntry(entry);
       setDialogProject(entry.project_id || '');
       setDialogTask(entry.task_id || '');
-      setDialogHours(entry.duration_minutes ? (entry.duration_minutes / 60).toString() : '');
       setDialogDescription(entry.description || '');
       setDialogDate(format(parseISO(entry.start_time), 'yyyy-MM-dd'));
       setDialogBillable(entry.billable);
+      if (entry.end_time) {
+        setDialogTimeMode('start_end');
+        setDialogStartTime(format(parseISO(entry.start_time), 'HH:mm'));
+        setDialogEndTime(format(parseISO(entry.end_time), 'HH:mm'));
+        setDialogHours('');
+      } else {
+        setDialogTimeMode('manual');
+        setDialogStartTime('09:00');
+        setDialogEndTime('17:00');
+        setDialogHours(entry.duration_minutes ? (entry.duration_minutes / 60).toString() : '');
+      }
     } else {
       setEditingEntry(null);
       setDialogProject('');
       setDialogTask('');
+      setDialogTimeMode('manual');
+      setDialogStartTime('09:00');
+      setDialogEndTime('17:00');
       setDialogHours('');
       setDialogDescription('');
       setDialogDate(format(new Date(), 'yyyy-MM-dd'));
@@ -309,19 +325,45 @@ export default function TimeTracking() {
       return;
     }
 
-    const hours = parseFloat(dialogHours);
-    if (isNaN(hours) || hours <= 0) {
-      toast({
-        title: 'Invalid hours',
-        description: 'Please enter valid hours',
-        variant: 'destructive',
-      });
-      return;
-    }
+    let startTime: Date;
+    let endTime: Date;
+    let durationMinutes: number;
 
-    const durationMinutes = Math.round(hours * 60);
-    const startTime = new Date(`${dialogDate}T09:00:00`);
-    const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+    if (dialogTimeMode === 'start_end') {
+      startTime = new Date(`${dialogDate}T${dialogStartTime}:00`);
+      endTime = new Date(`${dialogDate}T${dialogEndTime}:00`);
+      if (endTime <= startTime) {
+        toast({
+          title: 'Invalid times',
+          description: 'End time must be after start time',
+          variant: 'destructive',
+        });
+        return;
+      }
+      durationMinutes = differenceInMinutes(endTime, startTime);
+    } else {
+      const hours = parseFloat(dialogHours);
+      if (isNaN(hours) || hours <= 0) {
+        toast({
+          title: 'Invalid hours',
+          description: 'Please enter valid hours',
+          variant: 'destructive',
+        });
+        return;
+      }
+      // Exact minutes from hours, no rounding up (floor so we never round up)
+      durationMinutes = Math.floor(hours * 60);
+      if (durationMinutes <= 0) {
+        toast({
+          title: 'Invalid hours',
+          description: 'Please enter at least 0.01 hours',
+          variant: 'destructive',
+        });
+        return;
+      }
+      startTime = new Date(`${dialogDate}T${dialogStartTime}:00`);
+      endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+    }
 
     const entryData = {
       description: dialogDescription || null,
@@ -517,31 +559,80 @@ export default function TimeTracking() {
                     rows={3}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="dialog_date">Date *</Label>
-                    <Input
-                      id="dialog_date"
-                      type="date"
-                      value={dialogDate}
-                      onChange={(e) => setDialogDate(e.target.value)}
-                      required
-                    />
+                <div className="space-y-2">
+                  <Label>Time entry</Label>
+                  <div className="flex gap-4 p-2 rounded-lg border bg-muted/30">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="time_mode"
+                        checked={dialogTimeMode === 'start_end'}
+                        onChange={() => setDialogTimeMode('start_end')}
+                        className="rounded-full border-primary text-primary"
+                      />
+                      <span className="text-sm">Start & end time</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="time_mode"
+                        checked={dialogTimeMode === 'manual'}
+                        onChange={() => setDialogTimeMode('manual')}
+                        className="rounded-full border-primary text-primary"
+                      />
+                      <span className="text-sm">Enter hours</span>
+                    </label>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dialog_date">Date *</Label>
+                  <Input
+                    id="dialog_date"
+                    type="date"
+                    value={dialogDate}
+                    onChange={(e) => setDialogDate(e.target.value)}
+                    required
+                  />
+                </div>
+                {dialogTimeMode === 'start_end' ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="dialog_start_time">Start time *</Label>
+                      <Input
+                        id="dialog_start_time"
+                        type="time"
+                        value={dialogStartTime}
+                        onChange={(e) => setDialogStartTime(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="dialog_end_time">End time *</Label>
+                      <Input
+                        id="dialog_end_time"
+                        type="time"
+                        value={dialogEndTime}
+                        onChange={(e) => setDialogEndTime(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                ) : (
                   <div className="space-y-2">
                     <Label htmlFor="dialog_hours">Hours *</Label>
                     <Input
                       id="dialog_hours"
                       type="number"
-                      step="0.25"
-                      min="0.25"
+                      step="0.01"
+                      min="0.01"
                       value={dialogHours}
                       onChange={(e) => setDialogHours(e.target.value)}
-                      placeholder="2.5"
-                      required
+                      placeholder="e.g. 1.5 or 2.25"
+                      required={dialogTimeMode === 'manual'}
                     />
+                    <p className="text-xs text-muted-foreground">Enter any decimal (e.g. 0.25, 1.5, 2.75). No rounding.</p>
                   </div>
-                </div>
+                )}
                 <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                   <Label htmlFor="dialog_billable" className="cursor-pointer">Billable time</Label>
                   <Switch

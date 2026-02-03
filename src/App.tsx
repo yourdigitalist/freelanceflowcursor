@@ -17,7 +17,13 @@ import ProjectDetail from "./pages/ProjectDetail";
 import TimeTracking from "./pages/TimeTracking";
 import Invoices from "./pages/Invoices";
 import InvoiceDetail from "./pages/InvoiceDetail";
-import Settings from "./pages/Settings";
+import SettingsLayout from "./pages/SettingsLayout";
+import UserSettings from "./pages/settings/UserSettings";
+import BusinessSettings from "./pages/settings/BusinessSettings";
+import LocaleSettings from "./pages/settings/LocaleSettings";
+import InvoiceSettings from "./pages/settings/InvoiceSettings";
+import SubscriptionSettings from "./pages/settings/SubscriptionSettings";
+import StorageSettings from "./pages/settings/StorageSettings";
 import ReviewRequests from "./pages/ReviewRequests";
 import ReviewRequestDetail from "./pages/ReviewRequestDetail";
 import ClientReview from "./pages/ClientReview";
@@ -128,7 +134,15 @@ function AppRoutes() {
       <Route path="/reviews" element={<ProtectedRoute><ReviewRequests /></ProtectedRoute>} />
       <Route path="/reviews/:id" element={<ProtectedRoute><ReviewRequestDetail /></ProtectedRoute>} />
       <Route path="/review/:token" element={<ClientReview />} />
-      <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>
+        <Route index element={<Navigate to="profile" replace />} />
+        <Route path="profile" element={<UserSettings />} />
+        <Route path="business" element={<BusinessSettings />} />
+        <Route path="invoices" element={<InvoiceSettings />} />
+        <Route path="locale" element={<LocaleSettings />} />
+        <Route path="subscription" element={<SubscriptionSettings />} />
+        <Route path="storage" element={<StorageSettings />} />
+      </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

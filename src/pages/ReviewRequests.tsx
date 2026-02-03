@@ -404,7 +404,7 @@ export default function ReviewRequests() {
     'application/pdf', 'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   ];
-  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -414,7 +414,7 @@ export default function ReviewRequests() {
     for (const file of files) {
       // Check file size
       if (file.size > MAX_FILE_SIZE) {
-        errors.push(`${file.name}: File too large (max 10MB)`);
+        errors.push(`${file.name}: File too large (max 2MB)`);
         continue;
       }
       
@@ -900,7 +900,7 @@ export default function ReviewRequests() {
                     <label htmlFor="file-upload" className="cursor-pointer">
                       <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                       <p className="text-sm font-medium">Click to upload or drag & drop</p>
-                      <p className="text-xs text-muted-foreground">PDF, Images, Documents (max 10MB each)</p>
+                      <p className="text-xs text-muted-foreground">PDF, Images, Documents (max 2MB each)</p>
                     </label>
                   </div>
                   {requestFiles.length > 0 && (

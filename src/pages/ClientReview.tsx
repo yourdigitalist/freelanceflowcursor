@@ -409,21 +409,21 @@ export default function ClientReview() {
           </div>
         </main>
 
-        {/* Comments Sidebar */}
+        {/* Comments Sidebar - grouped by file when multiple files */}
         <aside className="w-80 border-l bg-card hidden lg:flex flex-col">
           <div className="p-4 border-b">
             <h2 className="font-medium flex items-center gap-2">
               <MessageSquare className="h-4 w-4" />
-              Comments ({fileComments.length})
+              Comments ({comments.length})
             </h2>
           </div>
           <ScrollArea className="flex-1">
-            <div className="p-4 space-y-4">
-              {fileComments.length === 0 ? (
+            <div className="p-4 space-y-6">
+              {comments.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  No comments on this file yet. Click on the image to add one.
+                  No comments yet. Click on the image to add one.
                 </p>
-              ) : (
+              ) : files.length <= 1 ? (
                 fileComments.map((comment, i) => (
                   <div key={comment.id} className="flex gap-3">
                     <div className="flex-shrink-0">
@@ -452,6 +452,55 @@ export default function ClientReview() {
                     </div>
                   </div>
                 ))
+              ) : (
+                files.map((file) => {
+                  const fileCommentsList = comments.filter((c) => c.review_file_id === file.id);
+                  if (fileCommentsList.length === 0) return null;
+                  return (
+                    <div key={file.id} className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground border-b pb-2">
+                        {file.file_type?.startsWith('image/') ? (
+                          <div className="h-6 w-6 rounded overflow-hidden flex-shrink-0">
+                            <img src={file.file_url} alt="" className="h-full w-full object-cover" />
+                          </div>
+                        ) : (
+                          <FileText className="h-4 w-4 flex-shrink-0" />
+                        )}
+                        <span className="truncate">{file.file_name}</span>
+                      </div>
+                      <div className="space-y-4 pl-1">
+                        {fileCommentsList.map((comment, i) => (
+                          <div key={comment.id} className="flex gap-3">
+                            <div className="flex-shrink-0">
+                              {comment.x_position != null ? (
+                                <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold">
+                                  {i + 1}
+                                </div>
+                              ) : (
+                                <Avatar className="h-6 w-6">
+                                  <AvatarFallback className="text-xs">
+                                    {comment.commenter_name?.slice(0, 2).toUpperCase() || 'AN'}
+                                  </AvatarFallback>
+                                </Avatar>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-sm truncate">
+                                  {comment.commenter_name || 'Anonymous'}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {format(new Date(comment.created_at), 'MMM d')}
+                                </span>
+                              </div>
+                              <p className="text-sm mt-1">{comment.content}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
           </ScrollArea>

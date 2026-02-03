@@ -227,12 +227,17 @@ export type Database = {
           id: string
           last_name: string | null
           invoice_email_message_default: string | null
+          invoice_email_subject_default: string | null
           invoice_footer: string | null
           invoice_notes_default: string | null
           invoice_prefix: string | null
           invoice_show_quantity: boolean | null
           invoice_show_rate: boolean | null
           onboarding_completed: boolean | null
+          reminder_body_default: string | null
+          reminder_days_before: number | null
+          reminder_enabled: boolean | null
+          reminder_subject_default: string | null
           payment_instructions: string | null
           phone: string | null
           plan_type: string | null
@@ -275,6 +280,7 @@ export type Database = {
           id?: string
           last_name?: string | null
           invoice_email_message_default?: string | null
+          invoice_email_subject_default?: string | null
           invoice_footer?: string | null
           invoice_notes_default?: string | null
           invoice_prefix?: string | null
@@ -284,6 +290,10 @@ export type Database = {
           payment_instructions?: string | null
           phone?: string | null
           plan_type?: string | null
+          reminder_body_default?: string | null
+          reminder_days_before?: number | null
+          reminder_enabled?: boolean | null
+          reminder_subject_default?: string | null
           subscription_status?: string | null
           tax_id?: string | null
           time_format?: string | null
@@ -323,6 +333,7 @@ export type Database = {
           id?: string
           last_name?: string | null
           invoice_email_message_default?: string | null
+          invoice_email_subject_default?: string | null
           invoice_footer?: string | null
           invoice_notes_default?: string | null
           invoice_prefix?: string | null
@@ -332,6 +343,10 @@ export type Database = {
           payment_instructions?: string | null
           phone?: string | null
           plan_type?: string | null
+          reminder_body_default?: string | null
+          reminder_days_before?: number | null
+          reminder_enabled?: boolean | null
+          reminder_subject_default?: string | null
           subscription_status?: string | null
           tax_id?: string | null
           time_format?: string | null

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Trash2, Send, DollarSign, Mail, Loader2, Eye, Clock, Printer } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Send, DollarSign, Mail, Loader2, Eye, Clock, Printer, ListTodo, Wallet, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Dialog,
@@ -27,6 +27,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface InvoiceItem {
@@ -64,6 +70,7 @@ interface Invoice {
     postal_code: string | null;
     country: string | null;
   } | null;
+  projects?: { name: string; hourly_rate: number | null; budget: number | null } | null;
 }
 
 interface UserProfile {
@@ -129,12 +136,16 @@ export default function InvoiceDetail() {
   
   // Preview modal state
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  // Edit mode: draft starts editable; after save or when sent/paid, read-only until "Edit Invoice" is clicked
+  const [isEditMode, setIsEditMode] = useState(true);
   
   // Import unbilled time entries modal
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [unbilledEntries, setUnbilledEntries] = useState<UnbilledEntry[]>([]);
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [defaultHourlyRate, setDefaultHourlyRate] = useState(75);
+  const preloadedDefaultsRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (user && id) {
@@ -144,6 +155,28 @@ export default function InvoiceDetail() {
       fetchTaxes();
     }
   }, [user, id]);
+
+  // When invoice is sent or paid, switch to read-only (user must click "Edit Invoice" to change)
+  useEffect(() => {
+    if (invoice && (invoice.status === 'sent' || invoice.status === 'paid')) {
+      setIsEditMode(false);
+    }
+  }, [invoice?.id, invoice?.status]);
+
+  // Preload notes and footer from profile when invoice has none (e.g. newly created)
+  useEffect(() => {
+    if (id) preloadedDefaultsRef.current = null;
+  }, [id]);
+  useEffect(() => {
+    if (!invoice || !profile || preloadedDefaultsRef.current === invoice.id) return;
+    if (invoice.notes == null || invoice.notes === '') {
+      setNotes(profile.invoice_notes_default || '');
+    }
+    if ((invoice as Invoice).invoice_footer == null || (invoice as Invoice).invoice_footer === '') {
+      setInvoiceFooter(profile.invoice_footer || '');
+    }
+    preloadedDefaultsRef.current = invoice.id;
+  }, [invoice?.id, invoice?.notes, (invoice as Invoice)?.invoice_footer, profile?.invoice_notes_default, profile?.invoice_footer]);
 
   const fetchProfile = async () => {
     try {
@@ -187,7 +220,8 @@ export default function InvoiceDetail() {
         .from('invoices')
         .select(`
           *,
-          clients(name, email, phone, company, tax_id, street, city, state, postal_code, country)
+          clients(name, email, phone, company, tax_id, street, city, state, postal_code, country),
+          projects(name, hourly_rate, budget)
         `)
         .eq('id', id)
         .maybeSingle();
@@ -353,6 +387,90 @@ export default function InvoiceDetail() {
     }
   };
 
+  const importTasksFromProject = async () => {
+    if (!invoice?.project_id) {
+      toast({
+        title: 'No project',
+        description: 'Assign a project to this invoice to import tasks',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      const { data: tasks, error } = await supabase
+        .from('tasks')
+        .select('id, title, estimated_hours')
+        .eq('project_id', invoice.project_id)
+        .order('title');
+      if (error) throw error;
+      if (!tasks?.length) {
+        toast({ title: 'No tasks', description: 'This project has no tasks' });
+        return;
+      }
+      const projectRate = invoice.projects?.hourly_rate ?? defaultHourlyRate;
+      const newItems = tasks.map((t) => {
+        const qty = Number(t.estimated_hours) || 1;
+        const rate = projectRate;
+        const amount = qty * rate;
+        return {
+          invoice_id: id,
+          description: t.title,
+          quantity: qty,
+          unit_price: rate,
+          amount: parseFloat(amount.toFixed(2)),
+        };
+      });
+      const { data: inserted, error: insertError } = await supabase
+        .from('invoice_items')
+        .insert(newItems)
+        .select();
+      if (insertError) throw insertError;
+      toast({ title: `Imported ${tasks.length} tasks as line items` });
+      fetchItems();
+    } catch (e: any) {
+      toast({ title: 'Error importing tasks', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const importProjectBudget = async () => {
+    if (!invoice?.project_id) {
+      toast({
+        title: 'No project',
+        description: 'Assign a project to this invoice to import budget',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const budget = invoice.projects?.budget;
+    if (budget == null || Number(budget) <= 0) {
+      toast({
+        title: 'No budget',
+        description: 'This project has no budget set',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      const amount = Number(budget);
+      const { data: inserted, error } = await supabase
+        .from('invoice_items')
+        .insert({
+          invoice_id: id,
+          description: `Project budget: ${invoice.projects?.name || 'Project'}`,
+          quantity: 1,
+          unit_price: amount,
+          amount,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      toast({ title: 'Project budget added as line item' });
+      fetchItems();
+    } catch (e: any) {
+      toast({ title: 'Error importing budget', description: e.message, variant: 'destructive' });
+    }
+  };
+
   const addItem = async () => {
     try {
       const { data, error } = await supabase
@@ -410,7 +528,7 @@ export default function InvoiceDetail() {
     }
   };
 
-  const saveInvoice = async () => {
+  const saveInvoice = async (): Promise<boolean> => {
     setSaving(true);
     try {
       // Save all items
@@ -450,13 +568,16 @@ export default function InvoiceDetail() {
       if (error) throw error;
 
       toast({ title: 'Invoice saved' });
+      setIsEditMode(false);
       fetchInvoice();
+      return true;
     } catch (error: any) {
       toast({
         title: 'Error saving invoice',
         description: error.message,
         variant: 'destructive',
       });
+      return false;
     } finally {
       setSaving(false);
     }
@@ -584,7 +705,9 @@ export default function InvoiceDetail() {
       .replace(/\{\{client_name\}\}/gi, invoice?.clients?.name ?? '')
       .replace(/\{\{invoice_number\}\}/gi, invoice?.invoice_number ?? '')
       .replace(/\{\{total\}\}/gi, total > 0 ? `$${total.toFixed(2)}` : (invoice?.total != null ? `$${Number(invoice.total).toFixed(2)}` : ''))
-      .replace(/\{\{due_date\}\}/gi, invoice?.due_date ? format(new Date(invoice.due_date), 'MMMM d, yyyy') : '');
+      .replace(/\{\{due_date\}\}/gi, invoice?.due_date ? format(new Date(invoice.due_date), 'MMMM d, yyyy') : '')
+      .replace(/\{\{business_name\}\}/gi, profile?.business_name || profile?.company_name || profile?.full_name || '')
+      .replace(/\{\{project_name\}\}/gi, invoice?.projects?.name ?? '');
   };
 
   const previewNotes = notes.trim() || profile?.invoice_notes_default?.trim() || '';
@@ -644,12 +767,16 @@ export default function InvoiceDetail() {
               Preview
             </Button>
             {invoice.clients?.email && (
-              <Button onClick={() => {
-                if (!emailMessage.trim() && profile?.invoice_email_message_default) {
-                  setEmailMessage(resolveEmailMessage(profile.invoice_email_message_default));
-                }
-                setIsSendModalOpen(true);
-              }}>
+              <Button
+                onClick={async () => {
+                  if (isEditMode) {
+                    const ok = await saveInvoice();
+                    if (!ok) return;
+                  }
+                  setEmailMessage(resolveEmailMessage(profile?.invoice_email_message_default ?? ''));
+                  setIsSendModalOpen(true);
+                }}
+              >
                 <Mail className="mr-2 h-4 w-4" />
                 Send to Client
               </Button>
@@ -666,11 +793,24 @@ export default function InvoiceDetail() {
                 Mark as Paid
               </Button>
             )}
-            <Button variant="outline" onClick={saveInvoice} disabled={saving}>
-              {saving ? 'Saving...' : 'Save Invoice'}
-            </Button>
+            {isEditMode ? (
+              <Button variant="outline" onClick={saveInvoice} disabled={saving}>
+                {saving ? 'Saving...' : 'Save Invoice'}
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={() => setIsEditMode(true)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit Invoice
+              </Button>
+            )}
           </div>
         </div>
+
+        {isEditMode && (invoice.status === 'sent' || invoice.status === 'paid') && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-4 text-sm text-amber-800 dark:text-amber-200">
+            This invoice has already been sent to your client. Changes you make here will not update the version they received. To send an updated copy, save your changes and use &quot;Send to Client&quot; again.
+          </div>
+        )}
 
         {/* Invoice Details */}
         <Card className="border-0 shadow-sm">
@@ -747,18 +887,34 @@ export default function InvoiceDetail() {
         <Card className="border-0 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Line Items</CardTitle>
-            <div className="flex gap-2">
-              {invoice.client_id && (
-                <Button variant="outline" size="sm" onClick={fetchUnbilledEntries}>
-                  <Clock className="mr-2 h-4 w-4" />
-                  Import Time
+            {isEditMode && (
+              <div className="flex flex-wrap gap-2">
+                {invoice.client_id && (
+                  <Button variant="outline" size="sm" onClick={fetchUnbilledEntries}>
+                    <Clock className="mr-2 h-4 w-4" />
+                    Import Time
+                  </Button>
+                )}
+                {invoice.project_id && (
+                  <>
+                    <Button variant="outline" size="sm" onClick={importTasksFromProject}>
+                      <ListTodo className="mr-2 h-4 w-4" />
+                      Import Tasks
+                    </Button>
+                    {invoice.projects?.budget != null && Number(invoice.projects.budget) > 0 && (
+                      <Button variant="outline" size="sm" onClick={importProjectBudget}>
+                        <Wallet className="mr-2 h-4 w-4" />
+                        Import Budget
+                      </Button>
+                    )}
+                  </>
+                )}
+                <Button variant="outline" size="sm" onClick={addItem}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Item
                 </Button>
-              )}
-              <Button variant="outline" size="sm" onClick={addItem}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Item
-              </Button>
-            </div>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -768,59 +924,73 @@ export default function InvoiceDetail() {
                 {showQuantity && <div className="col-span-2">Qty</div>}
                 {showRate && <div className="col-span-2">Rate</div>}
                 <div className="col-span-2 text-right">Amount</div>
-                <div className="col-span-1"></div>
+                {isEditMode && <div className="col-span-1"></div>}
               </div>
 
               {/* Items */}
               {items.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  No items yet. Add your first line item or import from time entries.
+                  No items yet. {isEditMode ? 'Add your first line item or import from time entries.' : ''}
                 </div>
               ) : (
                 items.map((item) => (
                   <div key={item.id} className="grid grid-cols-12 gap-4 items-center">
                     <div className={showQuantity && showRate ? "col-span-5" : "col-span-7"}>
-                      <Input
-                        value={item.description}
-                        onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                        placeholder="Item description"
-                      />
+                      {isEditMode ? (
+                        <Input
+                          value={item.description}
+                          onChange={(e) => updateItem(item.id, 'description', e.target.value)}
+                          placeholder="Item description"
+                        />
+                      ) : (
+                        <span className="text-sm">{item.description}</span>
+                      )}
                     </div>
                     {showQuantity && (
                       <div className="col-span-2">
-                        <Input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                          min="0"
-                          step="0.01"
-                        />
+                        {isEditMode ? (
+                          <Input
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                            min="0"
+                            step="0.01"
+                          />
+                        ) : (
+                          <span className="text-sm">{item.quantity}</span>
+                        )}
                       </div>
                     )}
                     {showRate && (
                       <div className="col-span-2">
-                        <Input
-                          type="number"
-                          value={item.unit_price}
-                          onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                          min="0"
-                          step="0.01"
-                        />
+                        {isEditMode ? (
+                          <Input
+                            type="number"
+                            value={item.unit_price}
+                            onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                            min="0"
+                            step="0.01"
+                          />
+                        ) : (
+                          <span className="text-sm">${Number(item.unit_price).toFixed(2)}</span>
+                        )}
                       </div>
                     )}
                     <div className="col-span-2 text-right font-medium">
                       ${(Number(item.quantity) * Number(item.unit_price)).toFixed(2)}
                     </div>
-                    <div className="col-span-1 text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => deleteItem(item.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    {isEditMode && (
+                      <div className="col-span-1 text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => deleteItem(item.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))
               )}
@@ -834,22 +1004,26 @@ export default function InvoiceDetail() {
                 <div className="flex justify-between items-center text-sm">
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Tax</span>
-                    <Select
-                      value={selectedTaxId || 'none'}
-                      onValueChange={(v) => setSelectedTaxId(v === 'none' ? '' : v)}
-                    >
-                      <SelectTrigger className="w-40 h-8">
-                        <SelectValue placeholder="Select tax" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No tax</SelectItem>
-                        {taxes.map((tax) => (
-                          <SelectItem key={tax.id} value={tax.id}>
-                            {tax.name} ({tax.rate}%)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {isEditMode ? (
+                      <Select
+                        value={selectedTaxId || 'none'}
+                        onValueChange={(v) => setSelectedTaxId(v === 'none' ? '' : v)}
+                      >
+                        <SelectTrigger className="w-40 h-8">
+                          <SelectValue placeholder="Select tax" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No tax</SelectItem>
+                          {taxes.map((tax) => (
+                            <SelectItem key={tax.id} value={tax.id}>
+                              {tax.name} ({tax.rate}%)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span>{taxes.find(t => t.id === selectedTaxId)?.name ?? 'None'} ({taxRate}%)</span>
+                    )}
                   </div>
                   <span className="font-medium">${taxAmount.toFixed(2)}</span>
                 </div>
@@ -866,15 +1040,23 @@ export default function InvoiceDetail() {
         <Card className="border-0 shadow-sm">
           <CardHeader>
             <CardTitle>Notes</CardTitle>
-            <p className="text-sm text-muted-foreground">Shown on the PDF. Leave empty to use the default from Invoice Settings.</p>
+            {isEditMode && (
+              <p className="text-sm text-muted-foreground">Shown on the PDF. Leave empty to use the default from Invoice Settings.</p>
+            )}
           </CardHeader>
           <CardContent>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder={profile?.invoice_notes_default ? 'Leave empty to use default from settings' : 'Add any notes or payment instructions...'}
-              rows={4}
-            />
+            {isEditMode ? (
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={profile?.invoice_notes_default ? 'Leave empty to use default from settings' : 'Add any notes or payment instructions...'}
+                rows={4}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap min-h-[4rem]">
+                {previewNotes || '—'}
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -882,15 +1064,23 @@ export default function InvoiceDetail() {
         <Card className="border-0 shadow-sm">
           <CardHeader>
             <CardTitle>Footer</CardTitle>
-            <p className="text-sm text-muted-foreground">Shown at the bottom of the PDF. Leave empty to use the default from Invoice Settings.</p>
+            {isEditMode && (
+              <p className="text-sm text-muted-foreground">Shown at the bottom of the PDF. Leave empty to use the default from Invoice Settings.</p>
+            )}
           </CardHeader>
           <CardContent>
-            <Textarea
-              value={invoiceFooter}
-              onChange={(e) => setInvoiceFooter(e.target.value)}
-              placeholder={profile?.invoice_footer ? 'Leave empty to use default from settings' : 'e.g. Thank you for your business!'}
-              rows={2}
-            />
+            {isEditMode ? (
+              <Textarea
+                value={invoiceFooter}
+                onChange={(e) => setInvoiceFooter(e.target.value)}
+                placeholder={profile?.invoice_footer ? 'Leave empty to use default from settings' : 'e.g. Thank you for your business!'}
+                rows={2}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap min-h-[2rem]">
+                {previewFooter || '—'}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -907,9 +1097,7 @@ export default function InvoiceDetail() {
               </Button>
               <Button size="sm" onClick={() => {
                 setIsPreviewOpen(false);
-                if (!emailMessage.trim() && profile?.invoice_email_message_default) {
-                  setEmailMessage(resolveEmailMessage(profile.invoice_email_message_default));
-                }
+                setEmailMessage(resolveEmailMessage(profile?.invoice_email_message_default ?? ''));
                 setIsSendModalOpen(true);
               }}>
                 <Mail className="mr-2 h-4 w-4" />
@@ -1126,7 +1314,12 @@ export default function InvoiceDetail() {
       </Dialog>
 
       {/* Send Invoice Modal */}
-      <Dialog open={isSendModalOpen} onOpenChange={setIsSendModalOpen}>
+      <Dialog open={isSendModalOpen} onOpenChange={(open) => {
+        setIsSendModalOpen(open);
+        if (open) {
+          setEmailMessage(resolveEmailMessage(profile?.invoice_email_message_default ?? ''));
+        }
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Send Invoice</DialogTitle>
@@ -1146,13 +1339,39 @@ export default function InvoiceDetail() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email-message">Personal Message (optional)</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="email-message">Message</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" className="h-8">
+                      Insert placeholder
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {[
+                      { tag: '{{client_name}}', label: 'Client Name' },
+                      { tag: '{{invoice_number}}', label: 'Invoice Number' },
+                      { tag: '{{total}}', label: 'Total' },
+                      { tag: '{{due_date}}', label: 'Due Date' },
+                      { tag: '{{business_name}}', label: 'Business Name' },
+                      { tag: '{{project_name}}', label: 'Project Name' },
+                    ].map(({ tag, label }) => (
+                      <DropdownMenuItem
+                        key={tag}
+                        onSelect={() => setEmailMessage((m) => m + (m ? ' ' : '') + tag)}
+                      >
+                        {label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
               <Textarea
                 id="email-message"
                 value={emailMessage}
                 onChange={(e) => setEmailMessage(e.target.value)}
                 placeholder="Add a personal message to include in the email..."
-                rows={3}
+                rows={4}
               />
             </div>
             <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground">

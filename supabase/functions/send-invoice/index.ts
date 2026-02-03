@@ -30,6 +30,29 @@ interface InvoiceItem {
   amount: number;
 }
 
+// Currency symbols for PDF (user's locale settings)
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "$", EUR: "€", GBP: "£", JPY: "¥", CAD: "C$", AUD: "A$", CHF: "CHF",
+  CNY: "¥", INR: "₹", BRL: "R$", MXN: "MX$", KRW: "₩", PLN: "zł", SEK: "kr",
+  NOK: "kr", DKK: "kr", CZK: "Kč", HUF: "Ft", RON: "lei", RUB: "₽", TRY: "₺",
+  ZAR: "R", AED: "د.إ", SAR: "﷼", ILS: "₪", THB: "฿", IDR: "Rp", MYR: "RM",
+  SGD: "S$", HKD: "HK$", NZD: "NZ$", PHP: "₱", VND: "₫", EGP: "E£", NGN: "₦",
+};
+
+function formatCurrency(
+  amount: number,
+  currencyCode: string | null | undefined,
+  displayFormat: string | null | undefined
+): string {
+  const code = (currencyCode || "USD").toUpperCase();
+  const format = displayFormat || "symbol";
+  const num = Number(amount).toFixed(2);
+  if (format === "code") return `${code} ${num}`;
+  if (format === "name") return `${num} ${code}`;
+  const symbol = CURRENCY_SYMBOLS[code] || code + " ";
+  return symbol + num;
+}
+
 // Rate limiting configuration
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const RATE_LIMIT_MAX_EMAILS = 50; // 50 emails per user per hour
@@ -111,10 +134,10 @@ serve(async (req) => {
 
     console.log(`Fetching invoice ${invoiceId} for user ${user.id}`);
 
-    // Fetch user profile with business details and default content
+    // Fetch user profile with business details, logo, and currency
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default")
+      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display")
       .eq("user_id", user.id)
       .single();
 
@@ -166,66 +189,121 @@ serve(async (req) => {
     const businessAddress = businessAddressParts.length > 0 ? businessAddressParts.join(", ") : (profile?.business_address || "");
     const taxId = profile?.tax_id || "";
 
+    const currencyFmt = (amount: number) =>
+      formatCurrency(amount, profile?.currency, profile?.currency_display);
+
     // Generate PDF
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
-    
-    // Header
-    doc.setFontSize(24);
-    doc.setTextColor(155, 99, 233); // Primary purple color
-    doc.text("INVOICE", 20, 30);
-    
-    doc.setFontSize(12);
-    doc.setTextColor(100, 100, 100);
-    doc.text(invoice.invoice_number, 20, 40);
+    const margin = 20;
+    const lineHeight = 5.5;
 
-    // From/To sections
-    let yPos = 60;
-    
-    // From (Business)
-    doc.setFontSize(10);
-    doc.setTextColor(150, 150, 150);
-    doc.text("FROM", 20, yPos);
-    doc.setTextColor(50, 50, 50);
+    // Optional: fetch and add company logo (top left)
+    let headerLeft = margin;
+    if (profile?.business_logo) {
+      try {
+        const imgRes = await fetch(profile.business_logo);
+        if (imgRes.ok) {
+          const arrBuf = await imgRes.arrayBuffer();
+          const bytes = new Uint8Array(arrBuf);
+          let base64 = "";
+          for (let i = 0; i < bytes.length; i += 1024) {
+            const chunk = bytes.subarray(i, Math.min(i + 1024, bytes.length));
+            base64 += String.fromCharCode.apply(null, Array.from(chunk));
+          }
+          base64 = btoa(base64);
+          const mime = imgRes.headers.get("content-type") || "image/png";
+          const format = mime.includes("png") ? "PNG" : "JPEG";
+          const dataUrl = `data:${mime};base64,${base64}`;
+          const logoW = 32;
+          const logoH = 12;
+          doc.addImage(dataUrl, format, margin, 14, logoW, logoH);
+          headerLeft = margin + logoW + 8;
+        }
+      } catch (_) {
+        // ignore logo fetch errors
+      }
+    }
+
+    // Header: INVOICE + number on left; Issue Date & Due Date on top right
+    doc.setFontSize(22);
+    doc.setTextColor(155, 99, 233);
+    doc.text("INVOICE", headerLeft, 22);
     doc.setFontSize(11);
-    yPos += 7;
-    doc.text(businessName, 20, yPos);
+    doc.setTextColor(100, 100, 100);
+    doc.text(invoice.invoice_number, headerLeft, 28);
+
+    const issueDateStr = new Date(invoice.issue_date).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+    const dueDateStr = invoice.due_date
+      ? new Date(invoice.due_date).toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        })
+      : null;
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Issue: ${issueDateStr}`, pageWidth - margin, 22, { align: "right" });
+    if (dueDateStr) doc.text(`Due: ${dueDateStr}`, pageWidth - margin, 28, { align: "right" });
+
+    // From/To sections — consistent line spacing
+    let yPos = 44;
+
+    doc.setFontSize(9);
+    doc.setTextColor(150, 150, 150);
+    doc.text("FROM", margin, yPos);
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(10);
+    yPos += lineHeight + 1;
+    doc.text(businessName, margin, yPos);
     if (businessEmail) {
-      yPos += 5;
-      doc.text(businessEmail, 20, yPos);
+      yPos += lineHeight;
+      doc.text(businessEmail, margin, yPos);
     }
     if (businessPhone) {
-      yPos += 5;
-      doc.text(businessPhone, 20, yPos);
+      yPos += lineHeight;
+      doc.text(businessPhone, margin, yPos);
     }
     if (businessAddress) {
-      yPos += 5;
-      const addressLines = doc.splitTextToSize(businessAddress, 80);
-      doc.text(addressLines, 20, yPos);
-      yPos += (addressLines.length - 1) * 4;
+      yPos += lineHeight;
+      const addressLines = doc.splitTextToSize(businessAddress, 78);
+      doc.text(addressLines, margin, yPos);
+      yPos += addressLines.length * lineHeight;
     }
     if (taxId) {
-      yPos += 5;
+      yPos += lineHeight;
       doc.setFontSize(9);
-      doc.text(`Tax ID: ${taxId}`, 20, yPos);
+      doc.text(`Tax ID: ${taxId}`, margin, yPos);
     }
 
-    // To (Client) - full details
-    yPos = 60;
-    doc.setFontSize(10);
+    yPos = 44;
+    doc.setFontSize(9);
     doc.setTextColor(150, 150, 150);
-    doc.text("BILL TO", 120, yPos);
+    doc.text("BILL TO", 105, yPos);
     doc.setTextColor(50, 50, 50);
-    doc.setFontSize(11);
-    yPos += 7;
+    doc.setFontSize(10);
+    yPos += lineHeight + 1;
     const client = invoice.clients;
-    if (client?.name) doc.text(client.name, 120, yPos);
-    yPos += 5;
-    if (client?.company) doc.text(client.company, 120, yPos);
-    yPos += 5;
-    if (client?.email) doc.text(client.email, 120, yPos);
-    yPos += 5;
-    if (client?.phone) doc.text(client.phone, 120, yPos);
+    if (client?.name) {
+      doc.text(client.name, 105, yPos);
+      yPos += lineHeight;
+    }
+    if (client?.company) {
+      doc.text(client.company, 105, yPos);
+      yPos += lineHeight;
+    }
+    if (client?.email) {
+      doc.text(client.email, 105, yPos);
+      yPos += lineHeight;
+    }
+    if (client?.phone) {
+      doc.text(client.phone, 105, yPos);
+      yPos += lineHeight;
+    }
     const clientAddressParts = [
       client?.street,
       client?.street2,
@@ -235,111 +313,84 @@ serve(async (req) => {
     ].filter(Boolean);
     const clientAddress = clientAddressParts.length > 0 ? clientAddressParts.join(", ") : (client?.address || "");
     if (clientAddress) {
-      yPos += 5;
-      const clientAddrLines = doc.splitTextToSize(clientAddress, 75);
-      doc.text(clientAddrLines, 120, yPos);
-      yPos += (clientAddrLines.length - 1) * 4;
+      const clientAddrLines = doc.splitTextToSize(clientAddress, 72);
+      doc.text(clientAddrLines, 105, yPos);
+      yPos += clientAddrLines.length * lineHeight;
     }
     if (client?.tax_id) {
-      yPos += 5;
       doc.setFontSize(9);
-      doc.text(`Tax ID: ${client.tax_id}`, 120, yPos);
-    }
-
-    // Dates
-    yPos = 100;
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    const issueDate = new Date(invoice.issue_date).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-    doc.text(`Issue Date: ${issueDate}`, 20, yPos);
-    
-    if (invoice.due_date) {
-      const dueDate = new Date(invoice.due_date).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-      doc.text(`Due Date: ${dueDate}`, 120, yPos);
+      doc.text(`Tax ID: ${client.tax_id}`, 105, yPos);
     }
 
     // Items table header
-    yPos = 120;
-    doc.setFillColor(245, 245, 245);
-    doc.rect(20, yPos - 5, pageWidth - 40, 10, "F");
+    doc.setFillColor(248, 248, 250);
+    doc.rect(margin, yPos - 4, pageWidth - 2 * margin, 8, "F");
     doc.setFontSize(9);
     doc.setTextColor(100, 100, 100);
-    doc.text("Description", 25, yPos);
-    doc.text("Qty", 110, yPos);
-    doc.text("Price", 130, yPos);
-    doc.text("Amount", 160, yPos);
+    doc.text("Description", margin + 4, yPos);
+    doc.text("Qty", 108, yPos);
+    doc.text("Price", 128, yPos);
+    doc.text("Amount", 158, yPos);
 
     // Items
-    yPos += 15;
+    yPos += 10;
     doc.setTextColor(50, 50, 50);
     doc.setFontSize(10);
-    
     const invoiceItems: InvoiceItem[] = items || [];
     for (const item of invoiceItems) {
-      // Wrap long descriptions
-      const descLines = doc.splitTextToSize(item.description, 80);
-      doc.text(descLines, 25, yPos);
-      doc.text(String(item.quantity), 110, yPos);
-      doc.text(`$${Number(item.unit_price).toFixed(2)}`, 130, yPos);
-      doc.text(`$${Number(item.amount).toFixed(2)}`, 160, yPos);
-      yPos += descLines.length * 5 + 5;
+      const descLines = doc.splitTextToSize(item.description, 78);
+      doc.text(descLines, margin + 4, yPos);
+      doc.text(String(item.quantity), 108, yPos);
+      doc.text(currencyFmt(Number(item.unit_price)), 128, yPos);
+      doc.text(currencyFmt(Number(item.amount)), 158, yPos);
+      yPos += Math.max(descLines.length * lineHeight, lineHeight) + 3;
     }
 
     // Totals
-    yPos += 10;
+    yPos += 6;
     doc.setDrawColor(220, 220, 220);
-    doc.line(20, yPos - 5, pageWidth - 20, yPos - 5);
-    
+    doc.line(margin, yPos - 3, pageWidth - margin, yPos - 3);
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
-    doc.text("Subtotal:", 130, yPos);
+    doc.text("Subtotal:", 128, yPos);
     doc.setTextColor(50, 50, 50);
-    doc.text(`$${Number(invoice.subtotal || 0).toFixed(2)}`, 160, yPos);
-
+    doc.text(currencyFmt(Number(invoice.subtotal || 0)), 158, yPos);
     if (invoice.tax_rate > 0) {
-      yPos += 8;
+      yPos += lineHeight + 2;
       doc.setTextColor(100, 100, 100);
-      doc.text(`Tax (${invoice.tax_rate}%):`, 130, yPos);
+      doc.text(`Tax (${invoice.tax_rate}%):`, 128, yPos);
       doc.setTextColor(50, 50, 50);
-      doc.text(`$${Number(invoice.tax_amount || 0).toFixed(2)}`, 160, yPos);
+      doc.text(currencyFmt(Number(invoice.tax_amount || 0)), 158, yPos);
     }
-
-    yPos += 12;
-    doc.setFontSize(12);
+    yPos += lineHeight + 4;
+    doc.setFontSize(11);
     doc.setTextColor(155, 99, 233);
-    doc.text("Total:", 130, yPos);
-    doc.text(`$${Number(invoice.total || 0).toFixed(2)}`, 160, yPos);
+    doc.text("Total:", 128, yPos);
+    doc.text(currencyFmt(Number(invoice.total || 0)), 158, yPos);
 
-    // Notes (invoice-level or default from profile)
+    // Notes
     const notesText = invoice.notes?.trim() || profile?.invoice_notes_default?.trim() || "";
     if (notesText) {
-      yPos += 25;
-      doc.setFontSize(10);
+      yPos += 14;
+      doc.setFontSize(9);
       doc.setTextColor(150, 150, 150);
-      doc.text("Notes:", 20, yPos);
-      yPos += 7;
+      doc.text("Notes:", margin, yPos);
+      yPos += lineHeight;
       doc.setTextColor(80, 80, 80);
-      const noteLines = doc.splitTextToSize(notesText, pageWidth - 40);
-      doc.text(noteLines, 20, yPos);
-      yPos += noteLines.length * 5;
+      doc.setFontSize(10);
+      const noteLines = doc.splitTextToSize(notesText, pageWidth - 2 * margin);
+      doc.text(noteLines, margin, yPos);
+      yPos += noteLines.length * lineHeight + 4;
     }
 
-    // Footer (per-invoice override or profile default)
+    // Footer
     const footerText = invoice.invoice_footer?.trim() || profile?.invoice_footer?.trim() || "";
     if (footerText) {
-      yPos += 15;
+      yPos += 8;
       doc.setFontSize(9);
       doc.setTextColor(120, 120, 120);
-      const footerLines = doc.splitTextToSize(footerText, pageWidth - 40);
-      doc.text(footerLines, 20, yPos);
+      const footerLines = doc.splitTextToSize(footerText, pageWidth - 2 * margin);
+      doc.text(footerLines, margin, yPos);
     }
 
     // Get PDF as base64
@@ -351,14 +402,14 @@ serve(async (req) => {
     const safeInvoiceNumber = escapeHtml(invoice.invoice_number);
     const safeMessage = escapeHtml(message);
     const safeSenderName = escapeHtml(senderName);
-    const safeTotal = Number(invoice.total || 0).toFixed(2);
+    const safeTotalFormatted = escapeHtml(currencyFmt(Number(invoice.total || 0)));
     
     const emailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #9B63E9;">Invoice ${safeInvoiceNumber}</h2>
         ${safeMessage ? `<p style="color: #333; white-space: pre-wrap;">${safeMessage}</p>` : ""}
         <p style="color: #666;">
-          Please find attached your invoice for <strong>$${safeTotal}</strong>.
+          Please find attached your invoice for <strong>${safeTotalFormatted}</strong>.
         </p>
         ${invoice.due_date ? `<p style="color: #666;">Payment is due by <strong>${new Date(invoice.due_date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</strong>.</p>` : ""}
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
@@ -371,7 +422,7 @@ serve(async (req) => {
     const { data: emailData, error: emailError } = await resend.emails.send({
       from: senderEmail ? `${senderName || "Invoice"} <onboarding@resend.dev>` : "Invoice <onboarding@resend.dev>",
       to: [recipientEmail],
-      subject: `Invoice ${invoice.invoice_number} - $${Number(invoice.total || 0).toFixed(2)}`,
+      subject: `Invoice ${invoice.invoice_number} - ${currencyFmt(Number(invoice.total || 0))}`,
       html: emailHtml,
       attachments: [
         {
