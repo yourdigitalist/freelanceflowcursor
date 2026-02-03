@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -84,8 +84,10 @@ export default function TimeTracking() {
   const [activeTimer, setActiveTimer] = useState<TimeEntry | null>(null);
   const [timerDescription, setTimerDescription] = useState('');
   const [timerProject, setTimerProject] = useState<string>('');
+  const [timerTask, setTimerTask] = useState<string>('');
   const [timerBillable, setTimerBillable] = useState(true);
-  const [elapsedTime, setElapsedTime] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const timerStartMsRef = useRef<number | null>(null);
   
   // Filters
   const [timeframeFilter, setTimeframeFilter] = useState<TimeframeFilter>('all');
@@ -121,15 +123,27 @@ export default function TimeTracking() {
   }, [dialogProject]);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (activeTimer) {
-      interval = setInterval(() => {
-        const elapsed = differenceInMinutes(new Date(), parseISO(activeTimer.start_time));
-        setElapsedTime(elapsed);
-      }, 1000);
+    if (timerProject) {
+      fetchTasksForProject(timerProject);
     }
+  }, [timerProject]);
+
+  // Elapsed time: use ref + seconds so display is accurate (avoids timezone/DB sync issues)
+  useEffect(() => {
+    if (!activeTimer) {
+      timerStartMsRef.current = null;
+      setElapsedSeconds(0);
+      return;
+    }
+    timerStartMsRef.current = new Date(activeTimer.start_time).getTime();
+    const tick = () => {
+      if (timerStartMsRef.current == null) return;
+      setElapsedSeconds(Math.floor((Date.now() - timerStartMsRef.current) / 1000));
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [activeTimer]);
+  }, [activeTimer?.id, activeTimer?.start_time]);
 
   const fetchEntries = async () => {
     try {
@@ -153,7 +167,10 @@ export default function TimeTracking() {
         setActiveTimer(runningEntry);
         setTimerDescription(runningEntry.description || '');
         setTimerProject(runningEntry.project_id || '');
+        setTimerTask(runningEntry.task_id || '');
         setTimerBillable(runningEntry.billable);
+      } else {
+        setTimerTask('');
       }
     } catch (error) {
       console.error('Error fetching time entries:', error);
@@ -207,22 +224,14 @@ export default function TimeTracking() {
   };
 
   const startTimer = async () => {
-    if (!timerProject) {
-      toast({
-        title: 'Project required',
-        description: 'Please select a project before starting the timer',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     try {
       const { data, error } = await supabase
         .from('time_entries')
         .insert({
           description: timerDescription || null,
           start_time: new Date().toISOString(),
-          project_id: timerProject,
+          project_id: timerProject || null,
+          task_id: timerTask || null,
           billable: timerBillable,
           billing_status: timerBillable ? 'unbilled' : 'not_billable',
           user_id: user!.id,
@@ -246,7 +255,8 @@ export default function TimeTracking() {
     if (!activeTimer) return;
 
     const endTime = new Date();
-    const durationMinutes = differenceInMinutes(endTime, parseISO(activeTimer.start_time));
+    const startMs = timerStartMsRef.current ?? new Date(activeTimer.start_time).getTime();
+    const durationMinutes = Math.max(0, Math.floor((endTime.getTime() - startMs) / 60_000));
 
     try {
       const { error } = await supabase
@@ -256,20 +266,23 @@ export default function TimeTracking() {
           duration_minutes: durationMinutes,
           description: timerDescription || null,
           project_id: timerProject || null,
+          task_id: timerTask || null,
           billable: timerBillable,
           billing_status: timerBillable ? 'unbilled' : 'not_billable',
         })
         .eq('id', activeTimer.id);
 
       if (error) throw error;
-      
+
       setActiveTimer(null);
       setTimerDescription('');
       setTimerProject('');
+      setTimerTask('');
       setTimerBillable(true);
-      setElapsedTime(0);
+      setElapsedSeconds(0);
+      timerStartMsRef.current = null;
       fetchEntries();
-      toast({ title: 'Timer stopped', description: `Logged ${formatDuration(durationMinutes)}` });
+      toast({ title: 'Timer stopped', description: `Logged ${formatDuration(durationMinutes)}. You can edit the entry below.` });
     } catch (error: any) {
       toast({
         title: 'Error stopping timer',
@@ -432,10 +445,10 @@ export default function TimeTracking() {
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   };
 
-  const formatElapsed = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    const secs = Math.floor((Date.now() - (activeTimer ? parseISO(activeTimer.start_time).getTime() : 0)) / 1000) % 60;
+  const formatElapsed = (totalSeconds: number) => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
@@ -665,12 +678,23 @@ export default function TimeTracking() {
                 />
                 <Select value={timerProject || 'none'} onValueChange={(v) => setTimerProject(v === 'none' ? '' : v)}>
                   <SelectTrigger className="lg:w-48">
-                    <SelectValue placeholder="Select project *" />
+                    <SelectValue placeholder="Project (optional)" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">No project</SelectItem>
                     {projects.map((p) => (
                       <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={timerTask || 'none'} onValueChange={(v) => setTimerTask(v === 'none' ? '' : v)} disabled={!timerProject}>
+                  <SelectTrigger className="lg:w-48">
+                    <SelectValue placeholder={timerProject ? 'Task (optional)' : 'Select project first'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No task</SelectItem>
+                    {tasks.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -685,7 +709,7 @@ export default function TimeTracking() {
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-3xl font-mono font-bold text-primary min-w-[140px] text-center">
-                  {activeTimer ? formatElapsed(elapsedTime) : '00:00:00'}
+                  {activeTimer ? formatElapsed(elapsedSeconds) : '00:00:00'}
                 </div>
                 {activeTimer ? (
                   <Button size="lg" variant="destructive" onClick={stopTimer}>

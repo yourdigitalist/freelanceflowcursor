@@ -38,6 +38,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 interface InvoiceItem {
   id: string;
   description: string;
+  line_description?: string | null;
   quantity: number;
   unit_price: number;
   amount: number;
@@ -56,6 +57,7 @@ interface Invoice {
   total: number;
   notes: string | null;
   invoice_footer: string | null;
+  bank_details: string | null;
   client_id: string | null;
   project_id: string | null;
   clients: { 
@@ -94,6 +96,10 @@ interface UserProfile {
   invoice_footer: string | null;
   invoice_notes_default: string | null;
   invoice_email_message_default: string | null;
+  invoice_email_subject_default: string | null;
+  reminder_enabled: boolean | null;
+  reminder_subject_default: string | null;
+  reminder_body_default: string | null;
 }
 
 interface Tax {
@@ -126,12 +132,14 @@ export default function InvoiceDetail() {
   const [taxes, setTaxes] = useState<Tax[]>([]);
   const [notes, setNotes] = useState('');
   const [invoiceFooter, setInvoiceFooter] = useState('');
+  const [bankDetails, setBankDetails] = useState('');
   const [profile, setProfile] = useState<UserProfile | null>(null);
   
   // Send invoice modal state
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [sendingInvoice, setSendingInvoice] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
   
   // Preview modal state
@@ -175,14 +183,17 @@ export default function InvoiceDetail() {
     if ((invoice as Invoice).invoice_footer == null || (invoice as Invoice).invoice_footer === '') {
       setInvoiceFooter(profile.invoice_footer || '');
     }
+    if ((invoice as Invoice).bank_details == null || (invoice as Invoice).bank_details === '') {
+      setBankDetails('');
+    }
     preloadedDefaultsRef.current = invoice.id;
-  }, [invoice?.id, invoice?.notes, (invoice as Invoice)?.invoice_footer, profile?.invoice_notes_default, profile?.invoice_footer]);
+  }, [invoice?.id, invoice?.notes, (invoice as Invoice)?.invoice_footer, (invoice as Invoice)?.bank_details, profile?.invoice_notes_default, profile?.invoice_footer]);
 
   const fetchProfile = async () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('full_name, email, company_name, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_show_quantity, invoice_show_rate, invoice_footer, invoice_notes_default, invoice_email_message_default, hourly_rate')
+        .select('full_name, email, company_name, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_show_quantity, invoice_show_rate, invoice_footer, invoice_notes_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_subject_default, reminder_body_default, hourly_rate')
         .eq('user_id', user!.id)
         .maybeSingle();
       if (!error && data) {
@@ -234,6 +245,7 @@ export default function InvoiceDetail() {
       setInvoice(data);
       setNotes(data.notes || '');
       setInvoiceFooter((data as Invoice).invoice_footer ?? '');
+      setBankDetails((data as Invoice).bank_details ?? '');
       // Pre-fill recipient email from client
       if (data.clients?.email) {
         setRecipientEmail(data.clients.email);
@@ -537,6 +549,7 @@ export default function InvoiceDetail() {
           .from('invoice_items')
           .update({
             description: item.description,
+            line_description: item.line_description?.trim() || null,
             quantity: item.quantity,
             unit_price: item.unit_price,
             amount: item.amount,
@@ -562,6 +575,7 @@ export default function InvoiceDetail() {
           total,
           notes,
           invoice_footer: invoiceFooter.trim() || null,
+          bank_details: bankDetails.trim() || null,
         })
         .eq('id', id);
 
@@ -653,6 +667,7 @@ export default function InvoiceDetail() {
           senderName: profile?.full_name || profile?.company_name || 'Your Business',
           senderEmail: profile?.email || user?.email,
           message: emailMessage,
+          subject: emailSubject.trim() || undefined,
         },
       });
 
@@ -679,7 +694,7 @@ export default function InvoiceDetail() {
       case 'paid':
         return 'bg-success/10 text-success';
       case 'sent':
-        return 'bg-primary/10 text-primary';
+        return 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
       case 'draft':
         return 'bg-muted text-muted-foreground';
       case 'overdue':
@@ -773,12 +788,19 @@ export default function InvoiceDetail() {
                     const ok = await saveInvoice();
                     if (!ok) return;
                   }
-                  setEmailMessage(resolveEmailMessage(profile?.invoice_email_message_default ?? ''));
+                  const isReminder = invoice.status === 'sent' || invoice.status === 'paid';
+                  if (isReminder) {
+                    setEmailSubject(profile?.reminder_subject_default ? resolveEmailMessage(profile.reminder_subject_default) : '');
+                    setEmailMessage(profile?.reminder_body_default ? resolveEmailMessage(profile.reminder_body_default) : '');
+                  } else {
+                    setEmailSubject(profile?.invoice_email_subject_default ? resolveEmailMessage(profile.invoice_email_subject_default) : '');
+                    setEmailMessage(resolveEmailMessage(profile?.invoice_email_message_default ?? ''));
+                  }
                   setIsSendModalOpen(true);
                 }}
               >
                 <Mail className="mr-2 h-4 w-4" />
-                Send to Client
+                {invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send to Client'}
               </Button>
             )}
             {invoice.status === 'draft' && (
@@ -920,7 +942,8 @@ export default function InvoiceDetail() {
             <div className="space-y-4">
               {/* Header */}
               <div className="grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground">
-                <div className={showQuantity && showRate ? "col-span-5" : "col-span-7"}>Item</div>
+                <div className="col-span-3">Item</div>
+                <div className="col-span-2">Description</div>
                 {showQuantity && <div className="col-span-2">Qty</div>}
                 {showRate && <div className="col-span-2">Rate</div>}
                 <div className="col-span-2 text-right">Amount</div>
@@ -935,15 +958,26 @@ export default function InvoiceDetail() {
               ) : (
                 items.map((item) => (
                   <div key={item.id} className="grid grid-cols-12 gap-4 items-center">
-                    <div className={showQuantity && showRate ? "col-span-5" : "col-span-7"}>
+                    <div className="col-span-3">
                       {isEditMode ? (
                         <Input
                           value={item.description}
                           onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                          placeholder="Item description"
+                          placeholder="Item / activity"
                         />
                       ) : (
                         <span className="text-sm">{item.description}</span>
+                      )}
+                    </div>
+                    <div className="col-span-2">
+                      {isEditMode ? (
+                        <Input
+                          value={item.line_description ?? ''}
+                          onChange={(e) => updateItem(item.id, 'line_description', e.target.value)}
+                          placeholder="Optional details"
+                        />
+                      ) : (
+                        <span className="text-sm text-muted-foreground">{item.line_description || '—'}</span>
                       )}
                     </div>
                     {showQuantity && (
@@ -1079,6 +1113,30 @@ export default function InvoiceDetail() {
             ) : (
               <p className="text-sm text-muted-foreground whitespace-pre-wrap min-h-[2rem]">
                 {previewFooter || '—'}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Bank details (per-invoice override) */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle>Bank details</CardTitle>
+            {isEditMode && (
+              <p className="text-sm text-muted-foreground">Leave empty to use default from Company settings. Shown on the invoice PDF.</p>
+            )}
+          </CardHeader>
+          <CardContent>
+            {isEditMode ? (
+              <Textarea
+                value={bankDetails}
+                onChange={(e) => setBankDetails(e.target.value)}
+                placeholder="Bank name, account number, routing, payment instructions..."
+                rows={3}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap min-h-[2rem]">
+                {bankDetails.trim() || '—'}
               </p>
             )}
           </CardContent>
@@ -1317,17 +1375,31 @@ export default function InvoiceDetail() {
       <Dialog open={isSendModalOpen} onOpenChange={(open) => {
         setIsSendModalOpen(open);
         if (open) {
-          setEmailMessage(resolveEmailMessage(profile?.invoice_email_message_default ?? ''));
+          const isReminder = invoice.status === 'sent' || invoice.status === 'paid';
+          if (isReminder) {
+            setEmailSubject(profile?.reminder_subject_default ? resolveEmailMessage(profile.reminder_subject_default) : '');
+            setEmailMessage(profile?.reminder_body_default ? resolveEmailMessage(profile.reminder_body_default) : '');
+          } else {
+            setEmailSubject(profile?.invoice_email_subject_default ? resolveEmailMessage(profile.invoice_email_subject_default) : '');
+            setEmailMessage(resolveEmailMessage(profile?.invoice_email_message_default ?? ''));
+          }
         }
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Send Invoice</DialogTitle>
+            <DialogTitle>{invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send Invoice'}</DialogTitle>
             <DialogDescription>
-              Send this invoice to your client via email with a PDF attachment.
+              {invoice.status === 'sent' || invoice.status === 'paid'
+                ? 'Send a reminder email to your client with the invoice PDF attached.'
+                : 'Send this invoice to your client via email with a PDF attachment.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {(invoice.status === 'sent' || invoice.status === 'paid') && profile?.reminder_enabled && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-3 text-sm text-amber-800 dark:text-amber-200">
+                You have automatic reminders enabled. This is a manual reminder.
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="recipient-email">Recipient Email</Label>
               <Input
@@ -1336,6 +1408,15 @@ export default function InvoiceDetail() {
                 value={recipientEmail}
                 onChange={(e) => setRecipientEmail(e.target.value)}
                 placeholder="client@example.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email-subject">Subject</Label>
+              <Input
+                id="email-subject"
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+                placeholder="Email subject"
               />
             </div>
             <div className="space-y-2">
@@ -1396,7 +1477,7 @@ export default function InvoiceDetail() {
               ) : (
                 <>
                   <Mail className="mr-2 h-4 w-4" />
-                  Send Invoice
+                  {invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send Invoice'}
                 </>
               )}
             </Button>

@@ -31,7 +31,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { format } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, parseISO } from 'date-fns';
 import {
   Table,
   TableBody,
@@ -87,6 +87,15 @@ export default function Invoices() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTaxId, setSelectedTaxId] = useState<string>('');
+
+  // Filters
+  type DateRangePreset = 'all' | 'this_week' | 'this_month' | 'last_90' | 'custom';
+  const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>('all');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+  const [filterClientId, setFilterClientId] = useState<string>('all');
+  const [filterProjectId, setFilterProjectId] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
 
   useEffect(() => {
     if (user) {
@@ -249,18 +258,38 @@ export default function Invoices() {
     }
   };
 
-  const filteredInvoices = invoices.filter(
-    (inv) =>
+  const filteredInvoices = invoices.filter((inv) => {
+    const matchesSearch =
       inv.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inv.clients?.name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      inv.clients?.name?.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+
+    const created = parseISO(inv.created_at);
+    if (dateRangePreset !== 'all') {
+      const now = new Date();
+      if (dateRangePreset === 'this_week') {
+        if (created < startOfWeek(now) || created > endOfWeek(now)) return false;
+      } else if (dateRangePreset === 'this_month') {
+        if (created < startOfMonth(now) || created > endOfMonth(now)) return false;
+      } else if (dateRangePreset === 'last_90') {
+        if (created < subDays(now, 90)) return false;
+      } else if (dateRangePreset === 'custom') {
+        if (dateFrom && created < parseISO(dateFrom)) return false;
+        if (dateTo && created > parseISO(dateTo + 'T23:59:59')) return false;
+      }
+    }
+    if (filterClientId !== 'all' && inv.client_id !== filterClientId) return false;
+    if (filterProjectId !== 'all' && inv.project_id !== filterProjectId) return false;
+    if (filterStatus !== 'all' && inv.status !== filterStatus) return false;
+    return true;
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'paid':
         return 'bg-success/10 text-success';
       case 'sent':
-        return 'bg-primary/10 text-primary';
+        return 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
       case 'draft':
         return 'bg-muted text-muted-foreground';
       case 'overdue':
@@ -273,10 +302,10 @@ export default function Invoices() {
   };
 
   const stats = {
-    total: invoices.reduce((sum, i) => sum + Number(i.total), 0),
-    paid: invoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + Number(i.total), 0),
-    pending: invoices.filter(i => ['sent', 'draft'].includes(i.status)).reduce((sum, i) => sum + Number(i.total), 0),
-    overdue: invoices.filter(i => i.status === 'overdue').reduce((sum, i) => sum + Number(i.total), 0),
+    total: filteredInvoices.reduce((sum, i) => sum + Number(i.total), 0),
+    paid: filteredInvoices.filter((i) => i.status === 'paid').reduce((sum, i) => sum + Number(i.total), 0),
+    pending: filteredInvoices.filter((i) => ['sent', 'draft'].includes(i.status)).reduce((sum, i) => sum + Number(i.total), 0),
+    overdue: filteredInvoices.filter((i) => i.status === 'overdue').reduce((sum, i) => sum + Number(i.total), 0),
   };
 
   return (
@@ -437,15 +466,88 @@ export default function Invoices() {
           </Card>
         </div>
 
-        {/* Search */}
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search invoices..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+        {/* Filters */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Date</Label>
+            <Select value={dateRangePreset} onValueChange={(v) => setDateRangePreset(v as DateRangePreset)}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All time</SelectItem>
+                <SelectItem value="this_week">This week</SelectItem>
+                <SelectItem value="this_month">This month</SelectItem>
+                <SelectItem value="last_90">Last 90 days</SelectItem>
+                <SelectItem value="custom">Custom</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {dateRangePreset === 'custom' && (
+            <>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">From</Label>
+                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-[140px]" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">To</Label>
+                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-[140px]" />
+              </div>
+            </>
+          )}
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Client</Label>
+            <Select value={filterClientId} onValueChange={setFilterClientId}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="All clients" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All clients</SelectItem>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Project</Label>
+            <Select value={filterProjectId} onValueChange={setFilterProjectId}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="All projects" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All projects</SelectItem>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Status</Label>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[130px]">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="sent">Sent</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value="overdue">Overdue</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search invoices..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
         </div>
 
         {/* Invoices Table */}

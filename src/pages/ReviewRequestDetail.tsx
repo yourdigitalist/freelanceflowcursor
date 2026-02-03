@@ -318,36 +318,144 @@ export default function ReviewRequestDetail() {
                         );
                       })}
                     </div>
-                    {/* Image viewer with comment pins (like client view) */}
+                    {/* Image viewer with comment pins and comments list (like client view) */}
                     <Dialog open={!!imageViewFile} onOpenChange={(open) => !open && setImageViewFile(null)}>
-                      <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
-                        <DialogHeader>
-                          <DialogTitle>{imageViewFile?.file_name}</DialogTitle>
+                      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-0 gap-0">
+                        <DialogHeader className="px-6 py-4 border-b shrink-0">
+                          <DialogTitle className="truncate pr-8">{imageViewFile?.file_name}</DialogTitle>
                         </DialogHeader>
-                        {imageViewFile?.file_type?.startsWith('image/') && (
-                          <div className="relative inline-block max-w-full">
-                            <img
-                              src={imageViewFile.file_url}
-                              alt={imageViewFile.file_name}
-                              className="max-w-full h-auto rounded-lg"
-                            />
-                            {comments
-                              .filter(c => c.review_file_id === imageViewFile.id && c.x_position != null && c.y_position != null)
-                              .map((comment, i) => (
-                                <div
-                                  key={comment.id}
-                                  className="absolute w-6 h-6 -ml-3 -mt-3 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold shadow-lg"
-                                  style={{
-                                    left: `${comment.x_position}%`,
-                                    top: `${comment.y_position}%`,
-                                  }}
-                                  title={comment.content}
-                                >
-                                  {i + 1}
+                        {imageViewFile && (imageViewFile.file_type?.startsWith('image/') ? (() => {
+                          const fileCommentsList = comments.filter(c => c.review_file_id === imageViewFile.id);
+                          const pinnedComments = fileCommentsList.filter(c => c.x_position != null && c.y_position != null);
+                          const getPinNumber = (commentId: string) => {
+                            const idx = pinnedComments.findIndex(c => c.id === commentId);
+                            return idx >= 0 ? idx + 1 : null;
+                          };
+                          return (
+                            <div className="flex flex-1 min-h-0 overflow-hidden">
+                              <div className="flex-1 overflow-auto p-6 flex items-start justify-center bg-muted/30">
+                                <div className="relative w-fit max-w-full">
+                                  <img
+                                    src={imageViewFile.file_url}
+                                    alt={imageViewFile.file_name}
+                                    className="max-w-full h-auto rounded-lg block"
+                                  />
+                                  {pinnedComments.map((comment, i) => (
+                                    <div
+                                      key={comment.id}
+                                      className="absolute w-6 h-6 -ml-3 -mt-3 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold shadow-lg pointer-events-none"
+                                      style={{
+                                        left: `${comment.x_position}%`,
+                                        top: `${comment.y_position}%`,
+                                      }}
+                                      title={comment.content}
+                                    >
+                                      {i + 1}
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
+                              </div>
+                              <div className="w-80 border-l bg-card flex flex-col shrink-0 overflow-hidden">
+                                <div className="p-4 border-b shrink-0">
+                                  <h3 className="font-medium flex items-center gap-2">
+                                    <MessageSquare className="h-4 w-4" />
+                                    Comments ({fileCommentsList.length})
+                                  </h3>
+                                </div>
+                                <div className="flex-1 overflow-auto p-4 space-y-4">
+                                  {[...fileCommentsList]
+                                    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                                    .map((comment) => {
+                                      const pinNumber = getPinNumber(comment.id);
+                                      return (
+                                        <div key={comment.id} className="flex gap-3">
+                                          <div className="flex-shrink-0">
+                                            {pinNumber != null ? (
+                                              <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold">
+                                                {pinNumber}
+                                              </div>
+                                            ) : (
+                                              <Avatar className="h-6 w-6">
+                                                <AvatarFallback className="text-xs">
+                                                  {comment.commenter_name?.slice(0, 2).toUpperCase() || 'AN'}
+                                                </AvatarFallback>
+                                              </Avatar>
+                                            )}
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              <span className="font-medium text-sm">
+                                                {comment.commenter_name || 'Anonymous'}
+                                              </span>
+                                              <span className="text-xs text-muted-foreground">
+                                                {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
+                                              </span>
+                                            </div>
+                                            {comment.commenter_email && (
+                                              <p className="text-xs text-muted-foreground">{comment.commenter_email}</p>
+                                            )}
+                                            <p className="text-sm mt-1 whitespace-pre-wrap">{comment.content}</p>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  {fileCommentsList.length === 0 && (
+                                    <p className="text-sm text-muted-foreground text-center py-4">No comments on this file</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })() : (
+                          <div className="flex flex-1 min-h-0 overflow-hidden">
+                            <div className="flex-1 overflow-auto p-6 flex flex-col items-center justify-center gap-4 bg-muted/30">
+                              <FileText className="h-16 w-16 text-muted-foreground" />
+                              <p className="font-medium">{imageViewFile.file_name}</p>
+                              <a
+                                href={imageViewFile.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline"
+                              >
+                                Open file
+                              </a>
+                            </div>
+                            <div className="w-80 border-l bg-card flex flex-col shrink-0 overflow-hidden">
+                              <div className="p-4 border-b shrink-0">
+                                <h3 className="font-medium flex items-center gap-2">
+                                  <MessageSquare className="h-4 w-4" />
+                                  Comments ({comments.filter(c => c.review_file_id === imageViewFile.id).length})
+                                </h3>
+                              </div>
+                              <div className="flex-1 overflow-auto p-4 space-y-4">
+                                {comments
+                                  .filter(c => c.review_file_id === imageViewFile.id)
+                                  .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                                  .map((comment) => (
+                                    <div key={comment.id} className="flex gap-3">
+                                      <Avatar className="h-6 w-6 flex-shrink-0">
+                                        <AvatarFallback className="text-xs">
+                                          {comment.commenter_name?.slice(0, 2).toUpperCase() || 'AN'}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="font-medium text-sm">{comment.commenter_name || 'Anonymous'}</span>
+                                          <span className="text-xs text-muted-foreground">
+                                            {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
+                                          </span>
+                                        </div>
+                                        <p className="text-sm mt-1 whitespace-pre-wrap">{comment.content}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                {comments.filter(c => c.review_file_id === imageViewFile.id).length === 0 && (
+                                  <p className="text-sm text-muted-foreground text-center py-4">No comments on this file</p>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        )}
+                        ))}
                       </DialogContent>
                     </Dialog>
                   </>

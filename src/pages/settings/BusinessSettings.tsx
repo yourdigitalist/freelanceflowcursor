@@ -63,11 +63,22 @@ export default function BusinessSettings() {
     }
   };
 
+  const MAX_LOGO_BYTES = 500 * 1024; // 500KB
+
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
     if (!file.type.startsWith('image/')) {
       toast({ title: 'Please select an image file', variant: 'destructive' });
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      toast({
+        title: 'File too large',
+        description: `Max size is 500 KB. Your file is ${(file.size / 1024).toFixed(1)} KB.`,
+        variant: 'destructive',
+      });
+      e.target.value = '';
       return;
     }
     setSaving(true);
@@ -87,9 +98,15 @@ export default function BusinessSettings() {
       toast({ title: 'Logo uploaded' });
       fetchProfile();
     } catch (error: any) {
+      const msg = error.message ?? '';
+      const isRls = msg.includes('row-level security') || msg.includes('violates');
       toast({
         title: 'Upload failed',
-        description: error.message?.includes('Bucket not found') ? 'Create a storage bucket named "business-logos" in Supabase (Storage) and set it to public.' : error.message,
+        description: isRls
+          ? 'Storage access was denied. Ensure the business-logos bucket has RLS policies for your user.'
+          : msg.includes('Bucket not found')
+            ? 'Create a storage bucket named "business-logos" in Supabase (Storage) and set it to public.'
+            : msg,
         variant: 'destructive',
       });
     } finally {
@@ -162,7 +179,7 @@ export default function BusinessSettings() {
       <Card className="border-0 shadow-sm">
         <CardHeader>
           <CardTitle>Business Logo</CardTitle>
-          <CardDescription>This logo will appear on your invoices</CardDescription>
+          <CardDescription>This logo will appear on your invoices. Max file size: 500 KB. Counts toward your storage allowance.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-4">

@@ -1,3 +1,5 @@
+// @ts-nocheck
+// Supabase Edge Function (Deno). Deploy with: supabase functions deploy send-invoice
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
@@ -25,6 +27,7 @@ function escapeHtml(text: string | null | undefined): string {
 
 interface InvoiceItem {
   description: string;
+  line_description?: string | null;
   quantity: number;
   unit_price: number;
   amount: number;
@@ -126,7 +129,7 @@ serve(async (req) => {
       );
     }
 
-    const { invoiceId, recipientEmail, senderName, senderEmail, message } = await req.json();
+    const { invoiceId, recipientEmail, senderName, senderEmail, message, subject: customSubject } = await req.json();
 
     if (!invoiceId || !recipientEmail) {
       throw new Error("Missing required fields: invoiceId and recipientEmail");
@@ -134,10 +137,10 @@ serve(async (req) => {
 
     console.log(`Fetching invoice ${invoiceId} for user ${user.id}`);
 
-    // Fetch user profile with business details, logo, and currency
+    // Fetch user profile with business details, logo, currency, bank, and invoice display options
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display")
+      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, bank_name, bank_account_number, bank_routing_number, payment_instructions")
       .eq("user_id", user.id)
       .single();
 
@@ -194,15 +197,39 @@ serve(async (req) => {
 
     // Generate PDF
     const doc = new jsPDF();
+    function checkPageBreak(docRef: any, yPos: number, neededSpace: number, marginVal: number): number {
+      const ph = docRef.internal.pageSize.getHeight();
+      if (yPos + neededSpace > ph - 30) {
+        docRef.addPage();
+        return marginVal + 10;
+      }
+      return yPos;
+    }
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 20;
-    const lineHeight = 5.5;
+    const spacing = {
+      lineHeight: 5.5,
+      sectionGap: 12,
+      paragraphGap: 6,
+      tableRowPadding: 2,
+      beforeFooter: 16,
+    };
+    const { lineHeight, sectionGap, paragraphGap, tableRowPadding, beforeFooter } = spacing;
+    const showQty = profile?.invoice_show_quantity !== false;
+    const showRate = profile?.invoice_show_rate !== false;
+    const showLineDescription = profile?.invoice_show_line_description === true;
 
-    // Optional: fetch and add company logo (top left)
-    let headerLeft = margin;
+    const billToX = 105;
+    const logoW = 40;
+    const logoH = 14;
+    const logoX = pageWidth - margin - logoW;
+    let logoDrawn = false;
     if (profile?.business_logo) {
+      const logoUrl = profile.business_logo;
+      console.log("[send-invoice] Logo URL:", logoUrl ? "present" : "missing");
       try {
-        const imgRes = await fetch(profile.business_logo);
+        const imgRes = await fetch(logoUrl, { redirect: "follow" });
+        console.log("[send-invoice] Logo fetch status:", imgRes.status, imgRes.ok);
         if (imgRes.ok) {
           const arrBuf = await imgRes.arrayBuffer();
           const bytes = new Uint8Array(arrBuf);
@@ -215,163 +242,214 @@ serve(async (req) => {
           const mime = imgRes.headers.get("content-type") || "image/png";
           const format = mime.includes("png") ? "PNG" : "JPEG";
           const dataUrl = `data:${mime};base64,${base64}`;
-          const logoW = 32;
-          const logoH = 12;
-          doc.addImage(dataUrl, format, margin, 14, logoW, logoH);
-          headerLeft = margin + logoW + 8;
+          doc.addImage(dataUrl, format, logoX, 12, logoW, logoH);
+          logoDrawn = true;
+          console.log("[send-invoice] Logo drawn from fetch");
         }
-      } catch (_) {
-        // ignore logo fetch errors
+      } catch (e) {
+        console.log("[send-invoice] Logo fetch error:", e instanceof Error ? e.message : String(e));
       }
+      if (!logoDrawn && logoUrl.includes("storage/v1/object/public/business-logos/")) {
+        const pathMatch = logoUrl.match(/business-logos\/(.+)$/);
+        const path = pathMatch ? pathMatch[1].split("?")[0] : null;
+        if (path) {
+          const { data: blob, error: dlErr } = await supabase.storage.from("business-logos").download(path);
+          console.log("[send-invoice] Logo storage fallback:", dlErr ? dlErr.message : "ok");
+          if (!dlErr && blob) {
+            const arrBuf = await blob.arrayBuffer();
+            const bytes = new Uint8Array(arrBuf);
+            let base64 = "";
+            for (let i = 0; i < bytes.length; i += 1024) {
+              const chunk = bytes.subarray(i, Math.min(i + 1024, bytes.length));
+              base64 += String.fromCharCode.apply(null, Array.from(chunk));
+            }
+            base64 = btoa(base64);
+            const mime = blob.type || "image/png";
+            const format = mime.includes("png") ? "PNG" : "JPEG";
+            doc.addImage(`data:${mime};base64,${base64}`, format, logoX, 12, logoW, logoH);
+            logoDrawn = true;
+            console.log("[send-invoice] Logo drawn from storage");
+          }
+        }
+      }
+      if (!logoDrawn) console.log("[send-invoice] Logo skipped (unable to load)");
     }
 
-    // Header: INVOICE + number on left; Issue Date & Due Date on top right
+    // Header: INVOICE title, number, dates, status (right side) — fixed at top
+    let rightY = 14;
     doc.setFontSize(22);
     doc.setTextColor(155, 99, 233);
-    doc.text("INVOICE", headerLeft, 22);
-    doc.setFontSize(11);
-    doc.setTextColor(100, 100, 100);
-    doc.text(invoice.invoice_number, headerLeft, 28);
-
-    const issueDateStr = new Date(invoice.issue_date).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-    const dueDateStr = invoice.due_date
-      ? new Date(invoice.due_date).toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        })
-      : null;
+    doc.text("INVOICE", pageWidth - margin, rightY, { align: "right" });
+    rightY += 6;
+    doc.setFontSize(10);
+    doc.setTextColor(60, 60, 60);
+    doc.text(invoice.invoice_number, pageWidth - margin, rightY, { align: "right" });
+    rightY += 5;
+    const issueDateStr = new Date(invoice.issue_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
     doc.setFontSize(9);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Issue: ${issueDateStr}`, pageWidth - margin, 22, { align: "right" });
-    if (dueDateStr) doc.text(`Due: ${dueDateStr}`, pageWidth - margin, 28, { align: "right" });
+    doc.text(`Issue Date: ${issueDateStr}`, pageWidth - margin, rightY, { align: "right" });
+    rightY += 5;
+    const dueDateStr = invoice.due_date ? new Date(invoice.due_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : null;
+    if (dueDateStr) {
+      doc.text(`Due Date: ${dueDateStr}`, pageWidth - margin, rightY, { align: "right" });
+      rightY += 6;
+    } else rightY += 4;
+    doc.setFillColor(245, 158, 11);
+    try {
+      if (typeof doc.roundedRect === "function") doc.roundedRect(pageWidth - margin - 26, rightY - 3.5, 26, 7, 1.5, 1.5, "F");
+      else doc.rect(pageWidth - margin - 26, rightY - 3.5, 26, 7, "F");
+    } catch (_) {
+      doc.rect(pageWidth - margin - 26, rightY - 3.5, 26, 7, "F");
+    }
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255);
+    doc.text("Sent", pageWidth - margin - 13, rightY + 1, { align: "center" });
 
-    // From/To sections — consistent line spacing
-    let yPos = 44;
-
+    // FROM and BILL TO side-by-side at Y=44; single yPos = max of both section ends
+    const startY = 44;
+    let fromY = startY;
     doc.setFontSize(9);
     doc.setTextColor(150, 150, 150);
-    doc.text("FROM", margin, yPos);
+    doc.text("FROM", margin, fromY);
     doc.setTextColor(50, 50, 50);
     doc.setFontSize(10);
-    yPos += lineHeight + 1;
-    doc.text(businessName, margin, yPos);
+    fromY += lineHeight + 2;
+    doc.text(businessName, margin, fromY);
+    fromY += lineHeight;
     if (businessEmail) {
-      yPos += lineHeight;
-      doc.text(businessEmail, margin, yPos);
+      doc.text(businessEmail, margin, fromY);
+      fromY += lineHeight;
     }
     if (businessPhone) {
-      yPos += lineHeight;
-      doc.text(businessPhone, margin, yPos);
+      doc.text(businessPhone, margin, fromY);
+      fromY += lineHeight;
     }
     if (businessAddress) {
-      yPos += lineHeight;
       const addressLines = doc.splitTextToSize(businessAddress, 78);
-      doc.text(addressLines, margin, yPos);
-      yPos += addressLines.length * lineHeight;
+      doc.text(addressLines, margin, fromY);
+      fromY += addressLines.length * lineHeight;
     }
     if (taxId) {
-      yPos += lineHeight;
-      doc.setFontSize(9);
-      doc.text(`Tax ID: ${taxId}`, margin, yPos);
+      fromY += paragraphGap;
+      doc.setFontSize(10);
+      doc.setTextColor(60, 60, 60);
+      doc.text(`Tax ID: ${taxId}`, margin, fromY);
+      doc.setTextColor(50, 50, 50);
+      fromY += lineHeight;
     }
 
-    yPos = 44;
+    let billToY = startY;
+    const client = invoice.clients;
     doc.setFontSize(9);
     doc.setTextColor(150, 150, 150);
-    doc.text("BILL TO", 105, yPos);
+    doc.text("BILL TO", billToX, billToY);
     doc.setTextColor(50, 50, 50);
     doc.setFontSize(10);
-    yPos += lineHeight + 1;
-    const client = invoice.clients;
+    billToY += lineHeight + 2;
     if (client?.name) {
-      doc.text(client.name, 105, yPos);
-      yPos += lineHeight;
+      doc.text(client.name, billToX, billToY);
+      billToY += lineHeight;
     }
     if (client?.company) {
-      doc.text(client.company, 105, yPos);
-      yPos += lineHeight;
+      doc.text(client.company, billToX, billToY);
+      billToY += lineHeight;
     }
     if (client?.email) {
-      doc.text(client.email, 105, yPos);
-      yPos += lineHeight;
+      doc.text(client.email, billToX, billToY);
+      billToY += lineHeight;
     }
     if (client?.phone) {
-      doc.text(client.phone, 105, yPos);
-      yPos += lineHeight;
+      doc.text(client.phone, billToX, billToY);
+      billToY += lineHeight;
     }
-    const clientAddressParts = [
-      client?.street,
-      client?.street2,
-      client?.city,
-      [client?.state, client?.postal_code].filter(Boolean).join(" "),
-      client?.country,
-    ].filter(Boolean);
+    const clientAddressParts = [client?.street, client?.street2, client?.city, [client?.state, client?.postal_code].filter(Boolean).join(" "), client?.country].filter(Boolean);
     const clientAddress = clientAddressParts.length > 0 ? clientAddressParts.join(", ") : (client?.address || "");
     if (clientAddress) {
       const clientAddrLines = doc.splitTextToSize(clientAddress, 72);
-      doc.text(clientAddrLines, 105, yPos);
-      yPos += clientAddrLines.length * lineHeight;
+      doc.text(clientAddrLines, billToX, billToY);
+      billToY += clientAddrLines.length * lineHeight;
     }
     if (client?.tax_id) {
-      doc.setFontSize(9);
-      doc.text(`Tax ID: ${client.tax_id}`, 105, yPos);
+      billToY += paragraphGap;
+      doc.setFontSize(10);
+      doc.setTextColor(60, 60, 60);
+      doc.text(`Tax ID: ${client.tax_id}`, billToX, billToY);
+      doc.setTextColor(50, 50, 50);
+      billToY += lineHeight;
     }
 
-    // Items table header
+    let yPos = Math.max(fromY, billToY) + sectionGap;
+    console.log("[send-invoice] yPos after FROM/BILL TO:", yPos);
+
+    // Table header
+    yPos += 10;
+    const colItem = margin + 4;
+    const colAmount = pageWidth - margin - 2;
+    const tableRight = pageWidth - margin;
+    const colQty = showLineDescription ? 112 : 102;
+    const colPrice = showQty ? 128 : 118;
+    const amountLabelX = colAmount - 32;
+
     doc.setFillColor(248, 248, 250);
-    doc.rect(margin, yPos - 4, pageWidth - 2 * margin, 8, "F");
+    doc.rect(margin, yPos - 4, tableRight - margin, 10, "F");
     doc.setFontSize(9);
     doc.setTextColor(100, 100, 100);
-    doc.text("Description", margin + 4, yPos);
-    doc.text("Qty", 108, yPos);
-    doc.text("Price", 128, yPos);
-    doc.text("Amount", 158, yPos);
+    doc.text("Item", colItem, yPos + 2);
+    if (showLineDescription) doc.text("Description", 72, yPos + 2);
+    if (showQty) doc.text("Qty", colQty, yPos + 2);
+    if (showRate) doc.text("Price", colPrice, yPos + 2);
+    doc.text("Amount", colAmount, yPos + 2, { align: "right" });
+    yPos += 10 + tableRowPadding;
+    console.log("[send-invoice] yPos after table header:", yPos);
 
-    // Items
-    yPos += 10;
     doc.setTextColor(50, 50, 50);
     doc.setFontSize(10);
     const invoiceItems: InvoiceItem[] = items || [];
     for (const item of invoiceItems) {
-      const descLines = doc.splitTextToSize(item.description, 78);
-      doc.text(descLines, margin + 4, yPos);
-      doc.text(String(item.quantity), 108, yPos);
-      doc.text(currencyFmt(Number(item.unit_price)), 128, yPos);
-      doc.text(currencyFmt(Number(item.amount)), 158, yPos);
-      yPos += Math.max(descLines.length * lineHeight, lineHeight) + 3;
+      const itemW = showLineDescription ? 64 : 76;
+      const itemLines = doc.splitTextToSize(item.description, itemW);
+      const lineDescLines = showLineDescription && item.line_description ? doc.splitTextToSize(item.line_description, 48) : [];
+      const descLines = itemLines;
+      const rowH = Math.max(descLines.length * lineHeight, lineDescLines.length * lineHeight, lineHeight) + tableRowPadding;
+      yPos = checkPageBreak(doc, yPos, rowH + 4, margin);
+      doc.text(itemLines, colItem, yPos);
+      if (showLineDescription && item.line_description) doc.text(lineDescLines, 72, yPos);
+      if (showQty) doc.text(String(item.quantity), colQty, yPos);
+      if (showRate) doc.text(currencyFmt(Number(item.unit_price)), colPrice, yPos);
+      doc.text(currencyFmt(Number(item.amount)), colAmount, yPos, { align: "right" });
+      yPos += rowH;
     }
+    console.log("[send-invoice] yPos after items (" + invoiceItems.length + " items):", yPos);
 
     // Totals
-    yPos += 6;
+    yPos += sectionGap;
     doc.setDrawColor(220, 220, 220);
-    doc.line(margin, yPos - 3, pageWidth - margin, yPos - 3);
+    doc.line(margin, yPos - 3, tableRight, yPos - 3);
+    yPos += 6;
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
-    doc.text("Subtotal:", 128, yPos);
+    doc.text("Subtotal:", amountLabelX, yPos);
     doc.setTextColor(50, 50, 50);
-    doc.text(currencyFmt(Number(invoice.subtotal || 0)), 158, yPos);
-    if (invoice.tax_rate > 0) {
-      yPos += lineHeight + 2;
+    doc.text(currencyFmt(Number(invoice.subtotal || 0)), colAmount, yPos, { align: "right" });
+    yPos += lineHeight + 2;
+    if (Number(invoice.tax_rate) > 0) {
       doc.setTextColor(100, 100, 100);
-      doc.text(`Tax (${invoice.tax_rate}%):`, 128, yPos);
+      doc.text(`Tax (${invoice.tax_rate}%):`, amountLabelX, yPos);
       doc.setTextColor(50, 50, 50);
-      doc.text(currencyFmt(Number(invoice.tax_amount || 0)), 158, yPos);
+      doc.text(currencyFmt(Number(invoice.tax_amount || 0)), colAmount, yPos, { align: "right" });
+      yPos += lineHeight + 2;
     }
-    yPos += lineHeight + 4;
     doc.setFontSize(11);
     doc.setTextColor(155, 99, 233);
-    doc.text("Total:", 128, yPos);
-    doc.text(currencyFmt(Number(invoice.total || 0)), 158, yPos);
+    doc.text("Total:", amountLabelX, yPos);
+    doc.text(currencyFmt(Number(invoice.total || 0)), colAmount, yPos, { align: "right" });
+    yPos += lineHeight + 4;
 
-    // Notes
+    // Notes — sequential at yPos, then advance by actual height
     const notesText = invoice.notes?.trim() || profile?.invoice_notes_default?.trim() || "";
+    yPos += beforeFooter;
     if (notesText) {
-      yPos += 14;
+      yPos = checkPageBreak(doc, yPos, lineHeight * 4, margin);
       doc.setFontSize(9);
       doc.setTextColor(150, 150, 150);
       doc.text("Notes:", margin, yPos);
@@ -380,17 +458,48 @@ serve(async (req) => {
       doc.setFontSize(10);
       const noteLines = doc.splitTextToSize(notesText, pageWidth - 2 * margin);
       doc.text(noteLines, margin, yPos);
-      yPos += noteLines.length * lineHeight + 4;
+      yPos += noteLines.length * lineHeight + paragraphGap;
     }
 
-    // Footer
+    // Bank details — sequential at yPos
+    const bankText = (invoice.bank_details && invoice.bank_details.trim()) || [profile?.bank_name, profile?.bank_account_number && `Account: ${profile.bank_account_number}`, profile?.bank_routing_number && `Routing: ${profile.bank_routing_number}`, profile?.payment_instructions].filter(Boolean).join("\n");
+    if (bankText.trim()) {
+      yPos += 8;
+      yPos = checkPageBreak(doc, yPos, lineHeight * 4, margin);
+      doc.setFontSize(9);
+      doc.setTextColor(150, 150, 150);
+      doc.text("Bank details:", margin, yPos);
+      yPos += lineHeight;
+      doc.setTextColor(80, 80, 80);
+      doc.setFontSize(10);
+      const bankLines = doc.splitTextToSize(bankText.trim(), pageWidth - 2 * margin);
+      doc.text(bankLines, margin, yPos);
+      yPos += bankLines.length * lineHeight + 8;
+    }
+
+    // Footer — sequential at yPos (no fixed bottom position)
     const footerText = invoice.invoice_footer?.trim() || profile?.invoice_footer?.trim() || "";
+    console.log("[send-invoice] yPos before footer:", yPos);
     if (footerText) {
       yPos += 8;
+      const footerLines = doc.splitTextToSize(footerText, pageWidth - 2 * margin);
+      yPos = checkPageBreak(doc, yPos, footerLines.length * lineHeight + 4, margin);
+      doc.setDrawColor(220, 220, 220);
+      doc.line(margin, yPos - 5, pageWidth - margin, yPos - 5);
       doc.setFontSize(9);
       doc.setTextColor(120, 120, 120);
-      const footerLines = doc.splitTextToSize(footerText, pageWidth - 2 * margin);
       doc.text(footerLines, margin, yPos);
+      yPos += footerLines.length * lineHeight;
+    }
+
+    const totalPages = doc.getNumberOfPages();
+    if (totalPages > 1) {
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFontSize(9);
+        doc.setTextColor(150, 150, 150);
+        doc.text(`Page ${p} of ${totalPages}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: "center" });
+      }
     }
 
     // Get PDF as base64
@@ -419,10 +528,14 @@ serve(async (req) => {
       </div>
     `;
 
+    const emailSubject = customSubject && String(customSubject).trim()
+      ? customSubject
+      : `Invoice ${invoice.invoice_number} - ${currencyFmt(Number(invoice.total || 0))}`;
+
     const { data: emailData, error: emailError } = await resend.emails.send({
       from: senderEmail ? `${senderName || "Invoice"} <onboarding@resend.dev>` : "Invoice <onboarding@resend.dev>",
       to: [recipientEmail],
-      subject: `Invoice ${invoice.invoice_number} - ${currencyFmt(Number(invoice.total || 0))}`,
+      subject: emailSubject,
       html: emailHtml,
       attachments: [
         {

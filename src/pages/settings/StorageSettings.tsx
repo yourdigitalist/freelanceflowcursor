@@ -137,7 +137,7 @@ export default function StorageSettings() {
               Usage
             </CardTitle>
             <CardDescription>
-              {totalMB}MB of {maxMB}MB used
+              {totalMB}MB of {maxMB}MB used. Company logo and profile photo count toward this total.
             </CardDescription>
           </CardHeader>
           <CardContent>

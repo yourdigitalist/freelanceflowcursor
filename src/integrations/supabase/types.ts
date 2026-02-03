@@ -93,6 +93,7 @@ export type Database = {
           description: string
           id: string
           invoice_id: string
+          line_description: string | null
           quantity: number | null
           unit_price: number
         }
@@ -102,6 +103,7 @@ export type Database = {
           description: string
           id?: string
           invoice_id: string
+          line_description?: string | null
           quantity?: number | null
           unit_price: number
         }
@@ -111,6 +113,7 @@ export type Database = {
           description?: string
           id?: string
           invoice_id?: string
+          line_description?: string | null
           quantity?: number | null
           unit_price?: number
         }
@@ -126,6 +129,7 @@ export type Database = {
       }
       invoices: {
         Row: {
+          bank_details: string | null
           client_id: string | null
           created_at: string
           due_date: string | null
@@ -144,6 +148,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          bank_details?: string | null
           client_id?: string | null
           created_at?: string
           due_date?: string | null
@@ -162,6 +167,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          bank_details?: string | null
           client_id?: string | null
           created_at?: string
           due_date?: string | null
@@ -231,6 +237,7 @@ export type Database = {
           invoice_footer: string | null
           invoice_notes_default: string | null
           invoice_prefix: string | null
+          invoice_show_line_description: boolean | null
           invoice_show_quantity: boolean | null
           invoice_show_rate: boolean | null
           onboarding_completed: boolean | null
@@ -284,6 +291,7 @@ export type Database = {
           invoice_footer?: string | null
           invoice_notes_default?: string | null
           invoice_prefix?: string | null
+          invoice_show_line_description?: boolean | null
           invoice_show_quantity?: boolean | null
           invoice_show_rate?: boolean | null
           onboarding_completed?: boolean | null
@@ -337,6 +345,7 @@ export type Database = {
           invoice_footer?: string | null
           invoice_notes_default?: string | null
           invoice_prefix?: string | null
+          invoice_show_line_description?: boolean | null
           invoice_show_quantity?: boolean | null
           invoice_show_rate?: boolean | null
           onboarding_completed?: boolean | null
