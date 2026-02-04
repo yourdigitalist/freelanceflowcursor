@@ -2,6 +2,19 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getBrowserCountry } from '@/lib/locale-data';
 import { countries as countryList } from '@/components/ui/phone-input';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -500,11 +513,41 @@ export default function Onboarding() {
                       onChange={(e) => setBusinessPostalCode(e.target.value)}
                       placeholder="ZIP / Postal Code"
                     />
-                    <Input
-                      value={businessCountry}
-                      onChange={(e) => setBusinessCountry(e.target.value)}
-                      placeholder="Country"
-                    />
+                    <div className="space-y-2">
+                      <Label className="sr-only">Country</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className="w-full justify-between font-normal"
+                          >
+                            <span className="truncate">
+                              {businessCountry || 'Select country'}
+                            </span>
+                            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search country..." />
+                            <CommandList>
+                              <CommandEmpty>No country found.</CommandEmpty>
+                              {countryList.map((c) => (
+                                <CommandItem
+                                  key={c.code}
+                                  value={`${c.name} ${c.code}`}
+                                  onSelect={() => setBusinessCountry(c.name)}
+                                >
+                                  <span className="mr-2">{c.flag}</span>
+                                  <span>{c.name}</span>
+                                </CommandItem>
+                              ))}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                   </div>
                 </div>
                 <div className="space-y-2">

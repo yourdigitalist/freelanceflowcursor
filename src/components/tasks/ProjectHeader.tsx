@@ -17,6 +17,7 @@ interface ProjectHeaderProps {
   tasks: Task[];
   statuses: ProjectStatus[];
   totalHours: number;
+  formatCurrency?: (amount: number) => string;
   onEdit?: () => void;
   onDelete?: () => void;
   onDownloadTaskTemplate?: () => void;
@@ -30,6 +31,7 @@ export function ProjectHeader({
   tasks,
   statuses,
   totalHours,
+  formatCurrency: fmt,
   onEdit,
   onDelete,
   onDownloadTaskTemplate,
@@ -173,7 +175,7 @@ export function ProjectHeader({
               <div>
                 <p className="text-sm text-muted-foreground">Rate</p>
                 <p className="text-xl font-semibold">
-                  {project.hourly_rate != null ? `$${project.hourly_rate}` : '-'}
+                  {project.hourly_rate != null ? (fmt ? fmt(project.hourly_rate) : `$${project.hourly_rate}`) : '-'}
                 </p>
                 <p className="text-xs text-muted-foreground">hourly</p>
               </div>

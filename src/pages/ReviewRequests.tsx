@@ -57,6 +57,7 @@ import {
 import { EmojiPicker } from '@/components/ui/emoji-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
+import { getSiteUrl } from '@/lib/site-url';
 
 interface ReviewFolder {
   id: string;
@@ -360,7 +361,7 @@ export default function ReviewRequests() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const response = await supabase.functions.invoke('send-review-request', {
-        body: { reviewRequestId: request.id, origin: window.location.origin },
+        body: { reviewRequestId: request.id, origin: getSiteUrl() || window.location.origin },
       });
       if (session && response.data && !response.error) {
         toast({ title: 'Review request sent', description: 'Recipients have been emailed the review link.' });
@@ -383,7 +384,7 @@ export default function ReviewRequests() {
   };
 
   const getClientReviewUrl = (request: ReviewRequest) => {
-    return `${window.location.origin}/review/${request.share_token}`;
+    return `${getSiteUrl()}/review/${request.share_token}`;
   };
 
   const copyShareLink = (request: ReviewRequest) => {
@@ -642,11 +643,11 @@ export default function ReviewRequests() {
                 </CollapsibleContent>
               </Collapsible>
             )}
-            {/* Each folder section */}
+            {/* Each folder section (include empty folders with "Add review request" CTA) */}
             {folders.map((folder) => {
               const folderRequests = requestsByFolder.byId[folder.id] || [];
-              if (folderRequests.length === 0) return null;
               const sectionId = folder.id;
+              const isEmpty = folderRequests.length === 0;
               return (
                 <Collapsible
                   key={folder.id}
@@ -680,7 +681,22 @@ export default function ReviewRequests() {
                   </div>
                   <CollapsibleContent>
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 pl-6 pt-2">
-                      {folderRequests.map((request) => (
+                      {isEmpty ? (
+                        <div className="col-span-full flex flex-col items-center justify-center py-8 px-4 rounded-lg border border-dashed bg-muted/30">
+                          <p className="text-sm text-muted-foreground mb-3">No review requests in this folder yet</p>
+                          <Button
+                            variant="secondary"
+                            onClick={() => {
+                              resetRequestForm();
+                              setRequestFolderId(folder.id);
+                              setRequestDialogOpen(true);
+                            }}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add review request
+                          </Button>
+                        </div>
+                      ) : folderRequests.map((request) => (
                         <Card
                           key={request.id}
                           className="hover:shadow-md transition-shadow cursor-pointer group border-0 shadow-sm"

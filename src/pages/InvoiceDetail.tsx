@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Plus, Trash2, Send, DollarSign, Mail, Loader2, Eye, Clock, Printer, ListTodo, Wallet, Pencil, Download } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatCurrency } from '@/lib/locale-data';
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface InvoiceItem {
@@ -92,6 +99,8 @@ interface UserProfile {
   business_postal_code?: string | null;
   business_country?: string | null;
   tax_id: string | null;
+  currency: string | null;
+  currency_display: string | null;
   invoice_show_quantity: boolean | null;
   invoice_show_rate: boolean | null;
   invoice_show_line_date: boolean | null;
@@ -197,15 +206,21 @@ export default function InvoiceDetail() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('full_name, email, company_name, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, invoice_footer, invoice_notes_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_subject_default, reminder_body_default, hourly_rate')
+        .select('full_name, email, company_name, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, currency, currency_display, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, invoice_footer, invoice_notes_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_subject_default, reminder_body_default, hourly_rate')
         .eq('user_id', user!.id)
         .maybeSingle();
-      if (!error && data) {
-        setProfile(data);
-        setDefaultHourlyRate(data.hourly_rate || 75);
+      if (error) {
+        console.error('Error fetching profile:', error);
+        toast({ title: 'Could not load business details', description: 'Showing placeholder. You can still edit the invoice.', variant: 'destructive' });
+        return;
       }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
+      if (data) {
+        setProfile(data);
+        setDefaultHourlyRate((data as { hourly_rate?: number }).hourly_rate || 75);
+      }
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+      toast({ title: 'Could not load business details', variant: 'destructive' });
     }
   };
 
@@ -239,6 +254,7 @@ export default function InvoiceDetail() {
           projects(name, hourly_rate, budget)
         `)
         .eq('id', id)
+        .eq('user_id', user!.id)
         .maybeSingle();
 
       if (error) throw error;
@@ -752,13 +768,16 @@ export default function InvoiceDetail() {
   const showQuantity = profile?.invoice_show_quantity ?? true;
   const showRate = profile?.invoice_show_rate ?? true;
 
+  const fmt = (amount: number) => formatCurrency(amount, profile?.currency, profile?.currency_display);
+
   // Resolve merge tags for default email message: {{client_name}}, {{invoice_number}}, {{total}}, {{due_date}}
   const resolveEmailMessage = (template: string) => {
     if (!template?.trim()) return '';
+    const totalVal = total > 0 ? total : (invoice?.total != null ? Number(invoice.total) : 0);
     return template
       .replace(/\{\{client_name\}\}/gi, invoice?.clients?.name ?? '')
       .replace(/\{\{invoice_number\}\}/gi, invoice?.invoice_number ?? '')
-      .replace(/\{\{total\}\}/gi, total > 0 ? `$${total.toFixed(2)}` : (invoice?.total != null ? `$${Number(invoice.total).toFixed(2)}` : ''))
+      .replace(/\{\{total\}\}/gi, totalVal > 0 || invoice?.total != null ? fmt(totalVal || Number(invoice?.total ?? 0)) : '')
       .replace(/\{\{due_date\}\}/gi, invoice?.due_date ? format(new Date(invoice.due_date), 'MMMM d, yyyy') : '')
       .replace(/\{\{business_name\}\}/gi, profile?.business_name || profile?.company_name || profile?.full_name || '')
       .replace(/\{\{project_name\}\}/gi, invoice?.projects?.name ?? '');
@@ -801,9 +820,10 @@ export default function InvoiceDetail() {
 
   return (
     <AppLayout>
+      <TooltipProvider>
       <div className="space-y-6 max-w-4xl">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate('/invoices')}>
               <ArrowLeft className="h-5 w-5" />
@@ -815,17 +835,18 @@ export default function InvoiceDetail() {
               </Badge>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setIsPreviewOpen(true)}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setIsPreviewOpen(true)}>
               <Eye className="mr-2 h-4 w-4" />
               Preview
             </Button>
-            <Button variant="outline" onClick={handleDownloadPdf} disabled={downloadingPdf}>
+            <Button variant="outline" size="sm" onClick={handleDownloadPdf} disabled={downloadingPdf}>
               {downloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
               Download PDF
             </Button>
             {invoice.clients?.email && (
               <Button
+                size="sm"
                 onClick={async () => {
                   if (isEditMode) {
                     const ok = await saveInvoice();
@@ -836,7 +857,7 @@ export default function InvoiceDetail() {
                   if (isReceipt) {
                     setSendModalMode('receipt');
                     setEmailSubject(`Receipt for Invoice ${invoice.invoice_number} – Paid`);
-                    setEmailMessage(`This invoice has been paid. Balance due: $0. Thank you for your business.`);
+                    setEmailMessage(`This invoice has been paid. Balance due: ${fmt(0)}. Thank you for your business.`);
                   } else if (isReminder) {
                     setSendModalMode('reminder');
                     setEmailSubject(profile?.reminder_subject_default ? resolveEmailMessage(profile.reminder_subject_default) : '');
@@ -854,38 +875,54 @@ export default function InvoiceDetail() {
                 {invoice.status === 'paid' ? 'Send receipt' : invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send to Client'}
               </Button>
             )}
-            {invoice.status === 'draft' && (
-              <Button variant="outline" onClick={markAsSent}>
-                <Send className="mr-2 h-4 w-4" />
-                Mark as Sent
-              </Button>
-            )}
-            {invoice.status === 'sent' && (
-              <Button variant="outline" onClick={markAsPaid}>
-                <DollarSign className="mr-2 h-4 w-4" />
-                Mark as Paid
-              </Button>
+            {(invoice.status === 'draft' || invoice.status === 'sent') && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    More
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {invoice.status === 'draft' && (
+                    <DropdownMenuItem onClick={markAsSent}>
+                      <Send className="mr-2 h-4 w-4" />
+                      Mark as Sent
+                    </DropdownMenuItem>
+                  )}
+                  {invoice.status === 'sent' && (
+                    <DropdownMenuItem onClick={markAsPaid}>
+                      <DollarSign className="mr-2 h-4 w-4" />
+                      Mark as Paid
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             {isEditMode ? (
-              <Button variant="outline" onClick={saveInvoice} disabled={saving}>
-                {saving ? 'Saving...' : 'Save Invoice'}
+              <Button variant="outline" size="sm" onClick={saveInvoice} disabled={saving}>
+                {saving ? 'Saving...' : 'Save'}
               </Button>
             ) : (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (invoice.status === 'sent' || invoice.status === 'paid') {
-                    if (window.confirm('This invoice has already been sent. Any changes you make won\'t update the version the client received. To send an updated copy, save your changes and use "Send to Client" again. Continue to edit?')) {
-                      setIsEditMode(true);
-                    }
-                  } else {
-                    setIsEditMode(true);
-                  }
-                }}
-              >
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit Invoice
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      if (invoice.status === 'sent' || invoice.status === 'paid') {
+                        if (window.confirm('This invoice has already been sent. Any changes you make won\'t update the version the client received. To send an updated copy, save your changes and use "Send to Client" again. Continue to edit?')) {
+                          setIsEditMode(true);
+                        }
+                      } else {
+                        setIsEditMode(true);
+                      }
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Edit Invoice</TooltipContent>
+              </Tooltip>
             )}
           </div>
         </div>
@@ -904,25 +941,34 @@ export default function InvoiceDetail() {
               <div>
                 <h3 className="font-semibold mb-2">From</h3>
                 <div className="text-sm text-muted-foreground">
-                  {profile?.business_logo && (
-                    <img 
-                      src={profile.business_logo} 
-                      alt="Business logo" 
-                      className="h-12 mb-2 object-contain"
-                    />
-                  )}
-                  <p className="font-medium text-foreground">
-                    {profile?.business_name || profile?.company_name || profile?.full_name || 'Your Business'}
-                  </p>
-                  {formatBusinessAddress(profile) && (
-                    <p className="whitespace-pre-line">{formatBusinessAddress(profile)}</p>
-                  )}
-                  {(profile?.business_email || profile?.email) && (
-                    <p>{profile.business_email || profile.email}</p>
-                  )}
-                  {profile?.business_phone && <p>{profile.business_phone}</p>}
-                  {profile?.tax_id && (
-                    <p className="mt-1">Tax ID: {profile.tax_id}</p>
+                  {profile == null ? (
+                    <div className="animate-pulse space-y-2">
+                      <div className="h-4 bg-muted rounded w-32" />
+                      <div className="h-3 bg-muted rounded w-48" />
+                    </div>
+                  ) : (
+                    <>
+                      {profile?.business_logo && (
+                        <img 
+                          src={profile.business_logo} 
+                          alt="Business logo" 
+                          className="h-12 mb-2 object-contain"
+                        />
+                      )}
+                      <p className="font-medium text-foreground break-words">
+                        {profile?.business_name || profile?.company_name || profile?.full_name || 'Your Business'}
+                      </p>
+                      {formatBusinessAddress(profile) && (
+                        <p className="whitespace-pre-line">{formatBusinessAddress(profile)}</p>
+                      )}
+                      {(profile?.business_email || profile?.email) && (
+                        <p>{profile.business_email || profile.email}</p>
+                      )}
+                      {profile?.business_phone && <p>{profile.business_phone}</p>}
+                      {profile?.tax_id && (
+                        <p className="mt-1">Tax ID: {profile.tax_id}</p>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -1001,9 +1047,9 @@ export default function InvoiceDetail() {
             )}
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-x-auto">
               {/* Header */}
-              <div className="grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground">
+              <div className="grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground min-w-[640px]">
                 <div className="col-span-2">Item</div>
                 <div className="col-span-2">Description</div>
                 <div className="col-span-2">Date</div>
@@ -1040,7 +1086,7 @@ export default function InvoiceDetail() {
                           placeholder="Optional details"
                         />
                       ) : (
-                        <span className="text-sm text-muted-foreground">{item.line_description || '—'}</span>
+                        <span className="text-sm text-muted-foreground break-words block">{item.line_description || '—'}</span>
                       )}
                     </div>
                     {showQuantity && (
@@ -1069,12 +1115,12 @@ export default function InvoiceDetail() {
                             step="0.01"
                           />
                         ) : (
-                          <span className="text-sm">${Number(item.unit_price).toFixed(2)}</span>
+                          <span className="text-sm">{fmt(Number(item.unit_price))}</span>
                         )}
                       </div>
                     )}
                     <div className="col-span-2 text-right font-medium">
-                      ${(Number(item.quantity) * Number(item.unit_price)).toFixed(2)}
+                      {fmt(Number(item.quantity) * Number(item.unit_price))}
                     </div>
                     {isEditMode && (
                       <div className="col-span-1 text-right">
@@ -1096,7 +1142,7 @@ export default function InvoiceDetail() {
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
-                  <span className="font-medium">${subtotal.toFixed(2)}</span>
+                  <span className="font-medium">{fmt(subtotal)}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <div className="flex items-center gap-2">
@@ -1122,11 +1168,11 @@ export default function InvoiceDetail() {
                       <span>{taxes.find(t => t.id === selectedTaxId)?.name ?? 'None'} ({taxRate}%)</span>
                     )}
                   </div>
-                  <span className="font-medium">${taxAmount.toFixed(2)}</span>
+                  <span className="font-medium">{fmt(taxAmount)}</span>
                 </div>
                 <div className="flex justify-between text-lg font-bold border-t pt-2">
                   <span>Total</span>
-                  <span>${total.toFixed(2)}</span>
+                  <span>{fmt(total)}</span>
                 </div>
               </div>
             </div>
@@ -1304,10 +1350,10 @@ export default function InvoiceDetail() {
                 <tbody>
                   {items.map((item) => (
                     <tr key={item.id} className="border-b border-gray-100">
-                      <td className="py-3">{item.description}</td>
+                      <td className="py-3 break-words min-w-0">{item.description}</td>
                       {showQuantity && <td className="py-3 text-center">{item.quantity}</td>}
-                      {showRate && <td className="py-3 text-right">${Number(item.unit_price).toFixed(2)}</td>}
-                      <td className="py-3 text-right font-medium">${Number(item.amount).toFixed(2)}</td>
+                      {showRate && <td className="py-3 text-right">{fmt(Number(item.unit_price))}</td>}
+                      <td className="py-3 text-right font-medium">{fmt(Number(item.amount))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1318,17 +1364,17 @@ export default function InvoiceDetail() {
                 <div className="w-64">
                   <div className="flex justify-between py-2 text-sm">
                     <span className="text-gray-600">Subtotal</span>
-                    <span className="font-medium">${subtotal.toFixed(2)}</span>
+                    <span className="font-medium">{fmt(subtotal)}</span>
                   </div>
                   {selectedTax && (
                     <div className="flex justify-between py-2 text-sm">
                       <span className="text-gray-600">{selectedTax.name} ({selectedTax.rate}%)</span>
-                      <span className="font-medium">${taxAmount.toFixed(2)}</span>
+                      <span className="font-medium">{fmt(taxAmount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between py-2 border-t border-gray-200 text-lg">
                     <span className="font-bold">Total</span>
-                    <span className="font-bold text-primary">${total.toFixed(2)}</span>
+                    <span className="font-bold text-primary">{fmt(total)}</span>
                   </div>
                 </div>
               </div>
@@ -1407,8 +1453,8 @@ export default function InvoiceDetail() {
                             </p>
                           </div>
                           <div className="text-right text-sm">
-                            <p>{hours.toFixed(2)}h × ${rate}</p>
-                            <p className="font-medium">${(hours * rate).toFixed(2)}</p>
+                            <p>{hours.toFixed(2)}h × {fmt(rate)}</p>
+                            <p className="font-medium">{fmt(hours * rate)}</p>
                           </div>
                         </div>
                       );
@@ -1562,7 +1608,7 @@ export default function InvoiceDetail() {
             <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-1">Invoice Summary</p>
               <p>Invoice: {invoice.invoice_number}</p>
-              <p>Amount: ${total.toFixed(2)}</p>
+              <p>Amount: {fmt(total)}</p>
               {invoice.due_date && (
                 <p>Due: {format(new Date(invoice.due_date), 'MMM d, yyyy')}</p>
               )}
@@ -1588,6 +1634,7 @@ export default function InvoiceDetail() {
           </div>
         </DialogContent>
       </Dialog>
+      </TooltipProvider>
     </AppLayout>
   );
 }

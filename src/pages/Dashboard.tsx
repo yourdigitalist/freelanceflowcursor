@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
+import { useProfileCurrency } from '@/hooks/useProfileCurrency';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -55,6 +56,7 @@ interface RecentInvoice {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { formatCurrency: fmt } = useProfileCurrency();
   const [stats, setStats] = useState<DashboardStats>({
     totalClients: 0,
     activeProjects: 0,
@@ -66,6 +68,8 @@ export default function Dashboard() {
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [recentInvoices, setRecentInvoices] = useState<RecentInvoice[]>([]);
+  const [totalInvoicesCount, setTotalInvoicesCount] = useState(0);
+  const [reviewCounts, setReviewCounts] = useState({ total: 0, pending: 0, approved: 0 });
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<{ full_name: string | null }>({ full_name: null });
@@ -99,13 +103,13 @@ export default function Dashboard() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'active');
 
-      // Fetch pending invoices
-      const { count: invoicesCount, data: pendingInvoices } = await supabase
+      // Pending = sent (awaiting payment), not draft. Fetch count and amount for sent only.
+      const { count: pendingInvoicesCount, data: sentInvoices } = await supabase
         .from('invoices')
-        .select('total')
-        .in('status', ['sent', 'draft']);
+        .select('total', { count: 'exact' })
+        .eq('status', 'sent');
 
-      const pendingAmount = pendingInvoices?.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0) || 0;
+      const pendingAmount = sentInvoices?.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0) || 0;
 
       // Fetch time entries for this month
       const startOfMonth = new Date();
@@ -185,10 +189,10 @@ export default function Dashboard() {
         time_ago: getTimeAgo(new Date(entry.created_at)),
       }));
 
-      // Fetch recent invoices
-      const { data: invoices } = await supabase
+      // Fetch recent invoices and total count for display
+      const { data: invoices, count: invoicesTotalCount } = await supabase
         .from('invoices')
-        .select('id, invoice_number, total, status')
+        .select('id, invoice_number, total, status', { count: 'exact' })
         .order('created_at', { ascending: false })
         .limit(3);
 
@@ -204,7 +208,7 @@ export default function Dashboard() {
       setStats({
         totalClients: clientsCount || 0,
         activeProjects: projectsCount || 0,
-        pendingInvoices: invoicesCount || 0,
+        pendingInvoices: pendingInvoicesCount ?? 0,
         pendingAmount,
         hoursThisMonth,
         unbilledHours,
@@ -213,6 +217,25 @@ export default function Dashboard() {
       setRecentProjects(projectsWithTasks);
       setRecentActivity(activities);
       setRecentInvoices(invoices || []);
+      setTotalInvoicesCount(invoicesTotalCount ?? 0);
+
+      // Review requests counts
+      const { count: reviewTotal } = await supabase
+        .from('review_requests')
+        .select('*', { count: 'exact', head: true });
+      const { count: reviewPending } = await supabase
+        .from('review_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+      const { count: reviewApproved } = await supabase
+        .from('review_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'approved');
+      setReviewCounts({
+        total: reviewTotal ?? 0,
+        pending: reviewPending ?? 0,
+        approved: reviewApproved ?? 0,
+      });
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -283,7 +306,7 @@ export default function Dashboard() {
     },
     {
       title: 'Pending Payment',
-      value: `$${stats.pendingAmount.toLocaleString()}`,
+      value: fmt(stats.pendingAmount),
       subtitle: `${stats.pendingInvoices} invoices`,
       icon: DollarSign,
     },
@@ -576,12 +599,12 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="flex items-baseline gap-2 mb-3">
-                <span className="text-3xl font-bold">0</span>
+                <span className="text-3xl font-bold">{reviewCounts.total}</span>
                 <span className="text-sm text-muted-foreground">Total reviews</span>
               </div>
               <div className="flex gap-2">
-                <Badge variant="outline" className="bg-muted">0 pending</Badge>
-                <Badge variant="outline" className="bg-success/10 text-success border-success/20">0 approved</Badge>
+                <Badge variant="outline" className="bg-muted">{reviewCounts.pending} pending</Badge>
+                <Badge variant="outline" className="bg-success/10 text-success border-success/20">{reviewCounts.approved} approved</Badge>
               </div>
             </CardContent>
           </Card>
@@ -599,7 +622,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="flex items-baseline gap-2 mb-3">
-                <span className="text-3xl font-bold">{recentInvoices.length}</span>
+                <span className="text-3xl font-bold">{totalInvoicesCount}</span>
                 <span className="text-sm text-muted-foreground">Total invoices</span>
               </div>
               <div className="flex gap-2 mb-4">
@@ -622,7 +645,7 @@ export default function Dashboard() {
                         <FileText className="h-4 w-4 text-muted-foreground" />
                         <div>
                           <p className="text-sm font-medium">{invoice.invoice_number}</p>
-                          <p className="text-xs text-muted-foreground">${invoice.total?.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">{fmt(Number(invoice.total ?? 0))}</p>
                         </div>
                       </div>
                       <Badge variant="outline" className={getStatusBadgeStyle(invoice.status)}>

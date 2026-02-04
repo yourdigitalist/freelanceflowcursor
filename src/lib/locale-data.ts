@@ -172,6 +172,22 @@ export const currencyDisplayFormats = [
   { value: 'name', label: 'Name (100.00 US dollars)' },
 ];
 
+/** Format a monetary amount using profile currency settings. */
+export function formatCurrency(
+  amount: number,
+  currencyCode?: string | null,
+  displayFormat?: string | null
+): string {
+  const code = (currencyCode || 'USD').toUpperCase();
+  const fmt = displayFormat || 'symbol';
+  const num = Number(amount).toFixed(2);
+  if (fmt === 'code') return `${code} ${num}`;
+  if (fmt === 'name') return `${num} ${code}`;
+  const entry = currencies.find((c) => c.value === code);
+  const symbol = entry?.symbol ?? '$';
+  return symbol + num;
+}
+
 // Date formats
 export const dateFormats = [
   { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY (12/31/2024)' },

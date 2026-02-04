@@ -529,14 +529,6 @@ export default function InvoiceSettings() {
           </CardContent>
         </Card>
 
-        <div className="flex justify-end">
-          <Button type="submit" disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Changes
-          </Button>
-        </div>
-      </form>
-
       {/* Tax Rates Section */}
       <Card className="border-0 shadow-sm">
         <CardHeader>
@@ -672,6 +664,14 @@ export default function InvoiceSettings() {
           )}
         </CardContent>
       </Card>
+
+        <div className="flex justify-end">
+          <Button type="submit" disabled={saving}>
+            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Save Changes
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

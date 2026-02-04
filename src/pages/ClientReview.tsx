@@ -252,12 +252,20 @@ export default function ClientReview() {
 
   if (error || !request) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="max-w-md">
-          <CardContent className="pt-6 text-center">
-            <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Review Not Found</h2>
-            <p className="text-muted-foreground">{error || 'This review link may have expired or is invalid.'}</p>
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardContent className="pt-6 pb-6 text-center space-y-4">
+            <XCircle className="h-12 w-12 text-destructive mx-auto" />
+            <h2 className="text-xl font-semibold">Link expired or invalid</h2>
+            <p className="text-muted-foreground text-sm">
+              This review link may have expired or the address is incorrect. Please ask the sender for a new link.
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => { setError(null); setLoading(true); fetchData(); }}
+            >
+              Try again
+            </Button>
           </CardContent>
         </Card>
       </div>

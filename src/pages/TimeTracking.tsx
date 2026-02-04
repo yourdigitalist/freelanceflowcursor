@@ -796,19 +796,19 @@ export default function TimeTracking() {
           </DialogContent>
         </Dialog>
 
-        {/* Timer Card */}
-        <Card className="border-0 shadow-sm">
+        {/* Timer Card - responsive so timer and buttons stay inside on laptop */}
+        <Card className="border-0 shadow-sm overflow-hidden">
           <CardContent className="p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-              <div className="flex-1 space-y-4 lg:space-y-0 lg:flex lg:items-center lg:gap-4">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 min-w-0">
                 <Input
                   placeholder="What are you working on?"
                   value={timerDescription}
                   onChange={(e) => setTimerDescription(e.target.value)}
-                  className="lg:flex-1"
+                  className="sm:min-w-[200px] flex-1"
                 />
                 <Select value={timerProject || 'none'} onValueChange={(v) => setTimerProject(v === 'none' ? '' : v)}>
-                  <SelectTrigger className="lg:w-48">
+                  <SelectTrigger className="w-full sm:w-48">
                     <SelectValue placeholder="Project (optional)" />
                   </SelectTrigger>
                   <SelectContent>
@@ -819,7 +819,7 @@ export default function TimeTracking() {
                   </SelectContent>
                 </Select>
                 <Select value={timerTask || 'none'} onValueChange={(v) => setTimerTask(v === 'none' ? '' : v)} disabled={!timerProject}>
-                  <SelectTrigger className="lg:w-48">
+                  <SelectTrigger className="w-full sm:w-48">
                     <SelectValue placeholder={timerProject ? 'Task (optional)' : 'Select project first'} />
                   </SelectTrigger>
                   <SelectContent>
@@ -829,7 +829,7 @@ export default function TimeTracking() {
                     ))}
                   </SelectContent>
                 </Select>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <Switch
                     id="timer-billable"
                     checked={timerBillable}
@@ -838,34 +838,36 @@ export default function TimeTracking() {
                   <Label htmlFor="timer-billable" className="text-sm">Billable</Label>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="text-3xl font-mono font-bold text-primary min-w-[140px] text-center">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap min-w-0">
+                <div className="text-2xl sm:text-3xl font-mono font-bold text-primary text-center shrink-0">
                   {localTimerStartMs != null && localTimerEndMs == null
                     ? formatElapsed(elapsedSeconds)
                     : localTimerStartMs != null && localTimerEndMs != null
                       ? formatDuration(Math.floor((localTimerEndMs - localTimerStartMs) / 60_000))
                       : '00:00:00'}
                 </div>
-                {localTimerStartMs != null && localTimerEndMs == null ? (
-                  <Button size="lg" variant="destructive" onClick={stopTimer}>
-                    <Square className="mr-2 h-4 w-4" />
-                    Stop
-                  </Button>
-                ) : localTimerStartMs != null && localTimerEndMs != null ? (
-                  <div className="flex gap-2">
-                    <Button size="lg" variant="outline" onClick={discardTimerSegment}>
-                      Discard
+                <div className="flex gap-2 justify-center sm:justify-start flex-shrink-0">
+                  {localTimerStartMs != null && localTimerEndMs == null ? (
+                    <Button size="lg" variant="destructive" onClick={stopTimer}>
+                      <Square className="mr-2 h-4 w-4" />
+                      Stop
                     </Button>
-                    <Button size="lg" onClick={logTimeFromTimer}>
-                      Log time
+                  ) : localTimerStartMs != null && localTimerEndMs != null ? (
+                    <>
+                      <Button size="lg" variant="outline" onClick={discardTimerSegment}>
+                        Discard
+                      </Button>
+                      <Button size="lg" onClick={logTimeFromTimer}>
+                        Log time
+                      </Button>
+                    </>
+                  ) : (
+                    <Button size="lg" onClick={startTimer}>
+                      <Play className="mr-2 h-4 w-4" />
+                      Start
                     </Button>
-                  </div>
-                ) : (
-                  <Button size="lg" onClick={startTimer}>
-                    <Play className="mr-2 h-4 w-4" />
-                    Start
-                  </Button>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </CardContent>

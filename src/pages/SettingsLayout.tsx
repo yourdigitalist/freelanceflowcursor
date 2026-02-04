@@ -191,8 +191,8 @@ function SettingsLayoutInner() {
         </div>
       </div>
 
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
+      <Dialog open={confirmOpen} onOpenChange={() => {}}>
+        <DialogContent onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>Unsaved changes</DialogTitle>
             <DialogDescription>
@@ -200,9 +200,6 @@ function SettingsLayoutInner() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setConfirmOpen(false); setPendingPath(null); }}>
-              Cancel
-            </Button>
             <Button variant="outline" onClick={handleDiscardAndLeave}>
               Discard
             </Button>

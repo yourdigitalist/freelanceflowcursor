@@ -515,7 +515,7 @@ export default function Projects() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="budget">Budget ($)</Label>
+                    <Label htmlFor="budget">Budget</Label>
                     <Input
                       id="budget"
                       name="budget"
@@ -525,7 +525,7 @@ export default function Projects() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="hourly_rate">Hourly Rate ($)</Label>
+                    <Label htmlFor="hourly_rate">Hourly Rate</Label>
                     <Input
                       id="hourly_rate"
                       name="hourly_rate"

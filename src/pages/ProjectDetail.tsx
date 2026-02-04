@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
+import { useProfileCurrency } from '@/hooks/useProfileCurrency';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -45,6 +46,7 @@ import { StatusManagementModal } from '@/components/tasks/StatusManagementModal'
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { formatCurrency: fmt } = useProfileCurrency();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -652,6 +654,7 @@ export default function ProjectDetail() {
           tasks={tasks}
           statuses={statuses}
           totalHours={totalHours}
+          formatCurrency={fmt}
           onEdit={handleEditProject}
           onDelete={handleDeleteProject}
           onDownloadTaskTemplate={handleDownloadTaskTemplate}

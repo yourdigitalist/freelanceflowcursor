@@ -46,6 +46,7 @@ import {
   getInvoicesTemplateRows,
   INVOICES_CSV_HEADERS,
 } from '@/lib/csv';
+import { formatCurrency } from '@/lib/locale-data';
 
 interface Client {
   id: string;
@@ -79,6 +80,7 @@ interface Invoice {
   project_id: string | null;
   clients: { name: string } | null;
   projects: { name: string } | null;
+  notes?: string | null;
   created_at: string;
 }
 
@@ -107,6 +109,8 @@ export default function Invoices() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const importFileInputRef = useRef<HTMLInputElement>(null);
+  const [profileCurrency, setProfileCurrency] = useState<string | null>(null);
+  const [profileCurrencyDisplay, setProfileCurrencyDisplay] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -114,8 +118,17 @@ export default function Invoices() {
       fetchClients();
       fetchProjects();
       fetchTaxes();
+      (async () => {
+        const { data } = await supabase.from('profiles').select('currency, currency_display').eq('user_id', user.id).maybeSingle();
+        if (data) {
+          setProfileCurrency(data.currency ?? null);
+          setProfileCurrencyDisplay(data.currency_display ?? null);
+        }
+      })();
     }
   }, [user]);
+
+  const fmt = (amount: number) => formatCurrency(amount, profileCurrency, profileCurrencyDisplay);
 
   const fetchInvoices = async () => {
     try {
@@ -597,7 +610,7 @@ export default function Invoices() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total Invoiced</p>
-                  <p className="text-2xl font-bold">${stats.total.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">{fmt(stats.total)}</p>
                 </div>
               </div>
             </CardContent>
@@ -610,7 +623,7 @@ export default function Invoices() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Paid</p>
-                  <p className="text-2xl font-bold">${stats.paid.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">{fmt(stats.paid)}</p>
                 </div>
               </div>
             </CardContent>
@@ -623,7 +636,7 @@ export default function Invoices() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Pending</p>
-                  <p className="text-2xl font-bold">${stats.pending.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">{fmt(stats.pending)}</p>
                 </div>
               </div>
             </CardContent>
@@ -636,7 +649,7 @@ export default function Invoices() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Overdue</p>
-                  <p className="text-2xl font-bold">${stats.overdue.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">{fmt(stats.overdue)}</p>
                 </div>
               </div>
             </CardContent>
@@ -775,7 +788,7 @@ export default function Invoices() {
                         {invoice.due_date ? format(new Date(invoice.due_date), 'MMM d, yyyy') : '—'}
                       </TableCell>
                       <TableCell className="font-medium">
-                        ${Number(invoice.total).toLocaleString()}
+                        {fmt(Number(invoice.total))}
                       </TableCell>
                       <TableCell>
                         <Badge className={getStatusColor(invoice.status)}>

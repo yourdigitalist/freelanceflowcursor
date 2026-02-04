@@ -190,7 +190,7 @@ const emojiCategories = {
 // Search index: emoji + keywords (category + common terms) so search matches text
 const emojiSearchIndex: { emoji: string; keywords: string }[] = [];
 const categoryKeywords: Record<string, string> = {
-  'Smileys': 'smileys smile happy face sad emotion',
+  'Smileys': 'smileys smile happy face sad emotion emoji',
   'Gestures': 'gestures hand wave thumbs',
   'People': 'people person man woman baby',
   'Animals': 'animals animal dog cat bird',
@@ -223,8 +223,14 @@ export function EmojiPicker({ value, onChange, children, className }: EmojiPicke
   const filteredEmojis = React.useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return null;
+    const words = q.split(/\s+/).filter(Boolean);
     return emojiSearchIndex
-      .filter(({ keywords }) => keywords.includes(q))
+      .filter(({ keywords }) => {
+        const keywordTokens = keywords.toLowerCase().split(/\s+/);
+        return words.every((w) =>
+          keywordTokens.some((token) => token.startsWith(w) || token.includes(w))
+        );
+      })
       .map(({ emoji }) => emoji);
   }, [search]);
 

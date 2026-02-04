@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { getSiteUrl } from '@/lib/site-url';
 import { format } from 'date-fns';
 import {
   ArrowLeft,
@@ -138,7 +139,7 @@ export default function ReviewRequestDetail() {
 
   const getClientReviewUrl = () => {
     if (!request) return '';
-    return `${window.location.origin}/review/${request.share_token}`;
+    return `${getSiteUrl()}/review/${request.share_token}`;
   };
 
   const copyShareLink = () => {
@@ -186,7 +187,7 @@ export default function ReviewRequestDetail() {
     setSending(true);
     try {
       const { data, error } = await supabase.functions.invoke('send-review-request', {
-        body: { reviewRequestId: request.id, origin: window.location.origin },
+        body: { reviewRequestId: request.id, origin: getSiteUrl() || window.location.origin },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);

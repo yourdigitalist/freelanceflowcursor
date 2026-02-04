@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import {
   Dialog,
   DialogContent,
@@ -223,7 +224,7 @@ export default function HelpContentSettings() {
       </div>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit section' : 'Add section'}</DialogTitle>
           </DialogHeader>
@@ -262,13 +263,13 @@ export default function HelpContentSettings() {
               </select>
             </div>
             <div>
-              <Label htmlFor="help-body">Content (Markdown)</Label>
-              <textarea
-                id="help-body"
-                className="flex min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              <Label>Content</Label>
+              <p className="text-xs text-muted-foreground mb-1">Use the toolbar for headings (H1, H2, H3), lists, links, and images.</p>
+              <RichTextEditor
                 value={form.body}
-                onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-                placeholder="Write content in Markdown..."
+                onChange={(body) => setForm((f) => ({ ...f, body }))}
+                placeholder="Write content..."
+                minHeight="220px"
               />
             </div>
           </div>
