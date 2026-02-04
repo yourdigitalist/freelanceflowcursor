@@ -64,7 +64,7 @@ export default function Index() {
       {/* Footer */}
       <footer className="py-8 border-t">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          © 2024 FreelanceFlow. Built with Lovable.
+          © 2024 FreelanceFlow.
         </div>
       </footer>
     </div>

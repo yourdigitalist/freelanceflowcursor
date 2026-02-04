@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
+import { useSettingsDirty } from '@/contexts/SettingsDirtyContext';
 import { Loader2, Camera } from 'lucide-react';
 
 interface UserProfile {
@@ -21,13 +22,44 @@ interface UserProfile {
 export default function UserSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const dirtyContext = useSettingsDirty();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (user) fetchProfile();
   }, [user]);
+
+  const save = async () => {
+    if (!formRef.current || !user) return;
+    const formData = new FormData(formRef.current);
+    const firstName = formData.get('first_name') as string || null;
+    const lastName = formData.get('last_name') as string || null;
+    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || null;
+    const profileData = {
+      first_name: firstName,
+      last_name: lastName,
+      full_name: fullName,
+      email: formData.get('email') as string || null,
+      phone: formData.get('phone') as string || null,
+    };
+    const { error } = await supabase.from('profiles').update(profileData).eq('user_id', user.id);
+    if (error) throw error;
+    toast({ title: 'Profile updated successfully' });
+    await fetchProfile();
+    dirtyContext?.setDirty(false);
+  };
+
+  const discard = () => {
+    fetchProfile();
+    dirtyContext?.setDirty(false);
+  };
+
+  useEffect(() => {
+    dirtyContext?.registerHandlers(save, discard);
+  }, [dirtyContext]);
 
   const fetchProfile = async () => {
     try {
@@ -49,28 +81,8 @@ export default function UserSettings() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
-
-    const formData = new FormData(e.currentTarget);
-    const firstName = formData.get('first_name') as string || null;
-    const lastName = formData.get('last_name') as string || null;
-    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || null;
-    const profileData = {
-      first_name: firstName,
-      last_name: lastName,
-      full_name: fullName,
-      email: formData.get('email') as string || null,
-      phone: formData.get('phone') as string || null,
-    };
-
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update(profileData)
-        .eq('user_id', user!.id);
-
-      if (error) throw error;
-      toast({ title: 'Profile updated successfully' });
-      fetchProfile();
+      await save();
     } catch (error: any) {
       toast({
         title: 'Error saving profile',
@@ -101,7 +113,7 @@ export default function UserSettings() {
     .slice(0, 2) || 'U';
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form ref={formRef} onSubmit={handleSubmit} onInput={() => dirtyContext?.setDirty(true)} className="space-y-6">
       <Card className="border-0 shadow-sm">
         <CardHeader>
           <CardTitle>Profile Picture</CardTitle>

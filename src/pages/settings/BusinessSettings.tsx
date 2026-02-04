@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { useSettingsDirty } from '@/contexts/SettingsDirtyContext';
 import { Loader2, Upload } from 'lucide-react';
 import { PhoneInput } from '@/components/ui/phone-input';
 
@@ -33,15 +34,61 @@ interface BusinessProfile {
 export default function BusinessSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const dirtyContext = useSettingsDirty();
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [businessPhone, setBusinessPhone] = useState('');
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (user) fetchProfile();
   }, [user]);
+
+  const save = async () => {
+    if (!formRef.current || !user) return;
+    const formData = new FormData(formRef.current);
+    const street = formData.get('business_street') as string || null;
+    const street2 = formData.get('business_street2') as string || null;
+    const city = formData.get('business_city') as string || null;
+    const state = formData.get('business_state') as string || null;
+    const postalCode = formData.get('business_postal_code') as string || null;
+    const country = formData.get('business_country') as string || null;
+    const addressLine = [street, street2, city, state, postalCode, country].filter(Boolean).join('\n') || null;
+    const profileData = {
+      business_name: formData.get('business_name') as string || null,
+      business_email: formData.get('business_email') as string || null,
+      business_phone: businessPhone || null,
+      business_street: street,
+      business_street2: street2,
+      business_city: city,
+      business_state: state,
+      business_postal_code: postalCode,
+      business_country: country,
+      business_address: addressLine,
+      business_website: formData.get('business_website') as string || null,
+      tax_id: formData.get('tax_id') as string || null,
+      bank_name: formData.get('bank_name') as string || null,
+      bank_account_number: formData.get('bank_account_number') as string || null,
+      bank_routing_number: formData.get('bank_routing_number') as string || null,
+      payment_instructions: formData.get('payment_instructions') as string || null,
+    };
+    const { error } = await supabase.from('profiles').update(profileData).eq('user_id', user.id);
+    if (error) throw error;
+    toast({ title: 'Business profile updated successfully' });
+    await fetchProfile();
+    dirtyContext?.setDirty(false);
+  };
+
+  const discard = () => {
+    fetchProfile();
+    dirtyContext?.setDirty(false);
+  };
+
+  useEffect(() => {
+    dirtyContext?.registerHandlers(save, discard);
+  }, [dirtyContext]);
 
   const fetchProfile = async () => {
     try {
@@ -55,6 +102,8 @@ export default function BusinessSettings() {
       setProfile(data);
       if (data?.business_phone) {
         setBusinessPhone(data.business_phone);
+      } else {
+        setBusinessPhone('');
       }
     } catch (error) {
       console.error('Error fetching business profile:', error);
@@ -118,43 +167,8 @@ export default function BusinessSettings() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
-
-    const formData = new FormData(e.currentTarget);
-    const street = formData.get('business_street') as string || null;
-    const street2 = formData.get('business_street2') as string || null;
-    const city = formData.get('business_city') as string || null;
-    const state = formData.get('business_state') as string || null;
-    const postalCode = formData.get('business_postal_code') as string || null;
-    const country = formData.get('business_country') as string || null;
-    const addressLine = [street, street2, city, state, postalCode, country].filter(Boolean).join('\n') || null;
-    const profileData = {
-      business_name: formData.get('business_name') as string || null,
-      business_email: formData.get('business_email') as string || null,
-      business_phone: businessPhone || null,
-      business_street: street,
-      business_street2: street2,
-      business_city: city,
-      business_state: state,
-      business_postal_code: postalCode,
-      business_country: country,
-      business_address: addressLine,
-      business_website: formData.get('business_website') as string || null,
-      tax_id: formData.get('tax_id') as string || null,
-      bank_name: formData.get('bank_name') as string || null,
-      bank_account_number: formData.get('bank_account_number') as string || null,
-      bank_routing_number: formData.get('bank_routing_number') as string || null,
-      payment_instructions: formData.get('payment_instructions') as string || null,
-    };
-
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update(profileData)
-        .eq('user_id', user!.id);
-
-      if (error) throw error;
-      toast({ title: 'Business profile updated successfully' });
-      fetchProfile();
+      await save();
     } catch (error: any) {
       toast({
         title: 'Error saving business profile',
@@ -175,7 +189,7 @@ export default function BusinessSettings() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form ref={formRef} onSubmit={handleSubmit} onInput={() => dirtyContext?.setDirty(true)} className="space-y-6">
       <Card className="border-0 shadow-sm">
         <CardHeader>
           <CardTitle>Business Logo</CardTitle>

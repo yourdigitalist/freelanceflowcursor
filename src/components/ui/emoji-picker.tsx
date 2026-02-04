@@ -187,6 +187,27 @@ const emojiCategories = {
   ],
 };
 
+// Search index: emoji + keywords (category + common terms) so search matches text
+const emojiSearchIndex: { emoji: string; keywords: string }[] = [];
+const categoryKeywords: Record<string, string> = {
+  'Smileys': 'smileys smile happy face sad emotion',
+  'Gestures': 'gestures hand wave thumbs',
+  'People': 'people person man woman baby',
+  'Animals': 'animals animal dog cat bird',
+  'Food': 'food eat drink coffee',
+  'Activities': 'activities sport game music',
+  'Travel': 'travel car plane train',
+  'Objects': 'objects object phone computer',
+  'Symbols': 'symbols heart star check',
+  'Flags': 'flags flag country',
+};
+Object.entries(emojiCategories).forEach(([category, emojis]) => {
+  const keywords = `${category.toLowerCase()} ${categoryKeywords[category] || ''}`.trim();
+  emojis.forEach((emoji) => {
+    emojiSearchIndex.push({ emoji, keywords });
+  });
+});
+
 interface EmojiPickerProps {
   value?: string;
   onChange?: (emoji: string) => void;
@@ -199,14 +220,13 @@ export function EmojiPicker({ value, onChange, children, className }: EmojiPicke
   const [search, setSearch] = React.useState('');
   const [activeTab, setActiveTab] = React.useState('Smileys');
 
-  const allEmojis = React.useMemo(() => {
-    return Object.values(emojiCategories).flat();
-  }, []);
-
   const filteredEmojis = React.useMemo(() => {
-    if (!search) return null;
-    return allEmojis.filter(emoji => emoji.includes(search));
-  }, [search, allEmojis]);
+    const q = search.trim().toLowerCase();
+    if (!q) return null;
+    return emojiSearchIndex
+      .filter(({ keywords }) => keywords.includes(q))
+      .map(({ emoji }) => emoji);
+  }, [search]);
 
   const handleSelect = (emoji: string) => {
     onChange?.(emoji);

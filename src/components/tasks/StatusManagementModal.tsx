@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { GripVertical, Plus, Trash2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { ProjectStatus, STATUS_COLORS, DEFAULT_STATUSES } from './types';
 import {
   DndContext,
@@ -164,8 +165,12 @@ export function StatusManagementModal({
   onClose,
   statuses,
   onSave,
+  projectId,
+  userId,
 }: StatusManagementModalProps) {
   const [editableStatuses, setEditableStatuses] = useState<EditableStatus[]>([]);
+  const [otherProjects, setOtherProjects] = useState<{ id: string; name: string }[]>([]);
+  const [copyingFromProject, setCopyingFromProject] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -198,6 +203,20 @@ export function StatusManagementModal({
       }
     }
   }, [isOpen, statuses]);
+
+  useEffect(() => {
+    if (!isOpen || !userId) return;
+    const fetchProjects = async () => {
+      const { data } = await supabase
+        .from('projects')
+        .select('id, name')
+        .eq('user_id', userId)
+        .neq('id', projectId)
+        .order('name');
+      setOtherProjects(data || []);
+    };
+    fetchProjects();
+  }, [isOpen, userId, projectId]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -248,6 +267,34 @@ export function StatusManagementModal({
     }
   };
 
+  const handleCopyFromProject = async (sourceProjectId: string) => {
+    if (!sourceProjectId) return;
+    setCopyingFromProject(true);
+    try {
+      const { data, error } = await supabase
+        .from('project_statuses')
+        .select('name, color, is_done_status, position')
+        .eq('project_id', sourceProjectId)
+        .order('position');
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setEditableStatuses(
+          data.map((s, i) => ({
+            tempId: crypto.randomUUID(),
+            name: s.name,
+            color: s.color,
+            is_done_status: s.is_done_status ?? false,
+            position: s.position ?? i,
+          }))
+        );
+      }
+    } catch (err) {
+      console.error('Copy from project:', err);
+    } finally {
+      setCopyingFromProject(false);
+    }
+  };
+
   const handleSave = () => {
     onSave(
       editableStatuses.map((s) => ({
@@ -268,19 +315,39 @@ export function StatusManagementModal({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Select onValueChange={handleApplyTemplate}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Apply Template" />
-              </SelectTrigger>
-              <SelectContent>
-                {TEMPLATES.map((template) => (
-                  <SelectItem key={template.name} value={template.name}>
-                    {template.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Select onValueChange={handleApplyTemplate}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Apply Template" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TEMPLATES.map((template) => (
+                    <SelectItem key={template.name} value={template.name}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value=""
+                onValueChange={(v) => {
+                  if (v) handleCopyFromProject(v);
+                }}
+                disabled={copyingFromProject || otherProjects.length === 0}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Copy from project" />
+                </SelectTrigger>
+                <SelectContent>
+                  {otherProjects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             <Button variant="outline" size="sm" onClick={handleAddStatus}>
               <Plus className="h-4 w-4 mr-2" />

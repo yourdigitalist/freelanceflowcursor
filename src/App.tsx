@@ -106,7 +106,7 @@ function OnboardingRoute({ children }: { children: React.ReactNode }) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
   
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user) return <Navigate to="/auth?confirm=email" replace />;
   
   if (onboardingCompleted === true) {
     return <Navigate to="/dashboard" replace />;

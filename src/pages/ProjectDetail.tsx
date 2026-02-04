@@ -713,6 +713,7 @@ export default function ProjectDetail() {
                 onEstHoursChange={handleEstHoursChange}
                 onDueDateChange={handleDueDateChange}
                 onDelete={handleDeleteTask}
+                onDuplicate={handleDuplicateTask}
                 onQuickAdd={handleQuickAddTask}
                 defaultStatusId={statuses[0]?.id || ''}
               />
@@ -730,6 +731,7 @@ export default function ProjectDetail() {
           }}
           onSave={handleSaveTask}
           onDuplicate={handleDuplicateTask}
+          onDelete={handleDeleteTask}
         />
 
         <StatusManagementModal
@@ -737,6 +739,8 @@ export default function ProjectDetail() {
           onClose={() => setIsStatusModalOpen(false)}
           statuses={statuses}
           onSave={handleSaveStatuses}
+          projectId={id ?? ''}
+          userId={user?.id ?? ''}
         />
 
         <Dialog open={importTaskDialogOpen} onOpenChange={setImportTaskDialogOpen}>

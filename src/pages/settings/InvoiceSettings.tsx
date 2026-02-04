@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
+import { useSettingsDirty } from '@/contexts/SettingsDirtyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,6 +43,7 @@ interface InvoiceProfile {
   invoice_show_quantity: boolean | null;
   invoice_show_rate: boolean | null;
   invoice_show_line_description: boolean | null;
+  invoice_show_line_date: boolean | null;
   invoice_email_subject_default: string | null;
   reminder_enabled: boolean | null;
   reminder_days_before: number | null;
@@ -59,10 +61,12 @@ interface Tax {
 export default function InvoiceSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const dirtyContext = useSettingsDirty();
   const [profile, setProfile] = useState<InvoiceProfile | null>(null);
   const [taxes, setTaxes] = useState<Tax[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   
   // Tax form state
   const [newTaxName, setNewTaxName] = useState('');
@@ -78,11 +82,46 @@ export default function InvoiceSettings() {
     }
   }, [user]);
 
+  const save = async () => {
+    if (!formRef.current || !user) return;
+    const formData = new FormData(formRef.current);
+    const profileData = {
+      hourly_rate: parseFloat(formData.get('hourly_rate') as string) || 0,
+      invoice_prefix: formData.get('invoice_prefix') as string || 'INV-',
+      invoice_notes_default: formData.get('invoice_notes_default') as string || null,
+      invoice_footer: formData.get('invoice_footer') as string || null,
+      invoice_email_message_default: formData.get('invoice_email_message_default') as string || null,
+      invoice_show_quantity: formData.get('invoice_show_quantity') === 'on',
+      invoice_show_rate: formData.get('invoice_show_rate') === 'on',
+      invoice_show_line_description: formData.get('invoice_show_line_description') === 'on',
+      invoice_show_line_date: formData.get('invoice_show_line_date') === 'on',
+      invoice_email_subject_default: formData.get('invoice_email_subject_default') as string || null,
+      reminder_enabled: reminderEnabled,
+      reminder_days_before: reminderDaysBefore,
+      reminder_subject_default: formData.get('reminder_subject_default') as string || null,
+      reminder_body_default: formData.get('reminder_body_default') as string || null,
+    };
+    const { error } = await supabase.from('profiles').update(profileData).eq('user_id', user.id);
+    if (error) throw error;
+    toast({ title: 'Invoice settings saved successfully' });
+    await fetchProfile();
+    dirtyContext?.setDirty(false);
+  };
+
+  const discard = () => {
+    fetchProfile();
+    dirtyContext?.setDirty(false);
+  };
+
+  useEffect(() => {
+    dirtyContext?.registerHandlers(save, discard);
+  }, [dirtyContext]);
+
   const fetchProfile = async () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('hourly_rate, invoice_prefix, invoice_notes_default, invoice_footer, invoice_email_message_default, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_email_subject_default, reminder_enabled, reminder_days_before, reminder_subject_default, reminder_body_default')
+        .select('hourly_rate, invoice_prefix, invoice_notes_default, invoice_footer, invoice_email_message_default, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, invoice_email_subject_default, reminder_enabled, reminder_days_before, reminder_subject_default, reminder_body_default')
         .eq('user_id', user!.id)
         .maybeSingle();
 
@@ -116,33 +155,8 @@ export default function InvoiceSettings() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
-
-    const formData = new FormData(e.currentTarget);
-    const profileData = {
-      hourly_rate: parseFloat(formData.get('hourly_rate') as string) || 0,
-      invoice_prefix: formData.get('invoice_prefix') as string || 'INV-',
-      invoice_notes_default: formData.get('invoice_notes_default') as string || null,
-      invoice_footer: formData.get('invoice_footer') as string || null,
-      invoice_email_message_default: formData.get('invoice_email_message_default') as string || null,
-      invoice_show_quantity: formData.get('invoice_show_quantity') === 'on',
-      invoice_show_rate: formData.get('invoice_show_rate') === 'on',
-      invoice_show_line_description: formData.get('invoice_show_line_description') === 'on',
-      invoice_email_subject_default: formData.get('invoice_email_subject_default') as string || null,
-      reminder_enabled: reminderEnabled,
-      reminder_days_before: reminderDaysBefore,
-      reminder_subject_default: formData.get('reminder_subject_default') as string || null,
-      reminder_body_default: formData.get('reminder_body_default') as string || null,
-    };
-
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update(profileData)
-        .eq('user_id', user!.id);
-
-      if (error) throw error;
-      toast({ title: 'Invoice settings saved successfully' });
-      fetchProfile();
+      await save();
     } catch (error: any) {
       toast({
         title: 'Error saving settings',
@@ -268,7 +282,7 @@ export default function InvoiceSettings() {
 
   return (
     <div className="space-y-6">
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form ref={formRef} onSubmit={handleSubmit} onInput={() => dirtyContext?.setDirty(true)} className="space-y-6">
         <Card className="border-0 shadow-sm">
           <CardHeader>
             <CardTitle>Billing Defaults</CardTitle>
@@ -337,6 +351,17 @@ export default function InvoiceSettings() {
                 id="invoice_show_line_description"
                 name="invoice_show_line_description"
                 defaultChecked={profile?.invoice_show_line_description ?? true}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="invoice_show_line_date">Show Line Item Date on Invoice</Label>
+                <p className="text-sm text-muted-foreground">Show the optional line item date column on the invoice PDF</p>
+              </div>
+              <Switch
+                id="invoice_show_line_date"
+                name="invoice_show_line_date"
+                defaultChecked={profile?.invoice_show_line_date ?? false}
               />
             </div>
           </CardContent>
@@ -487,7 +512,7 @@ export default function InvoiceSettings() {
               <Switch
                 id="reminder_enabled"
                 checked={reminderEnabled}
-                onCheckedChange={setReminderEnabled}
+                onCheckedChange={(v) => { setReminderEnabled(v); dirtyContext?.setDirty(true); }}
               />
             </div>
             <div className="space-y-2">
@@ -498,7 +523,7 @@ export default function InvoiceSettings() {
                 min={1}
                 max={30}
                 value={reminderDaysBefore}
-                onChange={(e) => setReminderDaysBefore(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                onChange={(e) => { setReminderDaysBefore(Math.max(1, parseInt(e.target.value, 10) || 1)); dirtyContext?.setDirty(true); }}
               />
             </div>
           </CardContent>

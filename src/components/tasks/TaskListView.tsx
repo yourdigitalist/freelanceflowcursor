@@ -25,7 +25,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { GripVertical, Pencil, Trash2, MessageSquare, Plus, Calendar as CalendarIcon } from 'lucide-react';
+import { GripVertical, Pencil, Trash2, Copy, MessageSquare, Plus, Calendar as CalendarIcon } from 'lucide-react';
 import { Task, ProjectStatus, PRIORITY_OPTIONS } from './types';
 import { format } from 'date-fns';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -43,6 +43,7 @@ interface TaskListViewProps {
   onEstHoursChange: (taskId: string, hours: number | null) => void;
   onDueDateChange: (taskId: string, date: string | null) => void;
   onDelete: (taskId: string) => void;
+  onDuplicate?: (task: Task) => void;
   onQuickAdd: (title: string, statusId: string) => void;
   defaultStatusId: string;
 }
@@ -58,6 +59,7 @@ interface SortableRowProps {
   onEstHoursChange: (hours: number | null) => void;
   onDueDateChange: (date: string | null) => void;
   onDelete: () => void;
+  onDuplicate?: () => void;
 }
 
 function SortableRow({
@@ -71,6 +73,7 @@ function SortableRow({
   onEstHoursChange,
   onDueDateChange,
   onDelete,
+  onDuplicate,
 }: SortableRowProps) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isEditingHours, setIsEditingHours] = useState(false);
@@ -271,10 +274,15 @@ function SortableRow({
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onTaskClick}>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onTaskClick} title="Edit">
             <Pencil className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={onDelete}>
+          {onDuplicate && (
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onDuplicate} title="Duplicate">
+              <Copy className="h-4 w-4" />
+            </Button>
+          )}
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={onDelete} title="Delete">
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
@@ -294,6 +302,7 @@ export function TaskListView({
   onEstHoursChange,
   onDueDateChange,
   onDelete,
+  onDuplicate,
   onQuickAdd,
   defaultStatusId,
 }: TaskListViewProps) {
@@ -308,7 +317,7 @@ export function TaskListView({
             <TableHead>Title</TableHead>
             <TableHead className="w-[180px]">Status</TableHead>
             <TableHead className="w-[120px]">Priority</TableHead>
-            <TableHead className="w-[100px]">Est. Hours</TableHead>
+            <TableHead className="w-[100px] whitespace-nowrap min-w-[100px]">Est. Hours</TableHead>
             <TableHead className="w-[140px]">Due Date</TableHead>
             <TableHead className="w-[100px]">Actions</TableHead>
           </TableRow>
@@ -328,6 +337,7 @@ export function TaskListView({
                 onEstHoursChange={(hours) => onEstHoursChange(task.id, hours)}
                 onDueDateChange={(date) => onDueDateChange(task.id, date)}
                 onDelete={() => onDelete(task.id)}
+                onDuplicate={onDuplicate ? () => onDuplicate(task) : undefined}
               />
             ))}
           </SortableContext>

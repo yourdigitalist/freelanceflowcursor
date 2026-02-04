@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Trash2, Send, DollarSign, Mail, Loader2, Eye, Clock, Printer, ListTodo, Wallet, Pencil } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Send, DollarSign, Mail, Loader2, Eye, Clock, Printer, ListTodo, Wallet, Pencil, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Dialog,
@@ -39,6 +39,7 @@ interface InvoiceItem {
   id: string;
   description: string;
   line_description?: string | null;
+  line_date?: string | null;
   quantity: number;
   unit_price: number;
   amount: number;
@@ -93,6 +94,7 @@ interface UserProfile {
   tax_id: string | null;
   invoice_show_quantity: boolean | null;
   invoice_show_rate: boolean | null;
+  invoice_show_line_date: boolean | null;
   invoice_footer: string | null;
   invoice_notes_default: string | null;
   invoice_email_message_default: string | null;
@@ -137,8 +139,10 @@ export default function InvoiceDetail() {
   
   // Send invoice modal state
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  const [sendModalMode, setSendModalMode] = useState<'send' | 'reminder' | 'receipt'>('send');
   const [sendingInvoice, setSendingInvoice] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState('');
+  const [ccEmails, setCcEmails] = useState<string[]>([]);
   const [emailSubject, setEmailSubject] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
   
@@ -193,7 +197,7 @@ export default function InvoiceDetail() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('full_name, email, company_name, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_show_quantity, invoice_show_rate, invoice_footer, invoice_notes_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_subject_default, reminder_body_default, hourly_rate')
+        .select('full_name, email, company_name, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, invoice_footer, invoice_notes_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_subject_default, reminder_body_default, hourly_rate')
         .eq('user_id', user!.id)
         .maybeSingle();
       if (!error && data) {
@@ -645,6 +649,38 @@ export default function InvoiceDetail() {
     }
   };
 
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    if (!id) return;
+    setDownloadingPdf(true);
+    try {
+      const response = await supabase.functions.invoke('send-invoice', {
+        body: { invoiceId: id, downloadOnly: true },
+      });
+      if (response.error) throw response.error;
+      const pdfBase64 = (response.data as { pdfBase64?: string })?.pdfBase64;
+      if (!pdfBase64) throw new Error('No PDF returned');
+      const binary = Uint8Array.from(atob(pdfBase64), (c) => c.charCodeAt(0));
+      const blob = new Blob([binary], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${invoice?.invoice_number ?? 'invoice'}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: 'PDF downloaded' });
+    } catch (error: any) {
+      toast({
+        title: 'Failed to download PDF',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   const handleSendInvoice = async () => {
     if (!recipientEmail) {
       toast({
@@ -664,23 +700,26 @@ export default function InvoiceDetail() {
         body: {
           invoiceId: id,
           recipientEmail,
+          cc: ccEmails.filter(Boolean),
           senderName: profile?.full_name || profile?.company_name || 'Your Business',
           senderEmail: profile?.email || user?.email,
           message: emailMessage,
           subject: emailSubject.trim() || undefined,
+          receipt: sendModalMode === 'receipt',
         },
       });
 
       if (response.error) throw response.error;
 
-      toast({ title: 'Invoice sent successfully!' });
+      toast({ title: sendModalMode === 'receipt' ? 'Receipt sent!' : 'Invoice sent successfully!' });
       setIsSendModalOpen(false);
       setEmailMessage('');
+      setCcEmails([]);
       fetchInvoice();
     } catch (error: any) {
       console.error('Send invoice error:', error);
       toast({
-        title: 'Failed to send invoice',
+        title: 'Failed to send',
         description: error.message || 'Please try again',
         variant: 'destructive',
       });
@@ -781,6 +820,10 @@ export default function InvoiceDetail() {
               <Eye className="mr-2 h-4 w-4" />
               Preview
             </Button>
+            <Button variant="outline" onClick={handleDownloadPdf} disabled={downloadingPdf}>
+              {downloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+              Download PDF
+            </Button>
             {invoice.clients?.email && (
               <Button
                 onClick={async () => {
@@ -788,19 +831,27 @@ export default function InvoiceDetail() {
                     const ok = await saveInvoice();
                     if (!ok) return;
                   }
+                  const isReceipt = invoice.status === 'paid';
                   const isReminder = invoice.status === 'sent' || invoice.status === 'paid';
-                  if (isReminder) {
+                  if (isReceipt) {
+                    setSendModalMode('receipt');
+                    setEmailSubject(`Receipt for Invoice ${invoice.invoice_number} – Paid`);
+                    setEmailMessage(`This invoice has been paid. Balance due: $0. Thank you for your business.`);
+                  } else if (isReminder) {
+                    setSendModalMode('reminder');
                     setEmailSubject(profile?.reminder_subject_default ? resolveEmailMessage(profile.reminder_subject_default) : '');
                     setEmailMessage(profile?.reminder_body_default ? resolveEmailMessage(profile.reminder_body_default) : '');
                   } else {
+                    setSendModalMode('send');
                     setEmailSubject(profile?.invoice_email_subject_default ? resolveEmailMessage(profile.invoice_email_subject_default) : '');
                     setEmailMessage(resolveEmailMessage(profile?.invoice_email_message_default ?? ''));
                   }
+                  setCcEmails([]);
                   setIsSendModalOpen(true);
                 }}
               >
                 <Mail className="mr-2 h-4 w-4" />
-                {invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send to Client'}
+                {invoice.status === 'paid' ? 'Send receipt' : invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send to Client'}
               </Button>
             )}
             {invoice.status === 'draft' && (
@@ -820,7 +871,18 @@ export default function InvoiceDetail() {
                 {saving ? 'Saving...' : 'Save Invoice'}
               </Button>
             ) : (
-              <Button variant="outline" onClick={() => setIsEditMode(true)}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (invoice.status === 'sent' || invoice.status === 'paid') {
+                    if (window.confirm('This invoice has already been sent. Any changes you make won\'t update the version the client received. To send an updated copy, save your changes and use "Send to Client" again. Continue to edit?')) {
+                      setIsEditMode(true);
+                    }
+                  } else {
+                    setIsEditMode(true);
+                  }
+                }}
+              >
                 <Pencil className="mr-2 h-4 w-4" />
                 Edit Invoice
               </Button>
@@ -942,9 +1004,10 @@ export default function InvoiceDetail() {
             <div className="space-y-4">
               {/* Header */}
               <div className="grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground">
-                <div className="col-span-3">Item</div>
+                <div className="col-span-2">Item</div>
                 <div className="col-span-2">Description</div>
-                {showQuantity && <div className="col-span-2">Qty</div>}
+                <div className="col-span-2">Date</div>
+                {showQuantity && <div className="col-span-1">Qty</div>}
                 {showRate && <div className="col-span-2">Rate</div>}
                 <div className="col-span-2 text-right">Amount</div>
                 {isEditMode && <div className="col-span-1"></div>}
@@ -981,7 +1044,7 @@ export default function InvoiceDetail() {
                       )}
                     </div>
                     {showQuantity && (
-                      <div className="col-span-2">
+                      <div className="col-span-1">
                         {isEditMode ? (
                           <Input
                             type="number"
@@ -1387,15 +1450,19 @@ export default function InvoiceDetail() {
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send Invoice'}</DialogTitle>
+            <DialogTitle>
+              {sendModalMode === 'receipt' ? 'Send receipt' : invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send Invoice'}
+            </DialogTitle>
             <DialogDescription>
-              {invoice.status === 'sent' || invoice.status === 'paid'
-                ? 'Send a reminder email to your client with the invoice PDF attached.'
-                : 'Send this invoice to your client via email with a PDF attachment.'}
+              {sendModalMode === 'receipt'
+                ? 'Send a receipt to your client confirming payment. The PDF is attached.'
+                : invoice.status === 'sent' || invoice.status === 'paid'
+                  ? 'Send a reminder email to your client with the invoice PDF attached.'
+                  : 'Send this invoice to your client via email with a PDF attachment.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {(invoice.status === 'sent' || invoice.status === 'paid') && profile?.reminder_enabled && (
+            {(invoice.status === 'sent' || invoice.status === 'paid') && sendModalMode !== 'receipt' && profile?.reminder_enabled && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-3 text-sm text-amber-800 dark:text-amber-200">
                 You have automatic reminders enabled. This is a manual reminder.
               </div>
@@ -1409,6 +1476,43 @@ export default function InvoiceDetail() {
                 onChange={(e) => setRecipientEmail(e.target.value)}
                 placeholder="client@example.com"
               />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>CC</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setCcEmails((prev) => [...prev, ''])}
+                >
+                  + Add CC
+                </Button>
+              </div>
+              {ccEmails.map((email, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setCcEmails((prev) => {
+                      const next = [...prev];
+                      next[i] = e.target.value;
+                      return next;
+                    })}
+                    placeholder="cc@example.com"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    onClick={() => setCcEmails((prev) => prev.filter((_, j) => j !== i))}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
             </div>
             <div className="space-y-2">
               <Label htmlFor="email-subject">Subject</Label>
@@ -1477,7 +1581,7 @@ export default function InvoiceDetail() {
               ) : (
                 <>
                   <Mail className="mr-2 h-4 w-4" />
-                  {invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send Invoice'}
+                  {sendModalMode === 'receipt' ? 'Send receipt' : invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send Invoice'}
                 </>
               )}
             </Button>

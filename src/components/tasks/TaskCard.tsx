@@ -49,7 +49,7 @@ export function TaskCard({ task, status, commentCount = 0, onClick, isDragging }
         >
           <GripVertical className="h-4 w-4 text-muted-foreground" />
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 space-y-3">
         <h4 className="font-medium text-sm leading-tight">
           {task.title}
         </h4>

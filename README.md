@@ -96,4 +96,4 @@ Deploy with: `supabase functions deploy` (after `supabase login` and `supabase l
 - `supabase/migrations/` – Database schema and RLS  
 - `supabase/functions/` – Edge Functions  
 
-This project was generated with [Lovable](https://lovable.dev) and extracted to run as a standalone app.
+You can run this app standalone with your own Supabase project.

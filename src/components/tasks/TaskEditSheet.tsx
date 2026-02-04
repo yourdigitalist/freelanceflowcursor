@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Send, MessageSquare } from 'lucide-react';
+import { Copy, Send, MessageSquare, Trash2 } from 'lucide-react';
 import { Task, ProjectStatus, TaskComment, PRIORITY_OPTIONS } from './types';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -31,6 +31,7 @@ interface TaskEditSheetProps {
   onClose: () => void;
   onSave: (task: Partial<Task>) => void;
   onDuplicate?: (task: Task) => void;
+  onDelete?: (taskId: string) => void;
 }
 
 export function TaskEditSheet({
@@ -40,6 +41,7 @@ export function TaskEditSheet({
   onClose,
   onSave,
   onDuplicate,
+  onDelete,
 }: TaskEditSheetProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -134,17 +136,37 @@ export function TaskEditSheet({
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent className="sm:max-w-[480px] overflow-y-auto">
-        <SheetHeader className="flex flex-row items-center justify-between">
+        <SheetHeader className="flex flex-row items-center justify-between gap-2">
           <SheetTitle>{task ? 'Edit Task' : 'New Task'}</SheetTitle>
-          {task && onDuplicate && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onDuplicate(task)}
-            >
-              <Copy className="h-4 w-4 mr-2" />
-              Duplicate
-            </Button>
+          {task && (
+            <div className="flex items-center gap-1">
+              {onDuplicate && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onDuplicate(task)}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Duplicate
+                </Button>
+              )}
+              {onDelete && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => {
+                    if (window.confirm('Delete this task? This cannot be undone.')) {
+                      onDelete(task.id);
+                      onClose();
+                    }
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </Button>
+              )}
+            </div>
           )}
         </SheetHeader>
 

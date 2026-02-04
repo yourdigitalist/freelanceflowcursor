@@ -59,7 +59,7 @@ If you see **errors in red**, copy the last few lines and search for them online
 
 Your app talks to Supabase (your database and auth). It needs a file named `.env` in the project folder with your Supabase settings.
 
-- **If you already have a `.env` file** (you might have created it when you first set up the app in Lovable): you don’t need to change anything. Go to **Step 5**.
+- **If you already have a `.env` file** (e.g. from an earlier setup): you don’t need to change anything. Go to **Step 5**.
 - **If you don’t have a `.env` file:**
   1. Copy the example file:  
      - Mac/Linux: `cp .env.example .env`  
@@ -120,4 +120,4 @@ You should see the FreelanceFlow landing page. You can click **Get Started** to 
 - **Port 8080 already in use**  
   Another program is using that port. Either close that program or we can change the app to use a different port (you can ask for help with that).
 
-Once the app is running, you can use it like you did when it was on Lovable—the same Supabase project and data.
+Once the app is running, you can use it with the same Supabase project and data.

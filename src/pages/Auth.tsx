@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,14 +9,26 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Briefcase, Loader2, Clock, Users, FileText, BarChart3, Check } from 'lucide-react';
 
+const SIGNUP_PENDING_KEY = 'signup_pending';
+
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [showConfirmEmailMessage, setShowConfirmEmailMessage] = useState(false);
   const { signIn, signUp, resetPassword } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+
+  useEffect(() => {
+    const pending = sessionStorage.getItem(SIGNUP_PENDING_KEY);
+    if (pending || searchParams.get('confirm') === 'email') {
+      if (pending) sessionStorage.removeItem(SIGNUP_PENDING_KEY);
+      setShowConfirmEmailMessage(true);
+    }
+  }, [searchParams]);
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -52,7 +64,7 @@ export default function Auth() {
     const lastName = formData.get('lastName') as string;
     const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
 
-    const { error } = await signUp(email, password, fullName);
+    const { error } = await signUp(email, password, fullName, firstName, lastName);
     
     if (error) {
       toast({
@@ -61,11 +73,12 @@ export default function Auth() {
         variant: 'destructive',
       });
     } else {
+      sessionStorage.setItem('signup_pending', '1');
+      navigate('/onboarding');
       toast({
-        title: 'Account created!',
-        description: 'You can now sign in with your credentials.',
+        title: 'Check your email',
+        description: "We sent a confirmation link. After confirming, you'll complete setup here.",
       });
-      navigate('/dashboard');
     }
     
     setIsLoading(false);
@@ -159,6 +172,11 @@ export default function Auth() {
           </div>
 
           <Card className="border-0 shadow-xl">
+            {showConfirmEmailMessage && (
+              <div className="mx-6 mt-6 p-4 rounded-lg bg-primary/10 border border-primary/20 text-sm text-center">
+                Check your email to confirm your account. After confirming, you’ll complete setup on the onboarding page.
+              </div>
+            )}
             <CardHeader className="text-center pb-4">
               <CardTitle className="text-2xl">Welcome</CardTitle>
               <CardDescription>

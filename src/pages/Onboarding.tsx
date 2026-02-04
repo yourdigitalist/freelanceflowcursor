@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getBrowserCountry } from '@/lib/locale-data';
 import { countries as countryList } from '@/components/ui/phone-input';
@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { Check, Sparkles, Loader2, ArrowRight, Building2, User } from 'lucide-react';
 import { PhoneInput } from '@/components/ui/phone-input';
+import { DEFAULT_STATUSES } from '@/components/tasks/types';
 
 type Step = 'plan' | 'profile' | 'business';
 
@@ -84,6 +85,35 @@ export default function Onboarding() {
   const [businessCountry, setBusinessCountry] = useState('');
   const [taxId, setTaxId] = useState('');
 
+  // Prefill first/last name from user_metadata or profile when entering profile step
+  const loadProfileForPrefill = useCallback(async () => {
+    if (!user) return;
+    const meta = user.user_metadata as Record<string, unknown> | undefined;
+    const fromMeta = meta?.first_name != null || meta?.last_name != null;
+    if (fromMeta) {
+      setFirstName((meta?.first_name as string) ?? '');
+      setLastName((meta?.last_name as string) ?? '');
+      return;
+    }
+    if (meta?.full_name && typeof meta.full_name === 'string') {
+      const parts = (meta.full_name as string).trim().split(/\s+/);
+      if (parts.length >= 1) setFirstName(parts[0]);
+      if (parts.length >= 2) setLastName(parts.slice(1).join(' '));
+      return;
+    }
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('first_name, last_name')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (profile?.first_name) setFirstName(profile.first_name);
+    if (profile?.last_name) setLastName(profile.last_name);
+  }, [user]);
+
+  useEffect(() => {
+    if (step === 'profile') loadProfileForPrefill();
+  }, [step, loadProfileForPrefill]);
+
   // Auto-detect country when reaching business step
   useEffect(() => {
     if (step === 'business' && !businessCountry) {
@@ -101,8 +131,10 @@ export default function Onboarding() {
     setStep('profile');
   };
 
+  const canContinueFromProfile = Boolean(firstName?.trim() && lastName?.trim());
+
   const handleContinueToBusiness = () => {
-    if (!firstName.trim() || !lastName.trim()) {
+    if (!canContinueFromProfile) {
       toast({
         title: 'Name required',
         description: 'Please enter your first and last name',
@@ -113,7 +145,19 @@ export default function Onboarding() {
     setStep('business');
   };
 
+  const canCompleteBusiness = Boolean(
+    businessName?.trim() || businessEmail?.trim() || businessPhone?.trim()
+  );
+
   const handleComplete = async () => {
+    if (!canCompleteBusiness) {
+      toast({
+        title: 'Business details required',
+        description: 'Please enter at least a business name or one contact (email or phone).',
+        variant: 'destructive',
+      });
+      return;
+    }
     setLoading(true);
     try {
       const trialEndDate = new Date();
@@ -140,15 +184,78 @@ export default function Onboarding() {
         subscription_status: selectedPlan === 'free_trial' ? 'trial' : 'active',
         trial_start_date: new Date().toISOString(),
         trial_end_date: selectedPlan === 'free_trial' ? trialEndDate.toISOString() : null,
-        onboarding_completed: true,
+        onboarding_completed: false,
       };
 
-      const { error } = await supabase
+      const { error: profileError } = await supabase
         .from('profiles')
         .update(profileData)
         .eq('user_id', user!.id);
 
-      if (error) throw error;
+      if (profileError) throw profileError;
+
+      const sampleProject = {
+        user_id: user!.id,
+        name: 'Getting started with FreelanceFlow',
+        description: 'Sample project – next steps for FreelanceFlow',
+        status: 'active',
+        budget: null,
+        hourly_rate: null,
+        client_id: null,
+      };
+
+      const { data: projectRow, error: projectError } = await supabase
+        .from('projects')
+        .insert(sampleProject)
+        .select('id')
+        .single();
+
+      if (projectError) throw projectError;
+      const projectId = projectRow!.id;
+
+      const statusRows = DEFAULT_STATUSES.map((s, i) => ({
+        ...s,
+        project_id: projectId,
+        user_id: user!.id,
+        position: i,
+      }));
+      const { data: insertedStatuses, error: statusError } = await supabase
+        .from('project_statuses')
+        .insert(statusRows)
+        .select('id, position');
+
+      if (statusError) throw statusError;
+      const firstStatusId = insertedStatuses?.sort((a, b) => (a.position ?? 0) - (b.position ?? 0))[0]?.id;
+
+      const sampleTaskTitles = [
+        'Create your first invoice',
+        'Update your business settings',
+        'Add your bank details',
+        'Add a client',
+        'Create a project',
+        'Log time',
+      ];
+      const tasksToInsert = sampleTaskTitles.map((title, i) => ({
+        user_id: user!.id,
+        project_id: projectId,
+        title,
+        description: null,
+        status_id: firstStatusId ?? null,
+        priority: 'medium',
+        due_date: null,
+        estimated_hours: null,
+        position: i,
+      }));
+
+      const { error: tasksError } = await supabase.from('tasks').insert(tasksToInsert);
+      if (tasksError) throw tasksError;
+
+      const { error: completeError } = await supabase
+        .from('profiles')
+        .update({ onboarding_completed: true })
+        .eq('user_id', user!.id);
+
+      if (completeError) throw completeError;
 
       toast({ title: 'Welcome! Your account is ready.' });
       navigate('/dashboard');
@@ -312,7 +419,7 @@ export default function Onboarding() {
               <Button variant="ghost" onClick={() => setStep('plan')}>
                 Back
               </Button>
-              <Button onClick={handleContinueToBusiness}>
+              <Button onClick={handleContinueToBusiness} disabled={!canContinueFromProfile}>
                 Continue
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -420,7 +527,7 @@ export default function Onboarding() {
               <Button variant="ghost" onClick={() => setStep('profile')}>
                 Back
               </Button>
-              <Button onClick={handleComplete} disabled={loading}>
+              <Button onClick={handleComplete} disabled={loading || !canCompleteBusiness}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Complete Setup
               </Button>

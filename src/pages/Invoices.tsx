@@ -55,6 +55,7 @@ interface Client {
 interface Project {
   id: string;
   name: string;
+  client_id: string | null;
 }
 
 interface Tax {
@@ -93,6 +94,7 @@ export default function Invoices() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTaxId, setSelectedTaxId] = useState<string>('');
+  const [createClientId, setCreateClientId] = useState<string>('');
 
   // Filters
   type DateRangePreset = 'all' | 'this_week' | 'this_month' | 'last_90' | 'custom';
@@ -152,7 +154,7 @@ export default function Invoices() {
     try {
       const { data, error } = await supabase
         .from('projects')
-        .select('id, name')
+        .select('id, name, client_id')
         .order('name');
       if (error) throw error;
       setProjects(data || []);
@@ -188,16 +190,22 @@ export default function Invoices() {
     return `INV-${year}${month}-${random}`;
   };
 
+  const projectsForCreateClient = createClientId
+    ? projects.filter((p) => p.client_id === createClientId)
+    : projects;
+
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
     const selectedTax = taxes.find(t => t.id === selectedTaxId);
+    const clientId = (formData.get('client_id') as string) || null;
+    const projectId = (formData.get('project_id') as string) || null;
     
     const invoiceData = {
       invoice_number: generateInvoiceNumber(),
-      client_id: (formData.get('client_id') as string) || null,
-      project_id: (formData.get('project_id') as string) || null,
+      client_id: clientId || null,
+      project_id: projectId || null,
       issue_date: formData.get('issue_date') as string,
       due_date: (formData.get('due_date') as string) || null,
       status: 'draft',
@@ -459,11 +467,16 @@ export default function Invoices() {
               <form onSubmit={handleCreate} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="client_id">Client</Label>
-                  <Select name="client_id">
+                  <Select
+                    name="client_id"
+                    value={createClientId || 'none'}
+                    onValueChange={(v) => setCreateClientId(v === 'none' ? '' : v)}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select client" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">No client</SelectItem>
                       {clients.map((c) => (
                         <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                       ))}
@@ -477,11 +490,18 @@ export default function Invoices() {
                       <SelectValue placeholder="Select project" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projects.map((p) => (
+                      {projectsForCreateClient.map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {createClientId
+                      ? projectsForCreateClient.length === 0
+                        ? "No projects for this client. You can assign a client to a project in Projects."
+                        : "Only projects for this client are shown. You can change a project's client in Projects."
+                      : "Select a client to see their projects."}
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="tax">Tax Rate</Label>
@@ -501,6 +521,11 @@ export default function Invoices() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {taxes.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      <Link to="/settings/invoices" className="text-primary hover:underline">Add tax rates in Invoice Settings</Link>
+                    </p>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">

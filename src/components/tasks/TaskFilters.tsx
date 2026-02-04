@@ -58,7 +58,7 @@ export function TaskFilters({
           Edit Statuses
         </Button>
 
-        <Button onClick={onAddTask}>
+        <Button onClick={onAddTask} className="hover:text-primary-foreground">
           <Plus className="h-4 w-4 mr-2" />
           Task
         </Button>

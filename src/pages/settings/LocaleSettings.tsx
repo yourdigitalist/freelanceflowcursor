@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
+import { useSettingsDirty } from '@/contexts/SettingsDirtyContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -40,6 +41,7 @@ interface LocaleProfile {
 export default function LocaleSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const dirtyContext = useSettingsDirty();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
@@ -55,6 +57,32 @@ export default function LocaleSettings() {
   useEffect(() => {
     if (user) fetchProfile();
   }, [user]);
+
+  const save = async () => {
+    if (!user) return;
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        currency,
+        currency_display: currencyDisplay,
+        date_format: dateFormat,
+        time_format: timeFormat,
+        timezone,
+      })
+      .eq('user_id', user.id);
+    if (error) throw error;
+    toast({ title: 'Locale settings saved successfully' });
+    dirtyContext?.setDirty(false);
+  };
+
+  const discard = () => {
+    fetchProfile();
+    dirtyContext?.setDirty(false);
+  };
+
+  useEffect(() => {
+    dirtyContext?.registerHandlers(save, discard);
+  }, [dirtyContext]);
 
   const fetchProfile = async () => {
     try {
@@ -128,21 +156,8 @@ export default function LocaleSettings() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          currency,
-          currency_display: currencyDisplay,
-          date_format: dateFormat,
-          time_format: timeFormat,
-          timezone,
-        })
-        .eq('user_id', user!.id);
-
-      if (error) throw error;
-      toast({ title: 'Locale settings saved successfully' });
+      await save();
     } catch (error: any) {
       toast({
         title: 'Error saving settings',
@@ -153,6 +168,8 @@ export default function LocaleSettings() {
       setSaving(false);
     }
   };
+
+  const markDirty = () => dirtyContext?.setDirty(true);
 
   if (loading) {
     return (
@@ -179,7 +196,7 @@ export default function LocaleSettings() {
                 </p>
               </div>
             </div>
-            <Button type="button" variant="outline" onClick={handleDetectSettings}>
+            <Button type="button" variant="outline" onClick={() => { handleDetectSettings(); markDirty(); }}>
               Detect
             </Button>
           </div>
@@ -195,7 +212,7 @@ export default function LocaleSettings() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="currency">Default Currency</Label>
-              <Select value={currency} onValueChange={setCurrency}>
+              <Select value={currency} onValueChange={(v) => { setCurrency(v); markDirty(); }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -212,7 +229,7 @@ export default function LocaleSettings() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="currency_display">Display Format</Label>
-              <Select value={currencyDisplay} onValueChange={setCurrencyDisplay}>
+              <Select value={currencyDisplay} onValueChange={(v) => { setCurrencyDisplay(v); markDirty(); }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -228,7 +245,7 @@ export default function LocaleSettings() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="number_format">Number Format</Label>
-            <Select value={numberFormat} onValueChange={setNumberFormat}>
+            <Select value={numberFormat} onValueChange={(v) => { setNumberFormat(v); markDirty(); }}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -256,7 +273,7 @@ export default function LocaleSettings() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="date_format">Date Format</Label>
-              <Select value={dateFormat} onValueChange={setDateFormat}>
+              <Select value={dateFormat} onValueChange={(v) => { setDateFormat(v); markDirty(); }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -271,7 +288,7 @@ export default function LocaleSettings() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="time_format">Time Format</Label>
-              <Select value={timeFormat} onValueChange={setTimeFormat}>
+              <Select value={timeFormat} onValueChange={(v) => { setTimeFormat(v); markDirty(); }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -312,6 +329,7 @@ export default function LocaleSettings() {
                         onSelect={() => {
                           setTimezone(tz.value);
                           setTimezoneOpen(false);
+                          markDirty();
                         }}
                       >
                         <span className="truncate">{tz.label}</span>

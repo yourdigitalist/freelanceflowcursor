@@ -93,11 +93,12 @@ export default function TimeTracking() {
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
-  const [activeTimer, setActiveTimer] = useState<TimeEntry | null>(null);
   const [timerDescription, setTimerDescription] = useState('');
   const [timerProject, setTimerProject] = useState<string>('');
   const [timerTask, setTimerTask] = useState<string>('');
   const [timerBillable, setTimerBillable] = useState(true);
+  const [localTimerStartMs, setLocalTimerStartMs] = useState<number | null>(null);
+  const [localTimerEndMs, setLocalTimerEndMs] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const timerStartMsRef = useRef<number | null>(null);
   
@@ -143,14 +144,15 @@ export default function TimeTracking() {
     }
   }, [timerProject]);
 
-  // Elapsed time: use ref + seconds so display is accurate (avoids timezone/DB sync issues)
+  // Elapsed time for local timer (in-memory only until "Log time")
+  const isLocalTimerRunning = localTimerStartMs != null && localTimerEndMs == null;
   useEffect(() => {
-    if (!activeTimer) {
+    if (!isLocalTimerRunning) {
       timerStartMsRef.current = null;
       setElapsedSeconds(0);
       return;
     }
-    timerStartMsRef.current = new Date(activeTimer.start_time).getTime();
+    timerStartMsRef.current = localTimerStartMs;
     const tick = () => {
       if (timerStartMsRef.current == null) return;
       setElapsedSeconds(Math.floor((Date.now() - timerStartMsRef.current) / 1000));
@@ -158,7 +160,7 @@ export default function TimeTracking() {
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [activeTimer?.id, activeTimer?.start_time]);
+  }, [isLocalTimerRunning, localTimerStartMs]);
 
   const fetchEntries = async () => {
     try {
@@ -174,19 +176,7 @@ export default function TimeTracking() {
 
       if (error) throw error;
       
-      const completedEntries = data?.filter(e => e.end_time) || [];
-      const runningEntry = data?.find(e => !e.end_time);
-      
-      setEntries(completedEntries);
-      if (runningEntry) {
-        setActiveTimer(runningEntry);
-        setTimerDescription(runningEntry.description || '');
-        setTimerProject(runningEntry.project_id || '');
-        setTimerTask(runningEntry.task_id || '');
-        setTimerBillable(runningEntry.billable);
-      } else {
-        setTimerTask('');
-      }
+      setEntries(data || []);
     } catch (error) {
       console.error('Error fetching time entries:', error);
     } finally {
@@ -238,73 +228,62 @@ export default function TimeTracking() {
     }
   };
 
-  const startTimer = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('time_entries')
-        .insert({
-          description: timerDescription || null,
-          start_time: new Date().toISOString(),
-          project_id: timerProject || null,
-          task_id: timerTask || null,
-          billable: timerBillable,
-          billing_status: timerBillable ? 'unbilled' : 'not_billable',
-          user_id: user!.id,
-        })
-        .select(`*, projects(name, client_id), tasks(title)`)
-        .single();
+  const startTimer = () => {
+    setLocalTimerStartMs(Date.now());
+    setLocalTimerEndMs(null);
+    toast({ title: 'Timer started' });
+  };
 
+  const stopTimer = () => {
+    if (localTimerStartMs == null) return;
+    setLocalTimerEndMs(Date.now());
+    toast({ title: 'Timer stopped. Click "Log time" to save the entry.' });
+  };
+
+  const logTimeFromTimer = async () => {
+    if (localTimerStartMs == null || !user) return;
+    const endMs = localTimerEndMs ?? Date.now();
+    const startTime = new Date(localTimerStartMs);
+    const endTime = new Date(endMs);
+    const durationMinutes = Math.max(0, Math.floor((endMs - localTimerStartMs) / 60_000));
+
+    try {
+      const { error } = await supabase.from('time_entries').insert({
+        description: timerDescription || null,
+        start_time: startTime.toISOString(),
+        end_time: endTime.toISOString(),
+        duration_minutes: durationMinutes,
+        project_id: timerProject || null,
+        task_id: timerTask || null,
+        billable: timerBillable,
+        billing_status: timerBillable ? 'unbilled' : 'not_billable',
+        user_id: user.id,
+      });
       if (error) throw error;
-      setActiveTimer(data);
-      toast({ title: 'Timer started' });
+      setLocalTimerStartMs(null);
+      setLocalTimerEndMs(null);
+      setTimerDescription('');
+      setTimerProject('');
+      setTimerTask('');
+      setTimerBillable(true);
+      fetchEntries();
+      toast({ title: 'Time logged', description: formatDuration(durationMinutes) });
     } catch (error: any) {
       toast({
-        title: 'Error starting timer',
+        title: 'Error logging time',
         description: error.message,
         variant: 'destructive',
       });
     }
   };
 
-  const stopTimer = async () => {
-    if (!activeTimer) return;
-
-    const endTime = new Date();
-    const startMs = timerStartMsRef.current ?? new Date(activeTimer.start_time).getTime();
-    const durationMinutes = Math.max(0, Math.floor((endTime.getTime() - startMs) / 60_000));
-
-    try {
-      const { error } = await supabase
-        .from('time_entries')
-        .update({
-          end_time: endTime.toISOString(),
-          duration_minutes: durationMinutes,
-          description: timerDescription || null,
-          project_id: timerProject || null,
-          task_id: timerTask || null,
-          billable: timerBillable,
-          billing_status: timerBillable ? 'unbilled' : 'not_billable',
-        })
-        .eq('id', activeTimer.id);
-
-      if (error) throw error;
-
-      setActiveTimer(null);
-      setTimerDescription('');
-      setTimerProject('');
-      setTimerTask('');
-      setTimerBillable(true);
-      setElapsedSeconds(0);
-      timerStartMsRef.current = null;
-      fetchEntries();
-      toast({ title: 'Timer stopped', description: `Logged ${formatDuration(durationMinutes)}. You can edit the entry below.` });
-    } catch (error: any) {
-      toast({
-        title: 'Error stopping timer',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
+  const discardTimerSegment = () => {
+    setLocalTimerStartMs(null);
+    setLocalTimerEndMs(null);
+    setTimerDescription('');
+    setTimerProject('');
+    setTimerTask('');
+    setTimerBillable(true);
   };
 
   const openLogDialog = (entry?: TimeEntry) => {
@@ -521,8 +500,13 @@ export default function TimeTracking() {
     return true;
   });
 
-  const totalHours = filteredEntries.reduce((sum, e) => sum + (e.duration_minutes || 0), 0) / 60;
-  const billableHours = filteredEntries.filter(e => e.billable).reduce((sum, e) => sum + (e.duration_minutes || 0), 0) / 60;
+  const getEntryMinutes = (e: TimeEntry) => {
+    if (e.duration_minutes != null) return e.duration_minutes;
+    if (e.start_time && e.end_time) return Math.max(0, differenceInMinutes(parseISO(e.end_time), parseISO(e.start_time)));
+    return 0;
+  };
+  const totalHours = filteredEntries.reduce((sum, e) => sum + getEntryMinutes(e), 0) / 60;
+  const billableHours = filteredEntries.filter(e => e.billable).reduce((sum, e) => sum + getEntryMinutes(e), 0) / 60;
 
   const handleDownloadTimeTemplate = () => {
     downloadCsv('time_entries_template.csv', getTimeEntriesTemplateRows());
@@ -856,13 +840,26 @@ export default function TimeTracking() {
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-3xl font-mono font-bold text-primary min-w-[140px] text-center">
-                  {activeTimer ? formatElapsed(elapsedSeconds) : '00:00:00'}
+                  {localTimerStartMs != null && localTimerEndMs == null
+                    ? formatElapsed(elapsedSeconds)
+                    : localTimerStartMs != null && localTimerEndMs != null
+                      ? formatDuration(Math.floor((localTimerEndMs - localTimerStartMs) / 60_000))
+                      : '00:00:00'}
                 </div>
-                {activeTimer ? (
+                {localTimerStartMs != null && localTimerEndMs == null ? (
                   <Button size="lg" variant="destructive" onClick={stopTimer}>
                     <Square className="mr-2 h-4 w-4" />
                     Stop
                   </Button>
+                ) : localTimerStartMs != null && localTimerEndMs != null ? (
+                  <div className="flex gap-2">
+                    <Button size="lg" variant="outline" onClick={discardTimerSegment}>
+                      Discard
+                    </Button>
+                    <Button size="lg" onClick={logTimeFromTimer}>
+                      Log time
+                    </Button>
+                  </div>
                 ) : (
                   <Button size="lg" onClick={startTimer}>
                     <Play className="mr-2 h-4 w-4" />
@@ -1009,7 +1006,7 @@ export default function TimeTracking() {
                         {entry.description || <span className="text-muted-foreground italic">No description</span>}
                       </TableCell>
                       <TableCell>
-                        {entry.duration_minutes ? `${(entry.duration_minutes / 60).toFixed(1)}h` : '—'}
+                        {getEntryMinutes(entry) ? `${(getEntryMinutes(entry) / 60).toFixed(1)}h` : '—'}
                       </TableCell>
                       <TableCell>
                         {getStatusBadge(entry)}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -35,7 +35,7 @@ import {
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { EmojiPicker } from '@/components/ui/emoji-picker';
-import { downloadCsv, getTasksTemplateRows, TASKS_CSV_HEADERS } from '@/lib/csv';
+import { downloadCsv, getTasksTemplateRows, TASKS_CSV_HEADERS, parseCsv } from '@/lib/csv';
 
 interface Client {
   id: string;
@@ -82,6 +82,10 @@ export default function Projects() {
   const [exportTasksDialogOpen, setExportTasksDialogOpen] = useState(false);
   const [exportTaskProjectId, setExportTaskProjectId] = useState<string>('all');
   const [exportingTasks, setExportingTasks] = useState(false);
+  const [importTasksDialogOpen, setImportTasksDialogOpen] = useState(false);
+  const [importTaskProjectId, setImportTaskProjectId] = useState<string>('');
+  const [importingTasks, setImportingTasks] = useState(false);
+  const importTaskFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) {
@@ -317,6 +321,78 @@ export default function Projects() {
     }
   };
 
+  const handleImportTasksCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !importTaskProjectId) return;
+    setImportingTasks(true);
+    try {
+      const { data: statusesData } = await supabase
+        .from('project_statuses')
+        .select('id, name')
+        .eq('project_id', importTaskProjectId)
+        .order('position');
+      const statuses = statusesData || [];
+      const { count } = await supabase
+        .from('tasks')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', importTaskProjectId);
+      let position = count ?? 0;
+
+      const rows = await parseCsv(file);
+      if (rows.length < 2) {
+        toast({ title: 'No data rows in file', variant: 'destructive' });
+        return;
+      }
+      const header = rows[0].map((h) => h.toLowerCase().replace(/\s/g, '_'));
+      const dataRows = rows.slice(1);
+      const titleIdx = header.indexOf('title');
+      const descIdx = header.indexOf('description');
+      const statusIdx = header.indexOf('status');
+      const priorityIdx = header.indexOf('priority');
+      const dueDateIdx = header.indexOf('due_date');
+      const estIdx = header.indexOf('estimated_hours');
+      if (titleIdx === -1) {
+        toast({ title: 'CSV must have title column', variant: 'destructive' });
+        return;
+      }
+      let created = 0;
+      for (const row of dataRows) {
+        const title = row[titleIdx]?.trim();
+        if (!title) continue;
+        const description = descIdx >= 0 ? row[descIdx]?.trim() || null : null;
+        const statusName = statusIdx >= 0 ? row[statusIdx]?.trim() : '';
+        const statusId = statusName ? statuses.find((s: { name: string }) => s.name === statusName)?.id ?? null : statuses[0]?.id ?? null;
+        const priority = (priorityIdx >= 0 ? row[priorityIdx]?.trim() : 'medium') || 'medium';
+        const dueDate = dueDateIdx >= 0 ? row[dueDateIdx]?.trim() || null : null;
+        const estimatedHours = estIdx >= 0 ? (parseFloat(row[estIdx]) || null) : null;
+        const { error } = await supabase.from('tasks').insert({
+          title,
+          description,
+          status_id: statusId,
+          priority,
+          due_date: dueDate || null,
+          estimated_hours: estimatedHours,
+          project_id: importTaskProjectId,
+          user_id: user.id,
+          position,
+          status: 'todo',
+        });
+        if (!error) {
+          created++;
+          position++;
+        }
+      }
+      setImportTasksDialogOpen(false);
+      setImportTaskProjectId('');
+      if (importTaskFileRef.current) importTaskFileRef.current.value = '';
+      toast({ title: `Imported ${created} tasks` });
+    } catch (err: any) {
+      toast({ title: 'Import failed', description: err?.message, variant: 'destructive' });
+    } finally {
+      setImportingTasks(false);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -342,6 +418,9 @@ export default function Projects() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setExportTasksDialogOpen(true)}>
                   Export all tasks
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setImportTasksDialogOpen(true)}>
+                  Import tasks
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -529,6 +608,47 @@ export default function Projects() {
               </div>
               <Button className="w-full" disabled={exportingTasks} onClick={handleExportAllTasks}>
                 {exportingTasks ? 'Exporting…' : 'Export CSV'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={importTasksDialogOpen} onOpenChange={setImportTasksDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Import tasks from CSV</DialogTitle>
+              <DialogDescription>
+                Select a project and choose a CSV file. Tasks will be added to that project. Use the task template for the correct format.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Project</Label>
+                <Select value={importTaskProjectId} onValueChange={setImportTaskProjectId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredProjects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <input
+                ref={importTaskFileRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={handleImportTasksCsv}
+              />
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={importingTasks || !importTaskProjectId}
+                onClick={() => importTaskFileRef.current?.click()}
+              >
+                {importingTasks ? 'Importing…' : 'Choose CSV file'}
               </Button>
             </div>
           </DialogContent>

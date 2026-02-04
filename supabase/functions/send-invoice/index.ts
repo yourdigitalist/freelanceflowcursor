@@ -28,6 +28,7 @@ function escapeHtml(text: string | null | undefined): string {
 interface InvoiceItem {
   description: string;
   line_description?: string | null;
+  line_date?: string | null;
   quantity: number;
   unit_price: number;
   amount: number;
@@ -129,10 +130,14 @@ serve(async (req) => {
       );
     }
 
-    const { invoiceId, recipientEmail, senderName, senderEmail, message, subject: customSubject } = await req.json();
+    const body = await req.json();
+    const { invoiceId, recipientEmail, senderName, senderEmail, message, subject: customSubject, cc, receipt, downloadOnly } = body;
 
-    if (!invoiceId || !recipientEmail) {
-      throw new Error("Missing required fields: invoiceId and recipientEmail");
+    if (!invoiceId) {
+      throw new Error("Missing required field: invoiceId");
+    }
+    if (!downloadOnly && !recipientEmail) {
+      throw new Error("Missing required field: recipientEmail");
     }
 
     console.log(`Fetching invoice ${invoiceId} for user ${user.id}`);
@@ -140,7 +145,7 @@ serve(async (req) => {
     // Fetch user profile with business details, logo, currency, bank, and invoice display options
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, bank_name, bank_account_number, bank_routing_number, payment_instructions")
+      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, bank_name, bank_account_number, bank_routing_number, payment_instructions")
       .eq("user_id", user.id)
       .single();
 
@@ -218,6 +223,7 @@ serve(async (req) => {
     const showQty = profile?.invoice_show_quantity !== false;
     const showRate = profile?.invoice_show_rate !== false;
     const showLineDescription = profile?.invoice_show_line_description === true;
+    const showLineDate = profile?.invoice_show_line_date === true;
 
     const billToX = 105;
     const logoW = 40;
@@ -422,11 +428,13 @@ serve(async (req) => {
 
     // Table header
     yPos += 10;
+    yPos += 4;
     const colItem = margin + 4;
+    const colDate = showLineDate ? 58 : 0;
     const colAmount = pageWidth - margin - 2;
     const tableRight = pageWidth - margin;
-    const colQty = showLineDescription ? 112 : 102;
-    const colPrice = showQty ? 128 : 118;
+    const colQty = showLineDescription ? (showLineDate ? 118 : 112) : (showLineDate ? 108 : 102);
+    const colPrice = showQty ? (showLineDate ? 134 : 128) : (showLineDate ? 124 : 118);
     const amountLabelX = colAmount - 32;
 
     doc.setFillColor(248, 248, 250);
@@ -434,7 +442,8 @@ serve(async (req) => {
     doc.setFontSize(9);
     doc.setTextColor(100, 100, 100);
     doc.text("Item", colItem, yPos + 2);
-    if (showLineDescription) doc.text("Description", 72, yPos + 2);
+    if (showLineDate) doc.text("Date", colDate, yPos + 2);
+    if (showLineDescription) doc.text("Description", showLineDate ? 72 : 72, yPos + 2);
     if (showQty) doc.text("Qty", colQty, yPos + 2);
     if (showRate) doc.text("Price", colPrice, yPos + 2);
     doc.text("Amount", colAmount, yPos + 2, { align: "right" });
@@ -445,14 +454,16 @@ serve(async (req) => {
     doc.setFontSize(10);
     const invoiceItems: InvoiceItem[] = items || [];
     for (const item of invoiceItems) {
-      const itemW = showLineDescription ? 64 : 76;
+      const itemW = showLineDescription ? (showLineDate ? 48 : 64) : (showLineDate ? 48 : 76);
       const itemLines = doc.splitTextToSize(item.description, itemW);
       const lineDescLines = showLineDescription && item.line_description ? doc.splitTextToSize(item.line_description, 48) : [];
+      const dateStr = showLineDate && item.line_date ? new Date(item.line_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
       const descLines = itemLines;
       const rowH = Math.max(descLines.length * lineHeight, lineDescLines.length * lineHeight, lineHeight) + tableRowPadding;
       yPos = checkPageBreak(doc, yPos, rowH + 4, margin);
       doc.text(itemLines, colItem, yPos);
-      if (showLineDescription && item.line_description) doc.text(lineDescLines, 72, yPos);
+      if (showLineDate) doc.text(dateStr, colDate, yPos);
+      if (showLineDescription && item.line_description) doc.text(lineDescLines, showLineDate ? 72 : 72, yPos);
       if (showQty) doc.text(String(item.quantity), colQty, yPos);
       if (showRate) doc.text(currencyFmt(Number(item.unit_price)), colPrice, yPos);
       doc.text(currencyFmt(Number(item.amount)), colAmount, yPos, { align: "right" });
@@ -544,6 +555,13 @@ serve(async (req) => {
     // Get PDF as base64
     const pdfBase64 = doc.output("datauristring").split(",")[1];
 
+    if (downloadOnly) {
+      return new Response(
+        JSON.stringify({ pdfBase64 }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     console.log(`Sending email to ${recipientEmail}`);
 
     // Send email with PDF attachment - all user inputs are escaped to prevent XSS
@@ -552,7 +570,18 @@ serve(async (req) => {
     const safeSenderName = escapeHtml(senderName);
     const safeTotalFormatted = escapeHtml(currencyFmt(Number(invoice.total || 0)));
     
-    const emailHtml = `
+    const isReceipt = receipt === true;
+    const emailHtml = isReceipt
+      ? `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #10B981;">Receipt – Invoice ${safeInvoiceNumber}</h2>
+        ${safeMessage ? `<p style="color: #333; white-space: pre-wrap;">${safeMessage}</p>` : ""}
+        <p style="color: #666;">This invoice has been paid. Balance due: <strong>$0</strong>.</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+        <p style="color: #999; font-size: 12px;">Thank you for your business.</p>
+      </div>
+    `
+      : `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #9B63E9;">Invoice ${safeInvoiceNumber}</h2>
         ${safeMessage ? `<p style="color: #333; white-space: pre-wrap;">${safeMessage}</p>` : ""}
@@ -569,20 +598,23 @@ serve(async (req) => {
 
     const emailSubject = customSubject && String(customSubject).trim()
       ? customSubject
-      : `Invoice ${invoice.invoice_number} - ${currencyFmt(Number(invoice.total || 0))}`;
+      : isReceipt
+        ? `Receipt for Invoice ${invoice.invoice_number} – Paid`
+        : `Invoice ${invoice.invoice_number} - ${currencyFmt(Number(invoice.total || 0))}`;
 
-    const { data: emailData, error: emailError } = await resend.emails.send({
+    const emailPayload: any = {
       from: senderEmail ? `${senderName || "Invoice"} <onboarding@resend.dev>` : "Invoice <onboarding@resend.dev>",
       to: [recipientEmail],
       subject: emailSubject,
       html: emailHtml,
       attachments: [
-        {
-          filename: `${invoice.invoice_number}.pdf`,
-          content: pdfBase64,
-        },
+        { filename: `${invoice.invoice_number}.pdf`, content: pdfBase64 },
       ],
-    });
+    };
+    const ccList = Array.isArray(cc) ? cc.filter((e: string) => e && String(e).trim()) : [];
+    if (ccList.length > 0) emailPayload.cc = ccList;
+
+    const { data: emailData, error: emailError } = await resend.emails.send(emailPayload);
 
     if (emailError) {
       console.error("Email send error:", emailError);
@@ -591,11 +623,12 @@ serve(async (req) => {
 
     console.log("Email sent successfully:", emailData);
 
-    // Update invoice status to sent
-    await supabase
-      .from("invoices")
-      .update({ status: "sent" })
-      .eq("id", invoiceId);
+    if (!isReceipt) {
+      await supabase
+        .from("invoices")
+        .update({ status: "sent" })
+        .eq("id", invoiceId);
+    }
 
     return new Response(
       JSON.stringify({ success: true, messageId: emailData?.id }),

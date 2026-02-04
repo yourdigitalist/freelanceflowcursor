@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
+import { SettingsDirtyProvider, useSettingsDirty } from '@/contexts/SettingsDirtyContext';
 import {
   User,
   Building2,
@@ -12,7 +22,6 @@ import {
   Globe,
   CreditCard,
   HardDrive,
-  LogOut,
 } from 'lucide-react';
 
 interface Profile {
@@ -33,10 +42,15 @@ const navItems = [
   { path: 'storage', label: 'Storage', icon: HardDrive },
 ];
 
-export default function SettingsLayout() {
+function SettingsLayoutInner() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const dirtyContext = useSettingsDirty();
+  const [pendingPath, setPendingPath] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -47,6 +61,48 @@ export default function SettingsLayout() {
       .single()
       .then(({ data }) => setProfile(data));
   }, [user]);
+
+  useEffect(() => {
+    if (!dirtyContext?.dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirtyContext?.dirty]);
+
+  const handleNavClick = (href: string) => {
+    if (location.pathname === href) return;
+    if (dirtyContext?.dirty) {
+      setPendingPath(href);
+      setConfirmOpen(true);
+    } else {
+      navigate(href);
+    }
+  };
+
+  const handleSaveAndLeave = async () => {
+    if (!dirtyContext || !pendingPath) return;
+    setSaving(true);
+    try {
+      const ok = await dirtyContext.runSave();
+      if (ok) {
+        setConfirmOpen(false);
+        navigate(pendingPath);
+        setPendingPath(null);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDiscardAndLeave = () => {
+    if (!dirtyContext || !pendingPath) return;
+    dirtyContext.runDiscard();
+    setConfirmOpen(false);
+    navigate(pendingPath);
+    setPendingPath(null);
+  };
 
   if (!user) return <Navigate to="/auth" replace />;
 
@@ -90,11 +146,12 @@ export default function SettingsLayout() {
                 const isActive = location.pathname === href;
                 const Icon = item.icon;
                 return (
-                  <Link
+                  <button
                     key={item.path}
-                    to={href}
+                    type="button"
+                    onClick={() => handleNavClick(href)}
                     className={cn(
-                      'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                      'w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                       isActive
                         ? 'bg-primary/10 text-primary'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -102,7 +159,7 @@ export default function SettingsLayout() {
                   >
                     <Icon className="h-4 w-4 shrink-0" />
                     {item.label}
-                  </Link>
+                  </button>
                 );
               })}
             </nav>
@@ -112,6 +169,36 @@ export default function SettingsLayout() {
           <Outlet />
         </div>
       </div>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unsaved changes</DialogTitle>
+            <DialogDescription>
+              You have unsaved changes. Save or discard before leaving?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setConfirmOpen(false); setPendingPath(null); }}>
+              Cancel
+            </Button>
+            <Button variant="outline" onClick={handleDiscardAndLeave}>
+              Discard
+            </Button>
+            <Button onClick={handleSaveAndLeave} disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
+  );
+}
+
+export default function SettingsLayout() {
+  return (
+    <SettingsDirtyProvider>
+      <SettingsLayoutInner />
+    </SettingsDirtyProvider>
   );
 }
