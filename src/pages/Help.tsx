@@ -217,11 +217,12 @@ export default function Help() {
     const voted = myVotes.has(featureRequestId);
     try {
       if (voted) {
-        await supabase
+        const { error } = await supabase
           .from('feature_request_votes')
           .delete()
           .eq('feature_request_id', featureRequestId)
           .eq('user_id', user.id);
+        if (error) throw error;
         setMyVotes((prev) => {
           const next = new Set(prev);
           next.delete(featureRequestId);
@@ -229,15 +230,17 @@ export default function Help() {
         });
         setVoteCounts((prev) => ({ ...prev, [featureRequestId]: (prev[featureRequestId] ?? 1) - 1 }));
       } else {
-        await supabase.from('feature_request_votes').insert({
+        const { error } = await supabase.from('feature_request_votes').insert({
           feature_request_id: featureRequestId,
           user_id: user.id,
         });
+        if (error) throw error;
         setMyVotes((prev) => new Set(prev).add(featureRequestId));
         setVoteCounts((prev) => ({ ...prev, [featureRequestId]: (prev[featureRequestId] ?? 0) + 1 }));
       }
-    } catch (e) {
-      toast({ title: 'Failed to update vote', variant: 'destructive' });
+    } catch (e: unknown) {
+      const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : 'Failed to update vote';
+      toast({ title: 'Vote failed', description: msg, variant: 'destructive' });
     }
     setVotingId(null);
   };
@@ -261,8 +264,9 @@ export default function Help() {
       setSubmitTitle('');
       setSubmitDescription('');
       fetchFeatureRequests();
-    } catch (e) {
-      toast({ title: 'Failed to submit', variant: 'destructive' });
+    } catch (e: unknown) {
+      const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : (e instanceof Error ? e.message : 'Failed to submit');
+      toast({ title: 'Submit failed', description: msg, variant: 'destructive' });
     }
     setSubmitting(false);
   };
