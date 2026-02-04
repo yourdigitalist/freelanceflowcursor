@@ -1,4 +1,5 @@
-// Supabase Edge Function: create Stripe Customer Portal session (manage subscription, payment method).
+// @ts-nocheck
+// Supabase Edge Function (Deno): create Stripe Customer Portal session (manage subscription, payment method).
 // Requires: STRIPE_SECRET_KEY. User must have stripe_customer_id set (after at least one checkout).
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";

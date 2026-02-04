@@ -1,4 +1,5 @@
-// Supabase Edge Function: create Stripe Checkout Session for subscription (15-day trial).
+// @ts-nocheck
+// Supabase Edge Function (Deno): create Stripe Checkout Session for subscription (15-day trial).
 // Requires: STRIPE_SECRET_KEY. Frontend passes priceId (monthly or annual).
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
@@ -23,7 +24,7 @@ serve(async (req) => {
     });
   }
 
-  const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY");
+  const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY")?.trim();
   if (!stripeSecret) {
     return new Response(JSON.stringify({ error: "Stripe not configured" }), {
       status: 500,
@@ -105,7 +106,12 @@ serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Stripe error";
+    let message = "Stripe error";
+    if (err && typeof err === "object" && "message" in err && typeof (err as { message: string }).message === "string") {
+      message = (err as { message: string }).message;
+    } else if (err instanceof Error) {
+      message = err.message;
+    }
     return new Response(JSON.stringify({ error: message }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

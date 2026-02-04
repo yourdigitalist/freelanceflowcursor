@@ -1,4 +1,5 @@
-// Supabase Edge Function: Stripe webhook. Sync subscription status to profiles.
+// @ts-nocheck
+// Supabase Edge Function (Deno): Stripe webhook. Sync subscription status to profiles.
 // Set STRIPE_WEBHOOK_SECRET and point Stripe Dashboard webhook to this function URL.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";

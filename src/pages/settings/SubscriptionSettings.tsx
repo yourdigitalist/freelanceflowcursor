@@ -94,25 +94,36 @@ export default function SubscriptionSettings() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         toast({ title: 'Please sign in again', variant: 'destructive' });
+        setUpgrading(false);
         return;
       }
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      if (!supabaseUrl || !anonKey) {
+        toast({ title: 'App config error', description: 'Missing Supabase URL or key', variant: 'destructive' });
+        setUpgrading(false);
+        return;
+      }
+      const url = `${supabaseUrl}/functions/v1/create-checkout-session`;
       const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
+          apikey: anonKey,
         },
         body: JSON.stringify({ priceId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const msg = data?.error || res.statusText || 'Checkout failed';
-        toast({ title: 'Error starting checkout', description: msg, variant: 'destructive' });
+        const msg = data?.error || data?.message || res.statusText || `Checkout failed (${res.status})`;
+        toast({ title: 'Error starting checkout', description: String(msg), variant: 'destructive' });
+        setUpgrading(false);
         return;
       }
-      if (data?.url) {
-        window.location.href = data.url;
+      const checkoutUrl = data?.url ?? data?.data?.url;
+      if (checkoutUrl && typeof checkoutUrl === 'string') {
+        window.location.href = checkoutUrl;
         return;
       }
       toast({ title: 'Error starting checkout', description: data?.error ?? 'No checkout URL returned', variant: 'destructive' });
