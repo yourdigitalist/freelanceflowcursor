@@ -17,7 +17,9 @@ export default function Auth() {
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [showConfirmEmailMessage, setShowConfirmEmailMessage] = useState(false);
-  const { signIn, signUp, resetPassword } = useAuth();
+  const [resendEmail, setResendEmail] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
+  const { signIn, signUp, resetPassword, resendConfirmationEmail } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
@@ -107,6 +109,26 @@ export default function Auth() {
     setIsLoading(false);
   };
 
+  const handleResendConfirmation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resendEmail?.trim()) return;
+    setResendLoading(true);
+    const { error } = await resendConfirmationEmail(resendEmail);
+    if (error) {
+      toast({
+        title: 'Could not resend',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'Email sent',
+        description: 'Check your inbox (and spam) for the confirmation link.',
+      });
+    }
+    setResendLoading(false);
+  };
+
   const features = [
     { icon: Users, text: 'Client Management' },
     { icon: BarChart3, text: 'Project Tracking' },
@@ -173,8 +195,21 @@ export default function Auth() {
 
           <Card className="border-0 shadow-xl">
             {showConfirmEmailMessage && (
-              <div className="mx-6 mt-6 p-4 rounded-lg bg-primary/10 border border-primary/20 text-sm text-center">
-                Check your email to confirm your account. After confirming, you’ll complete setup on the onboarding page.
+              <div className="mx-6 mt-6 p-4 rounded-lg bg-primary/10 border border-primary/20 text-sm space-y-3">
+                <p className="text-center">Check your email to confirm your account. After confirming, you’ll complete setup on the onboarding page.</p>
+                <form onSubmit={handleResendConfirmation} className="flex flex-col gap-2">
+                  <Input
+                    type="email"
+                    placeholder="Your signup email"
+                    value={resendEmail}
+                    onChange={(e) => setResendEmail(e.target.value)}
+                    className="h-9"
+                  />
+                  <Button type="submit" variant="secondary" size="sm" disabled={resendLoading}>
+                    {resendLoading && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                    Resend confirmation email
+                  </Button>
+                </form>
               </div>
             )}
             <CardHeader className="text-center pb-4">
