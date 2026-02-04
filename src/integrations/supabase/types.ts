@@ -240,6 +240,7 @@ export type Database = {
           invoice_show_line_description: boolean | null
           invoice_show_quantity: boolean | null
           invoice_show_rate: boolean | null
+          notification_preferences: Json | null
           onboarding_completed: boolean | null
           reminder_body_default: string | null
           reminder_days_before: number | null
@@ -249,6 +250,9 @@ export type Database = {
           phone: string | null
           plan_type: string | null
           subscription_status: string | null
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          is_admin: boolean | null
           tax_id: string | null
           time_format: string | null
           timezone: string | null
@@ -294,6 +298,7 @@ export type Database = {
           invoice_show_line_description?: boolean | null
           invoice_show_quantity?: boolean | null
           invoice_show_rate?: boolean | null
+          notification_preferences?: Json | null
           onboarding_completed?: boolean | null
           payment_instructions?: string | null
           phone?: string | null
@@ -303,6 +308,9 @@ export type Database = {
           reminder_enabled?: boolean | null
           reminder_subject_default?: string | null
           subscription_status?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          is_admin?: boolean | null
           tax_id?: string | null
           time_format?: string | null
           timezone?: string | null
@@ -348,6 +356,7 @@ export type Database = {
           invoice_show_line_description?: boolean | null
           invoice_show_quantity?: boolean | null
           invoice_show_rate?: boolean | null
+          notification_preferences?: Json | null
           onboarding_completed?: boolean | null
           payment_instructions?: string | null
           phone?: string | null
@@ -357,6 +366,9 @@ export type Database = {
           reminder_enabled?: boolean | null
           reminder_subject_default?: string | null
           subscription_status?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          is_admin?: boolean | null
           tax_id?: string | null
           time_format?: string | null
           timezone?: string | null
@@ -366,6 +378,145 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      help_content: {
+        Row: {
+          id: string
+          slug: string
+          title: string
+          body: string | null
+          category: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          slug: string
+          title: string
+          body?: string | null
+          category: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          slug?: string
+          title?: string
+          body?: string | null
+          category?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      feedback: {
+        Row: {
+          id: string
+          user_id: string
+          message: string
+          context: string | null
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          message: string
+          context?: string | null
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          message?: string
+          context?: string | null
+          status?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      feature_requests: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          description: string | null
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title: string
+          description?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          description?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      feature_request_votes: {
+        Row: {
+          id: string
+          user_id: string
+          feature_request_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          feature_request_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          feature_request_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_request_votes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feature_request_votes_feature_request_id_fkey"
+            columns: ["feature_request_id"]
+            isOneToOne: false
+            referencedRelation: "feature_requests"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       project_statuses: {
         Row: {
@@ -490,6 +641,47 @@ export type Database = {
           window_start?: string
         }
         Relationships: []
+      }
+      notifications: {
+        Row: {
+          id: string
+          user_id: string
+          type: string
+          title: string
+          body: string | null
+          link: string | null
+          read_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          type: string
+          title: string
+          body?: string | null
+          link?: string | null
+          read_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          type?: string
+          title?: string
+          body?: string | null
+          link?: string | null
+          read_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       review_comments: {
         Row: {

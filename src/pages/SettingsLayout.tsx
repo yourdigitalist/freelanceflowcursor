@@ -20,8 +20,12 @@ import {
   Building2,
   FileText,
   Globe,
+  Bell,
   CreditCard,
   HardDrive,
+  BookOpen,
+  Lightbulb,
+  MessageSquare,
 } from 'lucide-react';
 
 interface Profile {
@@ -38,6 +42,9 @@ const navItems = [
   { path: 'business', label: 'Company Settings', icon: Building2 },
   { path: 'invoices', label: 'Invoice Settings', icon: FileText },
   { path: 'locale', label: 'Personal Preferences', icon: Globe },
+  { path: 'notifications', label: 'Notifications', icon: Bell },
+  { path: 'help-content', label: 'Help content', icon: BookOpen },
+  { path: 'feature-requests', label: 'Feature requests', icon: Lightbulb },
   { path: 'subscription', label: 'Billing & Subscription', icon: CreditCard },
   { path: 'storage', label: 'Storage', icon: HardDrive },
 ];

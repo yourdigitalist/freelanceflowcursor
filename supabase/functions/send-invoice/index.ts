@@ -211,7 +211,8 @@ serve(async (req) => {
       return yPos;
     }
     const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 40;
+    const margin = 20; // Keep original side margins
+    const topMargin = 50; // Only for top spacing
     const spacing = {
       lineHeight: 5.5,
       sectionGap: 12,
@@ -226,9 +227,10 @@ serve(async (req) => {
     const showLineDate = profile?.invoice_show_line_date === true;
 
     const billToX = 105;
-    const logoW = 40;
-    const logoH = 14;
+    const logoW = 32;
+    const logoH = 12;
     const logoX = pageWidth - margin - logoW;
+    const headerLeft = margin;
     let logoDrawn = false;
     if (profile?.business_logo) {
       const logoUrl = profile.business_logo;
@@ -248,7 +250,7 @@ serve(async (req) => {
           const mime = imgRes.headers.get("content-type") || "image/png";
           const format = mime.includes("png") ? "PNG" : "JPEG";
           const dataUrl = `data:${mime};base64,${base64}`;
-          doc.addImage(dataUrl, format, logoX, 12, logoW, logoH);
+          doc.addImage(dataUrl, format, margin, topMargin - 36, logoW, logoH);
           logoDrawn = true;
           console.log("[send-invoice] Logo drawn from fetch");
         }
@@ -272,7 +274,7 @@ serve(async (req) => {
             base64 = btoa(base64);
             const mime = blob.type || "image/png";
             const format = mime.includes("png") ? "PNG" : "JPEG";
-            doc.addImage(`data:${mime};base64,${base64}`, format, logoX, 12, logoW, logoH);
+            doc.addImage(`data:${mime};base64,${base64}`, format, margin, topMargin - 36, logoW, logoH);
             logoDrawn = true;
             console.log("[send-invoice] Logo drawn from storage");
           }
@@ -281,27 +283,21 @@ serve(async (req) => {
       if (!logoDrawn) console.log("[send-invoice] Logo skipped (unable to load)");
     }
 
-    // Header: INVOICE title, number, dates, status (right side) — fixed at top
-    let rightY = 14;
+    // Header: INVOICE title (left), dates and status (right) — use topMargin
+    const issueDateStr = new Date(invoice.issue_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+    const dueDateStr = invoice.due_date ? new Date(invoice.due_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : null;
     doc.setFontSize(24);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0, 0, 0);
-    doc.text("INVOICE", pageWidth - margin, rightY, { align: "right" });
+    doc.text("INVOICE", headerLeft, topMargin + 8);
     doc.setFont("helvetica", "normal");
-    rightY += 6;
     doc.setFontSize(10);
     doc.setTextColor(60, 60, 60);
-    doc.text(invoice.invoice_number, pageWidth - margin, rightY, { align: "right" });
-    rightY += 5;
-    const issueDateStr = new Date(invoice.issue_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+    doc.text(invoice.invoice_number, headerLeft, topMargin + 16);
     doc.setFontSize(9);
-    doc.text(`Issue Date: ${issueDateStr}`, pageWidth - margin, rightY, { align: "right" });
-    rightY += 6;
-    const dueDateStr = invoice.due_date ? new Date(invoice.due_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : null;
-    if (dueDateStr) {
-      doc.text(`Due Date: ${dueDateStr}`, pageWidth - margin, rightY, { align: "right" });
-      rightY += 6;
-    } else rightY += 4;
+    doc.text(`Issue Date: ${issueDateStr}`, pageWidth - margin, topMargin + 8, { align: "right" });
+    if (dueDateStr) doc.text(`Due Date: ${dueDateStr}`, pageWidth - margin, topMargin + 16, { align: "right" });
+    let rightY = topMargin + 24;
     doc.setFillColor(245, 158, 11);
     try {
       if (typeof doc.roundedRect === "function") doc.roundedRect(pageWidth - margin - 26, rightY - 3.5, 26, 7, 1.5, 1.5, "F");
@@ -313,8 +309,8 @@ serve(async (req) => {
     doc.setTextColor(255, 255, 255);
     doc.text("Sent", pageWidth - margin - 13, rightY + 1, { align: "center" });
 
-    // FROM and BILL TO side-by-side at Y=44; single yPos = max of both section ends
-    const startY = 44;
+    // FROM and BILL TO side-by-side; start after header with proper spacing
+    const startY = topMargin + 30;
     let fromY = startY;
     doc.setFontSize(9);
     doc.setTextColor(150, 150, 150);
@@ -352,7 +348,7 @@ serve(async (req) => {
       doc.text(profile.business_country, margin, fromY);
     }
     if (!profile?.business_street && !profile?.business_street2 && !profile?.business_city && !profile?.business_country && businessAddress) {
-      const addressLines = doc.splitTextToSize(businessAddress, 78);
+      const addressLines = doc.splitTextToSize(businessAddress, 80);
       fromY += lineHeight;
       doc.text(addressLines, margin, fromY);
       fromY += addressLines.length * lineHeight;
@@ -410,7 +406,7 @@ serve(async (req) => {
       billToY += lineHeight;
     }
     if (!client?.street && !client?.street2 && !client?.city && !client?.country && (client?.address || "")) {
-      const clientAddrLines = doc.splitTextToSize(client?.address || "", 72);
+      const clientAddrLines = doc.splitTextToSize(client?.address || "", 80);
       doc.text(clientAddrLines, billToX, billToY);
       billToY += clientAddrLines.length * lineHeight;
     }
@@ -426,15 +422,16 @@ serve(async (req) => {
     let yPos = Math.max(fromY, billToY) + sectionGap;
     console.log("[send-invoice] yPos after FROM/BILL TO:", yPos);
 
-    // Table header
+    // Table header — fixed column positions
     yPos += 10;
     yPos += 4;
     const colItem = margin + 4;
-    const colDate = showLineDate ? 58 : 0;
-    const colAmount = pageWidth - margin - 2;
+    const colDesc = 140;
+    const colQty = 240;
+    const colPrice = 290;
+    const colAmount = pageWidth - margin - 10;
     const tableRight = pageWidth - margin;
-    const colQty = showLineDescription ? (showLineDate ? 118 : 112) : (showLineDate ? 108 : 102);
-    const colPrice = showQty ? (showLineDate ? 134 : 128) : (showLineDate ? 124 : 118);
+    const colDate = showLineDate ? 58 : 0;
     const amountLabelX = colAmount - 32;
 
     doc.setFillColor(248, 248, 250);
@@ -443,7 +440,7 @@ serve(async (req) => {
     doc.setTextColor(100, 100, 100);
     doc.text("Item", colItem, yPos + 2);
     if (showLineDate) doc.text("Date", colDate, yPos + 2);
-    if (showLineDescription) doc.text("Description", showLineDate ? 72 : 72, yPos + 2);
+    if (showLineDescription) doc.text("Description", colDesc, yPos + 2);
     if (showQty) doc.text("Qty", colQty, yPos + 2);
     if (showRate) doc.text("Price", colPrice, yPos + 2);
     doc.text("Amount", colAmount, yPos + 2, { align: "right" });
@@ -454,16 +451,19 @@ serve(async (req) => {
     doc.setFontSize(10);
     const invoiceItems: InvoiceItem[] = items || [];
     for (const item of invoiceItems) {
-      const itemW = showLineDescription ? (showLineDate ? 48 : 64) : (showLineDate ? 48 : 76);
-      const itemLines = doc.splitTextToSize(item.description, itemW);
-      const lineDescLines = showLineDescription && item.line_description ? doc.splitTextToSize(item.line_description, 48) : [];
+      // Item name in first column — wrap at 70
+      const itemLines = doc.splitTextToSize(item.description, 70);
+      const hasColonDesc = item.description && item.description.includes(":");
+      const descPart = hasColonDesc ? (item.description.split(":")[1]?.trim() || "") : "";
+      const lineDescLines = showLineDescription && item.line_description
+        ? doc.splitTextToSize(item.line_description, 85)
+        : descPart ? doc.splitTextToSize(descPart, 85) : [];
       const dateStr = showLineDate && item.line_date ? new Date(item.line_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
-      const descLines = itemLines;
-      const rowH = Math.max(descLines.length * lineHeight, lineDescLines.length * lineHeight, lineHeight) + tableRowPadding;
-      yPos = checkPageBreak(doc, yPos, rowH + 4, margin);
+      const rowH = Math.max(itemLines.length * lineHeight, lineDescLines.length * lineHeight, lineHeight) + 4;
+      yPos = checkPageBreak(doc, yPos, rowH + 4, topMargin);
       doc.text(itemLines, colItem, yPos);
       if (showLineDate) doc.text(dateStr, colDate, yPos);
-      if (showLineDescription && item.line_description) doc.text(lineDescLines, showLineDate ? 72 : 72, yPos);
+      if (showLineDescription && (item.line_description || lineDescLines.length)) doc.text(lineDescLines, colDesc, yPos);
       if (showQty) doc.text(String(item.quantity), colQty, yPos);
       if (showRate) doc.text(currencyFmt(Number(item.unit_price)), colPrice, yPos);
       doc.text(currencyFmt(Number(item.amount)), colAmount, yPos, { align: "right" });
@@ -499,7 +499,7 @@ serve(async (req) => {
     const notesText = invoice.notes?.trim() || profile?.invoice_notes_default?.trim() || "";
     yPos += 8;
     if (notesText) {
-      yPos = checkPageBreak(doc, yPos, lineHeight * 4, margin);
+      yPos = checkPageBreak(doc, yPos, lineHeight * 4, topMargin);
       doc.setFontSize(9);
       doc.setTextColor(150, 150, 150);
       doc.text("Notes:", margin, yPos);
@@ -515,7 +515,7 @@ serve(async (req) => {
     const bankText = (invoice.bank_details && invoice.bank_details.trim()) || [profile?.bank_name, profile?.bank_account_number && `Account: ${profile.bank_account_number}`, profile?.bank_routing_number && `Routing: ${profile.bank_routing_number}`, profile?.payment_instructions].filter(Boolean).join("\n");
     if (bankText.trim()) {
       yPos += 6;
-      yPos = checkPageBreak(doc, yPos, lineHeight * 4, margin);
+      yPos = checkPageBreak(doc, yPos, lineHeight * 4, topMargin);
       doc.setFontSize(9);
       doc.setTextColor(150, 150, 150);
       doc.text("Bank details:", margin, yPos);
@@ -533,7 +533,7 @@ serve(async (req) => {
     if (footerText) {
       yPos += 6;
       const footerLines = doc.splitTextToSize(footerText, pageWidth - 2 * margin);
-      yPos = checkPageBreak(doc, yPos, footerLines.length * lineHeight + 4, margin);
+      yPos = checkPageBreak(doc, yPos, footerLines.length * lineHeight + 4, topMargin);
       doc.setDrawColor(220, 220, 220);
       doc.line(margin, yPos - 5, pageWidth - margin, yPos - 5);
       doc.setFontSize(9);

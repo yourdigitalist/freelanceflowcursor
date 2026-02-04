@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { LayoutDashboard, Users, User, FolderKanban, Clock, FileText, LogOut, Menu, ChevronDown, ChevronLeft, Bell, Sparkles, ArrowRight, ChevronUp, Eye, Building2, Globe, CreditCard, HardDrive } from 'lucide-react';
+import { LayoutDashboard, Users, User, FolderKanban, Clock, FileText, LogOut, Menu, ChevronDown, ChevronLeft, Bell, Sparkles, ArrowRight, ChevronUp, Eye, Building2, Globe, CreditCard, HardDrive, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TrialBanner } from './TrialBanner';
 interface AppLayoutProps {
@@ -149,6 +149,10 @@ export function AppLayout({
             <Eye className={cn("h-5 w-5", location.pathname === '/reviews' && "text-primary")} />
             {!sidebarCollapsed && 'Reviews'}
           </Link>
+          <Link to="/help" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", location.pathname === '/help' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+            <HelpCircle className={cn("h-5 w-5", location.pathname === '/help' && "text-primary")} />
+            {!sidebarCollapsed && 'Help'}
+          </Link>
         </nav>
 
         {/* Bottom section */}
@@ -224,6 +228,18 @@ export function AppLayout({
                 <Link to="/settings/locale" className="cursor-pointer">
                   <Globe className="mr-2 h-4 w-4" />
                   Personal Preferences
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/settings/notifications" className="cursor-pointer">
+                  <Bell className="mr-2 h-4 w-4" />
+                  Notifications
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/help" className="cursor-pointer">
+                  <HelpCircle className="mr-2 h-4 w-4" />
+                  Help Center
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>

@@ -15,31 +15,36 @@ interface SubscriptionProfile {
   trial_end_date: string | null;
 }
 
+const STRIPE_PRICE_MONTHLY = import.meta.env.VITE_STRIPE_PRICE_MONTHLY as string | undefined;
+const STRIPE_PRICE_ANNUAL = import.meta.env.VITE_STRIPE_PRICE_ANNUAL as string | undefined;
+
 const plans = [
   {
     id: 'pro_monthly',
-    name: 'Pro Monthly',
-    price: '$45',
+    name: 'Early Access Monthly',
+    price: '$29',
     period: '/month',
-    description: 'Full access to all features',
+    priceId: STRIPE_PRICE_MONTHLY,
+    description: 'Full access. 15-day free trial.',
     features: [
       'Unlimited projects & clients',
-      'Advanced time tracking',
-      'Professional invoices',
-      'Priority support',
+      'Time tracking & invoicing',
+      'Client reviews & approvals',
+      'Cancel anytime',
     ],
   },
   {
     id: 'pro_annual',
-    name: 'Pro Annual',
-    price: '$360',
+    name: 'Early Access Annual',
+    price: '$290',
     period: '/year',
-    description: 'Save $180 annually',
+    priceId: STRIPE_PRICE_ANNUAL,
+    description: '2 months free. 15-day free trial.',
     features: [
-      'Everything in Pro Monthly',
-      '2 months free',
+      'Everything in Monthly',
+      'Billed annually',
       'Early access to new features',
-      'Dedicated support',
+      'Best value',
     ],
     highlighted: true,
   },
@@ -74,28 +79,71 @@ export default function SubscriptionSettings() {
   };
 
   const handleUpgrade = async (planId: string) => {
+    const plan = plans.find((p) => p.id === planId);
+    const priceId = plan?.priceId;
+    if (!priceId) {
+      toast({
+        title: 'Stripe not configured',
+        description: 'Set VITE_STRIPE_PRICE_MONTHLY and VITE_STRIPE_PRICE_ANNUAL in your .env',
+        variant: 'destructive',
+      });
+      return;
+    }
     setUpgrading(true);
     try {
-      // In a real app, this would integrate with Stripe or another payment provider
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          plan_type: planId,
-          subscription_status: 'active',
-        })
-        .eq('user_id', user!.id);
-
-      if (error) throw error;
-      toast({ title: 'Plan upgraded successfully!' });
-      fetchProfile();
-    } catch (error: any) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        toast({ title: 'Please sign in again', variant: 'destructive' });
+        return;
+      }
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ priceId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = data?.error || res.statusText || 'Checkout failed';
+        toast({ title: 'Error starting checkout', description: msg, variant: 'destructive' });
+        return;
+      }
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
+      toast({ title: 'Error starting checkout', description: data?.error ?? 'No checkout URL returned', variant: 'destructive' });
+    } catch (error: unknown) {
       toast({
-        title: 'Error upgrading plan',
-        description: error.message,
+        title: 'Error starting checkout',
+        description: error instanceof Error ? error.message : 'Something went wrong',
         variant: 'destructive',
       });
     } finally {
       setUpgrading(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('create-portal-session', {
+        body: {},
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
+      throw new Error(data?.error ?? 'No portal URL returned');
+    } catch (error: unknown) {
+      toast({
+        title: 'Error opening billing portal',
+        description: error instanceof Error ? error.message : 'Something went wrong',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -164,10 +212,10 @@ export default function SubscriptionSettings() {
           {isActive && (
             <div className="space-y-2">
               <p className="font-medium">
-                {profile?.plan_type === 'pro_monthly' ? 'Pro Monthly' : 'Pro Annual'}
+                {profile?.plan_type === 'pro_monthly' ? 'Early Access Monthly' : 'Early Access Annual'}
               </p>
               <p className="text-sm text-muted-foreground">
-                Your subscription is active. Thank you for being a Pro member!
+                Your subscription is active. Thank you for being a member!
               </p>
             </div>
           )}
@@ -177,7 +225,7 @@ export default function SubscriptionSettings() {
       {/* Upgrade Options */}
       {(isOnTrial || !isActive) && (
         <div>
-          <h3 className="text-lg font-semibold mb-4">Upgrade to Pro</h3>
+          <h3 className="text-lg font-semibold mb-4">Subscribe</h3>
           <div className="grid gap-4 md:grid-cols-2">
             {plans.map((plan) => (
               <Card 
@@ -209,10 +257,10 @@ export default function SubscriptionSettings() {
                     className="w-full" 
                     variant={plan.highlighted ? 'default' : 'outline'}
                     onClick={() => handleUpgrade(plan.id)}
-                    disabled={upgrading}
+                    disabled={upgrading || !plan.priceId}
                   >
                     {upgrading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Upgrade Now
+                    Start 15-day free trial
                   </Button>
                 </CardContent>
               </Card>
@@ -228,10 +276,12 @@ export default function SubscriptionSettings() {
             <CardTitle>Manage Subscription</CardTitle>
             <CardDescription>Update your payment method or cancel</CardDescription>
           </CardHeader>
-          <CardContent className="flex gap-3">
-            <Button variant="outline">Update Payment Method</Button>
-            <Button variant="ghost" className="text-destructive hover:text-destructive">
-              Cancel Subscription
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-3">
+              Update your payment method, view invoices, or cancel your subscription in the Stripe portal.
+            </p>
+            <Button variant="outline" onClick={handleManageSubscription}>
+              Open billing portal
             </Button>
           </CardContent>
         </Card>

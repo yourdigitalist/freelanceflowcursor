@@ -6,6 +6,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Users,
   FolderKanban,
@@ -14,6 +15,7 @@ import {
   Plus,
   ArrowRight,
   FileText,
+  Bell,
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -64,6 +66,7 @@ export default function Dashboard() {
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [recentInvoices, setRecentInvoices] = useState<RecentInvoice[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<{ full_name: string | null }>({ full_name: null });
 
@@ -189,6 +192,15 @@ export default function Dashboard() {
         .order('created_at', { ascending: false })
         .limit(3);
 
+      // Fetch recent notifications for summary
+      const { data: notifs } = await supabase
+        .from('notifications')
+        .select('id, title, body, link, read_at, created_at')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      setNotifications((notifs as NotificationItem[]) || []);
+
       setStats({
         totalClients: clientsCount || 0,
         activeProjects: projectsCount || 0,
@@ -248,6 +260,7 @@ export default function Dashboard() {
   };
 
   const firstName = profile.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
+  const unreadNotifications = notifications.filter((n) => !n.read_at);
 
   const statCards = [
     {
@@ -275,6 +288,90 @@ export default function Dashboard() {
       icon: DollarSign,
     },
   ];
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="space-y-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-64" />
+              <Skeleton className="h-4 w-80" />
+            </div>
+            <div className="flex gap-2">
+              <Skeleton className="h-9 w-24" />
+              <Skeleton className="h-9 w-32" />
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="border-0 shadow-sm">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-8 w-16" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                    <Skeleton className="h-10 w-10 rounded-xl" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="grid gap-6 lg:grid-cols-3">
+            <Card className="border-0 shadow-sm lg:col-span-2">
+              <CardHeader className="pb-4">
+                <Skeleton className="h-5 w-32" />
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <Skeleton key={i} className="h-40 rounded-xl" />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+            <div className="space-y-6">
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-5 w-28" />
+                    <Skeleton className="h-8 w-16" />
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                  ))}
+                </CardContent>
+              </Card>
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-4">
+                  <Skeleton className="h-5 w-36" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="flex gap-3">
+                      <Skeleton className="h-8 w-8 rounded-full" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-3 w-16" />
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Skeleton className="h-40 rounded-lg" />
+            <Skeleton className="h-40 rounded-lg" />
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -390,31 +487,78 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Recent Activity */}
-          <Card className="border-0 shadow-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {recentActivity.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
-              ) : (
-                <div className="space-y-4">
-                  {recentActivity.map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-3">
-                      <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
+          {/* Right column: Notifications summary + Recent Activity */}
+          <div className="space-y-6">
+            {/* Notification summary */}
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <Bell className="h-4 w-4" />
+                  Notifications
+                  {unreadNotifications.length > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {unreadNotifications.length} unread
+                    </Badge>
+                  )}
+                </CardTitle>
+                <Button variant="ghost" size="sm" asChild className="text-primary">
+                  <Link to="/notifications">
+                    View all
+                    <ArrowRight className="ml-1 h-4 w-4" />
+                  </Link>
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {notifications.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No notifications yet</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {notifications.slice(0, 3).map((n) => (
+                      <li key={n.id}>
+                        <Link
+                          to={n.link && n.link.startsWith('/') ? n.link : n.link ? `/${n.link}` : '/notifications'}
+                          className="flex items-start gap-2 text-sm hover:underline"
+                        >
+                          <span className={!n.read_at ? 'font-medium text-foreground' : 'text-muted-foreground'}>
+                            {n.title}
+                          </span>
+                        </Link>
+                        <p className="text-xs text-muted-foreground ml-0 truncate">
+                          {getTimeAgo(new Date(n.created_at))}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Recent Activity */}
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {recentActivity.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
+                ) : (
+                  <div className="space-y-4">
+                    {recentActivity.map((activity) => (
+                      <div key={activity.id} className="flex items-start gap-3">
+                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="text-sm">{activity.description}</p>
+                          <p className="text-xs text-muted-foreground">{activity.time_ago}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm">{activity.description}</p>
-                        <p className="text-xs text-muted-foreground">{activity.time_ago}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         {/* Bottom Row */}
