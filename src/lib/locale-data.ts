@@ -172,20 +172,46 @@ export const currencyDisplayFormats = [
   { value: 'name', label: 'Name (100.00 US dollars)' },
 ];
 
-/** Format a monetary amount using profile currency settings. */
+/** Get thousands and decimal separators from number_format pattern (e.g. 1,234.56 or 1.234,56). */
+function getSeparators(numberFormat: string): { thousands: string; decimal: string } {
+  const s = String(numberFormat || '1,234.56');
+  if (s.length >= 3) {
+    const decimalSep = s.charAt(s.length - 3);
+    const beforeDecimal = s.slice(0, -3);
+    const nonDigit = beforeDecimal.replace(/\d/g, '');
+    const thousands = nonDigit.slice(-1) || ',';
+    if (decimalSep === ',' || decimalSep === '.') {
+      return { thousands: thousands || ',', decimal: decimalSep };
+    }
+  }
+  return { thousands: ',', decimal: '.' };
+}
+
+/** Format a number for display using number_format (e.g. 1,234.56 or 1.234,56). */
+export function formatNumber(amount: number, numberFormat?: string | null): string {
+  const n = Number(amount);
+  const fixed = n.toFixed(2);
+  const { thousands, decimal } = getSeparators(numberFormat || '1,234.56');
+  const [intPart, decPart] = fixed.split('.');
+  const withThousands = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, thousands);
+  return decPart != null ? `${withThousands}${decimal}${decPart}` : withThousands;
+}
+
+/** Format a monetary amount using profile currency and number format settings. */
 export function formatCurrency(
   amount: number,
   currencyCode?: string | null,
-  displayFormat?: string | null
+  displayFormat?: string | null,
+  numberFormat?: string | null
 ): string {
   const code = (currencyCode || 'USD').toUpperCase();
   const fmt = displayFormat || 'symbol';
-  const num = Number(amount).toFixed(2);
-  if (fmt === 'code') return `${code} ${num}`;
-  if (fmt === 'name') return `${num} ${code}`;
+  const numStr = formatNumber(amount, numberFormat);
+  if (fmt === 'code') return `${code} ${numStr}`;
+  if (fmt === 'name') return `${numStr} ${code}`;
   const entry = currencies.find((c) => c.value === code);
   const symbol = entry?.symbol ?? '$';
-  return symbol + num;
+  return symbol + numStr;
 }
 
 // Date formats

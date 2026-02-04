@@ -40,10 +40,6 @@ interface InvoiceProfile {
   invoice_notes_default: string | null;
   invoice_footer: string | null;
   invoice_email_message_default: string | null;
-  invoice_show_quantity: boolean | null;
-  invoice_show_rate: boolean | null;
-  invoice_show_line_description: boolean | null;
-  invoice_show_line_date: boolean | null;
   invoice_email_subject_default: string | null;
   reminder_enabled: boolean | null;
   reminder_days_before: number | null;
@@ -91,10 +87,6 @@ export default function InvoiceSettings() {
       invoice_notes_default: formData.get('invoice_notes_default') as string || null,
       invoice_footer: formData.get('invoice_footer') as string || null,
       invoice_email_message_default: formData.get('invoice_email_message_default') as string || null,
-      invoice_show_quantity: formData.get('invoice_show_quantity') === 'on',
-      invoice_show_rate: formData.get('invoice_show_rate') === 'on',
-      invoice_show_line_description: formData.get('invoice_show_line_description') === 'on',
-      invoice_show_line_date: formData.get('invoice_show_line_date') === 'on',
       invoice_email_subject_default: formData.get('invoice_email_subject_default') as string || null,
       reminder_enabled: reminderEnabled,
       reminder_days_before: reminderDaysBefore,
@@ -121,7 +113,7 @@ export default function InvoiceSettings() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('hourly_rate, invoice_prefix, invoice_notes_default, invoice_footer, invoice_email_message_default, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, invoice_email_subject_default, reminder_enabled, reminder_days_before, reminder_subject_default, reminder_body_default')
+        .select('hourly_rate, invoice_prefix, invoice_notes_default, invoice_footer, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_days_before, reminder_subject_default, reminder_body_default')
         .eq('user_id', user!.id)
         .maybeSingle();
 
@@ -310,59 +302,6 @@ export default function InvoiceSettings() {
                   placeholder="INV-"
                 />
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-sm">
-          <CardHeader>
-            <CardTitle>Invoice Column Visibility</CardTitle>
-            <CardDescription>Choose which columns to show on invoices</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label htmlFor="invoice_show_quantity">Show Quantity Column</Label>
-                <p className="text-sm text-muted-foreground">Display quantity for each line item</p>
-              </div>
-              <Switch
-                id="invoice_show_quantity"
-                name="invoice_show_quantity"
-                defaultChecked={profile?.invoice_show_quantity ?? true}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <Label htmlFor="invoice_show_rate">Show Rate Column</Label>
-                <p className="text-sm text-muted-foreground">Display unit rate for each line item</p>
-              </div>
-              <Switch
-                id="invoice_show_rate"
-                name="invoice_show_rate"
-                defaultChecked={profile?.invoice_show_rate ?? true}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <Label htmlFor="invoice_show_line_description">Show Line Description on Invoice</Label>
-                <p className="text-sm text-muted-foreground">Show the optional description column on the invoice PDF</p>
-              </div>
-              <Switch
-                id="invoice_show_line_description"
-                name="invoice_show_line_description"
-                defaultChecked={profile?.invoice_show_line_description ?? true}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <Label htmlFor="invoice_show_line_date">Show Line Item Date on Invoice</Label>
-                <p className="text-sm text-muted-foreground">Show the optional line item date column on the invoice PDF</p>
-              </div>
-              <Switch
-                id="invoice_show_line_date"
-                name="invoice_show_line_date"
-                defaultChecked={profile?.invoice_show_line_date ?? false}
-              />
             </div>
           </CardContent>
         </Card>

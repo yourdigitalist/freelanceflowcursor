@@ -65,6 +65,7 @@ export default function LocaleSettings() {
       .update({
         currency,
         currency_display: currencyDisplay,
+        number_format: numberFormat,
         date_format: dateFormat,
         time_format: timeFormat,
         timezone,
@@ -88,7 +89,7 @@ export default function LocaleSettings() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('currency, currency_display, date_format, time_format, timezone')
+        .select('currency, currency_display, number_format, date_format, time_format, timezone')
         .eq('user_id', user!.id)
         .maybeSingle();
 
@@ -96,6 +97,7 @@ export default function LocaleSettings() {
       if (data) {
         setCurrency(data.currency || getDefaultCurrency());
         setCurrencyDisplay(data.currency_display || 'symbol');
+        setNumberFormat((data as { number_format?: string }).number_format || '1,234.56');
         setDateFormat(data.date_format || 'MM/DD/YYYY');
         setTimeFormat(data.time_format || '12h');
         setTimezone(data.timezone || getBrowserTimezone());

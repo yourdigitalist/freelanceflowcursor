@@ -43,18 +43,42 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   SGD: "S$", HKD: "HK$", NZD: "NZ$", PHP: "₱", VND: "₫", EGP: "E£", NGN: "₦",
 };
 
+function getSeparators(numberFormat: string | null | undefined): { thousands: string; decimal: string } {
+  const s = String(numberFormat || "1,234.56");
+  if (s.length >= 3) {
+    const decimalSep = s.charAt(s.length - 3);
+    const beforeDecimal = s.slice(0, -3);
+    const nonDigit = beforeDecimal.replace(/\d/g, "");
+    const thousands = nonDigit.slice(-1) || ",";
+    if (decimalSep === "," || decimalSep === ".") {
+      return { thousands: thousands || ",", decimal: decimalSep };
+    }
+  }
+  return { thousands: ",", decimal: "." };
+}
+
+function formatNumber(amount: number, numberFormat: string | null | undefined): string {
+  const n = Number(amount);
+  const fixed = n.toFixed(2);
+  const { thousands, decimal } = getSeparators(numberFormat);
+  const [intPart, decPart] = fixed.split(".");
+  const withThousands = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, thousands);
+  return decPart != null ? `${withThousands}${decimal}${decPart}` : withThousands;
+}
+
 function formatCurrency(
   amount: number,
   currencyCode: string | null | undefined,
-  displayFormat: string | null | undefined
+  displayFormat: string | null | undefined,
+  numberFormat?: string | null
 ): string {
   const code = (currencyCode || "USD").toUpperCase();
-  const format = displayFormat || "symbol";
-  const num = Number(amount).toFixed(2);
-  if (format === "code") return `${code} ${num}`;
-  if (format === "name") return `${num} ${code}`;
+  const fmt = displayFormat || "symbol";
+  const numStr = formatNumber(amount, numberFormat);
+  if (fmt === "code") return `${code} ${numStr}`;
+  if (fmt === "name") return `${numStr} ${code}`;
   const symbol = CURRENCY_SYMBOLS[code] || code + " ";
-  return symbol + num;
+  return symbol + numStr;
 }
 
 // Rate limiting configuration
@@ -142,10 +166,10 @@ serve(async (req) => {
 
     console.log(`Fetching invoice ${invoiceId} for user ${user.id}`);
 
-    // Fetch user profile with business details, logo, currency, bank, and invoice display options
+    // Fetch user profile with business details, logo, currency, number_format, bank, and invoice display options
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, bank_name, bank_account_number, bank_routing_number, payment_instructions")
+      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display, number_format, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, bank_name, bank_account_number, bank_routing_number, payment_instructions")
       .eq("user_id", user.id)
       .single();
 
@@ -198,7 +222,7 @@ serve(async (req) => {
     const taxId = profile?.tax_id || "";
 
     const currencyFmt = (amount: number) =>
-      formatCurrency(amount, profile?.currency, profile?.currency_display);
+      formatCurrency(amount, profile?.currency, profile?.currency_display, profile?.number_format);
 
     // Generate PDF
     const doc = new jsPDF();
@@ -422,24 +446,24 @@ serve(async (req) => {
     let yPos = Math.max(fromY, billToY) + sectionGap;
     console.log("[send-invoice] yPos after FROM/BILL TO:", yPos);
 
-    // Table header — fixed column positions
+    // Table header — Date first, then Item, Description, Qty, Price, Amount
     yPos += 10;
     yPos += 4;
-    const colItem = margin + 4;
-    const colDesc = 140;
-    const colQty = 240;
-    const colPrice = 290;
+    const colDate = showLineDate ? margin + 4 : 0;
+    const colItem = showLineDate ? 58 : margin + 4;
+    const colDesc = 130;
+    const colQty = 230;
+    const colPrice = 280;
     const colAmount = pageWidth - margin - 10;
     const tableRight = pageWidth - margin;
-    const colDate = showLineDate ? 58 : 0;
     const amountLabelX = colAmount - 32;
 
     doc.setFillColor(248, 248, 250);
     doc.rect(margin, yPos - 4, tableRight - margin, 10, "F");
     doc.setFontSize(9);
     doc.setTextColor(100, 100, 100);
-    doc.text("Item", colItem, yPos + 2);
     if (showLineDate) doc.text("Date", colDate, yPos + 2);
+    doc.text("Item", colItem, yPos + 2);
     if (showLineDescription) doc.text("Description", colDesc, yPos + 2);
     if (showQty) doc.text("Qty", colQty, yPos + 2);
     if (showRate) doc.text("Price", colPrice, yPos + 2);
@@ -451,18 +475,17 @@ serve(async (req) => {
     doc.setFontSize(10);
     const invoiceItems: InvoiceItem[] = items || [];
     for (const item of invoiceItems) {
-      // Item name in first column — wrap at 70
-      const itemLines = doc.splitTextToSize(item.description, 70);
+      const dateStr = showLineDate && item.line_date ? new Date(item.line_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+      const itemLines = doc.splitTextToSize(item.description, 65);
       const hasColonDesc = item.description && item.description.includes(":");
       const descPart = hasColonDesc ? (item.description.split(":")[1]?.trim() || "") : "";
       const lineDescLines = showLineDescription && item.line_description
-        ? doc.splitTextToSize(item.line_description, 85)
-        : descPart ? doc.splitTextToSize(descPart, 85) : [];
-      const dateStr = showLineDate && item.line_date ? new Date(item.line_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+        ? doc.splitTextToSize(item.line_description, 80)
+        : descPart ? doc.splitTextToSize(descPart, 80) : [];
       const rowH = Math.max(itemLines.length * lineHeight, lineDescLines.length * lineHeight, lineHeight) + 4;
       yPos = checkPageBreak(doc, yPos, rowH + 4, topMargin);
-      doc.text(itemLines, colItem, yPos);
       if (showLineDate) doc.text(dateStr, colDate, yPos);
+      doc.text(itemLines, colItem, yPos);
       if (showLineDescription && (item.line_description || lineDescLines.length)) doc.text(lineDescLines, colDesc, yPos);
       if (showQty) doc.text(String(item.quantity), colQty, yPos);
       if (showRate) doc.text(currencyFmt(Number(item.unit_price)), colPrice, yPos);

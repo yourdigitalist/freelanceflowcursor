@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Trash2, Send, DollarSign, Mail, Loader2, Eye, Clock, Printer, ListTodo, Wallet, Pencil, Download } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Send, DollarSign, Mail, Loader2, Eye, Clock, Printer, ListTodo, Wallet, Pencil, Download, MoreVertical } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/locale-data';
 import {
@@ -41,6 +41,15 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface InvoiceItem {
   id: string;
@@ -101,6 +110,7 @@ interface UserProfile {
   tax_id: string | null;
   currency: string | null;
   currency_display: string | null;
+  number_format: string | null;
   invoice_show_quantity: boolean | null;
   invoice_show_rate: boolean | null;
   invoice_show_line_date: boolean | null;
@@ -144,6 +154,7 @@ export default function InvoiceDetail() {
   const [notes, setNotes] = useState('');
   const [invoiceFooter, setInvoiceFooter] = useState('');
   const [bankDetails, setBankDetails] = useState('');
+  const [invoiceNumberEdit, setInvoiceNumberEdit] = useState('');
   const [profile, setProfile] = useState<UserProfile | null>(null);
   
   // Send invoice modal state
@@ -206,7 +217,7 @@ export default function InvoiceDetail() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('full_name, email, company_name, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, currency, currency_display, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, invoice_footer, invoice_notes_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_subject_default, reminder_body_default, hourly_rate')
+        .select('full_name, email, company_name, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, currency, currency_display, number_format, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, invoice_footer, invoice_notes_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_subject_default, reminder_body_default, hourly_rate')
         .eq('user_id', user!.id)
         .maybeSingle();
       if (error) {
@@ -263,6 +274,7 @@ export default function InvoiceDetail() {
         return;
       }
       setInvoice(data);
+      setInvoiceNumberEdit(data.invoice_number || '');
       setNotes(data.notes || '');
       setInvoiceFooter((data as Invoice).invoice_footer ?? '');
       setBankDetails((data as Invoice).bank_details ?? '');
@@ -570,6 +582,7 @@ export default function InvoiceDetail() {
           .update({
             description: item.description,
             line_description: item.line_description?.trim() || null,
+            line_date: item.line_date?.trim() || null,
             quantity: item.quantity,
             unit_price: item.unit_price,
             amount: item.amount,
@@ -585,10 +598,11 @@ export default function InvoiceDetail() {
       const taxAmount = subtotal * (taxRate / 100);
       const total = subtotal + taxAmount;
 
-      // Save invoice
+      // Save invoice (including editable invoice number)
       const { error } = await supabase
         .from('invoices')
         .update({
+          invoice_number: invoiceNumberEdit.trim() || invoice?.invoice_number,
           subtotal,
           tax_rate: taxRate,
           tax_amount: taxAmount,
@@ -727,6 +741,9 @@ export default function InvoiceDetail() {
 
       if (response.error) throw response.error;
 
+      if (sendModalMode === 'receipt') {
+        await supabase.from('invoices').update({ status: 'paid' }).eq('id', id);
+      }
       toast({ title: sendModalMode === 'receipt' ? 'Receipt sent!' : 'Invoice sent successfully!' });
       setIsSendModalOpen(false);
       setEmailMessage('');
@@ -767,8 +784,20 @@ export default function InvoiceDetail() {
 
   const showQuantity = profile?.invoice_show_quantity ?? true;
   const showRate = profile?.invoice_show_rate ?? true;
+  const showLineDescription = profile?.invoice_show_line_description ?? true;
+  const showLineDate = profile?.invoice_show_line_date ?? false;
 
-  const fmt = (amount: number) => formatCurrency(amount, profile?.currency, profile?.currency_display);
+  const updateColumnVisibility = async (field: 'invoice_show_quantity' | 'invoice_show_rate' | 'invoice_show_line_description' | 'invoice_show_line_date', value: boolean) => {
+    if (!user?.id) return;
+    const { error } = await supabase.from('profiles').update({ [field]: value }).eq('user_id', user.id);
+    if (error) {
+      toast({ title: 'Failed to update column visibility', variant: 'destructive' });
+      return;
+    }
+    setProfile((p) => (p ? { ...p, [field]: value } : null));
+  };
+
+  const fmt = (amount: number) => formatCurrency(amount, profile?.currency, profile?.currency_display, profile?.number_format);
 
   // Resolve merge tags for default email message: {{client_name}}, {{invoice_number}}, {{total}}, {{due_date}}
   const resolveEmailMessage = (template: string) => {
@@ -828,8 +857,17 @@ export default function InvoiceDetail() {
             <Button variant="ghost" size="icon" onClick={() => navigate('/invoices')}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <div>
-              <h1 className="text-2xl font-bold">{invoice.invoice_number}</h1>
+            <div className="min-w-0">
+              {isEditMode ? (
+                <Input
+                  value={invoiceNumberEdit}
+                  onChange={(e) => setInvoiceNumberEdit(e.target.value)}
+                  className="text-2xl font-bold h-9 max-w-[200px]"
+                  placeholder="Invoice number"
+                />
+              ) : (
+                <h1 className="text-2xl font-bold truncate">{invoice.invoice_number}</h1>
+              )}
               <Badge className={getStatusColor(invoice.status)}>
                 {invoice.status}
               </Badge>
@@ -840,10 +878,74 @@ export default function InvoiceDetail() {
               <Eye className="mr-2 h-4 w-4" />
               Preview
             </Button>
-            <Button variant="outline" size="sm" onClick={handleDownloadPdf} disabled={downloadingPdf}>
-              {downloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-              Download PDF
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="h-9 w-9">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleDownloadPdf} disabled={downloadingPdf}>
+                  {downloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  Download PDF
+                </DropdownMenuItem>
+                {invoice.status === 'draft' && (
+                  <DropdownMenuItem onClick={markAsSent}>
+                    <Send className="mr-2 h-4 w-4" />
+                    Mark as Sent
+                  </DropdownMenuItem>
+                )}
+                {invoice.status === 'sent' && (
+                  <DropdownMenuItem onClick={markAsPaid}>
+                    <DollarSign className="mr-2 h-4 w-4" />
+                    Mark as Paid
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={async () => {
+                    if (!window.confirm('Delete this invoice? This cannot be undone.')) return;
+                    try {
+                      const { error } = await supabase.from('invoices').delete().eq('id', id);
+                      if (error) throw error;
+                      toast({ title: 'Invoice deleted' });
+                      navigate('/invoices');
+                    } catch (err: any) {
+                      toast({ title: err?.message || 'Failed to delete', variant: 'destructive' });
+                    }
+                  }}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {isEditMode ? (
+              <Button variant="outline" size="sm" onClick={saveInvoice} disabled={saving}>
+                {saving ? 'Saving...' : 'Save'}
+              </Button>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      if (invoice.status === 'sent' || invoice.status === 'paid') {
+                        if (window.confirm('This invoice has already been sent. Any changes you make won\'t update the version the client received. To send an updated copy, save your changes and use "Send to Client" again. Continue to edit?')) {
+                          setIsEditMode(true);
+                        }
+                      } else {
+                        setIsEditMode(true);
+                      }
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Edit Invoice</TooltipContent>
+              </Tooltip>
+            )}
             {invoice.clients?.email && (
               <Button
                 size="sm"
@@ -874,55 +976,6 @@ export default function InvoiceDetail() {
                 <Mail className="mr-2 h-4 w-4" />
                 {invoice.status === 'paid' ? 'Send receipt' : invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send to Client'}
               </Button>
-            )}
-            {(invoice.status === 'draft' || invoice.status === 'sent') && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    More
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {invoice.status === 'draft' && (
-                    <DropdownMenuItem onClick={markAsSent}>
-                      <Send className="mr-2 h-4 w-4" />
-                      Mark as Sent
-                    </DropdownMenuItem>
-                  )}
-                  {invoice.status === 'sent' && (
-                    <DropdownMenuItem onClick={markAsPaid}>
-                      <DollarSign className="mr-2 h-4 w-4" />
-                      Mark as Paid
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            {isEditMode ? (
-              <Button variant="outline" size="sm" onClick={saveInvoice} disabled={saving}>
-                {saving ? 'Saving...' : 'Save'}
-              </Button>
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                      if (invoice.status === 'sent' || invoice.status === 'paid') {
-                        if (window.confirm('This invoice has already been sent. Any changes you make won\'t update the version the client received. To send an updated copy, save your changes and use "Send to Client" again. Continue to edit?')) {
-                          setIsEditMode(true);
-                        }
-                      } else {
-                        setIsEditMode(true);
-                      }
-                    }}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Edit Invoice</TooltipContent>
-              </Tooltip>
             )}
           </div>
         </div>
@@ -1048,94 +1101,165 @@ export default function InvoiceDetail() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4 overflow-x-auto">
-              {/* Header */}
-              <div className="grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground min-w-[640px]">
-                <div className="col-span-2">Item</div>
-                <div className="col-span-2">Description</div>
-                <div className="col-span-2">Date</div>
-                {showQuantity && <div className="col-span-1">Qty</div>}
-                {showRate && <div className="col-span-2">Rate</div>}
-                <div className="col-span-2 text-right">Amount</div>
-                {isEditMode && <div className="col-span-1"></div>}
-              </div>
-
-              {/* Items */}
               {items.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   No items yet. {isEditMode ? 'Add your first line item or import from time entries.' : ''}
                 </div>
               ) : (
-                items.map((item) => (
-                  <div key={item.id} className="grid grid-cols-12 gap-4 items-center">
-                    <div className="col-span-3">
-                      {isEditMode ? (
-                        <Input
-                          value={item.description}
-                          onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                          placeholder="Item / activity"
-                        />
-                      ) : (
-                        <span className="text-sm">{item.description}</span>
+                <Table className="min-w-[640px] w-full">
+                  <TableHeader>
+                    <TableRow className="border-b hover:bg-transparent">
+                      <TableHead className="w-[110px] min-w-[110px]">
+                        <div className="flex items-center gap-2">
+                          Date
+                          {isEditMode && (
+                            <Switch
+                              checked={showLineDate}
+                              onCheckedChange={(v) => updateColumnVisibility('invoice_show_line_date', v)}
+                              className="scale-75"
+                            />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead className="min-w-[160px]">Item</TableHead>
+                      {showLineDescription && (
+                        <TableHead className="min-w-[140px]">
+                          <div className="flex items-center gap-2">
+                            Description
+                            {isEditMode && (
+                              <Switch
+                                checked={showLineDescription}
+                                onCheckedChange={(v) => updateColumnVisibility('invoice_show_line_description', v)}
+                                className="scale-75"
+                              />
+                            )}
+                          </div>
+                        </TableHead>
                       )}
-                    </div>
-                    <div className="col-span-2">
-                      {isEditMode ? (
-                        <Input
-                          value={item.line_description ?? ''}
-                          onChange={(e) => updateItem(item.id, 'line_description', e.target.value)}
-                          placeholder="Optional details"
-                        />
-                      ) : (
-                        <span className="text-sm text-muted-foreground break-words block">{item.line_description || '—'}</span>
+                      {showQuantity && (
+                        <TableHead className="w-[72px] min-w-[72px] text-center">
+                          <div className="flex items-center gap-2 justify-center">
+                            Qty
+                            {isEditMode && (
+                              <Switch
+                                checked={showQuantity}
+                                onCheckedChange={(v) => updateColumnVisibility('invoice_show_quantity', v)}
+                                className="scale-75"
+                              />
+                            )}
+                          </div>
+                        </TableHead>
                       )}
-                    </div>
-                    {showQuantity && (
-                      <div className="col-span-1">
-                        {isEditMode ? (
-                          <Input
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                            min="0"
-                            step="0.01"
-                          />
-                        ) : (
-                          <span className="text-sm">{item.quantity}</span>
+                      {showRate && (
+                        <TableHead className="w-[100px] min-w-[100px] text-right">
+                          <div className="flex items-center gap-2 justify-end">
+                            Rate
+                            {isEditMode && (
+                              <Switch
+                                checked={showRate}
+                                onCheckedChange={(v) => updateColumnVisibility('invoice_show_rate', v)}
+                                className="scale-75"
+                              />
+                            )}
+                          </div>
+                        </TableHead>
+                      )}
+                      <TableHead className="w-[120px] min-w-[120px] text-right">Amount</TableHead>
+                      {isEditMode && <TableHead className="w-12 min-w-12" />}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="py-2 align-middle">
+                          {isEditMode ? (
+                            <Input
+                              type="date"
+                              value={item.line_date ? format(new Date(item.line_date), 'yyyy-MM-dd') : ''}
+                              onChange={(e) => updateItem(item.id, 'line_date', e.target.value || '')}
+                              className="h-8 text-sm"
+                            />
+                          ) : (
+                            <span className="text-sm">{item.line_date ? format(new Date(item.line_date), 'MMM d, yyyy') : '—'}</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-2 align-middle min-w-[160px]">
+                          {isEditMode ? (
+                            <Input
+                              value={item.description}
+                              onChange={(e) => updateItem(item.id, 'description', e.target.value)}
+                              placeholder="Item / activity"
+                              className="h-8 text-sm"
+                            />
+                          ) : (
+                            <span className="text-sm break-words">{item.description}</span>
+                          )}
+                        </TableCell>
+                        {showLineDescription && (
+                          <TableCell className="py-2 align-middle min-w-[140px]">
+                            {isEditMode ? (
+                              <Input
+                                value={item.line_description ?? ''}
+                                onChange={(e) => updateItem(item.id, 'line_description', e.target.value)}
+                                placeholder="Optional"
+                                className="h-8 text-sm"
+                              />
+                            ) : (
+                              <span className="text-sm text-muted-foreground break-words">{item.line_description || '—'}</span>
+                            )}
+                          </TableCell>
                         )}
-                      </div>
-                    )}
-                    {showRate && (
-                      <div className="col-span-2">
-                        {isEditMode ? (
-                          <Input
-                            type="number"
-                            value={item.unit_price}
-                            onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                            min="0"
-                            step="0.01"
-                          />
-                        ) : (
-                          <span className="text-sm">{fmt(Number(item.unit_price))}</span>
+                        {showQuantity && (
+                          <TableCell className="py-2 align-middle text-center">
+                            {isEditMode ? (
+                              <Input
+                                type="number"
+                                value={item.quantity}
+                                onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                                min="0"
+                                step="0.01"
+                                className="h-8 w-16 text-center mx-auto"
+                              />
+                            ) : (
+                              <span className="text-sm">{item.quantity}</span>
+                            )}
+                          </TableCell>
                         )}
-                      </div>
-                    )}
-                    <div className="col-span-2 text-right font-medium">
-                      {fmt(Number(item.quantity) * Number(item.unit_price))}
-                    </div>
-                    {isEditMode && (
-                      <div className="col-span-1 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => deleteItem(item.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ))
+                        {showRate && (
+                          <TableCell className="py-2 align-middle text-right">
+                            {isEditMode ? (
+                              <Input
+                                type="number"
+                                value={item.unit_price}
+                                onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                                min="0"
+                                step="0.01"
+                                className="h-8 w-24 text-right ml-auto"
+                              />
+                            ) : (
+                              <span className="text-sm">{fmt(Number(item.unit_price))}</span>
+                            )}
+                          </TableCell>
+                        )}
+                        <TableCell className="py-2 align-middle text-right font-medium">
+                          {fmt(Number(item.quantity) * Number(item.unit_price))}
+                        </TableCell>
+                        {isEditMode && (
+                          <TableCell className="py-2 align-middle w-12">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              onClick={() => deleteItem(item.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
 
               {/* Totals */}
@@ -1337,22 +1461,32 @@ export default function InvoiceDetail() {
                 </div>
               </div>
 
-              {/* Line Items */}
-              <table className="w-full mb-8">
+              {/* Line Items — column order matches editor: Date, Item, Description, Qty, Rate, Amount */}
+              <table className="w-full mb-8 border-collapse">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="text-left py-2 text-sm text-primary font-medium">Description</th>
-                    {showQuantity && <th className="text-center py-2 text-sm text-primary font-medium">Qty</th>}
-                    {showRate && <th className="text-right py-2 text-sm text-primary font-medium">Rate</th>}
-                    <th className="text-right py-2 text-sm text-primary font-medium">Amount</th>
+                    {showLineDate && <th className="text-left py-2 pr-4 text-sm text-primary font-medium w-[100px]">Date</th>}
+                    <th className="text-left py-2 pr-4 text-sm text-primary font-medium">Item</th>
+                    {showLineDescription && <th className="text-left py-2 pr-4 text-sm text-primary font-medium">Description</th>}
+                    {showQuantity && <th className="text-center py-2 pr-4 text-sm text-primary font-medium w-[72px]">Qty</th>}
+                    {showRate && <th className="text-right py-2 pr-4 text-sm text-primary font-medium w-[100px]">Rate</th>}
+                    <th className="text-right py-2 text-sm text-primary font-medium w-[120px]">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item) => (
                     <tr key={item.id} className="border-b border-gray-100">
-                      <td className="py-3 break-words min-w-0">{item.description}</td>
-                      {showQuantity && <td className="py-3 text-center">{item.quantity}</td>}
-                      {showRate && <td className="py-3 text-right">{fmt(Number(item.unit_price))}</td>}
+                      {showLineDate && (
+                        <td className="py-3 pr-4 text-sm text-gray-600">
+                          {item.line_date ? format(new Date(item.line_date), 'MMM d, yyyy') : '—'}
+                        </td>
+                      )}
+                      <td className="py-3 pr-4 break-words">{item.description}</td>
+                      {showLineDescription && (
+                        <td className="py-3 pr-4 text-sm text-gray-600 break-words">{item.line_description || '—'}</td>
+                      )}
+                      {showQuantity && <td className="py-3 pr-4 text-center">{item.quantity}</td>}
+                      {showRate && <td className="py-3 pr-4 text-right">{fmt(Number(item.unit_price))}</td>}
                       <td className="py-3 text-right font-medium">{fmt(Number(item.amount))}</td>
                     </tr>
                   ))}
