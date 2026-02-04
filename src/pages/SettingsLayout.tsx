@@ -128,7 +128,7 @@ function SettingsLayoutInner() {
   return (
     <AppLayout>
       <div className="flex flex-col lg:flex-row gap-8 max-w-5xl">
-        <aside className="lg:w-56 shrink-0">
+        <aside className="lg:w-64 shrink-0 min-w-0">
           <div className="rounded-xl border bg-card p-4 space-y-4">
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10">
@@ -158,14 +158,14 @@ function SettingsLayoutInner() {
                     type="button"
                     onClick={() => handleNavClick(href)}
                     className={cn(
-                      'w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                      'w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors text-left whitespace-nowrap',
                       isActive
                         ? 'bg-primary/10 text-primary'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     )}
                   >
                     <Icon className="h-4 w-4 shrink-0" />
-                    {item.label}
+                    <span className="truncate">{item.label}</span>
                   </button>
                 );
               })}

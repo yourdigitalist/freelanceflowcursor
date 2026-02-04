@@ -24,7 +24,7 @@ serve(async (req) => {
     });
   }
 
-  const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY");
+  const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY")?.trim();
   if (!stripeSecret) {
     return new Response(JSON.stringify({ error: "Stripe not configured" }), {
       status: 500,

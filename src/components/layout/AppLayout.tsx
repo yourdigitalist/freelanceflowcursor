@@ -164,20 +164,19 @@ export function AppLayout({
             </Link>}
 
           {/* Upgrade Button - only show for trial/free users */}
-          {!sidebarCollapsed && isOnTrial && <Link to="/settings/subscription" className="upgrade-gradient rounded-lg p-3 block hover:opacity-90 transition-opacity">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
+          {!sidebarCollapsed && isOnTrial && (
+            <Link to="/settings/subscription" className="upgrade-gradient rounded-lg p-3 block hover:opacity-90 transition-opacity">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
                     <Sparkles className="h-4 w-4 text-primary" />
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-sidebar-foreground">Upgrade to</p>
-                    <p className="text-sm font-semibold text-sidebar-foreground">Business</p>
-                  </div>
+                  <span className="text-sm font-semibold text-sidebar-foreground truncate">Upgrade now</span>
                 </div>
-                <ArrowRight className="h-4 w-4 text-primary" />
+                <ArrowRight className="h-4 w-4 text-primary shrink-0" />
               </div>
-            </Link>}
+            </Link>
+          )}
 
           {/* User Profile */}
           <DropdownMenu>

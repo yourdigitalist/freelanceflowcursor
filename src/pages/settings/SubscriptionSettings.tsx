@@ -13,6 +13,7 @@ interface SubscriptionProfile {
   subscription_status: string | null;
   trial_start_date: string | null;
   trial_end_date: string | null;
+  stripe_customer_id: string | null;
 }
 
 const STRIPE_PRICE_MONTHLY = import.meta.env.VITE_STRIPE_PRICE_MONTHLY as string | undefined;
@@ -65,7 +66,7 @@ export default function SubscriptionSettings() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('plan_type, subscription_status, trial_start_date, trial_end_date')
+        .select('plan_type, subscription_status, trial_start_date, trial_end_date, stripe_customer_id')
         .eq('user_id', user!.id)
         .maybeSingle();
 
@@ -139,16 +140,48 @@ export default function SubscriptionSettings() {
   };
 
   const handleManageSubscription = async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('create-portal-session', {
-        body: {},
+    if (!profile?.stripe_customer_id) {
+      toast({
+        title: 'No billing account',
+        description: 'Choose a plan above to add a payment method, then you can manage it here.',
+        variant: 'destructive',
       });
-      if (error) throw error;
-      if (data?.url) {
-        window.location.href = data.url;
+      return;
+    }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        toast({ title: 'Please sign in again', variant: 'destructive' });
         return;
       }
-      throw new Error(data?.error ?? 'No portal URL returned');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      if (!supabaseUrl || !anonKey) {
+        toast({ title: 'App config error', variant: 'destructive' });
+        return;
+      }
+      const url = `${supabaseUrl}/functions/v1/create-portal-session`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: anonKey,
+        },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = data?.error || data?.message || res.statusText || `Portal failed (${res.status})`;
+        toast({ title: 'Error opening billing portal', description: String(msg), variant: 'destructive' });
+        return;
+      }
+      const portalUrl = data?.url;
+      if (portalUrl && typeof portalUrl === 'string') {
+        window.location.href = portalUrl;
+        return;
+      }
+      toast({ title: 'Error', description: data?.error ?? 'No portal URL returned', variant: 'destructive' });
     } catch (error: unknown) {
       toast({
         title: 'Error opening billing portal',
@@ -220,6 +253,11 @@ export default function SubscriptionSettings() {
             </div>
           )}
           
+          {isOnTrial && !profile?.stripe_customer_id && (
+            <p className="text-sm text-muted-foreground">
+              Pick a plan below to add a payment method and continue after your trial.
+            </p>
+          )}
           {isActive && (
             <div className="space-y-2">
               <p className="font-medium">
@@ -233,7 +271,7 @@ export default function SubscriptionSettings() {
         </CardContent>
       </Card>
 
-      {/* Upgrade Options */}
+      {/* Upgrade Options - show when on trial or not active */}
       {(isOnTrial || !isActive) && (
         <div>
           <h3 className="text-lg font-semibold mb-4">Subscribe</h3>
@@ -280,8 +318,8 @@ export default function SubscriptionSettings() {
         </div>
       )}
 
-      {/* Manage Subscription */}
-      {isActive && (
+      {/* Manage Subscription - only when we have a Stripe customer (e.g. after checkout) */}
+      {(isActive || (isOnTrial && profile?.stripe_customer_id)) && (
         <Card className="border-0 shadow-sm">
           <CardHeader>
             <CardTitle>Manage Subscription</CardTitle>
@@ -291,9 +329,15 @@ export default function SubscriptionSettings() {
             <p className="text-sm text-muted-foreground mb-3">
               Update your payment method, view invoices, or cancel your subscription in the Stripe portal.
             </p>
-            <Button variant="outline" onClick={handleManageSubscription}>
-              Open billing portal
-            </Button>
+            {profile?.stripe_customer_id ? (
+              <Button variant="outline" onClick={handleManageSubscription}>
+                Open billing portal
+              </Button>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Choose a plan above to add a payment method; then you can manage it here.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}

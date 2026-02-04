@@ -67,12 +67,12 @@ export function TrialBanner({ onUpgrade }: TrialBannerProps) {
         <Sparkles className="h-4 w-4 text-primary" />
         <span className="text-foreground">
           {trialInfo.isExpired ? (
-            <>Your free trial has ended.</>
+            <>Your free trial has ended. Upgrade to keep full access.</>
           ) : (
             <>
-              {trialInfo.daysLeft === 0 
-                ? "Your free trial ends today!" 
-                : `${trialInfo.daysLeft} day${trialInfo.daysLeft === 1 ? '' : 's'} left on your free trial`
+              {trialInfo.daysLeft === 0
+                ? "Your free trial ends today — upgrade to keep your access."
+                : `Your free trial is active. ${trialInfo.daysLeft} day${trialInfo.daysLeft === 1 ? '' : 's'} left.`
               }
             </>
           )}
@@ -80,10 +80,10 @@ export function TrialBanner({ onUpgrade }: TrialBannerProps) {
         <Button
           size="sm"
           variant={isUrgent || trialInfo.isExpired ? 'default' : 'outline'}
-          className="h-7 text-xs"
+          className="h-7 text-xs shrink-0"
           onClick={onUpgrade}
         >
-          Upgrade Now
+          Upgrade now
         </Button>
       </div>
       <button
