@@ -407,23 +407,6 @@ export default function Invoices() {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return 'bg-success/10 text-success';
-      case 'sent':
-        return 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
-      case 'draft':
-        return 'bg-muted text-muted-foreground';
-      case 'overdue':
-        return 'bg-destructive/10 text-destructive';
-      case 'cancelled':
-        return 'bg-muted text-muted-foreground line-through';
-      default:
-        return 'bg-muted text-muted-foreground';
-    }
-  };
-
   const stats = {
     total: filteredInvoices.reduce((sum, i) => sum + Number(i.total), 0),
     paid: filteredInvoices.filter((i) => i.status === 'paid').reduce((sum, i) => sum + Number(i.total), 0),
@@ -791,8 +774,8 @@ export default function Invoices() {
                         {fmt(Number(invoice.total))}
                       </TableCell>
                       <TableCell>
-                        <Badge className={getStatusColor(invoice.status)}>
-                          {invoice.status}
+                        <Badge variant="secondary" className="font-bold uppercase text-[17px] text-black border-0 bg-transparent px-0">
+                          {(invoice.status || 'draft').toUpperCase()}
                         </Badge>
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>

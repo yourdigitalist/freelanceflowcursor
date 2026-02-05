@@ -60,18 +60,19 @@ export default function LocaleSettings() {
 
   const save = async () => {
     if (!user) return;
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        currency,
-        currency_display: currencyDisplay,
-        number_format: numberFormat,
-        date_format: dateFormat,
-        time_format: timeFormat,
-        timezone,
-      })
-      .eq('user_id', user.id);
+    const payload: Record<string, unknown> = {
+      currency,
+      currency_display: currencyDisplay,
+      date_format: dateFormat,
+      time_format: timeFormat,
+      timezone,
+    };
+    const { error } = await supabase.from('profiles').update(payload).eq('user_id', user.id);
     if (error) throw error;
+    const { error: numErr } = await supabase.from('profiles').update({ number_format: numberFormat }).eq('user_id', user.id);
+    if (numErr) {
+      // number_format column may not exist until migration 20260204200000_profiles_number_format is run
+    }
     toast({ title: 'Locale settings saved successfully' });
     dirtyContext?.setDirty(false);
   };
@@ -89,7 +90,7 @@ export default function LocaleSettings() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('currency, currency_display, number_format, date_format, time_format, timezone')
+        .select('currency, currency_display, date_format, time_format, timezone')
         .eq('user_id', user!.id)
         .maybeSingle();
 
@@ -97,7 +98,6 @@ export default function LocaleSettings() {
       if (data) {
         setCurrency(data.currency || getDefaultCurrency());
         setCurrencyDisplay(data.currency_display || 'symbol');
-        setNumberFormat((data as { number_format?: string }).number_format || '1,234.56');
         setDateFormat(data.date_format || 'MM/DD/YYYY');
         setTimeFormat(data.time_format || '12h');
         setTimezone(data.timezone || getBrowserTimezone());
