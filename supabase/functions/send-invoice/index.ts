@@ -222,6 +222,11 @@ serve(async (req) => {
     const receiverAddress1 = [client?.street, client?.street2].filter(Boolean).join(", ") || "";
     const receiverAddress2 = [client?.city, client?.state, client?.postal_code].filter(Boolean).join(", ") || (client?.country || "");
 
+    const notesText = (invoice.notes ?? profile?.invoice_notes_default ?? "").trim();
+    const bankDetailsText = (invoice.bank_details && String(invoice.bank_details).trim()) ||
+      [profile?.bank_name, profile?.bank_account_number != null && `Account: ${profile.bank_account_number}`, profile?.bank_routing_number != null && `Routing: ${profile.bank_routing_number}`, profile?.payment_instructions].filter(Boolean).join("\n").trim() ||
+      "";
+
     const customJsPayload = {
       invoiceNumber: invoice.invoice_number,
       createdDate: invoice.issue_date ? String(invoice.issue_date).slice(0, 10) : "",
@@ -234,21 +239,37 @@ serve(async (req) => {
         name: profile?.business_name || senderName || profile?.full_name || "Your Business",
         address1: senderAddress1,
         address2: [senderAddress2, profile?.business_country].filter(Boolean).join(", ").trim(),
+        email: profile?.business_email || "",
+        phone: profile?.business_phone || "",
+        tax: profile?.tax_id || "",
       },
       receiver: {
         name: client?.name || "",
         address1: receiverAddress1,
         address2: receiverAddress2.trim() || (client?.company || ""),
         tax: client?.tax_id || "",
+        email: client?.email || "",
+        phone: client?.phone || "",
+        company: client?.company || "",
       },
       companyLogo: profile?.business_logo && typeof profile.business_logo === "string" ? profile.business_logo : "",
       items: (items || []).map((item) => ({
-        description: [item.description, item.line_description].filter(Boolean).join(" – ") || "Item",
+        description: item.description || "Item",
         price: Number(item.amount),
+        line_date: item.line_date ? String(item.line_date).slice(0, 10) : "",
+        quantity: Number(item.quantity) || 1,
+        unit_price: Number(item.unit_price) ?? Number(item.amount),
+        line_description: item.line_description != null ? String(item.line_description) : "",
       })),
       currency: currencySymbol,
       taxRate: Number(invoice.tax_rate) || 0,
-      footerText: (invoice.invoice_footer || profile?.invoice_footer || "").trim(),
+      footerText: (invoice.invoice_footer ?? profile?.invoice_footer ?? "").trim(),
+      notes: notesText,
+      bankDetails: bankDetailsText,
+      showLineDate: profile?.invoice_show_line_date === true,
+      showQuantity: profile?.invoice_show_quantity !== false,
+      showRate: profile?.invoice_show_rate !== false,
+      showLineDescription: profile?.invoice_show_line_description === true,
     };
 
     const customJsUrl = Deno.env.get("CUSTOMJS_ENDPOINT_URL");
