@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -750,6 +751,7 @@ export default function InvoiceDetail() {
     }
 
     setSendingInvoice(true);
+    let sendResponse: { data?: { error?: string }; error?: { message?: string } } | null = null;
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
@@ -759,7 +761,7 @@ export default function InvoiceDetail() {
         await fetchInvoice();
       }
 
-      const response = await supabase.functions.invoke('send-invoice', {
+      sendResponse = await supabase.functions.invoke('send-invoice', {
         body: {
           invoiceId: id,
           recipientEmail,
@@ -772,7 +774,7 @@ export default function InvoiceDetail() {
         },
       });
 
-      if (response.error) throw response.error;
+      if (sendResponse.error) throw sendResponse.error;
 
       toast({ title: sendModalMode === 'receipt' ? 'Receipt sent!' : 'Invoice sent successfully!' });
       setIsSendModalOpen(false);
@@ -781,9 +783,20 @@ export default function InvoiceDetail() {
       fetchInvoice();
     } catch (error: any) {
       console.error('Send invoice error:', error);
+      let message = error?.message ?? 'Please try again';
+      if (error instanceof FunctionsHttpError && error.context) {
+        try {
+          const body = await (error.context as Response).json();
+          if (body?.error && typeof body.error === 'string') message = body.error;
+        } catch {
+          // ignore parse errors
+        }
+      } else if (sendResponse?.data?.error) {
+        message = sendResponse.data.error;
+      }
       toast({
         title: 'Failed to send',
-        description: error.message || 'Please try again',
+        description: message,
         variant: 'destructive',
       });
     } finally {

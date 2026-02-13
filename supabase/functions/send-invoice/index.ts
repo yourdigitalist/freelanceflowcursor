@@ -284,18 +284,26 @@ serve(async (req) => {
       headers: { "Content-Type": "application/json", "x-api-key": customJsKey },
       body: JSON.stringify(customJsPayload),
     });
+    const responseText = await res.text();
     if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`PDF generation failed: ${res.status} ${errText}`);
+      throw new Error(`PDF service returned ${res.status}. ${responseText.slice(0, 200)}`);
     }
-    const data = await res.json();
+    let data: unknown;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      throw new Error("PDF service returned invalid JSON. Check CustomJS endpoint and function.");
+    }
     if (typeof data === "string") {
       pdfBase64 = data;
+    } else if (data && typeof data === "object") {
+      const obj = data as Record<string, unknown>;
+      pdfBase64 = (obj.pdf ?? obj.pdfBase64 ?? obj.data ?? obj.content ?? "") as string;
     } else {
-      pdfBase64 = data.pdf ?? data.pdfBase64 ?? data.data ?? data.content ?? "";
+      pdfBase64 = "";
     }
-    if (!pdfBase64) {
-      throw new Error("PDF generation failed: no PDF data in response.");
+    if (!pdfBase64 || typeof pdfBase64 !== "string") {
+      throw new Error("PDF service did not return a PDF. Check CustomJS response format (expected pdf, pdfBase64, data, or content).");
     }
 
     if (downloadOnly) {
@@ -311,7 +319,8 @@ serve(async (req) => {
     const safeInvoiceNumber = escapeHtml(invoice.invoice_number);
     const safeMessage = escapeHtml(message);
     const safeSenderName = escapeHtml(senderName);
-    const safeTotalFormatted = escapeHtml(currencyFmt(Number(invoice.total || 0)));
+    const totalFormatted = formatCurrency(Number(invoice.total || 0), profile?.currency, profile?.currency_display, profile?.number_format);
+    const safeTotalFormatted = escapeHtml(totalFormatted);
     
     const isReceipt = receipt === true;
     const emailHtml = isReceipt
@@ -343,7 +352,7 @@ serve(async (req) => {
       ? customSubject
       : isReceipt
         ? `Receipt for Invoice ${invoice.invoice_number} – Paid`
-        : `Invoice ${invoice.invoice_number} - ${currencyFmt(Number(invoice.total || 0))}`;
+        : `Invoice ${invoice.invoice_number} - ${formatCurrency(Number(invoice.total || 0), profile?.currency, profile?.currency_display, profile?.number_format)}`;
 
     const emailPayload: any = {
       from: senderEmail ? `${senderName || "Invoice"} <onboarding@resend.dev>` : "Invoice <onboarding@resend.dev>",
