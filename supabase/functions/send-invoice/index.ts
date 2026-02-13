@@ -284,30 +284,50 @@ serve(async (req) => {
       headers: { "Content-Type": "application/json", "x-api-key": customJsKey },
       body: JSON.stringify(customJsPayload),
     });
-    const responseText = await res.text();
+    const responseBytes = new Uint8Array(await res.arrayBuffer());
     if (!res.ok) {
-      throw new Error(`PDF service returned ${res.status}. ${responseText.slice(0, 200)}`);
+      const errText = new TextDecoder().decode(responseBytes);
+      throw new Error(`PDF service returned ${res.status}. ${errText.slice(0, 200)}`);
     }
-    let data: unknown;
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      // CustomJS may return raw base64 (e.g. PDF as plain base64 string), not JSON
-      const trimmed = responseText.trim();
-      if (/^[A-Za-z0-9+/=]+$/.test(trimmed) && trimmed.length > 100) {
-        pdfBase64 = trimmed;
-      } else {
-        throw new Error("PDF service returned invalid JSON. Check CustomJS endpoint and function.");
+    // CustomJS can return: (1) raw binary PDF, (2) base64 string, (3) JSON with pdf/pdfBase64 field
+    const pdfMagic = [0x25, 0x50, 0x44, 0x46]; // %PDF
+    const isRawPdf = responseBytes.length >= 4 &&
+      responseBytes[0] === pdfMagic[0] &&
+      responseBytes[1] === pdfMagic[1] &&
+      responseBytes[2] === pdfMagic[2] &&
+      responseBytes[3] === pdfMagic[3];
+    if (isRawPdf) {
+      let binary = "";
+      for (let i = 0; i < responseBytes.length; i += 8192) {
+        binary += String.fromCharCode.apply(null, responseBytes.subarray(i, i + 8192) as unknown as number[]);
       }
-    }
-    if (data !== undefined) {
-      if (typeof data === "string") {
-        pdfBase64 = data;
-      } else if (data && typeof data === "object") {
-        const obj = data as Record<string, unknown>;
-        pdfBase64 = (obj.pdf ?? obj.pdfBase64 ?? obj.data ?? obj.content ?? "") as string;
-      } else {
-        pdfBase64 = "";
+      pdfBase64 = btoa(binary);
+    } else {
+      const responseText = new TextDecoder().decode(responseBytes);
+      let data: unknown;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        let raw = responseText.replace(/\s/g, "").replace(/^\uFEFF/, "");
+        const dataUrlMatch = /^data:application\/(?:pdf|octet-stream);base64,(.+)$/i.exec(raw);
+        if (dataUrlMatch) raw = dataUrlMatch[1];
+        if (/^[A-Za-z0-9+/=]+$/.test(raw) && raw.length > 100) {
+          pdfBase64 = raw;
+        } else if (raw.startsWith("JVBERi0x") && raw.length > 100) {
+          pdfBase64 = raw.replace(/[^A-Za-z0-9+/=]/g, "");
+        } else {
+          throw new Error("PDF service returned invalid JSON. Check CustomJS endpoint and function.");
+        }
+      }
+      if (data !== undefined) {
+        if (typeof data === "string") {
+          pdfBase64 = data;
+        } else if (data && typeof data === "object") {
+          const obj = data as Record<string, unknown>;
+          pdfBase64 = (obj.pdf ?? obj.pdfBase64 ?? obj.data ?? obj.content ?? "") as string;
+        } else {
+          pdfBase64 = "";
+        }
       }
     }
     if (!pdfBase64 || typeof pdfBase64 !== "string") {

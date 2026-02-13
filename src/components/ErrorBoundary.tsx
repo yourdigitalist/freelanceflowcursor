@@ -27,6 +27,8 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError && this.state.error) {
+      const err = this.state.error;
+      const isDev = import.meta.env.DEV;
       return (
         <div className="min-h-screen flex items-center justify-center p-4 bg-background">
           <Card className="max-w-md w-full">
@@ -35,6 +37,16 @@ export class ErrorBoundary extends Component<Props, State> {
               <p className="text-muted-foreground text-sm">
                 An unexpected error occurred. Try refreshing the page.
               </p>
+              {isDev && (
+                <div className="text-left rounded-md bg-destructive/10 border border-destructive/20 p-3 text-xs font-mono break-all">
+                  <p className="font-semibold text-destructive mb-1">{err.name}: {err.message}</p>
+                  {err.stack && (
+                    <pre className="whitespace-pre-wrap text-muted-foreground mt-2 max-h-40 overflow-auto">
+                      {err.stack}
+                    </pre>
+                  )}
+                </div>
+              )}
               <div className="flex gap-2 justify-center">
                 <Button onClick={() => window.location.reload()}>
                   Refresh page

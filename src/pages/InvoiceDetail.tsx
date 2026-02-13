@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Plus, Trash2, Send, DollarSign, Mail, Loader2, Eye, Clock, Printer, ListTodo, Wallet, Pencil, Download, MoreVertical } from 'lucide-react';
 import { format } from 'date-fns';
-import { formatCurrency } from '@/lib/locale-data';
+import { formatCurrency, currencies } from '@/lib/locale-data';
 import {
   Dialog,
   DialogContent,
@@ -124,6 +124,52 @@ interface UserProfile {
   reminder_subject_default: string | null;
   reminder_body_default: string | null;
 }
+
+// Exact styles from CustomJS HTML template so preview matches PDF/email
+const INVOICE_PREVIEW_STYLES = `
+  @media print { body { width: 210mm; height: 297mm; margin: 0; padding: 0; font-size: 10pt; } }
+  .invoice-preview-root * { margin: 0; padding: 0; box-sizing: border-box; }
+  .invoice-preview-root { padding: 30px; min-height: 100vh; font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; font-size: 13px; line-height: 1.5; }
+  .invoice-preview-root .wrapper-invoice { display: flex; justify-content: center; }
+  .invoice-preview-root .wrapper-invoice .invoice { height: auto; background: #fff; max-width: 800px; width: 100%; }
+  .invoice-preview-root .invoice-information { float: right; text-align: right; width: auto; }
+  .invoice-preview-root .invoice-information b { color: #0F172A; font-weight: 600; }
+  .invoice-preview-root .invoice-information p { font-size: 13px; color: #666; margin-bottom: 4px; }
+  .invoice-preview-root .invoice-logo-brand h2 { text-transform: uppercase; font-size: 24px; color: #0F172A; }
+  .invoice-preview-root .invoice-logo-brand img { max-width: 180px; width: 100%; height: auto; display: block; margin-bottom: 12px; }
+  .invoice-preview-root .invoice-head { display: flex; margin-top: 50px; clear: both; gap: 40px; }
+  .invoice-preview-root .invoice-head .head { flex: 1; }
+  .invoice-preview-root .invoice-head .client-info { text-align: left; }
+  .invoice-preview-root .invoice-head .client-info h2, .invoice-preview-root .invoice-head .client-data h2 { font-weight: 600; font-size: 11px; color: #999; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
+  .invoice-preview-root .invoice-head .client-info p, .invoice-preview-root .invoice-head .client-data p { font-size: 13px; color: #666; margin-bottom: 3px; }
+  .invoice-preview-root .invoice-head .client-info p strong, .invoice-preview-root .invoice-head .client-data p strong { color: #0F172A; font-weight: 600; }
+  .invoice-preview-root .invoice-head .client-info .receiver-tax { margin-top: 8px; }
+  .invoice-preview-root .invoice-head .client-data { text-align: right; }
+  .invoice-preview-root .invoice-body { margin-top: 40px; }
+  .invoice-preview-root .invoice-body .table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  .invoice-preview-root .invoice-body .table thead tr th { font-size: 11px; border: 1px solid #dcdcdc; text-align: left; padding: 10px 8px; background-color: #f5f5f5; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+  .invoice-preview-root .invoice-body .table thead tr th:nth-child(1) { width: 12%; }
+  .invoice-preview-root .invoice-body .table thead tr th:nth-child(2) { width: 36%; }
+  .invoice-preview-root .invoice-body .table thead tr th:nth-child(3) { width: 10%; text-align: right; }
+  .invoice-preview-root .invoice-body .table thead tr th:nth-child(4) { width: 20%; text-align: right; }
+  .invoice-preview-root .invoice-body .table thead tr th:nth-child(5) { width: 22%; text-align: right; }
+  .invoice-preview-root .invoice-body .table tbody tr td { font-size: 13px; border: 1px solid #e5e5e5; text-align: left; padding: 10px 8px; background-color: #fff; word-wrap: break-word; color: #333; }
+  .invoice-preview-root .invoice-body .table tbody tr td.text-right { text-align: right; }
+  .invoice-preview-root .invoice-body .table tbody tr td small { font-size: 11px; color: #888; display: block; margin-top: 3px; }
+  .invoice-preview-root .invoice-body .flex-table { display: flex; margin-top: 20px; }
+  .invoice-preview-root .invoice-body .flex-table .flex-column { width: 100%; }
+  .invoice-preview-root .invoice-body .flex-table .flex-column .table-subtotal { border-collapse: collapse; width: 100%; max-width: 350px; margin-left: auto; }
+  .invoice-preview-root .invoice-body .flex-table .flex-column .table-subtotal tbody tr td { font-size: 13px; border-bottom: 1px solid #e5e5e5; text-align: left; padding: 8px 12px; background-color: #fff; }
+  .invoice-preview-root .invoice-body .flex-table .flex-column .table-subtotal tbody tr td:nth-child(2) { text-align: right; font-weight: 500; }
+  .invoice-preview-root .invoice-body .invoice-total-amount { margin-top: 12px; text-align: right; }
+  .invoice-preview-root .invoice-body .invoice-total-amount p { font-weight: 700; color: #0F172A; font-size: 18px; }
+  .invoice-preview-root .invoice-notes, .invoice-preview-root .invoice-bank-details { margin-top: 30px; padding: 16px; background-color: #f8f9fa; border-left: 3px solid #0F172A; }
+  .invoice-preview-root .invoice-notes h3, .invoice-preview-root .invoice-bank-details h3 { font-size: 13px; color: #0F172A; margin-bottom: 8px; font-weight: 600; }
+  .invoice-preview-root .invoice-notes p, .invoice-preview-root .invoice-bank-details p { font-size: 13px; color: #555; line-height: 1.6; white-space: pre-wrap; }
+  .invoice-preview-root .invoice-footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #dcdcdc; }
+  .invoice-preview-root .invoice-footer p { font-size: 12px; color: #888; text-align: center; line-height: 1.6; }
+  @media print { .invoice-preview-root .table thead tr th { -webkit-print-color-adjust: exact; background-color: #f5f5f5 !important; } }
+`;
 
 interface Tax {
   id: string;
@@ -844,6 +890,44 @@ export default function InvoiceDetail() {
   const previewNotes = notes.trim() || profile?.invoice_notes_default?.trim() || '';
   const previewFooter = invoiceFooter.trim() || profile?.invoice_footer?.trim() || '';
   const previewClientMessage = emailMessage.trim() || resolveEmailMessage(profile?.invoice_email_message_default ?? '');
+  const previewBankDetails = bankDetails.trim() || '';
+
+  // Data for CustomJS-style preview (matches send-invoice payload)
+  const currencySymbol = currencies.find((c) => c.value === (profile?.currency || 'USD'))?.symbol ?? '$';
+  const senderAddress1 = [profile?.business_street, profile?.business_street2].filter(Boolean).join(', ') || '';
+  const senderAddress2 = [profile?.business_city, profile?.business_state, profile?.business_postal_code].filter(Boolean).join(', ') || (profile?.business_country || '');
+  const sender = {
+    name: profile?.business_name || profile?.company_name || profile?.full_name || 'Your Business',
+    address1: senderAddress1,
+    address2: [senderAddress2, profile?.business_country].filter(Boolean).join(', ').trim(),
+    email: profile?.business_email || profile?.email || '',
+    phone: profile?.business_phone || '',
+    tax: profile?.tax_id || '',
+  };
+  const client = invoice?.clients;
+  const receiverAddress1 = [client?.street, (client as { street2?: string } | null)?.street2].filter(Boolean).join(', ') || '';
+  const receiverAddress2 = [client?.city, client?.state, client?.postal_code].filter(Boolean).join(', ') || (client?.country || '');
+  const receiver = {
+    name: client?.name || '',
+    company: client?.company || '',
+    address1: receiverAddress1,
+    address2: receiverAddress2.trim() || (client?.company || ''),
+    email: client?.email || '',
+    phone: client?.phone || '',
+    tax: client?.tax_id || '',
+  };
+  const createdDate = invoice?.issue_date ? String(invoice.issue_date).slice(0, 10) : '';
+  const dueDate = invoice?.due_date ? String(invoice.due_date).slice(0, 10) : '';
+  const companyLogo = profile?.business_logo && typeof profile.business_logo === 'string' ? profile.business_logo : '';
+  const previewItems = items.map((it) => ({
+    description: it.description || '',
+    price: Number(it.amount),
+    unit_price: Number(it.unit_price) ?? Number(it.amount),
+    quantity: Number(it.quantity) || 1,
+    line_date: it.line_date ? String(it.line_date).slice(0, 10) : '',
+    line_description: it.line_description != null ? String(it.line_description) : '',
+  }));
+  const amt = (n: number) => `${currencySymbol}${Number(n).toFixed(2)}`;
 
   const formatClientAddress = (client: Invoice['clients']) => {
     if (!client) return '';
@@ -874,7 +958,9 @@ export default function InvoiceDetail() {
     );
   }
 
-  if (!invoice) return null;
+  if (!invoice) {
+    return null;
+  }
 
   return (
     <AppLayout>
@@ -1439,142 +1525,116 @@ export default function InvoiceDetail() {
             </div>
           </DialogHeader>
           <ScrollArea className="max-h-[calc(90vh-120px)]">
-            <div className="bg-white p-8 rounded-lg border">
-              {/* Invoice Header */}
-              <div className="flex justify-between items-start mb-8">
-                <div>
-                  {profile?.business_logo && (
-                    <img src={profile.business_logo} alt="Logo" className="h-12 mb-2" />
-                  )}
-                  <p className="font-bold text-lg">
-                    {profile?.business_name || profile?.company_name || profile?.full_name}
-                  </p>
-                  {formatBusinessAddress(profile) && (
-                    <p className="text-sm text-gray-600 whitespace-pre-line">{formatBusinessAddress(profile)}</p>
-                  )}
-                  {(profile?.business_email || profile?.email) && (
-                    <p className="text-sm text-gray-600">{profile.business_email || profile.email}</p>
-                  )}
-                  {profile?.business_phone && (
-                    <p className="text-sm text-gray-600">{profile.business_phone}</p>
-                  )}
-                  {profile?.tax_id && (
-                    <p className="text-sm text-gray-600">Tax ID: {profile.tax_id}</p>
-                  )}
-                </div>
-                <div className="text-right">
-                  <h2 className="text-2xl font-bold mb-2">INVOICE</h2>
-                  <p className="text-primary font-medium">{invoice.invoice_number}</p>
-                  <Badge variant="outline" className={getInvoiceStatusBadgeStyle(invoice.status || 'draft')}>
-                    {(invoice.status || 'draft').charAt(0).toUpperCase() + (invoice.status || 'draft').slice(1)}
-                  </Badge>
-                </div>
-              </div>
-
-              {/* Bill To & Dates */}
-              <div className="flex justify-between mb-8">
-                <div>
-                  <p className="text-sm text-primary font-medium mb-1">Bill To</p>
-                  {invoice.clients && (
-                    <>
-                      <p className="font-medium">{invoice.clients.name}</p>
-                      {invoice.clients.company && <p className="text-sm text-gray-600">{invoice.clients.company}</p>}
-                      {invoice.clients.email && <p className="text-sm text-gray-600">{invoice.clients.email}</p>}
-                      {formatClientAddress(invoice.clients) && (
-                        <p className="text-sm text-gray-600 whitespace-pre-line">{formatClientAddress(invoice.clients)}</p>
-                      )}
-                      {invoice.clients.tax_id && (
-                        <p className="text-sm text-gray-600">Tax ID: {invoice.clients.tax_id}</p>
-                      )}
-                    </>
-                  )}
-                </div>
-                <div className="text-right">
-                  <div className="mb-2">
-                    <p className="text-sm text-primary font-medium">Issue Date</p>
-                    <p className="font-medium">{format(new Date(invoice.issue_date), 'MMMM d, yyyy')}</p>
-                  </div>
-                  {invoice.due_date && (
-                    <div>
-                      <p className="text-sm text-primary font-medium">Due Date</p>
-                      <p className="font-medium">{format(new Date(invoice.due_date), 'MMMM d, yyyy')}</p>
+            <div className="bg-white rounded-lg border">
+              <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+              <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+              <style dangerouslySetInnerHTML={{ __html: INVOICE_PREVIEW_STYLES }} />
+              <div className="invoice-preview-root">
+                <section className="wrapper-invoice">
+                  <div className="invoice">
+                    <div className="invoice-information">
+                      <p><b>Invoice #</b> {invoice.invoice_number}</p>
+                      <p><b>Date</b> {createdDate}</p>
+                      <p><b>Due Date</b> {dueDate}</p>
                     </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Line Items — column order matches editor: Date, Item, Description, Qty, Rate, Amount */}
-              <table className="w-full mb-8 border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    {showLineDate && <th className="text-left py-2 pr-4 text-sm text-primary font-medium w-[100px]">Date</th>}
-                    <th className="text-left py-2 pr-4 text-sm text-primary font-medium">Item</th>
-                    {showLineDescription && <th className="text-left py-2 pr-4 text-sm text-primary font-medium">Description</th>}
-                    {showQuantity && <th className="text-center py-2 pr-4 text-sm text-primary font-medium w-[72px]">Qty</th>}
-                    {showRate && <th className="text-right py-2 pr-4 text-sm text-primary font-medium w-[100px]">Rate</th>}
-                    <th className="text-right py-2 text-sm text-primary font-medium w-[120px]">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => (
-                    <tr key={item.id} className="border-b border-gray-100">
-                      {showLineDate && (
-                        <td className="py-3 pr-4 text-sm text-gray-600">
-                          {item.line_date ? format(new Date(item.line_date), 'MMM d, yyyy') : '—'}
-                        </td>
-                      )}
-                      <td className="py-3 pr-4 break-words">{item.description}</td>
-                      {showLineDescription && (
-                        <td className="py-3 pr-4 text-sm text-gray-600 break-words">{item.line_description || '—'}</td>
-                      )}
-                      {showQuantity && <td className="py-3 pr-4 text-center">{item.quantity}</td>}
-                      {showRate && <td className="py-3 pr-4 text-right">{fmt(Number(item.unit_price))}</td>}
-                      <td className="py-3 text-right font-medium">{fmt(Number(item.amount))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* Totals */}
-              <div className="flex justify-end mb-8">
-                <div className="w-64">
-                  <div className="flex justify-between py-2 text-sm">
-                    <span className="text-gray-600">Subtotal</span>
-                    <span className="font-medium">{fmt(subtotal)}</span>
-                  </div>
-                  {selectedTax && (
-                    <div className="flex justify-between py-2 text-sm">
-                      <span className="text-gray-600">{selectedTax.name} ({selectedTax.rate}%)</span>
-                      <span className="font-medium">{fmt(taxAmount)}</span>
+                    <div className="invoice-logo-brand">
+                      {companyLogo ? <img src={companyLogo} alt="Company Logo" /> : null}
                     </div>
-                  )}
-                  <div className="flex justify-between py-2 border-t border-gray-200 text-lg">
-                    <span className="font-bold">Total</span>
-                    <span className="font-bold text-primary">{fmt(total)}</span>
+                    <div className="invoice-head">
+                      <div className="head client-info">
+                        <h2>To</h2>
+                        <p><strong>{receiver.name}</strong></p>
+                        {receiver.company ? <p>{receiver.company}</p> : null}
+                        {receiver.address1 ? <p>{receiver.address1}</p> : null}
+                        {receiver.address2 ? <p>{receiver.address2}</p> : null}
+                        {receiver.email ? <p>{receiver.email}</p> : null}
+                        {receiver.phone ? <p>{receiver.phone}</p> : null}
+                        {receiver.tax ? <p className="receiver-tax"><b>Tax ID:</b> {receiver.tax}</p> : null}
+                      </div>
+                      <div className="head client-data">
+                        <h2>From</h2>
+                        <p><strong>{sender.name}</strong></p>
+                        {sender.address1 ? <p>{sender.address1}</p> : null}
+                        {sender.address2 ? <p>{sender.address2}</p> : null}
+                        {sender.email ? <p>{sender.email}</p> : null}
+                        {sender.phone ? <p>{sender.phone}</p> : null}
+                        {sender.tax ? <p><b>Tax ID:</b> {sender.tax}</p> : null}
+                      </div>
+                    </div>
+                    <div className="invoice-body">
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            {showLineDate ? <th>Date</th> : null}
+                            <th>Description</th>
+                            {showQuantity ? <th>Qty</th> : null}
+                            {showRate ? <th>Rate</th> : null}
+                            <th>Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {previewItems.map((item, idx) => (
+                            <tr key={idx}>
+                              {showLineDate ? <td>{item.line_date}</td> : null}
+                              <td>
+                                {item.description}
+                                {showLineDescription && item.line_description ? <small>{item.line_description}</small> : null}
+                              </td>
+                              {showQuantity ? <td className="text-right">{item.quantity}</td> : null}
+                              {showRate ? <td className="text-right">{amt(item.unit_price)}</td> : null}
+                              <td className="text-right">{amt(item.price)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="flex-table">
+                        <div className="flex-column">
+                          <table className="table-subtotal">
+                            <tbody>
+                              <tr>
+                                <td>Subtotal</td>
+                                <td>{amt(subtotal)}</td>
+                              </tr>
+                              {taxRate > 0 ? (
+                                <tr>
+                                  <td>Tax {taxRate}%</td>
+                                  <td>{amt(taxAmount)}</td>
+                                </tr>
+                              ) : null}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                      <div className="invoice-total-amount">
+                        <p>Total: {amt(total)}</p>
+                      </div>
+                    </div>
+                    {previewNotes ? (
+                      <div className="invoice-notes">
+                        <h3>Notes</h3>
+                        <p>{previewNotes}</p>
+                      </div>
+                    ) : null}
+                    {previewBankDetails ? (
+                      <div className="invoice-bank-details">
+                        <h3>Payment Information</h3>
+                        <p>{previewBankDetails}</p>
+                      </div>
+                    ) : null}
+                    {previewFooter ? (
+                      <div className="invoice-footer">
+                        <p>{previewFooter}</p>
+                      </div>
+                    ) : null}
                   </div>
-                </div>
+                </section>
               </div>
-
-              {/* Notes (matches PDF: invoice notes or default from settings) */}
-              {previewNotes && (
-                <div className="border-t pt-4 mb-4">
-                  <p className="text-sm text-primary font-medium mb-1">Notes</p>
-                  <p className="text-sm text-gray-600 whitespace-pre-line">{previewNotes}</p>
+              {previewClientMessage ? (
+                <div className="border-t pt-4 mt-4 p-4 bg-muted/30">
+                  <p className="text-sm font-medium mb-1">Message to client (email)</p>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{previewClientMessage}</p>
                 </div>
-              )}
-              {/* Footer (matches PDF: per-invoice override or default from settings) */}
-              {previewFooter && (
-                <div className="text-center text-sm text-muted-foreground pt-4 border-t">
-                  {previewFooter}
-                </div>
-              )}
-              {/* Message to client (what will be in the email body) */}
-              {previewClientMessage && (
-                <div className="border-t pt-4 mt-4">
-                  <p className="text-sm text-primary font-medium mb-1">Message to client (email)</p>
-                  <p className="text-sm text-gray-600 whitespace-pre-line">{previewClientMessage}</p>
-                </div>
-              )}
+              ) : null}
             </div>
           </ScrollArea>
         </DialogContent>
