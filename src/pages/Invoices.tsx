@@ -31,7 +31,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, parseISO } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, parseISO, addDays } from 'date-fns';
 import {
   Table,
   TableBody,
@@ -111,6 +111,19 @@ export default function Invoices() {
   const importFileInputRef = useRef<HTMLInputElement>(null);
   const [profileCurrency, setProfileCurrency] = useState<string | null>(null);
   const [profileCurrencyDisplay, setProfileCurrencyDisplay] = useState<string | null>(null);
+
+  const getInvoiceStatusBadgeStyle = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return 'bg-success/10 text-success border-success/20';
+      case 'sent':
+        return 'bg-muted text-muted-foreground border-muted';
+      case 'draft':
+        return 'bg-warning/10 text-warning border-warning/20';
+      default:
+        return 'bg-muted text-muted-foreground border-muted';
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -211,6 +224,16 @@ export default function Invoices() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
+    const issueDate = (formData.get('issue_date') as string)?.trim() || null;
+    const dueDate = (formData.get('due_date') as string)?.trim() || null;
+    if (!issueDate || !dueDate) {
+      toast({
+        title: 'Issue date and due date are required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const selectedTax = taxes.find(t => t.id === selectedTaxId);
     const clientId = (formData.get('client_id') as string) || null;
     const projectId = (formData.get('project_id') as string) || null;
@@ -219,8 +242,8 @@ export default function Invoices() {
       invoice_number: generateInvoiceNumber(),
       client_id: clientId || null,
       project_id: projectId || null,
-      issue_date: formData.get('issue_date') as string,
-      due_date: (formData.get('due_date') as string) || null,
+      issue_date: issueDate,
+      due_date: dueDate,
       status: 'draft',
       subtotal: 0,
       tax_rate: selectedTax?.rate || 0,
@@ -540,6 +563,8 @@ export default function Invoices() {
                       id="due_date"
                       name="due_date"
                       type="date"
+                      defaultValue={format(addDays(new Date(), 30), 'yyyy-MM-dd')}
+                      required
                     />
                   </div>
                 </div>
@@ -774,8 +799,8 @@ export default function Invoices() {
                         {fmt(Number(invoice.total))}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className="font-bold uppercase text-[17px] text-black border-0 bg-transparent px-0">
-                          {(invoice.status || 'draft').toUpperCase()}
+                        <Badge variant="outline" className={getInvoiceStatusBadgeStyle(invoice.status || 'draft')}>
+                          {(invoice.status || 'draft').charAt(0).toUpperCase() + (invoice.status || 'draft').slice(1)}
                         </Badge>
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>

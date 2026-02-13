@@ -156,6 +156,8 @@ export default function InvoiceDetail() {
   const [invoiceFooter, setInvoiceFooter] = useState('');
   const [bankDetails, setBankDetails] = useState('');
   const [invoiceNumberEdit, setInvoiceNumberEdit] = useState('');
+  const [issueDateEdit, setIssueDateEdit] = useState('');
+  const [dueDateEdit, setDueDateEdit] = useState('');
   const [profile, setProfile] = useState<UserProfile | null>(null);
   
   // Send invoice modal state
@@ -213,6 +215,19 @@ export default function InvoiceDetail() {
     }
     preloadedDefaultsRef.current = invoice.id;
   }, [invoice?.id, invoice?.notes, (invoice as Invoice)?.invoice_footer, (invoice as Invoice)?.bank_details, profile?.invoice_notes_default, profile?.invoice_footer]);
+
+  const getInvoiceStatusBadgeStyle = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return 'bg-success/10 text-success border-success/20';
+      case 'sent':
+        return 'bg-muted text-muted-foreground border-muted';
+      case 'draft':
+        return 'bg-warning/10 text-warning border-warning/20';
+      default:
+        return 'bg-muted text-muted-foreground border-muted';
+    }
+  };
 
   const fetchProfile = async () => {
     try {
@@ -276,6 +291,8 @@ export default function InvoiceDetail() {
       }
       setInvoice(data);
       setInvoiceNumberEdit(data.invoice_number || '');
+      setIssueDateEdit(data.issue_date ? data.issue_date.slice(0, 10) : '');
+      setDueDateEdit(data.due_date ? data.due_date.slice(0, 10) : '');
       setNotes(data.notes || '');
       setInvoiceFooter((data as Invoice).invoice_footer ?? '');
       setBankDetails((data as Invoice).bank_details ?? '');
@@ -574,6 +591,15 @@ export default function InvoiceDetail() {
   };
 
   const saveInvoice = async (): Promise<boolean> => {
+    const issueDate = issueDateEdit?.trim() || null;
+    const dueDate = dueDateEdit?.trim() || null;
+    if (!issueDate || !dueDate) {
+      toast({
+        title: 'Issue date and due date are required',
+        variant: 'destructive',
+      });
+      return false;
+    }
     setSaving(true);
     try {
       // Save all items
@@ -599,11 +625,13 @@ export default function InvoiceDetail() {
       const taxAmount = subtotal * (taxRate / 100);
       const total = subtotal + taxAmount;
 
-      // Save invoice (including editable invoice number)
+      // Save invoice (including editable invoice number and dates)
       const { error } = await supabase
         .from('invoices')
         .update({
           invoice_number: invoiceNumberEdit.trim() || invoice?.invoice_number,
+          issue_date: issueDate,
+          due_date: dueDate,
           subtotal,
           tax_rate: taxRate,
           tax_amount: taxAmount,
@@ -856,8 +884,8 @@ export default function InvoiceDetail() {
               ) : (
                 <h1 className="text-2xl font-bold truncate">{invoice.invoice_number}</h1>
               )}
-              <Badge variant="secondary" className="font-bold uppercase text-[17px] text-black border-0 bg-transparent px-0">
-                {(invoice.status || 'draft').toUpperCase()}
+              <Badge variant="outline" className={getInvoiceStatusBadgeStyle(invoice.status || 'draft')}>
+                {(invoice.status || 'draft').charAt(0).toUpperCase() + (invoice.status || 'draft').slice(1)}
               </Badge>
             </div>
           </div>
@@ -1038,18 +1066,39 @@ export default function InvoiceDetail() {
             
             {/* Invoice Dates */}
             <div className="mt-6 pt-6 border-t border-border">
-              <div className="flex flex-wrap gap-6 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Issue Date:</span>{' '}
-                  <span className="font-medium">{format(new Date(invoice.issue_date), 'MMM d, yyyy')}</span>
+              {isEditMode ? (
+                <div className="grid grid-cols-2 gap-4 max-w-sm">
+                  <div className="space-y-2">
+                    <Label htmlFor="issue_date_edit">Issue Date</Label>
+                    <Input
+                      id="issue_date_edit"
+                      type="date"
+                      value={issueDateEdit}
+                      onChange={(e) => setIssueDateEdit(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="due_date_edit">Due Date</Label>
+                    <Input
+                      id="due_date_edit"
+                      type="date"
+                      value={dueDateEdit}
+                      onChange={(e) => setDueDateEdit(e.target.value)}
+                    />
+                  </div>
                 </div>
-                {invoice.due_date && (
+              ) : (
+                <div className="flex flex-wrap gap-6 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Issue Date:</span>{' '}
+                    <span className="font-medium">{invoice.issue_date ? format(new Date(invoice.issue_date), 'MMM d, yyyy') : '—'}</span>
+                  </div>
                   <div>
                     <span className="text-muted-foreground">Due Date:</span>{' '}
-                    <span className="font-medium">{format(new Date(invoice.due_date), 'MMM d, yyyy')}</span>
+                    <span className="font-medium">{invoice.due_date ? format(new Date(invoice.due_date), 'MMM d, yyyy') : '—'}</span>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -1403,8 +1452,8 @@ export default function InvoiceDetail() {
                 <div className="text-right">
                   <h2 className="text-2xl font-bold mb-2">INVOICE</h2>
                   <p className="text-primary font-medium">{invoice.invoice_number}</p>
-                  <Badge variant="secondary" className="font-bold uppercase text-[17px] text-black border-0 bg-transparent">
-                    {(invoice.status || 'draft').toUpperCase()}
+                  <Badge variant="outline" className={getInvoiceStatusBadgeStyle(invoice.status || 'draft')}>
+                    {(invoice.status || 'draft').charAt(0).toUpperCase() + (invoice.status || 'draft').slice(1)}
                   </Badge>
                 </div>
               </div>

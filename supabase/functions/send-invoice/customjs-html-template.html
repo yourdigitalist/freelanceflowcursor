@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invoice {{ invoiceNumber }}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: #333; padding: 20px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+    .header-left { flex: 1; }
+    .header-right { text-align: right; font-size: 11px; color: #666; }
+    .invoice-title { font-size: 24px; font-weight: bold; margin: 0 0 4px 0; }
+    .invoice-number { font-size: 12px; color: #666; }
+    .from-to { display: flex; gap: 40px; margin-bottom: 24px; }
+    .from-to section { flex: 1; min-width: 0; }
+    .from-to h3 { font-size: 10px; color: #999; text-transform: uppercase; margin: 0 0 6px 0; font-weight: 600; }
+    .from-to p { margin: 0 0 2px 0; font-size: 12px; }
+    .logo { max-height: 48px; max-width: 180px; display: block; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    thead tr { background: #f8f8fa; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; font-size: 11px; }
+    td.num, th.num { text-align: right; }
+    .totals { margin-top: 16px; text-align: right; }
+    .totals p { margin: 0 0 4px 0; font-size: 12px; }
+    .totals .total-line { font-size: 13px; font-weight: bold; color: #333; margin-top: 6px; }
+    .footer { margin-top: 16px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 11px; color: #777; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      {% if companyLogo %}<img src="{{ companyLogo }}" alt="Logo" class="logo" />{% endif %}
+      <h1 class="invoice-title">INVOICE</h1>
+      <p class="invoice-number">{{ invoiceNumber }}</p>
+    </div>
+    <div class="header-right">
+      <p>Issue Date: {{ createdDate }}</p>
+      <p>Due Date: {{ dueDate }}</p>
+    </div>
+  </div>
+  <div class="from-to">
+    <section>
+      <h3>FROM</h3>
+      <p><strong>{{ sender.name }}</strong></p>
+      {% if sender.address1 %}<p>{{ sender.address1 }}</p>{% endif %}
+      {% if sender.address2 %}<p>{{ sender.address2 }}</p>{% endif %}
+    </section>
+    <section>
+      <h3>BILL TO</h3>
+      <p><strong>{{ receiver.name }}</strong></p>
+      {% if receiver.address1 %}<p>{{ receiver.address1 }}</p>{% endif %}
+      {% if receiver.address2 %}<p>{{ receiver.address2 }}</p>{% endif %}
+      {% if receiver.tax %}<p>Tax ID: {{ receiver.tax }}</p>{% endif %}
+    </section>
+  </div>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Description</th>
+        <th class="num">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ item.description }}</td>
+        <td class="num">{{ item.price.toFixed(2) }} {{ currency }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="totals">
+    <p>Subtotal: {{ subtotal.toFixed(2) }} {{ currency }}</p>
+    {% if taxRate > 0 %}<p>Tax ({{ taxRate }}%): {{ taxAmount.toFixed(2) }} {{ currency }}</p>{% endif %}
+    <p class="total-line">Total: {{ total.toFixed(2) }} {{ currency }}</p>
+  </div>
+  {% if footerText %}<div class="footer">{{ footerText }}</div>{% endif %}
+</body>
+</html>
