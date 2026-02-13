@@ -292,15 +292,23 @@ serve(async (req) => {
     try {
       data = JSON.parse(responseText);
     } catch {
-      throw new Error("PDF service returned invalid JSON. Check CustomJS endpoint and function.");
+      // CustomJS may return raw base64 (e.g. PDF as plain base64 string), not JSON
+      const trimmed = responseText.trim();
+      if (/^[A-Za-z0-9+/=]+$/.test(trimmed) && trimmed.length > 100) {
+        pdfBase64 = trimmed;
+      } else {
+        throw new Error("PDF service returned invalid JSON. Check CustomJS endpoint and function.");
+      }
     }
-    if (typeof data === "string") {
-      pdfBase64 = data;
-    } else if (data && typeof data === "object") {
-      const obj = data as Record<string, unknown>;
-      pdfBase64 = (obj.pdf ?? obj.pdfBase64 ?? obj.data ?? obj.content ?? "") as string;
-    } else {
-      pdfBase64 = "";
+    if (data !== undefined) {
+      if (typeof data === "string") {
+        pdfBase64 = data;
+      } else if (data && typeof data === "object") {
+        const obj = data as Record<string, unknown>;
+        pdfBase64 = (obj.pdf ?? obj.pdfBase64 ?? obj.data ?? obj.content ?? "") as string;
+      } else {
+        pdfBase64 = "";
+      }
     }
     if (!pdfBase64 || typeof pdfBase64 !== "string") {
       throw new Error("PDF service did not return a PDF. Check CustomJS response format (expected pdf, pdfBase64, data, or content).");
