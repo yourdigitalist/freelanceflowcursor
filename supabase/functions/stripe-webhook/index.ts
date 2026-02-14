@@ -80,6 +80,9 @@ serve(async (req) => {
         const subscriptionId = session.subscription as string | null;
         const customerId = session.customer as string | null;
         let planType = "pro_monthly";
+        let subscriptionStatus = "active";
+        let trialStart: string | null = null;
+        let trialEnd: string | null = null;
         if (subscriptionId) {
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
           const priceId = sub.items.data[0]?.price?.id;
@@ -87,14 +90,20 @@ serve(async (req) => {
             const price = await stripe.prices.retrieve(priceId);
             planType = price.recurring?.interval === "year" ? "pro_annual" : "pro_monthly";
           }
-          const trialEnd = sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null;
+          if (sub.status === "trialing") {
+            subscriptionStatus = "trial";
+          }
+          trialStart = sub.trial_start ? new Date(sub.trial_start * 1000).toISOString() : null;
+          trialEnd = sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null;
           await supabase
             .from("profiles")
             .update({
-              subscription_status: "active",
+              onboarding_completed: true,
+              subscription_status: subscriptionStatus,
               plan_type: planType,
               stripe_customer_id: customerId,
               stripe_subscription_id: subscriptionId,
+              trial_start_date: trialStart,
               trial_end_date: trialEnd,
             })
             .eq("user_id", userId);
@@ -102,7 +111,8 @@ serve(async (req) => {
           await supabase
             .from("profiles")
             .update({
-              subscription_status: "active",
+              onboarding_completed: true,
+              subscription_status: subscriptionStatus,
               plan_type: planType,
               stripe_customer_id: customerId,
               stripe_subscription_id: subscriptionId,
@@ -126,12 +136,15 @@ serve(async (req) => {
         const planType =
           sub.items.data[0]?.price?.recurring?.interval === "year" ? "pro_annual" : "pro_monthly";
         const subscriptionStatus =
-          status === "active" || status === "trialing"
-            ? "active"
-            : status === "past_due"
-              ? "past_due"
-              : "canceled";
+          status === "trialing"
+            ? "trial"
+            : status === "active"
+              ? "active"
+              : status === "past_due"
+                ? "past_due"
+                : "canceled";
         const trialEnd = sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null;
+        const trialStart = sub.trial_start ? new Date(sub.trial_start * 1000).toISOString() : null;
 
         await supabase
           .from("profiles")
@@ -139,6 +152,7 @@ serve(async (req) => {
             subscription_status: subscriptionStatus,
             plan_type: planType,
             trial_end_date: trialEnd,
+            ...(trialStart && { trial_start_date: trialStart }),
           })
           .eq("user_id", profile.user_id);
         break;

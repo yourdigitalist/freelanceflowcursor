@@ -1837,7 +1837,7 @@ export default function InvoiceDetail() {
                 id="email-message"
                 value={emailMessage}
                 onChange={(e) => setEmailMessage(e.target.value)}
-                placeholder="Add a personal message to include in the email..."
+                placeholder="Uses default from Invoice Settings if empty. Edit to override."
                 rows={4}
               />
             </div>

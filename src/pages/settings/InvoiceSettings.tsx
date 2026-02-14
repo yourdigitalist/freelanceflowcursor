@@ -37,6 +37,10 @@ const MERGE_TAGS = [
 interface InvoiceProfile {
   hourly_rate: number | null;
   invoice_prefix: string | null;
+  invoice_include_year: boolean | null;
+  invoice_number_start: number | null;
+  invoice_number_padding: number | null;
+  invoice_number_reset_yearly: boolean | null;
   invoice_notes_default: string | null;
   invoice_footer: string | null;
   invoice_email_message_default: string | null;
@@ -70,6 +74,8 @@ export default function InvoiceSettings() {
   const [editingTax, setEditingTax] = useState<Tax | null>(null);
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [reminderDaysBefore, setReminderDaysBefore] = useState(1);
+  const [invoiceIncludeYear, setInvoiceIncludeYear] = useState(true);
+  const [invoiceResetYearly, setInvoiceResetYearly] = useState(true);
 
   useEffect(() => {
     if (user) {
@@ -83,7 +89,11 @@ export default function InvoiceSettings() {
     const formData = new FormData(formRef.current);
     const profileData = {
       hourly_rate: parseFloat(formData.get('hourly_rate') as string) || 0,
-      invoice_prefix: formData.get('invoice_prefix') as string || 'INV-',
+      invoice_prefix: (formData.get('invoice_prefix') as string)?.trim() ?? null,
+      invoice_include_year: invoiceIncludeYear,
+      invoice_number_start: Math.max(1, Math.floor(Number(formData.get('invoice_number_start')) || 1)),
+      invoice_number_padding: Math.min(6, Math.max(1, Math.floor(Number(formData.get('invoice_number_padding')) || 4))),
+      invoice_number_reset_yearly: invoiceResetYearly,
       invoice_notes_default: formData.get('invoice_notes_default') as string || null,
       invoice_footer: formData.get('invoice_footer') as string || null,
       invoice_email_message_default: formData.get('invoice_email_message_default') as string || null,
@@ -113,7 +123,7 @@ export default function InvoiceSettings() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('hourly_rate, invoice_prefix, invoice_notes_default, invoice_footer, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_days_before, reminder_subject_default, reminder_body_default')
+        .select('hourly_rate, invoice_prefix, invoice_include_year, invoice_number_start, invoice_number_padding, invoice_number_reset_yearly, invoice_notes_default, invoice_footer, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_days_before, reminder_subject_default, reminder_body_default')
         .eq('user_id', user!.id)
         .maybeSingle();
 
@@ -122,6 +132,8 @@ export default function InvoiceSettings() {
       if (data) {
         setReminderEnabled(!!data.reminder_enabled);
         setReminderDaysBefore(data.reminder_days_before ?? 1);
+        setInvoiceIncludeYear(data.invoice_include_year !== false);
+        setInvoiceResetYearly(data.invoice_number_reset_yearly !== false);
       }
     } catch (error) {
       console.error('Error fetching invoice settings:', error);
@@ -281,27 +293,74 @@ export default function InvoiceSettings() {
             <CardDescription>Default values for new invoices and projects</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="hourly_rate">Default Hourly Rate</Label>
-                <Input
-                  id="hourly_rate"
-                  name="hourly_rate"
-                  type="number"
-                  step="0.01"
-                  defaultValue={profile?.hourly_rate || 0}
-                  placeholder="75.00"
-                />
+            <div className="space-y-2">
+              <Label htmlFor="hourly_rate">Default Hourly Rate</Label>
+              <Input
+                id="hourly_rate"
+                name="hourly_rate"
+                type="number"
+                step="0.01"
+                defaultValue={profile?.hourly_rate || 0}
+                placeholder="75.00"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle>Invoice Number</CardTitle>
+            <CardDescription>
+              How new invoice numbers are generated. Useful for migrations (set starting number) and branding (prefix).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="invoice_prefix">Prefix</Label>
+              <Input
+                id="invoice_prefix"
+                name="invoice_prefix"
+                defaultValue={profile?.invoice_prefix ?? 'INV'}
+                placeholder="INV (leave empty for numbers only)"
+              />
+              <p className="text-xs text-muted-foreground">Optional. Default: INV. Leave empty for plain numbers.</p>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div>
+                <Label className="text-base">Include year</Label>
+                <p className="text-xs text-muted-foreground">Add YYYY to the number (e.g. INV2026-0001)</p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="invoice_prefix">Invoice Number Prefix</Label>
-                <Input
-                  id="invoice_prefix"
-                  name="invoice_prefix"
-                  defaultValue={profile?.invoice_prefix || 'INV-'}
-                  placeholder="INV-"
-                />
+              <Switch checked={invoiceIncludeYear} onCheckedChange={setInvoiceIncludeYear} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invoice_number_start">Starting number</Label>
+              <Input
+                id="invoice_number_start"
+                name="invoice_number_start"
+                type="number"
+                min={1}
+                defaultValue={profile?.invoice_number_start ?? 1}
+              />
+              <p className="text-xs text-muted-foreground">Next invoice will use this if sequence is reset.</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invoice_number_padding">Number padding</Label>
+              <Input
+                id="invoice_number_padding"
+                name="invoice_number_padding"
+                type="number"
+                min={1}
+                max={6}
+                defaultValue={profile?.invoice_number_padding ?? 4}
+              />
+              <p className="text-xs text-muted-foreground">Digits (1–6). 4 → 0001, 6 → 000001.</p>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div>
+                <Label className="text-base">Reset sequence yearly</Label>
+                <p className="text-xs text-muted-foreground">Start from starting number each year</p>
               </div>
+              <Switch checked={invoiceResetYearly} onCheckedChange={setInvoiceResetYearly} />
             </div>
           </CardContent>
         </Card>

@@ -346,33 +346,20 @@ serve(async (req) => {
     // Send email with PDF attachment - all user inputs are escaped to prevent XSS
     const safeInvoiceNumber = escapeHtml(invoice.invoice_number);
     const safeMessage = escapeHtml(message);
-    const safeSenderName = escapeHtml(senderName);
-    const totalFormatted = formatCurrency(Number(invoice.total || 0), profile?.currency, profile?.currency_display, profile?.number_format);
-    const safeTotalFormatted = escapeHtml(totalFormatted);
-    
+
     const isReceipt = receipt === true;
+    // Single message only: default from invoice settings or user override in send dialogue (no extra boilerplate)
     const emailHtml = isReceipt
       ? `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #10B981;">Receipt – Invoice ${safeInvoiceNumber}</h2>
-        ${safeMessage ? `<p style="color: #333; white-space: pre-wrap;">${safeMessage}</p>` : ""}
-        <p style="color: #666;">This invoice has been paid. Balance due: <strong>$0</strong>.</p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-        <p style="color: #999; font-size: 12px;">Thank you for your business.</p>
+        ${safeMessage ? `<div style="color: #333; white-space: pre-wrap;">${safeMessage}</div>` : "<p style=\"color: #666;\">This invoice has been paid.</p>"}
       </div>
     `
       : `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #9B63E9;">Invoice ${safeInvoiceNumber}</h2>
-        ${safeMessage ? `<p style="color: #333; white-space: pre-wrap;">${safeMessage}</p>` : ""}
-        <p style="color: #666;">
-          Please find attached your invoice for <strong>${safeTotalFormatted}</strong>.
-        </p>
-        ${invoice.due_date ? `<p style="color: #666;">Payment is due by <strong>${new Date(invoice.due_date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</strong>.</p>` : ""}
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-        <p style="color: #999; font-size: 12px;">
-          This invoice was sent via Flowdesk${safeSenderName ? ` by ${safeSenderName}` : ""}.
-        </p>
+        ${safeMessage ? `<div style="color: #333; white-space: pre-wrap;">${safeMessage}</div>` : "<p style=\"color: #666;\">Please find your invoice attached.</p>"}
       </div>
     `;
 

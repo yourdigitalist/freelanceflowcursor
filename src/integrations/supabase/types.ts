@@ -241,6 +241,12 @@ export type Database = {
           invoice_footer: string | null
           invoice_notes_default: string | null
           invoice_prefix: string | null
+          invoice_include_year: boolean | null
+          invoice_number_start: number | null
+          invoice_number_padding: number | null
+          invoice_number_reset_yearly: boolean | null
+          invoice_number_next: number | null
+          invoice_number_last_year: number | null
           invoice_show_line_description: boolean | null
           invoice_show_quantity: boolean | null
           invoice_show_rate: boolean | null
@@ -300,6 +306,12 @@ export type Database = {
           invoice_footer?: string | null
           invoice_notes_default?: string | null
           invoice_prefix?: string | null
+          invoice_include_year?: boolean | null
+          invoice_number_start?: number | null
+          invoice_number_padding?: number | null
+          invoice_number_reset_yearly?: boolean | null
+          invoice_number_next?: number | null
+          invoice_number_last_year?: number | null
           invoice_show_line_description?: boolean | null
           invoice_show_quantity?: boolean | null
           invoice_show_rate?: boolean | null
@@ -359,6 +371,12 @@ export type Database = {
           invoice_footer?: string | null
           invoice_notes_default?: string | null
           invoice_prefix?: string | null
+          invoice_include_year?: boolean | null
+          invoice_number_start?: number | null
+          invoice_number_padding?: number | null
+          invoice_number_reset_yearly?: boolean | null
+          invoice_number_next?: number | null
+          invoice_number_last_year?: number | null
           invoice_show_line_description?: boolean | null
           invoice_show_quantity?: boolean | null
           invoice_show_rate?: boolean | null

@@ -5,8 +5,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Check, Sparkles, Crown } from 'lucide-react';
+import { Loader2, Check, Sparkles, Crown, RotateCcw } from 'lucide-react';
 import { differenceInDays, format } from 'date-fns';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface SubscriptionProfile {
   plan_type: string | null;
@@ -57,6 +68,7 @@ export default function SubscriptionSettings() {
   const [profile, setProfile] = useState<SubscriptionProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     if (user) fetchProfile();
@@ -92,14 +104,14 @@ export default function SubscriptionSettings() {
     }
     setUpgrading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        toast({ title: 'Please sign in again', variant: 'destructive' });
+      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
+      if (sessionError || !session?.access_token) {
+        toast({ title: 'Please sign in again', description: 'Your session may have expired.', variant: 'destructive' });
         setUpgrading(false);
         return;
       }
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       if (!supabaseUrl || !anonKey) {
         toast({ title: 'App config error', description: 'Missing Supabase URL or key', variant: 'destructive' });
         setUpgrading(false);
@@ -149,13 +161,13 @@ export default function SubscriptionSettings() {
       return;
     }
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        toast({ title: 'Please sign in again', variant: 'destructive' });
+      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
+      if (sessionError || !session?.access_token) {
+        toast({ title: 'Please sign in again', description: 'Your session may have expired.', variant: 'destructive' });
         return;
       }
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       if (!supabaseUrl || !anonKey) {
         toast({ title: 'App config error', variant: 'destructive' });
         return;
@@ -188,6 +200,33 @@ export default function SubscriptionSettings() {
         description: error instanceof Error ? error.message : 'Something went wrong',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleResetToTrial = async () => {
+    if (!user?.id) return;
+    setResetting(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          subscription_status: 'trial',
+          stripe_customer_id: null,
+          stripe_subscription_id: null,
+          plan_type: null,
+        })
+        .eq('user_id', user.id);
+      if (error) throw error;
+      toast({ title: 'Reset to trial', description: 'You can try upgrading again.' });
+      await fetchProfile();
+    } catch (e: unknown) {
+      toast({
+        title: 'Reset failed',
+        description: e instanceof Error ? e.message : 'Could not reset',
+        variant: 'destructive',
+      });
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -238,16 +277,17 @@ export default function SubscriptionSettings() {
                 <Sparkles className="h-5 w-5 text-primary" />
                 <div>
                   <p className="font-medium">
-                    {daysLeft === 0 
-                      ? "Your trial ends today!" 
-                      : `${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining in your trial`
-                    }
+                    You're on the <strong>{profile?.plan_type === 'pro_annual' ? 'Early Access Annual' : 'Early Access Monthly'}</strong> plan (15-day free trial).
                   </p>
-                  {profile?.trial_end_date && (
-                    <p className="text-sm text-muted-foreground">
-                      Trial expires on {format(new Date(profile.trial_end_date), 'MMMM d, yyyy')}
-                    </p>
-                  )}
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {daysLeft === 0 
+                      ? "Your trial ends today." 
+                      : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left in your trial`
+                    }
+                    {profile?.trial_end_date && (
+                      <> · Trial ends {format(new Date(profile.trial_end_date), 'MMMM d, yyyy')}</>
+                    )}
+                  </p>
                 </div>
               </div>
             </div>
@@ -261,29 +301,58 @@ export default function SubscriptionSettings() {
           {isActive && (
             <div className="space-y-2">
               <p className="font-medium">
-                {profile?.plan_type === 'pro_monthly' ? 'Early Access Monthly' : 'Early Access Annual'}
+                You're on the <strong>{profile?.plan_type === 'pro_monthly' ? 'Early Access Monthly' : 'Early Access Annual'}</strong> plan.
               </p>
               <p className="text-sm text-muted-foreground">
                 Your subscription is active. Thank you for being a member!
               </p>
             </div>
           )}
+          <div className="mt-4 pt-4 border-t">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={resetting}>
+                  {resetting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
+                  Reset to trial (for testing)
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reset to trial?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This clears your billing link so you can go through the upgrade flow again. Use only for testing. Your Stripe subscription is not changed.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleResetToTrial}>Reset</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Upgrade Options - show when on trial or not active */}
-      {(isOnTrial || !isActive) && (
-        <div>
-          <h3 className="text-lg font-semibold mb-4">Subscribe</h3>
-          <div className="grid gap-4 md:grid-cols-2">
-            {plans.map((plan) => (
-              <Card 
+      {/* Plans – always visible; show which one the user is on and allow switch / subscribe */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Plans</h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          {plans.map((plan) => {
+            const isCurrentPlan = (isActive || isOnTrial) && profile?.plan_type === plan.id;
+            const hasBillingAccount = !!profile?.stripe_customer_id;
+            return (
+              <Card
                 key={plan.id}
-                className={`border-2 ${plan.highlighted ? 'border-primary' : 'border-transparent'}`}
+                className={`border-2 ${isCurrentPlan ? 'border-primary' : plan.highlighted && !isCurrentPlan ? 'border-primary/50' : 'border-transparent'}`}
               >
-                {plan.highlighted && (
+                {plan.highlighted && !isCurrentPlan && (
                   <div className="bg-primary text-primary-foreground text-xs font-medium text-center py-1">
                     Best Value
+                  </div>
+                )}
+                {isCurrentPlan && (
+                  <div className="bg-primary text-primary-foreground text-xs font-medium text-center py-1">
+                    Your plan
                   </div>
                 )}
                 <CardHeader>
@@ -302,45 +371,71 @@ export default function SubscriptionSettings() {
                       </li>
                     ))}
                   </ul>
-                  <Button 
-                    className="w-full" 
-                    variant={plan.highlighted ? 'default' : 'outline'}
-                    onClick={() => handleUpgrade(plan.id)}
-                    disabled={upgrading || !plan.priceId}
-                  >
-                    {upgrading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Start 15-day free trial
-                  </Button>
+                  {isCurrentPlan ? (
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={handleManageSubscription}
+                      disabled={!hasBillingAccount}
+                    >
+                      Manage plan
+                    </Button>
+                  ) : hasBillingAccount ? (
+                    <Button
+                      className="w-full"
+                      variant={plan.highlighted ? 'default' : 'outline'}
+                      onClick={handleManageSubscription}
+                    >
+                      Switch to this plan
+                    </Button>
+                  ) : (
+                    <Button
+                      className="w-full"
+                      variant={plan.highlighted ? 'default' : 'outline'}
+                      onClick={() => handleUpgrade(plan.id)}
+                      disabled={upgrading || !plan.priceId}
+                    >
+                      {upgrading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Start 15-day free trial
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
-            ))}
-          </div>
+            );
+          })}
         </div>
-      )}
+      </div>
 
-      {/* Manage Subscription - only when we have a Stripe customer (e.g. after checkout) */}
-      {(isActive || (isOnTrial && profile?.stripe_customer_id)) && (
-        <Card className="border-0 shadow-sm">
-          <CardHeader>
-            <CardTitle>Manage Subscription</CardTitle>
-            <CardDescription>Update your payment method or cancel</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-3">
-              Update your payment method, view invoices, or cancel your subscription in the Stripe portal.
-            </p>
-            {profile?.stripe_customer_id ? (
+      {/* Manage Subscription – standard for SaaS: link to Stripe Customer Portal (cancel, update payment, invoices) */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader>
+          <CardTitle>Manage billing</CardTitle>
+          <CardDescription>
+            Update payment method, view invoices, or cancel in Stripe
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {profile?.stripe_customer_id ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Open the Stripe billing portal to update your payment method, download invoices, or cancel your subscription.
+              </p>
               <Button variant="outline" onClick={handleManageSubscription}>
                 Open billing portal
               </Button>
-            ) : (
+            </>
+          ) : (
+            <>
               <p className="text-sm text-muted-foreground">
-                Choose a plan above to add a payment method; then you can manage it here.
+                Subscribe to a plan above and complete checkout. After that, you can manage or cancel your subscription here.
               </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
+              <Button variant="outline" disabled>
+                Open billing portal
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

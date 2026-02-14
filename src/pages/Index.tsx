@@ -305,7 +305,7 @@ export default function Index() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm font-medium text-foreground">
-                  15-day free trial. No credit card required.
+                  15-day free trial. You won't be charged until it ends.
                 </p>
                 <p className="text-sm font-semibold">Includes:</p>
                 <ul className="space-y-2 text-sm text-muted-foreground">
@@ -370,7 +370,7 @@ export default function Index() {
             </li>
             <li className="flex items-center justify-center gap-2">
               <Check className="h-5 w-5 text-primary shrink-0" />
-              No credit card required
+              You won't be charged until your trial ends
             </li>
             <li className="flex items-center justify-center gap-2">
               <Check className="h-5 w-5 text-primary shrink-0" />

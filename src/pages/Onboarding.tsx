@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getBrowserCountry } from '@/lib/locale-data';
 import { countries as countryList } from '@/components/ui/phone-input';
 import {
@@ -22,270 +22,185 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Check, Sparkles, Loader2, ArrowRight, Building2, User } from 'lucide-react';
-import { PhoneInput } from '@/components/ui/phone-input';
-import { DEFAULT_STATUSES } from '@/components/tasks/types';
+import { Check, Sparkles, Loader2, ArrowRight, Building2, User, FileText, FolderKanban, Timer } from 'lucide-react';
+import { currencies } from '@/lib/locale-data';
 
-type Step = 'plan' | 'profile' | 'business';
+const STRIPE_PRICE_MONTHLY = import.meta.env.VITE_STRIPE_PRICE_MONTHLY as string | undefined;
+const STRIPE_PRICE_ANNUAL = import.meta.env.VITE_STRIPE_PRICE_ANNUAL as string | undefined;
+
+type Step = 'role' | 'useFirst' | 'optional' | 'plan';
+
+const roles = [
+  { id: 'freelancer', label: 'Freelancer' },
+  { id: 'consultant', label: 'Consultant' },
+  { id: 'designer', label: 'Designer' },
+];
+
+const useFirstOptions = [
+  { id: 'invoices', label: 'Invoices', icon: FileText },
+  { id: 'projects', label: 'Projects', icon: FolderKanban },
+  { id: 'time', label: 'Time tracking', icon: Timer },
+];
 
 const plans = [
   {
-    id: 'free_trial',
-    name: 'Free Trial',
-    price: '$0',
-    period: '14 days',
-    description: 'Try all features free for 14 days',
-    features: [
-      'Unlimited projects',
-      'Time tracking',
-      'Invoice generation',
-      'Client management',
-    ],
-    highlighted: false,
-  },
-  {
     id: 'pro_monthly',
-    name: 'Pro Monthly',
-    price: '$45',
+    name: 'Monthly',
+    price: '$29',
     period: '/month',
-    description: 'Full access to all features',
-    features: [
-      'Everything in Free Trial',
-      'Priority support',
-      'Custom branding',
-      'Advanced reporting',
-    ],
-    highlighted: true,
+    priceId: STRIPE_PRICE_MONTHLY,
+    description: 'Full access. 15-day free trial.',
   },
   {
     id: 'pro_annual',
-    name: 'Pro Annual',
-    price: '$360',
+    name: 'Annual',
+    price: '$290',
     period: '/year',
-    description: 'Save $180 with annual billing',
-    features: [
-      'Everything in Pro',
-      '2 months free',
-      'Early access to new features',
-      'Dedicated account manager',
-    ],
-    highlighted: false,
+    priceId: STRIPE_PRICE_ANNUAL,
+    description: '2 months free. 15-day free trial.',
+    highlighted: true,
   },
 ];
 
 export default function Onboarding() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
-  const [step, setStep] = useState<Step>('plan');
-  const [selectedPlan, setSelectedPlan] = useState('free_trial');
-  const [loading, setLoading] = useState(false);
-  
-  // Profile data
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('');
-  
-  // Business data
+  const [step, setStep] = useState<Step>('role');
+  const [selectedRole, setSelectedRole] = useState<string>('');
+  const [selectedUseFirst, setSelectedUseFirst] = useState<string>('');
   const [businessName, setBusinessName] = useState('');
-  const [businessEmail, setBusinessEmail] = useState('');
-  const [businessPhone, setBusinessPhone] = useState('');
-  const [businessStreet, setBusinessStreet] = useState('');
-  const [businessStreet2, setBusinessStreet2] = useState('');
-  const [businessCity, setBusinessCity] = useState('');
-  const [businessState, setBusinessState] = useState('');
-  const [businessPostalCode, setBusinessPostalCode] = useState('');
-  const [businessCountry, setBusinessCountry] = useState('');
-  const [taxId, setTaxId] = useState('');
+  const [currency, setCurrency] = useState('USD');
+  const [selectedPlanId, setSelectedPlanId] = useState('pro_annual');
+  const [loading, setLoading] = useState(false);
+  const [completingCheckout, setCompletingCheckout] = useState(false);
 
-  // Prefill first/last name from user_metadata or profile when entering profile step
-  const loadProfileForPrefill = useCallback(async () => {
-    if (!user) return;
-    const meta = user.user_metadata as Record<string, unknown> | undefined;
-    const fromMeta = meta?.first_name != null || meta?.last_name != null;
-    if (fromMeta) {
-      setFirstName((meta?.first_name as string) ?? '');
-      setLastName((meta?.last_name as string) ?? '');
-      return;
-    }
-    if (meta?.full_name && typeof meta.full_name === 'string') {
-      const parts = (meta.full_name as string).trim().split(/\s+/);
-      if (parts.length >= 1) setFirstName(parts[0]);
-      if (parts.length >= 2) setLastName(parts.slice(1).join(' '));
-      return;
-    }
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('first_name, last_name')
-      .eq('user_id', user.id)
-      .maybeSingle();
-    if (profile?.first_name) setFirstName(profile.first_name);
-    if (profile?.last_name) setLastName(profile.last_name);
-  }, [user]);
-
+  // Handle return from Stripe Checkout: ?checkout_success=1&session_id=...
   useEffect(() => {
-    if (step === 'profile') loadProfileForPrefill();
-  }, [step, loadProfileForPrefill]);
-
-  // Auto-detect country when reaching business step
-  useEffect(() => {
-    if (step === 'business' && !businessCountry) {
-      const code = getBrowserCountry();
-      const match = countryList.find((c) => c.code === code);
-      if (match) setBusinessCountry(match.name);
+    const success = searchParams.get('checkout_success');
+    const sessionId = searchParams.get('session_id');
+    if (success === '1' && sessionId && user && !completingCheckout) {
+      setCompletingCheckout(true);
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.refreshSession();
+          if (!session?.access_token) {
+            toast({ title: 'Please sign in again', variant: 'destructive' });
+            setCompletingCheckout(false);
+            return;
+          }
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+          if (!supabaseUrl || !anonKey) {
+            toast({ title: 'App config error', variant: 'destructive' });
+            setCompletingCheckout(false);
+            return;
+          }
+          const res = await fetch(`${supabaseUrl}/functions/v1/complete-onboarding-after-checkout`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+              apikey: anonKey,
+            },
+            body: JSON.stringify({ session_id: sessionId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            toast({ title: 'Setup incomplete', description: data?.error || 'Please try again.', variant: 'destructive' });
+            setCompletingCheckout(false);
+            return;
+          }
+          setSearchParams({});
+          navigate('/dashboard', { replace: true });
+        } catch (e) {
+          toast({ title: 'Something went wrong', variant: 'destructive' });
+        } finally {
+          setCompletingCheckout(false);
+        }
+      })();
     }
-  }, [step, businessCountry]);
+  }, [searchParams, user, completingCheckout, navigate, setSearchParams, toast]);
 
-  const handlePlanSelect = (planId: string) => {
-    setSelectedPlan(planId);
-  };
+  const stepsOrder: Step[] = ['role', 'useFirst', 'optional', 'plan'];
+  const currentStepIndex = stepsOrder.indexOf(step);
 
-  const handleContinueToProfile = () => {
-    setStep('profile');
-  };
-
-  const canContinueFromProfile = Boolean(firstName?.trim() && lastName?.trim());
-
-  const handleContinueToBusiness = () => {
-    if (!canContinueFromProfile) {
-      toast({
-        title: 'Name required',
-        description: 'Please enter your first and last name',
-        variant: 'destructive',
-      });
-      return;
-    }
-    setStep('business');
-  };
-
-  const canCompleteBusiness = Boolean(
-    businessName?.trim() || businessEmail?.trim() || businessPhone?.trim()
-  );
-
-  const handleComplete = async () => {
-    if (!canCompleteBusiness) {
-      toast({
-        title: 'Business details required',
-        description: 'Please enter at least a business name or one contact (email or phone).',
-        variant: 'destructive',
-      });
+  const handleContinueToPayment = async () => {
+    const plan = plans.find((p) => p.id === selectedPlanId);
+    const priceId = plan?.priceId;
+    if (!priceId) {
+      toast({ title: 'Stripe not configured', variant: 'destructive' });
       return;
     }
     setLoading(true);
     try {
-      const trialEndDate = new Date();
-      trialEndDate.setDate(trialEndDate.getDate() + 14);
-      
-      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
-      const profileData: Record<string, unknown> = {
-        first_name: firstName.trim() || null,
-        last_name: lastName.trim() || null,
-        full_name: fullName || null,
-        phone,
-        business_name: businessName || null,
-        business_email: businessEmail || null,
-        business_phone: businessPhone || null,
-        business_street: businessStreet || null,
-        business_street2: businessStreet2 || null,
-        business_city: businessCity || null,
-        business_state: businessState || null,
-        business_postal_code: businessPostalCode || null,
-        business_country: businessCountry || null,
-        business_address: [businessStreet, businessStreet2, businessCity, businessState, businessPostalCode, businessCountry].filter(Boolean).join('\n') || null,
-        tax_id: taxId || null,
-        plan_type: selectedPlan,
-        subscription_status: selectedPlan === 'free_trial' ? 'trial' : 'active',
-        trial_start_date: new Date().toISOString(),
-        trial_end_date: selectedPlan === 'free_trial' ? trialEndDate.toISOString() : null,
-        onboarding_completed: false,
-      };
-
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update(profileData)
-        .eq('user_id', user!.id);
-
-      if (profileError) throw profileError;
-
-      const sampleProject = {
-        user_id: user!.id,
-        name: 'Getting started with FreelanceFlow',
-        description: 'Sample project – next steps for FreelanceFlow',
-        status: 'active',
-        budget: null,
-        hourly_rate: null,
-        client_id: null,
-      };
-
-      const { data: projectRow, error: projectError } = await supabase
-        .from('projects')
-        .insert(sampleProject)
-        .select('id')
-        .single();
-
-      if (projectError) throw projectError;
-      const projectId = projectRow!.id;
-
-      const statusRows = DEFAULT_STATUSES.map((s, i) => ({
-        ...s,
-        project_id: projectId,
-        user_id: user!.id,
-        position: i,
-      }));
-      const { data: insertedStatuses, error: statusError } = await supabase
-        .from('project_statuses')
-        .insert(statusRows)
-        .select('id, position');
-
-      if (statusError) throw statusError;
-      const firstStatusId = insertedStatuses?.sort((a, b) => (a.position ?? 0) - (b.position ?? 0))[0]?.id;
-
-      const sampleTaskTitles = [
-        'Create your first invoice',
-        'Update your business settings',
-        'Add your bank details',
-        'Add a client',
-        'Create a project',
-        'Log time',
-      ];
-      const tasksToInsert = sampleTaskTitles.map((title, i) => ({
-        user_id: user!.id,
-        project_id: projectId,
-        title,
-        description: null,
-        status_id: firstStatusId ?? null,
-        priority: 'medium',
-        due_date: null,
-        estimated_hours: null,
-        position: i,
-      }));
-
-      const { error: tasksError } = await supabase.from('tasks').insert(tasksToInsert);
-      if (tasksError) throw tasksError;
-
-      const { error: completeError } = await supabase
-        .from('profiles')
-        .update({ onboarding_completed: true })
-        .eq('user_id', user!.id);
-
-      if (completeError) throw completeError;
-
-      toast({ title: 'Welcome! Your account is ready.' });
-      navigate('/dashboard');
-    } catch (error: any) {
-      toast({
-        title: 'Error completing setup',
-        description: error.message,
-        variant: 'destructive',
+      await saveOptionalProfile();
+      const { data: { session } } = await supabase.auth.refreshSession();
+      if (!session?.access_token) {
+        toast({ title: 'Please sign in again', variant: 'destructive' });
+        setLoading(false);
+        return;
+      }
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      if (!supabaseUrl || !anonKey) {
+        toast({ title: 'App config error', variant: 'destructive' });
+        setLoading(false);
+        return;
+      }
+      const baseUrl = window.location.origin;
+      const successUrl = `${baseUrl}/onboarding?checkout_success=1&session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${baseUrl}/onboarding`;
+      const res = await fetch(`${supabaseUrl}/functions/v1/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: anonKey,
+        },
+        body: JSON.stringify({ priceId, successUrl, cancelUrl }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const errMsg = data?.error || data?.message || res.statusText || `Checkout failed (${res.status})`;
+        toast({ title: 'Error starting checkout', description: String(errMsg), variant: 'destructive' });
+        setLoading(false);
+        return;
+      }
+      const url = data?.url ?? data?.data?.url;
+      if (url && typeof url === 'string') {
+        window.location.href = url;
+        return;
+      }
+      toast({ title: 'No checkout URL returned', variant: 'destructive' });
+    } catch (e) {
+      toast({ title: 'Something went wrong', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   };
 
+  const saveOptionalProfile = async () => {
+    if (!user?.id) return;
+    const updates: Record<string, unknown> = {};
+    if (businessName.trim()) updates.business_name = businessName.trim();
+    if (currency) updates.currency = currency;
+    if (Object.keys(updates).length === 0) return;
+    await supabase.from('profiles').update(updates).eq('user_id', user.id);
+  };
+
+  if (completingCheckout) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+        <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">Setting up your account...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-2">
@@ -297,165 +212,90 @@ export default function Onboarding() {
         </div>
       </header>
 
-      {/* Progress indicator */}
       <div className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-center gap-2">
-          <div className={`flex items-center gap-2 ${step === 'plan' ? 'text-primary' : 'text-muted-foreground'}`}>
-              <div className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-medium ${step === 'plan' ? 'bg-primary text-primary-foreground' : 'bg-primary text-primary-foreground'}`}>
-                {step === 'plan' ? '1' : <Check className="h-4 w-4" />}
+            {stepsOrder.map((s, i) => (
+              <div key={s} className="flex items-center gap-2">
+                <div
+                  className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                    step === s ? 'bg-primary text-primary-foreground' : i < currentStepIndex ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                  }`}
+                >
+                  {i < currentStepIndex ? <Check className="h-4 w-4" /> : i + 1}
+                </div>
+                {i < stepsOrder.length - 1 && <div className="h-px w-6 bg-border" />}
               </div>
-              <span className="text-sm font-medium hidden sm:inline">Choose Plan</span>
-            </div>
-            <div className="h-px w-8 bg-border" />
-            <div className={`flex items-center gap-2 ${step === 'profile' ? 'text-primary' : 'text-muted-foreground'}`}>
-              <div className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-medium ${step === 'profile' ? 'bg-primary text-primary-foreground' : step === 'business' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                {step === 'business' ? <Check className="h-4 w-4" /> : '2'}
-              </div>
-              <span className="text-sm font-medium hidden sm:inline">Your Profile</span>
-            </div>
-            <div className="h-px w-8 bg-border" />
-            <div className={`flex items-center gap-2 ${step === 'business' ? 'text-primary' : 'text-muted-foreground'}`}>
-              <div className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-medium ${step === 'business' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                3
-              </div>
-              <span className="text-sm font-medium hidden sm:inline">Business Details</span>
-            </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Main content */}
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
-        {step === 'plan' && (
+      <main className="flex-1 container mx-auto px-4 py-8 max-w-2xl">
+        {step === 'role' && (
           <div className="space-y-6">
             <div className="text-center">
-              <h1 className="text-3xl font-bold">Choose your plan</h1>
-              <p className="text-muted-foreground mt-2">
-                Start with a free trial or get full access immediately
-              </p>
+              <h1 className="text-2xl font-bold">What do you do?</h1>
+              <p className="text-muted-foreground mt-1">We’ll tailor the experience for you.</p>
             </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              {plans.map((plan) => (
+            <div className="grid gap-3">
+              {roles.map((r) => (
                 <Card
-                  key={plan.id}
-                  className={`cursor-pointer transition-all border-2 ${
-                    selectedPlan === plan.id
-                      ? 'border-primary shadow-lg'
-                      : 'border-transparent hover:border-border'
-                  } ${plan.highlighted ? 'ring-2 ring-primary/20' : ''}`}
-                  onClick={() => handlePlanSelect(plan.id)}
+                  key={r.id}
+                  className={`cursor-pointer transition-all border-2 ${selectedRole === r.id ? 'border-primary' : 'border-transparent hover:border-border'}`}
+                  onClick={() => setSelectedRole(r.id)}
                 >
-                  <CardHeader>
-                    {plan.highlighted && (
-                      <div className="text-xs font-medium text-primary uppercase tracking-wide mb-2">
-                        Most Popular
-                      </div>
-                    )}
-                    <CardTitle className="flex items-baseline gap-1">
-                      <span className="text-3xl font-bold">{plan.price}</span>
-                      <span className="text-muted-foreground text-sm">{plan.period}</span>
-                    </CardTitle>
-                    <CardDescription>{plan.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-2">
-                      {plan.features.map((feature, i) => (
-                        <li key={i} className="flex items-center gap-2 text-sm">
-                          <Check className="h-4 w-4 text-primary" />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
+                  <CardContent className="py-4">{r.label}</CardContent>
+                </Card>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={() => setStep('useFirst')} disabled={!selectedRole}>
+                Continue <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 'useFirst' && (
+          <div className="space-y-6">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold">What do you want to use first?</h1>
+              <p className="text-muted-foreground mt-1">You can use everything—we’ll highlight this.</p>
+            </div>
+            <div className="grid gap-3">
+              {useFirstOptions.map((opt) => (
+                <Card
+                  key={opt.id}
+                  className={`cursor-pointer transition-all border-2 ${selectedUseFirst === opt.id ? 'border-primary' : 'border-transparent hover:border-border'}`}
+                  onClick={() => setSelectedUseFirst(opt.id)}
+                >
+                  <CardContent className="py-4 flex items-center gap-3">
+                    <opt.icon className="h-5 w-5 text-primary" />
+                    {opt.label}
                   </CardContent>
                 </Card>
               ))}
             </div>
-
-            <div className="flex justify-center">
-              <Button size="lg" onClick={handleContinueToProfile} className="px-8">
-                Continue
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {step === 'profile' && (
-          <div className="space-y-6 max-w-md mx-auto">
-            <div className="text-center">
-              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <User className="h-6 w-6 text-primary" />
-              </div>
-              <h1 className="text-3xl font-bold">Your Profile</h1>
-              <p className="text-muted-foreground mt-2">
-                Tell us a bit about yourself
-              </p>
-            </div>
-
-            <Card className="border-0 shadow-sm">
-              <CardContent className="pt-6 space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name *</Label>
-                    <Input
-                      id="firstName"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      placeholder="John"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name *</Label>
-                    <Input
-                      id="lastName"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      placeholder="Doe"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <PhoneInput
-                    id="phone"
-                    value={phone}
-                    onChange={setPhone}
-                    placeholder="Phone number"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
             <div className="flex justify-between">
-              <Button variant="ghost" onClick={() => setStep('plan')}>
-                Back
-              </Button>
-              <Button onClick={handleContinueToBusiness} disabled={!canContinueFromProfile}>
-                Continue
-                <ArrowRight className="ml-2 h-4 w-4" />
+              <Button variant="ghost" onClick={() => setStep('role')}>Back</Button>
+              <Button onClick={() => setStep('optional')} disabled={!selectedUseFirst}>
+                Continue <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
           </div>
         )}
 
-        {step === 'business' && (
-          <div className="space-y-6 max-w-md mx-auto">
+        {step === 'optional' && (
+          <div className="space-y-6">
             <div className="text-center">
-              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <Building2 className="h-6 w-6 text-primary" />
-              </div>
-              <h1 className="text-3xl font-bold">Business Details</h1>
-              <p className="text-muted-foreground mt-2">
-                This information will appear on your invoices
-              </p>
+              <h1 className="text-2xl font-bold">Optional: your business</h1>
+              <p className="text-muted-foreground mt-1">You can change this anytime in Settings.</p>
             </div>
-
             <Card className="border-0 shadow-sm">
               <CardContent className="pt-6 space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="businessName">Business / Company Name</Label>
+                  <Label htmlFor="businessName">Business name</Label>
                   <Input
                     id="businessName"
                     value={businessName}
@@ -464,115 +304,83 @@ export default function Onboarding() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="businessEmail">Business Email</Label>
-                  <Input
-                    id="businessEmail"
-                    type="email"
-                    value={businessEmail}
-                    onChange={(e) => setBusinessEmail(e.target.value)}
-                    placeholder="billing@company.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="businessPhone">Business Phone</Label>
-                  <PhoneInput
-                    id="businessPhone"
-                    value={businessPhone}
-                    onChange={setBusinessPhone}
-                    placeholder="Phone number"
-                    className="w-full min-w-0"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Business Address</Label>
-                  <Input
-                    value={businessStreet}
-                    onChange={(e) => setBusinessStreet(e.target.value)}
-                    placeholder="Street"
-                  />
-                  <Input
-                    value={businessStreet2}
-                    onChange={(e) => setBusinessStreet2(e.target.value)}
-                    placeholder="Street 2 / Apt, Suite"
-                  />
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Input
-                      value={businessCity}
-                      onChange={(e) => setBusinessCity(e.target.value)}
-                      placeholder="City"
-                    />
-                    <Input
-                      value={businessState}
-                      onChange={(e) => setBusinessState(e.target.value)}
-                      placeholder="State / Province"
-                    />
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Input
-                      value={businessPostalCode}
-                      onChange={(e) => setBusinessPostalCode(e.target.value)}
-                      placeholder="ZIP / Postal Code"
-                    />
-                    <div className="space-y-2">
-                      <Label className="sr-only">Country</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            className="w-full justify-between font-normal"
-                          >
-                            <span className="truncate">
-                              {businessCountry || 'Select country'}
-                            </span>
-                            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                          <Command>
-                            <CommandInput placeholder="Search country..." />
-                            <CommandList>
-                              <CommandEmpty>No country found.</CommandEmpty>
-                              {countryList.map((c) => (
-                                <CommandItem
-                                  key={c.code}
-                                  value={`${c.name} ${c.code}`}
-                                  onSelect={() => setBusinessCountry(c.name)}
-                                >
-                                  <span className="mr-2">{c.flag}</span>
-                                  <span>{c.name}</span>
-                                </CommandItem>
-                              ))}
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="taxId">Tax ID / VAT Number</Label>
-                  <Input
-                    id="taxId"
-                    value={taxId}
-                    onChange={(e) => setTaxId(e.target.value)}
-                    placeholder="XX-XXXXXXX"
-                  />
+                  <Label>Currency</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-between font-normal">
+                        <span>{currencies.find((c) => c.value === currency)?.label?.split(' - ')[0] || currency}</span>
+                        <ChevronDown className="h-4 w-4 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search currency..." />
+                        <CommandList>
+                          <CommandEmpty>No currency found.</CommandEmpty>
+                          {currencies.slice(0, 80).map((c) => (
+                            <CommandItem key={c.value} value={`${c.value} ${c.label}`} onSelect={() => setCurrency(c.value)}>
+                              {c.label}
+                            </CommandItem>
+                          ))}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </CardContent>
             </Card>
-
-            <p className="text-xs text-muted-foreground text-center">
-              You can update these details anytime in Settings
-            </p>
-
             <div className="flex justify-between">
-              <Button variant="ghost" onClick={() => setStep('profile')}>
-                Back
+              <Button variant="ghost" onClick={() => setStep('useFirst')}>Back</Button>
+              <Button onClick={() => setStep('plan')}>
+                Continue <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-              <Button onClick={handleComplete} disabled={loading || !canCompleteBusiness}>
+            </div>
+          </div>
+        )}
+
+        {step === 'plan' && (
+          <div className="space-y-6">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold">Choose your plan</h1>
+              <p className="text-muted-foreground mt-1">
+                Start your 15-day free trial. Cancel anytime before it ends.
+              </p>
+            </div>
+            <div className="rounded-lg border-2 border-primary/20 bg-primary/5 p-4 text-center text-sm">
+              <p className="font-medium">You won’t be charged today.</p>
+              <p className="text-muted-foreground mt-1">
+                Trial ends 15 days from now. We’ll remind you before then.
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {plans.map((p) => (
+                <Card
+                  key={p.id}
+                  className={`cursor-pointer transition-all border-2 ${
+                    selectedPlanId === p.id ? 'border-primary' : 'border-transparent hover:border-border'
+                  } ${p.highlighted ? 'ring-2 ring-primary/20' : ''}`}
+                  onClick={() => setSelectedPlanId(p.id)}
+                >
+                  {p.highlighted && (
+                    <div className="bg-primary text-primary-foreground text-xs font-medium text-center py-1">
+                      Best value
+                    </div>
+                  )}
+                  <CardHeader>
+                    <CardTitle className="flex items-baseline gap-1">
+                      <span className="text-2xl font-bold">{p.price}</span>
+                      <span className="text-muted-foreground text-sm">{p.period}</span>
+                    </CardTitle>
+                    <CardDescription>{p.description}</CardDescription>
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+            <div className="flex justify-between">
+              <Button variant="ghost" onClick={() => setStep('optional')}>Back</Button>
+              <Button onClick={handleContinueToPayment} disabled={loading || !plans.find((p) => p.id === selectedPlanId)?.priceId}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Complete Setup
+                Continue to payment
               </Button>
             </div>
           </div>

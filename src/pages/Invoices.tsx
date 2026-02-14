@@ -208,12 +208,34 @@ export default function Invoices() {
     }
   };
 
-  const generateInvoiceNumber = () => {
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    return `INV-${year}${month}-${random}`;
+  const getNextInvoiceNumber = async (): Promise<string> => {
+    const { data: profile, error: fetchError } = await supabase
+      .from('profiles')
+      .select('invoice_prefix, invoice_include_year, invoice_number_start, invoice_number_padding, invoice_number_reset_yearly, invoice_number_next, invoice_number_last_year')
+      .eq('user_id', user!.id)
+      .single();
+    if (fetchError || !profile) return `INV-${new Date().getFullYear()}${String(Date.now()).slice(-6)}`;
+    const currentYear = new Date().getFullYear();
+    const start = Math.max(1, Number(profile.invoice_number_start) || 1);
+    const padding = Math.min(6, Math.max(1, Number(profile.invoice_number_padding) || 4));
+    const resetYearly = profile.invoice_number_reset_yearly !== false;
+    const lastYear = profile.invoice_number_last_year ?? null;
+    let next = Number(profile.invoice_number_next);
+    let lastYearToSave = profile.invoice_number_last_year ?? currentYear;
+    if (resetYearly && (lastYear === null || lastYear < currentYear)) {
+      next = start;
+      lastYearToSave = currentYear;
+    } else if (!Number.isInteger(next) || next < start) {
+      next = start;
+    }
+    const prefix = (profile.invoice_prefix ?? 'INV').trim();
+    const includeYear = profile.invoice_include_year !== false;
+    const formatted = prefix + (includeYear ? String(currentYear) : '') + String(next).padStart(padding, '0');
+    await supabase
+      .from('profiles')
+      .update({ invoice_number_next: next + 1, invoice_number_last_year: lastYearToSave })
+      .eq('user_id', user!.id);
+    return formatted;
   };
 
   const projectsForCreateClient = createClientId
@@ -237,9 +259,14 @@ export default function Invoices() {
     const selectedTax = taxes.find(t => t.id === selectedTaxId);
     const clientId = (formData.get('client_id') as string) || null;
     const projectId = (formData.get('project_id') as string) || null;
-    
+    let invoiceNumber: string;
+    try {
+      invoiceNumber = await getNextInvoiceNumber();
+    } catch {
+      invoiceNumber = `INV-${new Date().getFullYear()}${String(Date.now()).slice(-6)}`;
+    }
     const invoiceData = {
-      invoice_number: generateInvoiceNumber(),
+      invoice_number: invoiceNumber,
       client_id: clientId || null,
       project_id: projectId || null,
       issue_date: issueDate,
