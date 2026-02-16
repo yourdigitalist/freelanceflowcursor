@@ -26,9 +26,14 @@ export default function Index() {
             <Briefcase className="h-6 w-6 text-primary" />
             <span className="text-xl font-bold">FreelanceFlow</span>
           </div>
-          <Button asChild className="rounded-full">
-            <Link to="/auth">Start free 15-day trial</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" asChild className="rounded-full">
+              <Link to="/auth">Log in</Link>
+            </Button>
+            <Button asChild className="rounded-full">
+              <Link to="/auth">Start free 15-day trial</Link>
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -56,6 +61,9 @@ export default function Index() {
               </Link>
             </Button>
             <Button size="lg" variant="outline" asChild className="rounded-full">
+              <Link to="/auth">Log in</Link>
+            </Button>
+            <Button size="lg" variant="ghost" asChild className="rounded-full">
               <a href="#how-it-works">See how it works</a>
             </Button>
           </div>

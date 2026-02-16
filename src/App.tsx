@@ -19,6 +19,7 @@ import TimeTracking from "./pages/TimeTracking";
 import Invoices from "./pages/Invoices";
 import InvoiceDetail from "./pages/InvoiceDetail";
 import SettingsLayout from "./pages/SettingsLayout";
+import AdminLayout from "./pages/AdminLayout";
 import UserSettings from "./pages/settings/UserSettings";
 import BusinessSettings from "./pages/settings/BusinessSettings";
 import LocaleSettings from "./pages/settings/LocaleSettings";
@@ -135,7 +136,9 @@ function AppRoutes() {
       <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
       <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
       <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
-      <Route path="/time" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
+      <Route path="/time" element={<Navigate to="/time/timer" replace />} />
+      <Route path="/time/timer" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
+      <Route path="/time/logs" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
       <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
       <Route path="/invoices/:id" element={<ProtectedRoute><InvoiceDetail /></ProtectedRoute>} />
       <Route path="/reviews" element={<ProtectedRoute><ReviewRequests /></ProtectedRoute>} />
@@ -143,6 +146,12 @@ function AppRoutes() {
       <Route path="/review/:token" element={<ClientReview />} />
         <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
       <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
+      <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
+        <Route index element={<Navigate to="help-content" replace />} />
+        <Route path="help-content" element={<HelpContentSettings />} />
+        <Route path="feature-requests" element={<FeatureRequestSettings />} />
+        <Route path="feedback" element={<FeedbackSettings />} />
+      </Route>
       <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>
         <Route index element={<Navigate to="profile" replace />} />
         <Route path="profile" element={<UserSettings />} />
@@ -150,9 +159,6 @@ function AppRoutes() {
         <Route path="invoices" element={<InvoiceSettings />} />
         <Route path="locale" element={<LocaleSettings />} />
         <Route path="notifications" element={<NotificationSettings />} />
-        <Route path="help-content" element={<HelpContentSettings />} />
-        <Route path="feature-requests" element={<FeatureRequestSettings />} />
-        <Route path="feedback" element={<FeedbackSettings />} />
         <Route path="subscription" element={<SubscriptionSettings />} />
         <Route path="storage" element={<StorageSettings />} />
       </Route>

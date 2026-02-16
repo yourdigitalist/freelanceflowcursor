@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { LayoutDashboard, Users, User, FolderKanban, Clock, FileText, LogOut, Menu, ChevronDown, ChevronLeft, Bell, Sparkles, ArrowRight, ChevronUp, Eye, Building2, Globe, CreditCard, HardDrive, HelpCircle } from 'lucide-react';
+import { LayoutDashboard, Users, User, FolderKanban, Clock, FileText, LogOut, Menu, ChevronDown, ChevronLeft, Bell, Sparkles, ArrowRight, ChevronUp, Eye, Building2, Globe, CreditCard, HardDrive, HelpCircle, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TrialBanner } from './TrialBanner';
 interface AppLayoutProps {
@@ -25,6 +25,7 @@ interface Profile {
   email: string | null;
   avatar_url: string | null;
   subscription_status: string | null;
+  is_admin: boolean | null;
 }
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -58,7 +59,7 @@ export function AppLayout({
       if (!user) return;
       const {
         data
-      } = await supabase.from('profiles').select('first_name, last_name, full_name, email, avatar_url, subscription_status').eq('user_id', user.id).single();
+      } = await supabase.from('profiles').select('first_name, last_name, full_name, email, avatar_url, subscription_status, is_admin').eq('user_id', user.id).single();
       setProfile(data);
     };
     if (user) {
@@ -71,6 +72,11 @@ export function AppLayout({
       setProjectsOpen(true);
     }
   }, [location.pathname]);
+  useEffect(() => {
+    if (location.pathname.startsWith('/time')) {
+      setTimeOpen(true);
+    }
+  }, [location.pathname]);
   const handleSignOut = async () => {
     await signOut();
     navigate('/');
@@ -81,6 +87,8 @@ export function AppLayout({
   const userInitials = displayName.slice(0, 2).toUpperCase() || 'U';
   const userName = displayName;
   const isProjectsActive = location.pathname.startsWith('/projects');
+  const [timeOpen, setTimeOpen] = useState(false);
+  const isTimeActive = location.pathname.startsWith('/time');
   const isOnTrial = profile?.subscription_status === 'trial';
   return <div className="min-h-screen bg-background flex flex-col">
       {/* Trial Banner */}
@@ -93,13 +101,16 @@ export function AppLayout({
       <aside className={cn("fixed left-0 z-50 bg-sidebar border-r border-sidebar-border transform transition-all duration-200 lg:translate-x-0 flex flex-col", isOnTrial ? "top-[40px] h-[calc(100vh-40px)]" : "top-0 h-screen", sidebarOpen ? "translate-x-0" : "-translate-x-full", sidebarCollapsed ? "w-16" : "w-64")}>
         {/* Logo Header */}
         <div className="flex h-16 items-center justify-between px-4 border-b border-sidebar-border">
-          {!sidebarCollapsed && <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                <Sparkles className="h-4 w-4 text-primary-foreground" />
-              </div>
-              <span className="text-lg font-semibold text-sidebar-foreground">Freelance Flow</span>
-            </div>}
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground hidden lg:flex" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
+          {sidebarCollapsed ? (
+            <Link to="/dashboard" className="flex flex-1 justify-center lg:justify-start" onClick={() => setSidebarOpen(false)}>
+              <img src="/lance-icon.png" alt="Lance" className="h-9 w-9 rounded-lg object-contain shrink-0" />
+            </Link>
+          ) : (
+            <Link to="/dashboard" className="flex items-center gap-2 min-w-0" onClick={() => setSidebarOpen(false)}>
+              <img src="/lance-logo.png" alt="Lance" className="h-8 object-contain object-left" />
+            </Link>
+          )}
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground hidden lg:flex shrink-0" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
             <ChevronLeft className={cn("h-4 w-4 transition-transform", sidebarCollapsed && "rotate-180")} />
           </Button>
         </div>
@@ -137,10 +148,32 @@ export function AppLayout({
               </CollapsibleContent>}
           </Collapsible>
 
-          <Link to="/time" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", location.pathname === '/time' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <Clock className={cn("h-5 w-5", location.pathname === '/time' && "text-primary")} />
-            {!sidebarCollapsed && 'Time'}
-          </Link>
+          {/* Time with sub-items: Timer, Logs */}
+          {sidebarCollapsed ? (
+            <Link to="/time/timer" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", isTimeActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+              <Clock className={cn("h-5 w-5", isTimeActive && "text-primary")} />
+            </Link>
+          ) : (
+            <Collapsible open={timeOpen} onOpenChange={setTimeOpen}>
+              <CollapsibleTrigger asChild>
+                <button className={cn("flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", isTimeActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+                  <div className="flex items-center gap-3">
+                    <Clock className={cn("h-5 w-5", isTimeActive && "text-primary")} />
+                    Time
+                  </div>
+                  <ChevronDown className={cn("h-4 w-4 transition-transform", timeOpen && "rotate-180")} />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pl-8 space-y-1 mt-1">
+                <Link to="/time/timer" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/time/timer' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
+                  Timer
+                </Link>
+                <Link to="/time/logs" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/time/logs' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
+                  Logs
+                </Link>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
           <Link to="/invoices" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", location.pathname === '/invoices' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
             <FileText className={cn("h-5 w-5", location.pathname === '/invoices' && "text-primary")} />
             {!sidebarCollapsed && 'Invoices'}
@@ -148,10 +181,6 @@ export function AppLayout({
           <Link to="/reviews" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", location.pathname === '/reviews' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
             <Eye className={cn("h-5 w-5", location.pathname === '/reviews' && "text-primary")} />
             {!sidebarCollapsed && 'Reviews'}
-          </Link>
-          <Link to="/help" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", location.pathname === '/help' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <HelpCircle className={cn("h-5 w-5", location.pathname === '/help' && "text-primary")} />
-            {!sidebarCollapsed && 'Help'}
           </Link>
         </nav>
 
@@ -241,6 +270,14 @@ export function AppLayout({
                   Help Center
                 </Link>
               </DropdownMenuItem>
+              {profile?.is_admin === true && (
+                <DropdownMenuItem asChild>
+                  <Link to="/admin" className="cursor-pointer">
+                    <ShieldCheck className="mr-2 h-4 w-4" />
+                    Admin
+                  </Link>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem asChild>
                 <Link to="/settings/subscription" className="cursor-pointer">
                   <CreditCard className="mr-2 h-4 w-4" />

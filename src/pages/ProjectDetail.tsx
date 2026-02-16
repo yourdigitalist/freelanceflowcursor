@@ -193,12 +193,14 @@ export default function ProjectDetail() {
     try {
       const { data, error } = await supabase
         .from('time_entries')
-        .select('duration_minutes')
+        .select('duration_minutes, total_duration_seconds')
         .eq('project_id', id);
 
       if (error) throw error;
-      const totalMinutes = data?.reduce((sum, e) => sum + (e.duration_minutes || 0), 0) || 0;
-      setTotalHours(totalMinutes / 60);
+      const toHours = (e: { duration_minutes?: number | null; total_duration_seconds?: number | null }) =>
+        e.total_duration_seconds != null ? e.total_duration_seconds / 3600 : (e.duration_minutes || 0) / 60;
+      const totalH = data?.reduce((sum, e) => sum + toHours(e), 0) || 0;
+      setTotalHours(totalH);
     } catch (error) {
       console.error('Error fetching total hours:', error);
     }

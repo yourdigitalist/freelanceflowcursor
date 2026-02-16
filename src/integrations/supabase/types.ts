@@ -1066,7 +1066,9 @@ export type Database = {
           invoice_id: string | null
           project_id: string | null
           start_time: string
+          started_at: string | null
           task_id: string | null
+          total_duration_seconds: number | null
           updated_at: string
           user_id: string
         }
@@ -1081,8 +1083,10 @@ export type Database = {
           id?: string
           invoice_id?: string | null
           project_id?: string | null
-          start_time: string
+          start_time?: string
+          started_at?: string | null
           task_id?: string | null
+          total_duration_seconds?: number | null
           updated_at?: string
           user_id: string
         }
@@ -1098,7 +1102,9 @@ export type Database = {
           invoice_id?: string | null
           project_id?: string | null
           start_time?: string
+          started_at?: string | null
           task_id?: string | null
+          total_duration_seconds?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -1122,6 +1128,41 @@ export type Database = {
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      time_entry_segments: {
+        Row: {
+          id: string
+          time_entry_id: string
+          start_time: string
+          end_time: string
+          duration_seconds: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          time_entry_id: string
+          start_time: string
+          end_time: string
+          duration_seconds?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          time_entry_id?: string
+          start_time?: string
+          end_time?: string
+          duration_seconds?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_entry_segments_time_entry_id_fkey"
+            columns: ["time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "time_entries"
             referencedColumns: ["id"]
           },
         ]

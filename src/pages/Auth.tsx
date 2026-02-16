@@ -21,8 +21,10 @@ export default function Auth() {
   const [resendLoading, setResendLoading] = useState(false);
   const { signIn, signUp, resetPassword, resendConfirmationEmail } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
+  const authTab = searchParams.get('tab') === 'signup' ? 'signup' : 'signin';
+  const setAuthTab = (value: string) => setSearchParams((p) => { p.set('tab', value); return p; }, { replace: true });
 
   useEffect(() => {
     const pending = sessionStorage.getItem(SIGNUP_PENDING_KEY);
@@ -219,10 +221,20 @@ export default function Auth() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Tabs defaultValue="signin" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-6">
-                  <TabsTrigger value="signin">Sign In</TabsTrigger>
-                  <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              <Tabs value={authTab} onValueChange={setAuthTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-6 h-11 p-1 bg-muted">
+                  <TabsTrigger
+                    value="signin"
+                    className="rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground"
+                  >
+                    Sign In
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="signup"
+                    className="rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground"
+                  >
+                    Sign Up
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="signin">

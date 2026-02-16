@@ -23,9 +23,6 @@ import {
   Bell,
   CreditCard,
   HardDrive,
-  BookOpen,
-  Lightbulb,
-  MessageSquare,
 } from 'lucide-react';
 
 interface Profile {
@@ -38,7 +35,7 @@ interface Profile {
   is_admin: boolean | null;
 }
 
-const navItemsBase = [
+const navItems = [
   { path: 'profile', label: 'Profile', icon: User },
   { path: 'business', label: 'Company Settings', icon: Building2 },
   { path: 'invoices', label: 'Invoice Settings', icon: FileText },
@@ -46,12 +43,6 @@ const navItemsBase = [
   { path: 'notifications', label: 'Notifications', icon: Bell },
   { path: 'subscription', label: 'Billing & Subscription', icon: CreditCard },
   { path: 'storage', label: 'Storage', icon: HardDrive },
-];
-
-const navItemsAdminOnly = [
-  { path: 'help-content', label: 'Help content', icon: BookOpen },
-  { path: 'feature-requests', label: 'Feature requests', icon: Lightbulb },
-  { path: 'feedback', label: 'Feedback', icon: MessageSquare },
 ];
 
 function SettingsLayoutInner() {
@@ -117,15 +108,6 @@ function SettingsLayoutInner() {
   };
 
   if (!user) return <Navigate to="/auth" replace />;
-
-  const isAdmin = profile?.is_admin === true;
-  const navItems = [...navItemsBase, ...(isAdmin ? navItemsAdminOnly : [])];
-
-  // Redirect non-admins away from admin-only settings routes
-  const adminOnlyPaths = ['/settings/help-content', '/settings/feature-requests', '/settings/feedback'];
-  if (!isAdmin && profile !== null && adminOnlyPaths.some((p) => location.pathname === p)) {
-    return <Navigate to="/settings/profile" replace />;
-  }
 
   const displayName =
     profile?.first_name && profile?.last_name

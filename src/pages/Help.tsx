@@ -357,7 +357,7 @@ export default function Help() {
                 <Card>
                   <CardContent className="p-8 text-center text-muted-foreground">
                     <HelpCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p>No FAQs yet. Admins can add them in Settings → Help content.</p>
+                    <p>No FAQs yet. Admins can add them in Admin → Help content.</p>
                   </CardContent>
                 </Card>
               ) : (
@@ -392,7 +392,7 @@ export default function Help() {
                 <Card>
                   <CardContent className="p-8 text-center text-muted-foreground">
                     <PlayCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p>No onboarding content yet. Admins can add it in Settings → Help content.</p>
+                    <p>No onboarding content yet. Admins can add it in Admin → Help content.</p>
                   </CardContent>
                 </Card>
               ) : (

@@ -118,11 +118,13 @@ export default function Dashboard() {
 
       const { data: timeEntries } = await supabase
         .from('time_entries')
-        .select('duration_minutes, billable')
+        .select('duration_minutes, total_duration_seconds, billable')
         .gte('start_time', startOfMonth.toISOString());
 
-      const hoursThisMonth = (timeEntries?.reduce((sum, entry) => sum + (entry.duration_minutes || 0), 0) || 0) / 60;
-      const unbilledHours = (timeEntries?.filter(e => e.billable === false).reduce((sum, entry) => sum + (entry.duration_minutes || 0), 0) || 0) / 60;
+      const toHours = (e: { duration_minutes?: number | null; total_duration_seconds?: number | null }) =>
+        (e.total_duration_seconds != null ? e.total_duration_seconds / 3600 : (e.duration_minutes || 0) / 60);
+      const hoursThisMonth = timeEntries?.reduce((sum, entry) => sum + toHours(entry), 0) || 0;
+      const unbilledHours = timeEntries?.filter(e => e.billable === false).reduce((sum, entry) => sum + toHours(entry), 0) || 0;
 
       // Fetch recent projects with task counts
       const { data: projects } = await supabase
@@ -150,10 +152,12 @@ export default function Dashboard() {
 
           const { data: projectTime } = await supabase
             .from('time_entries')
-            .select('duration_minutes')
+            .select('duration_minutes, total_duration_seconds')
             .eq('project_id', p.id);
 
-          const hours = (projectTime?.reduce((sum, entry) => sum + (entry.duration_minutes || 0), 0) || 0) / 60;
+          const toHoursEntry = (e: { duration_minutes?: number | null; total_duration_seconds?: number | null }) =>
+            e.total_duration_seconds != null ? e.total_duration_seconds / 3600 : (e.duration_minutes || 0) / 60;
+          const hours = projectTime?.reduce((sum, entry) => sum + toHoursEntry(entry), 0) || 0;
 
           return {
             id: p.id,
@@ -176,15 +180,17 @@ export default function Dashboard() {
           id,
           description,
           duration_minutes,
+          total_duration_seconds,
           created_at,
           projects(name)
         `)
         .order('created_at', { ascending: false })
         .limit(5);
 
+      const entryHours = (e: any) => e.total_duration_seconds != null ? e.total_duration_seconds / 3600 : (e.duration_minutes || 0) / 60;
       const activities = (recentTimeEntries || []).map((entry: any) => ({
         id: entry.id,
-        description: `${(entry.duration_minutes / 60).toFixed(1)}h logged on ${entry.projects?.name || 'Unknown Project'}`,
+        description: `${entryHours(entry).toFixed(1)}h logged on ${entry.projects?.name || 'Unknown Project'}`,
         project_name: entry.projects?.name || 'Unknown',
         time_ago: getTimeAgo(new Date(entry.created_at)),
       }));

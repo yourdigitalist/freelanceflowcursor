@@ -139,10 +139,12 @@ export default function Projects() {
 
           const { data: timeData } = await supabase
             .from('time_entries')
-            .select('duration_minutes')
+            .select('duration_minutes, total_duration_seconds')
             .eq('project_id', project.id);
 
-          const hours = (timeData?.reduce((sum, entry) => sum + (entry.duration_minutes || 0), 0) || 0) / 60;
+          const toHours = (e: { duration_minutes?: number | null; total_duration_seconds?: number | null }) =>
+            e.total_duration_seconds != null ? e.total_duration_seconds / 3600 : (e.duration_minutes || 0) / 60;
+          const hours = timeData?.reduce((sum, entry) => sum + toHours(entry), 0) || 0;
 
           return {
             ...project,

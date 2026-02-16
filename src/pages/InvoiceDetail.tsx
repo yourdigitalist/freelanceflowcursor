@@ -182,6 +182,7 @@ interface UnbilledEntry {
   id: string;
   description: string | null;
   duration_minutes: number;
+  total_duration_seconds: number | null;
   hourly_rate: number | null;
   project_id: string;
   project_name: string;
@@ -402,7 +403,7 @@ export default function InvoiceDetail() {
       // Get unbilled time entries for these projects
       const { data: entries, error: entriesError } = await supabase
         .from('time_entries')
-        .select('id, description, duration_minutes, hourly_rate, project_id, start_time')
+        .select('id, description, duration_minutes, total_duration_seconds, hourly_rate, project_id, start_time')
         .in('project_id', projectIds)
         .eq('billing_status', 'unbilled')
         .eq('billable', true)
@@ -454,7 +455,7 @@ export default function InvoiceDetail() {
       const newItems: any[] = [];
       for (const [projectName, entries] of Object.entries(groupedByProject)) {
         for (const entry of entries) {
-          const hours = entry.duration_minutes / 60;
+          const hours = (entry.total_duration_seconds != null ? entry.total_duration_seconds / 3600 : entry.duration_minutes / 60);
           const rate = entry.hourly_rate || defaultHourlyRate;
           newItems.push({
             invoice_id: id,
@@ -1666,7 +1667,7 @@ export default function InvoiceDetail() {
                   <div key={projectName} className="border rounded-lg p-3">
                     <h4 className="font-medium mb-2">{projectName}</h4>
                     {entries.map((entry) => {
-                      const hours = entry.duration_minutes / 60;
+                      const hours = (entry.total_duration_seconds != null ? entry.total_duration_seconds / 3600 : entry.duration_minutes / 60);
                       const rate = entry.hourly_rate || defaultHourlyRate;
                       return (
                         <div key={entry.id} className="flex items-center gap-3 py-2 border-b last:border-0">

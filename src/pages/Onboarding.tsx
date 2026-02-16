@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Check, Sparkles, Loader2, ArrowRight, Building2, User, FileText, FolderKanban, Timer } from 'lucide-react';
+import { Check, Sparkles, Loader2, ArrowRight, Building2, User, FileText, FolderKanban, Timer, LogOut } from 'lucide-react';
 import { currencies } from '@/lib/locale-data';
 
 const STRIPE_PRICE_MONTHLY = import.meta.env.VITE_STRIPE_PRICE_MONTHLY as string | undefined;
@@ -63,7 +63,7 @@ const plans = [
 ];
 
 export default function Onboarding() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
@@ -203,11 +203,17 @@ export default function Onboarding() {
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-              <Sparkles className="h-5 w-5 text-primary-foreground" />
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+                <Sparkles className="h-5 w-5 text-primary-foreground" />
+              </div>
+              <span className="text-xl font-bold">FreelanceFlow</span>
             </div>
-            <span className="text-xl font-bold">FreelanceFlow</span>
+            <Button variant="ghost" size="sm" onClick={() => signOut()} className="text-muted-foreground hover:text-foreground">
+              <LogOut className="h-4 w-4 mr-1.5" />
+              Sign out
+            </Button>
           </div>
         </div>
       </header>
