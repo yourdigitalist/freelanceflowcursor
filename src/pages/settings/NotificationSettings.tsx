@@ -100,7 +100,7 @@ export default function NotificationSettings() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
         <p className="text-muted-foreground mt-1">
-          Choose what you receive in-app and by email. Billing notifications are always sent by your payment provider.
+          Choose what you receive in-app and by email. To reduce email volume, Projects, Tasks, and Import/Export are in-app only.
         </p>
       </div>
 
@@ -118,6 +118,7 @@ export default function NotificationSettings() {
             duePref={prefs.projects}
             onChange={(projects) => update((p) => ({ ...p, projects }))}
             markDirty={markDirty}
+            allowEmail={false}
           />
         </CardContent>
       </Card>
@@ -136,6 +137,7 @@ export default function NotificationSettings() {
             duePref={prefs.tasks}
             onChange={(tasks) => update((p) => ({ ...p, tasks }))}
             markDirty={markDirty}
+            allowEmail={false}
           />
         </CardContent>
       </Card>
@@ -292,6 +294,7 @@ export default function NotificationSettings() {
             onEmail={(v) =>
               update((p) => ({ ...p, importExport: { ...p.importExport, email: v } }))
             }
+            showEmail={false}
           />
         </CardContent>
       </Card>
@@ -312,12 +315,14 @@ function ChannelRow({
   email,
   onInApp,
   onEmail,
+  showEmail = true,
 }: {
   label: string;
   inApp: boolean;
   email: boolean;
   onInApp: (v: boolean) => void;
   onEmail: (v: boolean) => void;
+  showEmail?: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 py-2">
@@ -329,12 +334,14 @@ function ChannelRow({
           </Label>
           <Switch id={`inapp-${label}`} checked={inApp} onCheckedChange={onInApp} />
         </div>
-        <div className="flex items-center gap-2">
-          <Label htmlFor={`email-${label}`} className="text-muted-foreground text-xs">
-            Email
-          </Label>
-          <Switch id={`email-${label}`} checked={email} onCheckedChange={onEmail} />
-        </div>
+        {showEmail && (
+          <div className="flex items-center gap-2">
+            <Label htmlFor={`email-${label}`} className="text-muted-foreground text-xs">
+              Email
+            </Label>
+            <Switch id={`email-${label}`} checked={email} onCheckedChange={onEmail} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -344,13 +351,15 @@ function DueSection({
   duePref,
   onChange,
   markDirty,
+  allowEmail = true,
 }: {
   duePref: DuePref | undefined;
   onChange: (pref: DuePref) => void;
   markDirty: () => void;
+  allowEmail?: boolean;
 }) {
-  const dueSoon = duePref?.dueSoon ?? { inApp: true, email: true };
-  const overdue = duePref?.overdue ?? { inApp: true, email: true };
+  const dueSoon = duePref?.dueSoon ?? { inApp: true, email: allowEmail };
+  const overdue = duePref?.overdue ?? { inApp: true, email: allowEmail };
   const daysBefore = duePref?.daysBefore ?? 7;
 
   const setChannel = (which: 'dueSoon' | 'overdue', channel: keyof ChannelPref, value: boolean) => {
@@ -371,16 +380,18 @@ function DueSection({
       <ChannelRow
         label="Due soon"
         inApp={dueSoon.inApp ?? true}
-        email={dueSoon.email ?? true}
+        email={dueSoon.email ?? allowEmail}
         onInApp={(v) => setChannel('dueSoon', 'inApp', v)}
         onEmail={(v) => setChannel('dueSoon', 'email', v)}
+        showEmail={allowEmail}
       />
       <ChannelRow
         label="Overdue"
         inApp={overdue.inApp ?? true}
-        email={overdue.email ?? true}
+        email={overdue.email ?? allowEmail}
         onInApp={(v) => setChannel('overdue', 'inApp', v)}
         onEmail={(v) => setChannel('overdue', 'email', v)}
+        showEmail={allowEmail}
       />
       <div className="flex flex-wrap items-center gap-4 py-2">
         <Label className="text-sm font-medium">Remind me (days before due)</Label>

@@ -104,6 +104,7 @@ serve(async (req) => {
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: { user_id: user.id },
+      allow_promotion_codes: true,
     });
 
     return new Response(

@@ -27,6 +27,27 @@ function escapeHtml(text: string | null | undefined): string {
     .replace(/'/g, "&#039;");
 }
 
+function replaceTokens(template: string, tokens: Record<string, string>): string {
+  return Object.entries(tokens).reduce((out, [key, value]) => {
+    const re = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "gi");
+    return out.replace(re, value);
+  }, template);
+}
+
+function getDefaultClientHeader(logoUrl: string, businessName: string, primaryColor: string): string {
+  return `<div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+  <div style="padding: 18px 20px; background: ${primaryColor}; color: white;">
+    ${logoUrl ? `<img src="${logoUrl}" alt="${escapeHtml(businessName)}" style="height: 28px; max-width: 160px; object-fit: contain;" />` : `<strong style="font-size: 18px;">${escapeHtml(businessName)}</strong>`}
+  </div>
+  <div style="padding: 20px;">`;
+}
+
+function getDefaultClientFooter(primaryColor: string): string {
+  return `</div><div style="padding: 14px 20px; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb;">
+  Sent by <span style="color: ${primaryColor}; font-weight: 600;">Lance</span>
+</div></div>`;
+}
+
 interface InvoiceItem {
   description: string;
   line_description?: string | null;
@@ -171,7 +192,7 @@ serve(async (req) => {
     // Fetch user profile with business details, logo, currency, number_format, bank, and invoice display options
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display, number_format, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, bank_name, bank_account_number, bank_routing_number, payment_instructions")
+      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display, number_format, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, bank_name, bank_account_number, bank_routing_number, payment_instructions, client_email_primary_color, client_email_header_html, client_email_footer_html")
       .eq("user_id", user.id)
       .single();
 
@@ -348,29 +369,43 @@ serve(async (req) => {
     const safeMessage = escapeHtml(message);
 
     const isReceipt = receipt === true;
-    // Single message only: default from invoice settings or user override in send dialogue (no extra boilerplate)
-    const emailHtml = isReceipt
+    const fromDisplayName = (profile?.business_name || senderName || profile?.full_name || "Your Business").trim();
+    const replyToEmail = (profile?.business_email || senderEmail || profile?.email || "").trim();
+    const primaryColor = (profile?.client_email_primary_color || "#9B63E9").trim();
+    const headerTpl = (profile?.client_email_header_html || "").trim();
+    const footerTpl = (profile?.client_email_footer_html || "").trim();
+    const coreHtml = isReceipt
       ? `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #10B981;">Receipt – Invoice ${safeInvoiceNumber}</h2>
+        <h2 style="color: #10B981; margin-top: 0;">Receipt – Invoice ${safeInvoiceNumber}</h2>
         ${safeMessage ? `<div style="color: #333; white-space: pre-wrap;">${safeMessage}</div>` : "<p style=\"color: #666;\">This invoice has been paid.</p>"}
-      </div>
-    `
+      `
       : `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #9B63E9;">Invoice ${safeInvoiceNumber}</h2>
+        <h2 style="color: ${primaryColor}; margin-top: 0;">Invoice ${safeInvoiceNumber}</h2>
         ${safeMessage ? `<div style="color: #333; white-space: pre-wrap;">${safeMessage}</div>` : "<p style=\"color: #666;\">Please find your invoice attached.</p>"}
-      </div>
-    `;
+      `;
+    const tokens = {
+      business_name: escapeHtml(fromDisplayName),
+      logo_url: profile?.business_logo || "",
+      primary_color: primaryColor,
+      body_html: coreHtml,
+      invoice_number: safeInvoiceNumber,
+    };
+    const header = headerTpl
+      ? replaceTokens(headerTpl, tokens)
+      : getDefaultClientHeader(profile?.business_logo || "", fromDisplayName, primaryColor);
+    const footer = footerTpl
+      ? replaceTokens(footerTpl, tokens)
+      : getDefaultClientFooter(primaryColor);
+    const emailHtml = `${header}${coreHtml}${footer}`;
 
     const emailSubject = customSubject && String(customSubject).trim()
       ? customSubject
       : isReceipt
-        ? `Receipt for Invoice ${invoice.invoice_number} – Paid`
-        : `Invoice ${invoice.invoice_number} - ${formatCurrency(Number(invoice.total || 0), profile?.currency, profile?.currency_display, profile?.number_format)}`;
+        ? `Receipt from ${fromDisplayName} for Invoice ${invoice.invoice_number}`
+        : `Invoice ${invoice.invoice_number} from ${fromDisplayName} - ${formatCurrency(Number(invoice.total || 0), profile?.currency, profile?.currency_display, profile?.number_format)}`;
 
     const emailPayload: any = {
-      from: senderEmail ? `${senderName || "Invoice"} <onboarding@resend.dev>` : "Invoice <onboarding@resend.dev>",
+      from: `${fromDisplayName} <onboarding@resend.dev>`,
       to: [recipientEmail],
       subject: emailSubject,
       html: emailHtml,
@@ -378,6 +413,7 @@ serve(async (req) => {
         { filename: `${invoice.invoice_number}.pdf`, content: pdfBase64 },
       ],
     };
+    if (replyToEmail) emailPayload.reply_to = replyToEmail;
     const ccList = Array.isArray(cc) ? cc.filter((e: string) => e && String(e).trim()) : [];
     if (ccList.length > 0) emailPayload.cc = ccList;
 

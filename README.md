@@ -1,6 +1,6 @@
-# FreelanceFlow
+# Lance
 
-Manage your freelance business in one place: clients, projects, tasks, time tracking, invoices, and client review requests.
+Manage your business in one place: clients, projects, tasks, time tracking, invoices, and client review requests.
 
 **New to this?** → See **[GETTING_STARTED.md](./GETTING_STARTED.md)** for a step-by-step guide (no coding experience needed).
 

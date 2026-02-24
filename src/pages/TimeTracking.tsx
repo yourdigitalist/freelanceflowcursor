@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
+import { useTimer, formatElapsed, formatDurationFromSeconds, TIMER_ENTRY_SAVED_EVENT } from '@/contexts/TimerContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -109,15 +110,24 @@ export default function TimeTracking() {
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
-  const [timerDescription, setTimerDescription] = useState('');
-  const [timerProject, setTimerProject] = useState<string>('');
-  const [timerTask, setTimerTask] = useState<string>('');
-  const [timerBillable, setTimerBillable] = useState(true);
-  /** Draft segments: multiple start/stop before saving. Last segment may have endMs null (running). */
-  const [draftSegments, setDraftSegments] = useState<DraftSegment[]>([]);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const timerStartMsRef = useRef<number | null>(null);
-  
+  const {
+    draftSegments,
+    timerDescription,
+    setTimerDescription,
+    timerProject,
+    setTimerProject,
+    timerTask,
+    setTimerTask,
+    timerBillable,
+    setTimerBillable,
+    startTimer,
+    stopTimer,
+    logTimeFromTimer,
+    discardTimerSegment,
+    getDraftTotalSeconds,
+    isLocalTimerRunning,
+  } = useTimer();
+
   // Filters
   const [timeframeFilter, setTimeframeFilter] = useState<TimeframeFilter>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
@@ -164,24 +174,11 @@ export default function TimeTracking() {
     }
   }, [timerProject]);
 
-  // Elapsed time for running segment (last segment has endMs null)
-  const isLocalTimerRunning = draftSegments.length > 0 && draftSegments[draftSegments.length - 1].endMs == null;
-  const runningSegmentStartMs = isLocalTimerRunning ? draftSegments[draftSegments.length - 1].startMs : null;
   useEffect(() => {
-    if (!isLocalTimerRunning || runningSegmentStartMs == null) {
-      timerStartMsRef.current = null;
-      setElapsedSeconds(0);
-      return;
-    }
-    timerStartMsRef.current = runningSegmentStartMs;
-    const tick = () => {
-      if (timerStartMsRef.current == null) return;
-      setElapsedSeconds(Math.floor((Date.now() - timerStartMsRef.current) / 1000));
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [isLocalTimerRunning, runningSegmentStartMs]);
+    const onSaved = () => fetchEntries();
+    window.addEventListener(TIMER_ENTRY_SAVED_EVENT, onSaved);
+    return () => window.removeEventListener(TIMER_ENTRY_SAVED_EVENT, onSaved);
+  }, [user]);
 
   const fetchEntries = async () => {
     try {
@@ -247,99 +244,6 @@ export default function TimeTracking() {
     } catch (error) {
       console.error('Error fetching tasks:', error);
     }
-  };
-
-  const startTimer = () => {
-    const now = Date.now();
-    setDraftSegments((prev) => {
-      const last = prev[prev.length - 1];
-      if (last && last.endMs == null) return prev; // already running
-      return [...prev, { startMs: now, endMs: null }];
-    });
-    toast({ title: 'Timer started' });
-  };
-
-  const stopTimer = () => {
-    setDraftSegments((prev) => {
-      if (prev.length === 0) return prev;
-      const last = prev[prev.length - 1];
-      if (last.endMs != null) return prev;
-      return [...prev.slice(0, -1), { ...last, endMs: Date.now() }];
-    });
-    toast({ title: 'Timer paused. Start again to add more time, or "Save entry" when done.' });
-  };
-
-  const getDraftTotalSeconds = () => {
-    return draftSegments.reduce((sum, seg) => {
-      const end = seg.endMs ?? Date.now();
-      return sum + Math.max(0, Math.round((end - seg.startMs) / 1000));
-    }, 0);
-  };
-
-  const logTimeFromTimer = async () => {
-    if (draftSegments.length === 0 || !user) return;
-    if (!timerDescription?.trim()) {
-      toast({ title: 'Description required', description: 'Enter what you worked on before saving.', variant: 'destructive' });
-      return;
-    }
-    const now = Date.now();
-    const segmentsToSave = draftSegments.map((s) => ({
-      startMs: s.startMs,
-      endMs: s.endMs ?? now,
-    }));
-    const firstStart = new Date(segmentsToSave[0].startMs);
-
-    try {
-      const { data: entryRow, error: entryError } = await supabase
-        .from('time_entries')
-        .insert({
-          description: timerDescription || null,
-          project_id: timerProject || null,
-          task_id: timerTask || null,
-          billable: timerBillable,
-          billing_status: timerBillable ? 'unbilled' : 'not_billable',
-          user_id: user.id,
-          start_time: firstStart.toISOString(),
-          end_time: firstStart.toISOString(),
-        })
-        .select('id')
-        .single();
-      if (entryError) throw entryError;
-      if (!entryRow?.id) throw new Error('No id returned');
-
-      for (const seg of segmentsToSave) {
-        const durationSeconds = Math.max(0, Math.round((seg.endMs - seg.startMs) / 1000));
-        await supabase.from('time_entry_segments').insert({
-          time_entry_id: entryRow.id,
-          start_time: new Date(seg.startMs).toISOString(),
-          end_time: new Date(seg.endMs).toISOString(),
-          duration_seconds: durationSeconds,
-        });
-      }
-
-      setDraftSegments([]);
-      setTimerDescription('');
-      setTimerProject('');
-      setTimerTask('');
-      setTimerBillable(true);
-      fetchEntries();
-      const totalSec = segmentsToSave.reduce((s, seg) => s + Math.round((seg.endMs - seg.startMs) / 1000), 0);
-      toast({ title: 'Time logged', description: formatDurationFromSeconds(totalSec) });
-    } catch (error: any) {
-      toast({
-        title: 'Error logging time',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const discardTimerSegment = () => {
-    setDraftSegments([]);
-    setTimerDescription('');
-    setTimerProject('');
-    setTimerTask('');
-    setTimerBillable(true);
   };
 
   const openLogDialog = (entry?: TimeEntry) => {
@@ -544,22 +448,6 @@ export default function TimeTracking() {
     }
   };
 
-  const formatDurationFromSeconds = (totalSeconds: number) => {
-    const hours = Math.floor(totalSeconds / 3600);
-    const mins = Math.floor((totalSeconds % 3600) / 60);
-    const secs = totalSeconds % 60;
-    if (hours > 0) return `${hours}h ${mins}m${secs > 0 ? ` ${secs}s` : ''}`;
-    if (mins > 0) return `${mins}m${secs > 0 ? ` ${secs}s` : ''}`;
-    return `${secs}s`;
-  };
-
-  const formatElapsed = (totalSeconds: number) => {
-    const hours = Math.floor(totalSeconds / 3600);
-    const mins = Math.floor((totalSeconds % 3600) / 60);
-    const secs = totalSeconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
   const getStatusBadge = (entry: TimeEntry) => {
     if (!entry.billable) {
       return <Badge variant="secondary">Not Billable</Badge>;
@@ -729,7 +617,9 @@ export default function TimeTracking() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">{isTimerView ? 'Timer' : 'Time logs'}</h1>
             <p className="text-muted-foreground">
-              {isTimerView ? 'Track time and save entries' : 'Log and manage your billable hours'}
+              {isTimerView
+                ? 'Track time and save entries. Your timer keeps running when you switch pages—use the bar at the bottom to pause or save.'
+                : 'Log and manage your billable hours'}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -1052,7 +942,7 @@ export default function TimeTracking() {
                     Segments
                   </CardTitle>
                   <CardDescription>
-                    Paused and resumed chunks. Save entry to log them as one time entry.
+                    Paused and resumed chunks. Save entry to log them as one time entry. You can also save from the bar at the bottom when you're on another page.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1113,8 +1003,8 @@ export default function TimeTracking() {
           <Card className="border-0 shadow-sm">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-accent/10">
-                  <Calendar className="h-5 w-5 text-accent-foreground" />
+                <div className="p-3 rounded-xl bg-primary/10">
+                  <Calendar className="h-5 w-5 text-primary" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Entries</p>

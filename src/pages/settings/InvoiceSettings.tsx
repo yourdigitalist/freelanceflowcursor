@@ -63,11 +63,18 @@ export default function InvoiceSettings() {
   const { toast } = useToast();
   const dirtyContext = useSettingsDirty();
   const [profile, setProfile] = useState<InvoiceProfile | null>(null);
+  const [appCommsDefaults, setAppCommsDefaults] = useState<{
+    invoice_footer: string | null;
+    invoice_email_subject_default: string | null;
+    invoice_email_message_default: string | null;
+    reminder_subject_default: string | null;
+    reminder_body_default: string | null;
+  } | null>(null);
   const [taxes, setTaxes] = useState<Tax[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
-  
+
   // Tax form state
   const [newTaxName, setNewTaxName] = useState('');
   const [newTaxRate, setNewTaxRate] = useState('');
@@ -81,6 +88,10 @@ export default function InvoiceSettings() {
     if (user) {
       fetchProfile();
       fetchTaxes();
+      (async () => {
+        const { data } = await supabase.from('app_comms_defaults').select('invoice_footer, invoice_email_subject_default, invoice_email_message_default, reminder_subject_default, reminder_body_default').eq('id', 1).maybeSingle();
+        setAppCommsDefaults(data ?? null);
+      })();
     }
   }, [user]);
 
@@ -389,8 +400,8 @@ export default function InvoiceSettings() {
               <Textarea
                 id="invoice_footer"
                 name="invoice_footer"
-                defaultValue={profile?.invoice_footer || ''}
-                placeholder="Thank you for your business!"
+                defaultValue={profile?.invoice_footer ?? appCommsDefaults?.invoice_footer ?? ''}
+                placeholder={appCommsDefaults?.invoice_footer ?? 'Thank you for your business!'}
                 rows={2}
               />
               <p className="text-xs text-muted-foreground">
@@ -414,8 +425,8 @@ export default function InvoiceSettings() {
               <Input
                 id="invoice_email_subject_default"
                 name="invoice_email_subject_default"
-                defaultValue={profile?.invoice_email_subject_default ?? 'Invoice {{invoice_number}} from {{business_name}}'}
-                placeholder="Invoice {{invoice_number}} from {{business_name}}"
+                defaultValue={profile?.invoice_email_subject_default ?? appCommsDefaults?.invoice_email_subject_default ?? 'Invoice {{invoice_number}} from {{business_name}}'}
+                placeholder={appCommsDefaults?.invoice_email_subject_default ?? 'Invoice {{invoice_number}} from {{business_name}}'}
               />
             </div>
             <div className="space-y-2">
@@ -451,8 +462,8 @@ export default function InvoiceSettings() {
               <Textarea
                 id="invoice_email_message_default"
                 name="invoice_email_message_default"
-                defaultValue={profile?.invoice_email_message_default || ''}
-                placeholder="Hi {{client_name}}, please find attached invoice {{invoice_number}} for {{total}}. Due by {{due_date}}."
+                defaultValue={profile?.invoice_email_message_default ?? appCommsDefaults?.invoice_email_message_default ?? ''}
+                placeholder={appCommsDefaults?.invoice_email_message_default ?? 'Hi {{client_name}}, please find attached invoice {{invoice_number}} for {{total}}. Due by {{due_date}}.'}
                 rows={4}
               />
             </div>
@@ -461,8 +472,8 @@ export default function InvoiceSettings() {
               <Input
                 id="reminder_subject_default"
                 name="reminder_subject_default"
-                defaultValue={profile?.reminder_subject_default ?? 'Reminder: Invoice {{invoice_number}} Due Soon'}
-                placeholder="Reminder: Invoice {{invoice_number}} Due Soon"
+                defaultValue={profile?.reminder_subject_default ?? appCommsDefaults?.reminder_subject_default ?? 'Reminder: Invoice {{invoice_number}} Due Soon'}
+                placeholder={appCommsDefaults?.reminder_subject_default ?? 'Reminder: Invoice {{invoice_number}} Due Soon'}
               />
             </div>
             <div className="space-y-2">
@@ -487,8 +498,8 @@ export default function InvoiceSettings() {
               <Textarea
                 id="reminder_body_default"
                 name="reminder_body_default"
-                defaultValue={profile?.reminder_body_default ?? `Hi {{client_name}},\nThis is a friendly reminder that invoice {{invoice_number}} for {{project_name}} is due on {{due_date}}.\nPlease let us know if you have any questions.`}
-                placeholder="Reminder message..."
+                defaultValue={profile?.reminder_body_default ?? appCommsDefaults?.reminder_body_default ?? `Hi {{client_name}},\nThis is a friendly reminder that invoice {{invoice_number}} for {{project_name}} is due on {{due_date}}.\nPlease let us know if you have any questions.`}
+                placeholder={appCommsDefaults?.reminder_body_default ?? 'Reminder message...'}
                 rows={4}
               />
             </div>

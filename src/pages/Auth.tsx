@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Briefcase, Loader2, Clock, Users, FileText, BarChart3, Check } from 'lucide-react';
+import { AppLogo } from '@/components/AppLogo';
+import { Loader2, Clock, Users, FileText, BarChart3, Check } from 'lucide-react';
 
 const SIGNUP_PENDING_KEY = 'signup_pending';
 
@@ -144,8 +145,7 @@ export default function Auth() {
       <div className="hidden lg:flex lg:w-1/2 bg-primary/5 p-12 flex-col justify-between">
         <div>
           <Link to="/" className="flex items-center gap-2 mb-12">
-            <Briefcase className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold text-gradient">FreelanceFlow</span>
+            <AppLogo full height={32} className="text-gradient" />
           </Link>
           
           <div className="space-y-2 mb-12">
@@ -191,8 +191,7 @@ export default function Auth() {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-4 lg:p-12">
         <div className="w-full max-w-md animate-fade-in">
           <div className="flex items-center justify-center gap-2 mb-8 lg:hidden">
-            <Briefcase className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold text-gradient">FreelanceFlow</span>
+            <AppLogo full height={32} className="text-gradient" />
           </div>
 
           <Card className="border-0 shadow-xl">

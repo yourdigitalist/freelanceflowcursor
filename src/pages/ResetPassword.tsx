@@ -98,7 +98,7 @@ export default function ResetPassword() {
       <div className="w-full max-w-md animate-fade-in">
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
           <Briefcase className="h-8 w-8 text-primary" />
-          <span className="text-2xl font-bold text-gradient">FreelanceFlow</span>
+          <span className="text-2xl font-bold text-gradient">Lance</span>
         </Link>
 
         <Card className="border-0 shadow-xl">

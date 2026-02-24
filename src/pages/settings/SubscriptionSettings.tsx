@@ -274,7 +274,7 @@ export default function SubscriptionSettings() {
               }}
             >
               <div className="flex items-center gap-3">
-                <Sparkles className="h-5 w-5 text-primary" />
+                <Sparkles className="h-5 w-5 text-primary shrink-0" />
                 <div>
                   <p className="font-medium">
                     You're on the <strong>{profile?.plan_type === 'pro_annual' ? 'Early Access Annual' : 'Early Access Monthly'}</strong> plan (15-day free trial).
@@ -288,6 +288,9 @@ export default function SubscriptionSettings() {
                       <> · Trial ends {format(new Date(profile.trial_end_date), 'MMMM d, yyyy')}</>
                     )}
                   </p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Your card will be charged automatically when your trial ends—no action needed. You can update payment or cancel anytime in the billing portal below.
+                  </p>
                 </div>
               </div>
             </div>
@@ -295,7 +298,7 @@ export default function SubscriptionSettings() {
           
           {isOnTrial && !profile?.stripe_customer_id && (
             <p className="text-sm text-muted-foreground">
-              Pick a plan below to add a payment method and continue after your trial.
+              Add a payment method below so we can continue your plan after the trial. You won&apos;t be charged until the trial ends.
             </p>
           )}
           {isActive && (

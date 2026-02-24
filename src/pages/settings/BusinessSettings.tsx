@@ -29,6 +29,9 @@ interface BusinessProfile {
   bank_account_number: string | null;
   bank_routing_number: string | null;
   payment_instructions: string | null;
+  client_email_primary_color: string | null;
+  client_email_header_html: string | null;
+  client_email_footer_html: string | null;
 }
 
 export default function BusinessSettings() {
@@ -73,6 +76,9 @@ export default function BusinessSettings() {
       bank_account_number: formData.get('bank_account_number') as string || null,
       bank_routing_number: formData.get('bank_routing_number') as string || null,
       payment_instructions: formData.get('payment_instructions') as string || null,
+      client_email_primary_color: formData.get('client_email_primary_color') as string || null,
+      client_email_header_html: formData.get('client_email_header_html') as string || null,
+      client_email_footer_html: formData.get('client_email_footer_html') as string || null,
     };
     const { error } = await supabase.from('profiles').update(profileData).eq('user_id', user.id);
     if (error) throw error;
@@ -94,7 +100,7 @@ export default function BusinessSettings() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, business_website, tax_id, bank_name, bank_account_number, bank_routing_number, payment_instructions')
+        .select('business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, business_website, tax_id, bank_name, bank_account_number, bank_routing_number, payment_instructions, client_email_primary_color, client_email_header_html, client_email_footer_html')
         .eq('user_id', user!.id)
         .maybeSingle();
 
@@ -226,6 +232,46 @@ export default function BusinessSettings() {
               <Upload className="mr-2 h-4 w-4" />
               {saving ? 'Uploading…' : 'Upload Logo'}
             </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-0 shadow-sm">
+        <CardHeader>
+          <CardTitle>Client Email Template</CardTitle>
+          <CardDescription>
+            Default wrapper for emails you send to clients (invoice and review request emails).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="client_email_primary_color">Brand Color</Label>
+            <Input
+              id="client_email_primary_color"
+              name="client_email_primary_color"
+              defaultValue={profile?.client_email_primary_color || '#9B63E9'}
+              placeholder="#9B63E9"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="client_email_header_html">Email Header HTML (optional)</Label>
+            <Textarea
+              id="client_email_header_html"
+              name="client_email_header_html"
+              defaultValue={profile?.client_email_header_html || ''}
+              placeholder="Tokens available: {{business_name}}, {{logo_url}}, {{primary_color}}, {{body_html}}"
+              rows={4}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="client_email_footer_html">Email Footer HTML (optional)</Label>
+            <Textarea
+              id="client_email_footer_html"
+              name="client_email_footer_html"
+              defaultValue={profile?.client_email_footer_html || ''}
+              placeholder="Example: <p>Sent by Lance</p>"
+              rows={3}
+            />
           </div>
         </CardContent>
       </Card>

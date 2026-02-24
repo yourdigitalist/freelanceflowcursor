@@ -1,4 +1,4 @@
-# Getting started with FreelanceFlow (no coding needed)
+# Getting started with Lance (no coding needed)
 
 This guide gets your app running on your computer in a few steps. You’ll use the **Terminal** (or **Command Prompt** on Windows) to type a few commands—no coding required.
 
@@ -84,7 +84,7 @@ Your app talks to Supabase (your database and auth). It needs a file named `.env
    ```
 4. Open your browser and go to: **http://localhost:8080**
 
-You should see the FreelanceFlow landing page. You can click **Get Started** to sign in or sign up (using the Supabase project you set up).
+You should see the Lance landing page. You can click **Get Started** to sign in or sign up (using the Supabase project you set up).
 
 ---
 

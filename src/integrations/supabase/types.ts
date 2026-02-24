@@ -256,6 +256,9 @@ export type Database = {
           reminder_days_before: number | null
           reminder_enabled: boolean | null
           reminder_subject_default: string | null
+          client_email_primary_color: string | null
+          client_email_header_html: string | null
+          client_email_footer_html: string | null
           payment_instructions: string | null
           phone: string | null
           plan_type: string | null
@@ -324,6 +327,9 @@ export type Database = {
           reminder_days_before?: number | null
           reminder_enabled?: boolean | null
           reminder_subject_default?: string | null
+          client_email_primary_color?: string | null
+          client_email_header_html?: string | null
+          client_email_footer_html?: string | null
           subscription_status?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -389,6 +395,9 @@ export type Database = {
           reminder_days_before?: number | null
           reminder_enabled?: boolean | null
           reminder_subject_default?: string | null
+          client_email_primary_color?: string | null
+          client_email_header_html?: string | null
+          client_email_footer_html?: string | null
           subscription_status?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -429,6 +438,96 @@ export type Database = {
           body?: string | null
           category?: string
           sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      app_branding: {
+        Row: {
+          id: number
+          logo_url: string | null
+          icon_url: string | null
+          favicon_url: string | null
+          primary_color: string | null
+          logo_size: string | null
+          logo_width: number | null
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          logo_url?: string | null
+          icon_url?: string | null
+          favicon_url?: string | null
+          primary_color?: string | null
+          logo_size?: string | null
+          logo_width?: number | null
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          logo_url?: string | null
+          icon_url?: string | null
+          favicon_url?: string | null
+          primary_color?: string | null
+          logo_size?: string | null
+          logo_width?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      app_comms_defaults: {
+        Row: {
+          id: number
+          invoice_footer: string | null
+          invoice_email_subject_default: string | null
+          invoice_email_message_default: string | null
+          reminder_subject_default: string | null
+          reminder_body_default: string | null
+          email_header_html: string | null
+          email_footer_html: string | null
+          lance_email_header_html: string | null
+          lance_email_footer_html: string | null
+          trial_body_5d: string | null
+          trial_body_1d: string | null
+          trial_body_0d: string | null
+          announcement_default_body: string | null
+          announcement_custom_html: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          invoice_footer?: string | null
+          invoice_email_subject_default?: string | null
+          invoice_email_message_default?: string | null
+          reminder_subject_default?: string | null
+          reminder_body_default?: string | null
+          email_header_html?: string | null
+          email_footer_html?: string | null
+          lance_email_header_html?: string | null
+          lance_email_footer_html?: string | null
+          trial_body_5d?: string | null
+          trial_body_1d?: string | null
+          trial_body_0d?: string | null
+          announcement_default_body?: string | null
+          announcement_custom_html?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          invoice_footer?: string | null
+          invoice_email_subject_default?: string | null
+          invoice_email_message_default?: string | null
+          reminder_subject_default?: string | null
+          reminder_body_default?: string | null
+          email_header_html?: string | null
+          email_footer_html?: string | null
+          lance_email_header_html?: string | null
+          lance_email_footer_html?: string | null
+          trial_body_5d?: string | null
+          trial_body_1d?: string | null
+          trial_body_0d?: string | null
+          announcement_default_body?: string | null
+          announcement_custom_html?: string | null
           updated_at?: string
         }
         Relationships: []

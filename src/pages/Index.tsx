@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { AppLogo } from '@/components/AppLogo';
 import {
-  Briefcase,
   ArrowRight,
   Check,
   ListTodo,
@@ -23,8 +23,7 @@ export default function Index() {
       <header className="border-b bg-card/50 backdrop-blur-md sticky top-0 z-50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Briefcase className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">FreelanceFlow</span>
+            <AppLogo full height={28} />
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" asChild className="rounded-full">
@@ -44,7 +43,7 @@ export default function Index() {
             One workflow. From work to payment.
           </h1>
           <p className="text-lg text-muted-foreground mb-4">
-            FreelanceFlow is built for freelancers who bill time and deliver creative work.
+            Lance is built for freelancers who bill time and deliver creative work.
           </p>
           <p className="text-lg text-muted-foreground mb-8">
             Track tasks. Capture feedback. Send invoices. Get paid.
@@ -87,7 +86,7 @@ export default function Index() {
           <p className="text-xl font-semibold text-foreground mb-4">It wastes time.</p>
           <p className="text-xl font-semibold text-foreground mb-8">And things fall through the cracks.</p>
           <p className="text-lg font-medium text-primary">
-            FreelanceFlow replaces that chaos with one clear workflow.
+            Lance replaces that chaos with one clear workflow.
           </p>
         </div>
       </section>
@@ -223,13 +222,13 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Why FreelanceFlow is different */}
+      {/* Why Lance is different */}
       <section className="py-16 lg:py-24">
         <div className="container mx-auto px-4 max-w-2xl text-center">
-          <h2 className="text-3xl font-bold mb-6">Why FreelanceFlow is different</h2>
+          <h2 className="text-3xl font-bold mb-6">Why Lance is different</h2>
           <p className="text-muted-foreground mb-12">Most tools do one thing well.</p>
           <p className="text-lg font-medium mb-10">
-            FreelanceFlow connects the moments that actually matter.
+            Lance connects the moments that actually matter.
           </p>
           <ul className="space-y-4 text-left max-w-md mx-auto">
             <li className="flex items-center gap-3">
@@ -354,14 +353,14 @@ export default function Index() {
             About file storage
           </h2>
           <p className="text-muted-foreground text-center mb-4">
-            FreelanceFlow includes active storage for client review files.
+            Lance includes active storage for client review files.
           </p>
           <p className="text-muted-foreground text-center mb-4">
             You can delete old files anytime to free up space. Most freelancers keep long-term
             assets in Google Drive or similar tools.
           </p>
           <p className="text-muted-foreground text-center mb-4">
-            FreelanceFlow is your active workspace, not a file archive.
+            Lance is your active workspace, not a file archive.
           </p>
           <p className="text-center font-medium text-foreground">Transparent. In your control.</p>
         </div>
@@ -400,7 +399,7 @@ export default function Index() {
             Stop juggling tools. Start finishing work.
           </h2>
           <p className="text-lg text-muted-foreground mb-8">
-            FreelanceFlow helps you focus on the work that matters and get paid without friction.
+            Lance helps you focus on the work that matters and get paid without friction.
           </p>
           <Button size="lg" asChild className="rounded-full">
             <Link to="/auth">
@@ -413,11 +412,8 @@ export default function Index() {
       {/* Footer */}
       <footer className="py-8 border-t">
         <div className="container mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Briefcase className="h-5 w-5 text-primary" />
-            <span className="font-semibold">FreelanceFlow</span>
-          </div>
-          <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} FreelanceFlow.</p>
+          <AppLogo full height={24} className="text-base font-semibold" />
+          <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Lance.</p>
         </div>
       </footer>
     </div>

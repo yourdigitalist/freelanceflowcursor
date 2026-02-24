@@ -22,7 +22,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Check, Sparkles, Loader2, ArrowRight, Building2, User, FileText, FolderKanban, Timer, LogOut } from 'lucide-react';
+import { AppLogo } from '@/components/AppLogo';
+import { Check, Loader2, ArrowRight, Building2, User, FileText, FolderKanban, Timer, LogOut } from 'lucide-react';
 import { currencies } from '@/lib/locale-data';
 
 const STRIPE_PRICE_MONTHLY = import.meta.env.VITE_STRIPE_PRICE_MONTHLY as string | undefined;
@@ -205,10 +206,7 @@ export default function Onboarding() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                <Sparkles className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold">FreelanceFlow</span>
+              <AppLogo full height={28} />
             </div>
             <Button variant="ghost" size="sm" onClick={() => signOut()} className="text-muted-foreground hover:text-foreground">
               <LogOut className="h-4 w-4 mr-1.5" />
@@ -295,8 +293,8 @@ export default function Onboarding() {
         {step === 'optional' && (
           <div className="space-y-6">
             <div className="text-center">
-              <h1 className="text-2xl font-bold">Optional: your business</h1>
-              <p className="text-muted-foreground mt-1">You can change this anytime in Settings.</p>
+              <h1 className="text-2xl font-bold">Your business</h1>
+              <p className="text-muted-foreground mt-1">Set your business name and currency here. You can add more details later in Settings.</p>
             </div>
             <Card className="border-0 shadow-sm">
               <CardContent className="pt-6 space-y-4">
@@ -337,7 +335,7 @@ export default function Onboarding() {
             </Card>
             <div className="flex justify-between">
               <Button variant="ghost" onClick={() => setStep('useFirst')}>Back</Button>
-              <Button onClick={() => setStep('plan')}>
+              <Button onClick={() => setStep('plan')} disabled={!businessName.trim()}>
                 Continue <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>

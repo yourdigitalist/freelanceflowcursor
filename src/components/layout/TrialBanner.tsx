@@ -7,9 +7,10 @@ import { differenceInDays } from 'date-fns';
 
 interface TrialBannerProps {
   onUpgrade?: () => void;
+  onDismiss?: () => void;
 }
 
-export function TrialBanner({ onUpgrade }: TrialBannerProps) {
+export function TrialBanner({ onUpgrade, onDismiss }: TrialBannerProps) {
   const { user } = useAuth();
   const [trialInfo, setTrialInfo] = useState<{
     isOnTrial: boolean;
@@ -58,23 +59,20 @@ export function TrialBanner({ onUpgrade }: TrialBannerProps) {
 
   return (
     <div 
-      className="relative py-2 px-4 text-center text-sm font-medium"
+      className="sticky top-0 z-40 py-2 px-4 text-center text-sm font-medium"
       style={{
         background: 'linear-gradient(135deg, #F8EDFF 0%, #CFDEF7 100%)',
       }}
     >
-      <div className="flex items-center justify-center gap-3">
-        <Sparkles className="h-4 w-4 text-primary" />
+      <div className="flex items-center justify-center gap-3 flex-wrap">
+        <Sparkles className="h-4 w-4 text-primary shrink-0" />
         <span className="text-foreground">
           {trialInfo.isExpired ? (
-            <>Your free trial has ended. Upgrade to keep full access.</>
+            <>Your free trial has ended. We couldn&apos;t charge your card. Update your payment method in Billing to keep access.</>
+          ) : trialInfo.daysLeft === 0 ? (
+            <>Your trial ends today. We&apos;ll charge your card automatically to continue your plan. To update payment or cancel, open Billing.</>
           ) : (
-            <>
-              {trialInfo.daysLeft === 0
-                ? "Your free trial ends today — upgrade to keep your access."
-                : `Your free trial is active. ${trialInfo.daysLeft} day${trialInfo.daysLeft === 1 ? '' : 's'} left.`
-              }
-            </>
+            <>Your free trial is active. {trialInfo.daysLeft} day{trialInfo.daysLeft === 1 ? '' : 's'} left. Your card will be charged automatically when the trial ends—no action needed.</>
           )}
         </span>
         <Button
@@ -83,11 +81,14 @@ export function TrialBanner({ onUpgrade }: TrialBannerProps) {
           className="h-7 text-xs shrink-0"
           onClick={onUpgrade}
         >
-          Upgrade now
+          Billing
         </Button>
       </div>
       <button
-        onClick={() => setDismissed(true)}
+        onClick={() => {
+          setDismissed(true);
+          onDismiss?.();
+        }}
         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
       >
         <X className="h-4 w-4" />

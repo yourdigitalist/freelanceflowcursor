@@ -5,9 +5,13 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
-import { BookOpen, Lightbulb, MessageSquare, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { BookOpen, Lightbulb, MessageSquare, ArrowLeft, ShieldCheck, Palette, LayoutDashboard, Megaphone, Mail } from 'lucide-react';
 
 const adminNavItems = [
+  { path: '/admin/overview', label: 'Overview', icon: LayoutDashboard },
+  { path: '/admin/announcements', label: 'Announcements', icon: Megaphone },
+  { path: '/admin/comms', label: 'Comms & templates', icon: Mail },
+  { path: '/admin/branding', label: 'Branding', icon: Palette },
   { path: '/admin/help-content', label: 'Help content', icon: BookOpen },
   { path: '/admin/feature-requests', label: 'Feature requests', icon: Lightbulb },
   { path: '/admin/feedback', label: 'Feedback', icon: MessageSquare },

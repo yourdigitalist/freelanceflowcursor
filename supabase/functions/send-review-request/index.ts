@@ -21,6 +21,27 @@ function escapeHtml(text: string | null | undefined): string {
     .replace(/'/g, "&#039;");
 }
 
+function replaceTokens(template: string, tokens: Record<string, string>): string {
+  return Object.entries(tokens).reduce((out, [key, value]) => {
+    const re = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "gi");
+    return out.replace(re, value);
+  }, template);
+}
+
+function getDefaultClientHeader(logoUrl: string, businessName: string, primaryColor: string): string {
+  return `<div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+  <div style="padding: 18px 20px; background: ${primaryColor}; color: white;">
+    ${logoUrl ? `<img src="${logoUrl}" alt="${escapeHtml(businessName)}" style="height: 28px; max-width: 160px; object-fit: contain;" />` : `<strong style="font-size: 18px;">${escapeHtml(businessName)}</strong>`}
+  </div>
+  <div style="padding: 20px;">`;
+}
+
+function getDefaultClientFooter(primaryColor: string): string {
+  return `</div><div style="padding: 14px 20px; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb;">
+  Sent by <span style="color: ${primaryColor}; font-weight: 600;">Lance</span>
+</div></div>`;
+}
+
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const RATE_LIMIT_MAX_EMAILS = 30;
 
@@ -100,6 +121,11 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name, business_name, business_email, email, business_logo, client_email_primary_color, client_email_header_html, client_email_footer_html")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
     const { data: recipients, error: recipientsError } = await supabase
       .from("review_recipients")
@@ -119,17 +145,33 @@ serve(async (req) => {
       ? `Please review by <strong>${new Date(request.due_date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</strong>.`
       : "";
 
-    const emailHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #9B63E9;">Review request: ${safeTitle}</h2>
+    const primaryColor = (profile?.client_email_primary_color || "#9B63E9").trim();
+    const fromDisplayName = (profile?.business_name || profile?.full_name || "Your Business").trim();
+    const replyToEmail = (profile?.business_email || profile?.email || "").trim();
+    const coreHtml = `
+        <h2 style="color: ${primaryColor}; margin-top: 0;">Review request: ${safeTitle}</h2>
         <p style="color: #333;">You've been asked to review <strong>${safeTitle}</strong> (v${escapeHtml(request.version)}).</p>
         ${dueText ? `<p style="color: #666;">${dueText}</p>` : ""}
         <p style="margin: 24px 0;">
-          <a href="${escapeHtml(reviewUrl)}" style="display: inline-block; background: #9B63E9; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px;">Open review</a>
+          <a href="${escapeHtml(reviewUrl)}" style="display: inline-block; background: ${primaryColor}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px;">Open review</a>
         </p>
         <p style="color: #999; font-size: 12px;">Or copy this link: ${escapeHtml(reviewUrl)}</p>
-      </div>
     `;
+    const tokens = {
+      business_name: escapeHtml(fromDisplayName),
+      logo_url: profile?.business_logo || "",
+      primary_color: primaryColor,
+      body_html: coreHtml,
+      review_title: safeTitle,
+      review_url: escapeHtml(reviewUrl),
+    };
+    const header = (profile?.client_email_header_html || "").trim()
+      ? replaceTokens(profile.client_email_header_html, tokens)
+      : getDefaultClientHeader(profile?.business_logo || "", fromDisplayName, primaryColor);
+    const footer = (profile?.client_email_footer_html || "").trim()
+      ? replaceTokens(profile.client_email_footer_html, tokens)
+      : getDefaultClientFooter(primaryColor);
+    const emailHtml = `${header}${coreHtml}${footer}`;
 
     const toAddresses = recipients.map((r: { email: string }) => r.email).filter(Boolean);
     if (toAddresses.length === 0) {
@@ -140,10 +182,11 @@ serve(async (req) => {
     }
 
     const { data: emailData, error: emailError } = await resend.emails.send({
-      from: "Reviews <onboarding@resend.dev>",
+      from: `${fromDisplayName} <onboarding@resend.dev>`,
       to: toAddresses,
-      subject: `Review request: ${request.title} (v${request.version})`,
+      subject: `Review request from ${fromDisplayName}: ${request.title} (v${request.version})`,
       html: emailHtml,
+      ...(replyToEmail ? { reply_to: replyToEmail } : {}),
     });
 
     if (emailError) {

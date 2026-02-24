@@ -30,12 +30,18 @@ import NotificationSettings from "./pages/settings/NotificationSettings";
 import HelpContentSettings from "./pages/settings/HelpContentSettings";
 import FeatureRequestSettings from "./pages/settings/FeatureRequestSettings";
 import FeedbackSettings from "./pages/settings/FeedbackSettings";
+import BrandingSettings from "./pages/settings/BrandingSettings";
+import AdminOverview from "./pages/admin/AdminOverview";
+import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
+import AdminComms from "./pages/admin/AdminComms";
 import Notifications from "./pages/Notifications";
 import Help from "./pages/Help";
 import ReviewRequests from "./pages/ReviewRequests";
 import ReviewRequestDetail from "./pages/ReviewRequestDetail";
 import ClientReview from "./pages/ClientReview";
 import NotFound from "./pages/NotFound";
+import { BrandingApply } from "@/components/BrandingApply";
+import { TimerProvider } from "@/contexts/TimerContext";
 
 const queryClient = new QueryClient();
 
@@ -147,7 +153,11 @@ function AppRoutes() {
         <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
       <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
-        <Route index element={<Navigate to="help-content" replace />} />
+        <Route index element={<Navigate to="overview" replace />} />
+        <Route path="overview" element={<AdminOverview />} />
+        <Route path="announcements" element={<AdminAnnouncements />} />
+        <Route path="comms" element={<AdminComms />} />
+        <Route path="branding" element={<BrandingSettings />} />
         <Route path="help-content" element={<HelpContentSettings />} />
         <Route path="feature-requests" element={<FeatureRequestSettings />} />
         <Route path="feedback" element={<FeedbackSettings />} />
@@ -174,9 +184,12 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <ErrorBoundary>
-            <AppRoutes />
-          </ErrorBoundary>
+          <BrandingApply />
+          <TimerProvider>
+            <ErrorBoundary>
+              <AppRoutes />
+            </ErrorBoundary>
+          </TimerProvider>
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
