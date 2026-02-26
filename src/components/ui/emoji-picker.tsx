@@ -9,7 +9,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 import { ScrollArea } from './scroll-area';
 import { Input } from './input';
-import { Search } from 'lucide-react';
+import { Search } from '@/components/icons';
 
 // Comprehensive emoji categories
 const emojiCategories = {

@@ -7,7 +7,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { LayoutGrid, List, Settings2, Plus, EyeOff } from 'lucide-react';
+import { LayoutGrid, List, Settings2, Plus, EyeOff } from '@/components/icons';
 import { ProjectStatus, PRIORITY_OPTIONS } from './types';
 
 interface TaskFiltersProps {

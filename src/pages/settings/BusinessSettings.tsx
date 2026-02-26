@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useSettingsDirty } from '@/contexts/SettingsDirtyContext';
-import { Loader2, Upload } from 'lucide-react';
+import { notifyStartGuideRefresh } from '@/components/layout/StartGuide';
+import { Loader2, Upload } from '@/components/icons';
 import { PhoneInput } from '@/components/ui/phone-input';
 
 interface BusinessProfile {
@@ -85,6 +86,7 @@ export default function BusinessSettings() {
     toast({ title: 'Business profile updated successfully' });
     await fetchProfile();
     dirtyContext?.setDirty(false);
+    notifyStartGuideRefresh();
   };
 
   const discard = () => {
@@ -238,46 +240,6 @@ export default function BusinessSettings() {
 
       <Card className="border-0 shadow-sm">
         <CardHeader>
-          <CardTitle>Client Email Template</CardTitle>
-          <CardDescription>
-            Default wrapper for emails you send to clients (invoice and review request emails).
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="client_email_primary_color">Brand Color</Label>
-            <Input
-              id="client_email_primary_color"
-              name="client_email_primary_color"
-              defaultValue={profile?.client_email_primary_color || '#9B63E9'}
-              placeholder="#9B63E9"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="client_email_header_html">Email Header HTML (optional)</Label>
-            <Textarea
-              id="client_email_header_html"
-              name="client_email_header_html"
-              defaultValue={profile?.client_email_header_html || ''}
-              placeholder="Tokens available: {{business_name}}, {{logo_url}}, {{primary_color}}, {{body_html}}"
-              rows={4}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="client_email_footer_html">Email Footer HTML (optional)</Label>
-            <Textarea
-              id="client_email_footer_html"
-              name="client_email_footer_html"
-              defaultValue={profile?.client_email_footer_html || ''}
-              placeholder="Example: <p>Sent by Lance</p>"
-              rows={3}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-0 shadow-sm">
-        <CardHeader>
           <CardTitle>Business Information</CardTitle>
           <CardDescription>Your business details for invoices and client communication</CardDescription>
         </CardHeader>
@@ -417,6 +379,46 @@ export default function BusinessSettings() {
               defaultValue={profile?.payment_instructions || ''}
               placeholder="Additional payment instructions or notes..."
               rows={2}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-0 shadow-sm">
+        <CardHeader>
+          <CardTitle>Client Email Template</CardTitle>
+          <CardDescription>
+            Default wrapper for emails you send to clients (invoice and review request emails).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="client_email_primary_color">Brand Color</Label>
+            <Input
+              id="client_email_primary_color"
+              name="client_email_primary_color"
+              defaultValue={profile?.client_email_primary_color || '#9B63E9'}
+              placeholder="#9B63E9"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="client_email_header_html">Email Header HTML (optional)</Label>
+            <Textarea
+              id="client_email_header_html"
+              name="client_email_header_html"
+              defaultValue={profile?.client_email_header_html || ''}
+              placeholder="Tokens available: {{business_name}}, {{logo_url}}, {{primary_color}}, {{body_html}}"
+              rows={4}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="client_email_footer_html">Email Footer HTML (optional)</Label>
+            <Textarea
+              id="client_email_footer_html"
+              name="client_email_footer_html"
+              defaultValue={profile?.client_email_footer_html || ''}
+              placeholder="Example: <p>Sent by Lance</p>"
+              rows={3}
             />
           </div>
         </CardContent>

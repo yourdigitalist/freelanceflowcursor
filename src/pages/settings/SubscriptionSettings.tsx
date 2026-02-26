@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Check, Sparkles, Crown, RotateCcw } from 'lucide-react';
+import { Loader2, Check, Sparkles, Crown, RotateCcw } from '@/components/icons';
 import { differenceInDays, format } from 'date-fns';
 import {
   AlertDialog,

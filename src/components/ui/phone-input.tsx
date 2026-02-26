@@ -14,7 +14,7 @@ import {
   CommandList,
 } from './command';
 import { Button } from './button';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown } from '@/components/icons';
 
 // Comprehensive list of countries with dial codes and flag emojis
 const countries = [

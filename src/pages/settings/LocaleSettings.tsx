@@ -16,7 +16,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Globe, ChevronDown } from 'lucide-react';
+import { Loader2, Globe, ChevronDown } from '@/components/icons';
 import {
   currencies,
   currencyDisplayFormats,

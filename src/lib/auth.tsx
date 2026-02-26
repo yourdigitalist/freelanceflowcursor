@@ -9,6 +9,7 @@ interface AuthContextType {
   loading: boolean;
   signUp: (email: string, password: string, fullName?: string, firstName?: string, lastName?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signInWithMagicLink: (email: string) => Promise<{ error: Error | null; message?: string }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
@@ -61,6 +62,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
+  const signInWithMagicLink = async (email: string) => {
+    const baseUrl = getSiteUrl() || (typeof window !== 'undefined' ? window.location.origin : '');
+    const { data, error } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: {
+        emailRedirectTo: baseUrl ? `${baseUrl}/dashboard` : undefined,
+      },
+    });
+    // Supabase may return success but with a message (e.g. rate limit)
+    const message = (data as { message?: string })?.message ?? error?.message;
+    return { error, message };
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
   };
@@ -86,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut, resetPassword, updatePassword, resendConfirmationEmail }}>
+    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signInWithMagicLink, signOut, resetPassword, updatePassword, resendConfirmationEmail }}>
       {children}
     </AuthContext.Provider>
   );

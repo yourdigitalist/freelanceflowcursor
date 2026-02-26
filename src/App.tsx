@@ -32,6 +32,7 @@ import FeatureRequestSettings from "./pages/settings/FeatureRequestSettings";
 import FeedbackSettings from "./pages/settings/FeedbackSettings";
 import BrandingSettings from "./pages/settings/BrandingSettings";
 import AdminOverview from "./pages/admin/AdminOverview";
+import AdminIcons from "./pages/admin/AdminIcons";
 import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
 import AdminComms from "./pages/admin/AdminComms";
 import Notifications from "./pages/Notifications";
@@ -40,8 +41,11 @@ import ReviewRequests from "./pages/ReviewRequests";
 import ReviewRequestDetail from "./pages/ReviewRequestDetail";
 import ClientReview from "./pages/ClientReview";
 import NotFound from "./pages/NotFound";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
 import { BrandingApply } from "@/components/BrandingApply";
 import { TimerProvider } from "@/contexts/TimerContext";
+import { IconSlotProvider } from "@/contexts/IconSlotContext";
 
 const queryClient = new QueryClient();
 
@@ -136,6 +140,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Index />} />
       <Route path="/auth" element={user ? <Navigate to="/dashboard" replace /> : <Auth />} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/privacy" element={<Privacy />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/onboarding" element={<OnboardingRoute><Onboarding /></OnboardingRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -158,6 +164,7 @@ function AppRoutes() {
         <Route path="announcements" element={<AdminAnnouncements />} />
         <Route path="comms" element={<AdminComms />} />
         <Route path="branding" element={<BrandingSettings />} />
+        <Route path="icons" element={<AdminIcons />} />
         <Route path="help-content" element={<HelpContentSettings />} />
         <Route path="feature-requests" element={<FeatureRequestSettings />} />
         <Route path="feedback" element={<FeedbackSettings />} />
@@ -185,11 +192,13 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <BrandingApply />
-          <TimerProvider>
-            <ErrorBoundary>
-              <AppRoutes />
-            </ErrorBoundary>
-          </TimerProvider>
+          <IconSlotProvider>
+            <TimerProvider>
+              <ErrorBoundary>
+                <AppRoutes />
+              </ErrorBoundary>
+            </TimerProvider>
+          </IconSlotProvider>
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>

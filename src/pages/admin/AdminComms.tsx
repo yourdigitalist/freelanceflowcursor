@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, FileText, Mail } from 'lucide-react';
+import { Loader2, Save, FileText, Mail } from '@/components/icons';
 
 interface AppCommsDefaults {
   id: number;

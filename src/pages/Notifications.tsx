@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Bell, Check, CheckCheck, Trash2, Settings, Loader2 } from 'lucide-react';
+import { Bell, Check, CheckCheck, Trash2, Settings, Loader2 } from '@/components/icons';
 import { formatDistanceToNow } from 'date-fns';
 
 interface NotificationRow {

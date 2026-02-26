@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
-import { X, Sparkles } from 'lucide-react';
+import { X, Sparkles } from '@/components/icons';
 import { differenceInDays } from 'date-fns';
 
 interface TrialBannerProps {

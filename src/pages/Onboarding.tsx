@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getBrowserCountry } from '@/lib/locale-data';
 import { countries as countryList } from '@/components/ui/phone-input';
@@ -14,7 +14,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown } from '@/components/icons';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { AppLogo } from '@/components/AppLogo';
-import { Check, Loader2, ArrowRight, Building2, User, FileText, FolderKanban, Timer, LogOut } from 'lucide-react';
+import { Check, Loader2, ArrowRight, Building2, User, Receipt, Table, Timer, LogOut } from '@/components/icons';
 import { currencies } from '@/lib/locale-data';
 
 const STRIPE_PRICE_MONTHLY = import.meta.env.VITE_STRIPE_PRICE_MONTHLY as string | undefined;
@@ -38,8 +38,8 @@ const roles = [
 ];
 
 const useFirstOptions = [
-  { id: 'invoices', label: 'Invoices', icon: FileText },
-  { id: 'projects', label: 'Projects', icon: FolderKanban },
+  { id: 'invoices', label: 'Invoices', icon: Receipt },
+  { id: 'projects', label: 'Projects', icon: Table },
   { id: 'time', label: 'Time tracking', icon: Timer },
 ];
 
@@ -76,53 +76,79 @@ export default function Onboarding() {
   const [selectedPlanId, setSelectedPlanId] = useState('pro_annual');
   const [loading, setLoading] = useState(false);
   const [completingCheckout, setCompletingCheckout] = useState(false);
+  const checkoutCompleteAttemptedRef = useRef(false);
 
   // Handle return from Stripe Checkout: ?checkout_success=1&session_id=...
   useEffect(() => {
     const success = searchParams.get('checkout_success');
     const sessionId = searchParams.get('session_id');
-    if (success === '1' && sessionId && user && !completingCheckout) {
-      setCompletingCheckout(true);
-      (async () => {
-        try {
-          const { data: { session } } = await supabase.auth.refreshSession();
-          if (!session?.access_token) {
-            toast({ title: 'Please sign in again', variant: 'destructive' });
-            setCompletingCheckout(false);
-            return;
-          }
-          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-          const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-          if (!supabaseUrl || !anonKey) {
-            toast({ title: 'App config error', variant: 'destructive' });
-            setCompletingCheckout(false);
-            return;
-          }
-          const res = await fetch(`${supabaseUrl}/functions/v1/complete-onboarding-after-checkout`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${session.access_token}`,
-              apikey: anonKey,
-            },
-            body: JSON.stringify({ session_id: sessionId }),
+    if (success !== '1' || !sessionId || !user || checkoutCompleteAttemptedRef.current) return;
+
+    checkoutCompleteAttemptedRef.current = true;
+    setCompletingCheckout(true);
+
+    (async () => {
+      try {
+        const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError || !session?.access_token) {
+          toast({ title: 'Session expired', description: 'Please sign in again and go to Settings → Subscription to finish.', variant: 'destructive' });
+          setSearchParams((p) => {
+            const next = new URLSearchParams(p);
+            next.delete('checkout_success');
+            next.delete('session_id');
+            return next;
           });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            toast({ title: 'Setup incomplete', description: data?.error || 'Please try again.', variant: 'destructive' });
-            setCompletingCheckout(false);
-            return;
-          }
-          setSearchParams({});
-          navigate('/dashboard', { replace: true });
-        } catch (e) {
-          toast({ title: 'Something went wrong', variant: 'destructive' });
-        } finally {
           setCompletingCheckout(false);
+          return;
         }
-      })();
-    }
-  }, [searchParams, user, completingCheckout, navigate, setSearchParams, toast]);
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        if (!supabaseUrl || !anonKey) {
+          toast({ title: 'App config error', variant: 'destructive' });
+          setCompletingCheckout(false);
+          return;
+        }
+        const res = await fetch(`${supabaseUrl}/functions/v1/complete-onboarding-after-checkout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: anonKey,
+          },
+          body: JSON.stringify({ session_id: sessionId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const isAuth = res.status === 401;
+          toast({
+            title: isAuth ? 'Session expired' : 'Setup incomplete',
+            description: isAuth ? 'Please sign in again. You can then go to Settings → Subscription to complete setup.' : (data?.error || 'Please try again.'),
+            variant: 'destructive',
+          });
+          setSearchParams((p) => {
+            const next = new URLSearchParams(p);
+            next.delete('checkout_success');
+            next.delete('session_id');
+            return next;
+          });
+          setCompletingCheckout(false);
+          return;
+        }
+        setSearchParams({});
+        navigate('/dashboard', { replace: true });
+      } catch (e) {
+        toast({ title: 'Something went wrong', description: 'Please try again or go to Settings → Subscription.', variant: 'destructive' });
+        setSearchParams((p) => {
+          const next = new URLSearchParams(p);
+          next.delete('checkout_success');
+          next.delete('session_id');
+          return next;
+        });
+      } finally {
+        setCompletingCheckout(false);
+      }
+    })();
+  }, [searchParams, user, navigate, setSearchParams, toast]);
 
   const stepsOrder: Step[] = ['role', 'useFirst', 'optional', 'plan'];
   const currentStepIndex = stepsOrder.indexOf(step);

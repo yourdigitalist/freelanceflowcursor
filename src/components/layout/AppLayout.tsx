@@ -6,12 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { LayoutDashboard, Users, User, FolderKanban, Clock, FileText, LogOut, Menu, ChevronDown, ChevronLeft, Bell, Sparkles, ArrowRight, ChevronUp, Eye, Building2, Globe, CreditCard, HardDrive, HelpCircle, ShieldCheck, Briefcase } from 'lucide-react';
+import { User, LogOut, Menu, ChevronDown, ChevronLeft, Bell, Sparkles, ArrowRight, ChevronUp, Building2, Globe, CreditCard, HardDrive, HelpCircle, ShieldCheck, Briefcase } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 import { cn } from '@/lib/utils';
 import { useBranding } from '@/hooks/useBranding';
 import { useTimer } from '@/contexts/TimerContext';
 import { TrialBanner } from './TrialBanner';
 import { TimerBar } from './TimerBar';
+import { StartGuide } from './StartGuide';
 interface AppLayoutProps {
   children: ReactNode;
 }
@@ -31,11 +33,11 @@ interface Profile {
   is_admin: boolean | null;
 }
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Clients', href: '/clients', icon: Users },
-  { name: 'Time', href: '/time', icon: Clock },
-  { name: 'Invoices', href: '/invoices', icon: FileText },
-  { name: 'Reviews', href: '/reviews', icon: Eye },
+  { name: 'Dashboard', href: '/dashboard', slot: 'sidebar_dashboard' as const },
+  { name: 'Clients', href: '/clients', slot: 'sidebar_clients' as const },
+  { name: 'Time', href: '/time', slot: 'sidebar_time' as const },
+  { name: 'Invoices', href: '/invoices', slot: 'sidebar_invoices' as const },
+  { name: 'Reviews', href: '/reviews', slot: 'sidebar_reviews' as const },
 ];
 export function AppLayout({
   children
@@ -169,25 +171,25 @@ export function AppLayout({
         {/* Navigation - order: Dashboard, Clients, Projects, Time, Invoices, Reviews */}
         <nav className={cn("flex-1 overflow-y-auto space-y-1", sidebarCollapsed ? "p-2" : "p-3")}>
           <Link to="/dashboard" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/dashboard' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <LayoutDashboard className={cn("h-5 w-5 shrink-0", location.pathname === '/dashboard' && "text-primary")} />
+            <SlotIcon slot="sidebar_dashboard" className={cn("h-5 w-5 shrink-0", location.pathname === '/dashboard' && "text-primary")} />
             {!sidebarCollapsed && 'Dashboard'}
           </Link>
           <Link to="/clients" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/clients' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <Users className={cn("h-5 w-5 shrink-0", location.pathname === '/clients' && "text-primary")} />
+            <SlotIcon slot="sidebar_clients" className={cn("h-5 w-5 shrink-0", location.pathname === '/clients' && "text-primary")} />
             {!sidebarCollapsed && 'Clients'}
           </Link>
 
           {/* Projects: when collapsed = single link (same size as others); when expanded = dropdown */}
           {sidebarCollapsed ? (
             <Link to="/projects" onClick={() => setSidebarOpen(false)} className={cn("flex items-center justify-center px-2 py-2.5 rounded-lg text-sm font-medium transition-colors", isProjectsActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-              <FolderKanban className={cn("h-5 w-5 shrink-0", isProjectsActive && "text-primary")} />
+              <SlotIcon slot="sidebar_projects" className={cn("h-5 w-5 shrink-0", isProjectsActive && "text-primary")} />
             </Link>
           ) : (
             <Collapsible open={projectsOpen} onOpenChange={setProjectsOpen}>
               <CollapsibleTrigger asChild>
                 <button className={cn("flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", isProjectsActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
                   <div className="flex items-center gap-3">
-                    <FolderKanban className={cn("h-5 w-5 shrink-0", isProjectsActive && "text-primary")} />
+                    <SlotIcon slot="sidebar_projects" className={cn("h-5 w-5 shrink-0", isProjectsActive && "text-primary")} />
                     Projects
                   </div>
                   <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", projectsOpen && "rotate-180")} />
@@ -208,14 +210,14 @@ export function AppLayout({
           {/* Time with sub-items: Timer, Logs */}
           {sidebarCollapsed ? (
             <Link to="/time/timer" onClick={() => setSidebarOpen(false)} className={cn("flex items-center justify-center px-2 py-2.5 rounded-lg text-sm font-medium transition-colors", isTimeActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-              <Clock className={cn("h-5 w-5 shrink-0", isTimeActive && "text-primary")} />
+              <SlotIcon slot="sidebar_time" className={cn("h-5 w-5 shrink-0", isTimeActive && "text-primary")} />
             </Link>
           ) : (
             <Collapsible open={timeOpen} onOpenChange={setTimeOpen}>
               <CollapsibleTrigger asChild>
                 <button className={cn("flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", isTimeActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
                   <div className="flex items-center gap-3">
-                    <Clock className={cn("h-5 w-5 shrink-0", isTimeActive && "text-primary")} />
+                    <SlotIcon slot="sidebar_time" className={cn("h-5 w-5 shrink-0", isTimeActive && "text-primary")} />
                     Time
                   </div>
                   <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", timeOpen && "rotate-180")} />
@@ -232,11 +234,11 @@ export function AppLayout({
             </Collapsible>
           )}
           <Link to="/invoices" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/invoices' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <FileText className={cn("h-5 w-5 shrink-0", location.pathname === '/invoices' && "text-primary")} />
+            <SlotIcon slot="sidebar_invoices" className={cn("h-5 w-5 shrink-0", location.pathname === '/invoices' && "text-primary")} />
             {!sidebarCollapsed && 'Invoices'}
           </Link>
           <Link to="/reviews" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/reviews' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <Eye className={cn("h-5 w-5 shrink-0", location.pathname === '/reviews' && "text-primary")} />
+            <SlotIcon slot="sidebar_reviews" className={cn("h-5 w-5 shrink-0", location.pathname === '/reviews' && "text-primary")} />
             {!sidebarCollapsed && 'Reviews'}
           </Link>
         </nav>
@@ -305,7 +307,7 @@ export function AppLayout({
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link to="/settings/invoices" className="cursor-pointer">
-                  <FileText className="mr-2 h-4 w-4" />
+                  <SlotIcon slot="sidebar_invoices" className="mr-2 h-4 w-4" />
                   Invoice Settings
                 </Link>
               </DropdownMenuItem>
@@ -373,6 +375,9 @@ export function AppLayout({
         <main className="p-4 lg:p-8">
           {children}
         </main>
+
+        {/* Floating setup guide (corner panel) */}
+        <StartGuide />
       </div>
 
       {/* Persistent timer bar when timer has unsaved time */}

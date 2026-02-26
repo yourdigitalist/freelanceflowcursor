@@ -30,9 +30,9 @@ import {
   ChevronUp,
   Paperclip,
   CheckCircle2,
-} from 'lucide-react';
+} from '@/components/icons';
 import { cn } from '@/lib/utils';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import DOMPurify from 'dompurify';
 
@@ -618,6 +618,11 @@ export default function Help() {
               </Card>
             </div>
           )}
+
+          <footer className="mt-10 pt-6 border-t text-sm text-muted-foreground">
+            <Link to="/terms" className="hover:text-foreground mr-4">Terms and conditions</Link>
+            <Link to="/privacy" className="hover:text-foreground">Privacy policy</Link>
+          </footer>
         </div>
       </div>
     </AppLayout>

@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Pencil, Plus, BookOpen } from 'lucide-react';
+import { Loader2, Pencil, Plus, BookOpen } from '@/components/icons';
 import type { Database } from '@/integrations/supabase/types';
 
 type HelpContentRow = Database['public']['Tables']['help_content']['Row'];

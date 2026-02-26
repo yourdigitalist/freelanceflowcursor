@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Briefcase, Loader2, CheckCircle } from 'lucide-react';
+import { Briefcase, Loader2, CheckCircle } from '@/components/icons';
 
 export default function ResetPassword() {
   const [isLoading, setIsLoading] = useState(false);

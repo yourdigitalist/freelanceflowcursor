@@ -1,0 +1,74 @@
+<!--
+  Stripe-style email template for Supabase Auth (and transactional emails).
+  Paste this into Supabase Dashboard → Authentication → Email Templates → Body (for each template).
+  Use the same BG colours as Stripe: outer #F1F5F9, card #FFFFFF, footer #F6F9FC.
+
+  Replace REPLACE_WITH_LOGO_URL with your logo URL (e.g. from Admin → Branding; copy the logo URL).
+  Supabase variables: {{ .SiteURL }}, {{ .ConfirmationURL }}, {{ .Token }}, {{ .Email }}, etc.
+-->
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style type="text/css">
+    body, .body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; }
+    table { border-spacing: 0; }
+    img { border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+    a { color: #635BFF; text-decoration: none; }
+  </style>
+</head>
+<body style="margin:0; padding:0; background-color:#FFFFFF; word-spacing:normal;">
+  <div style="background-color:#F1F5F9;">
+    <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="width:100%; background-color:#F1F5F9;">
+      <tr>
+        <td align="center" style="padding:24px 16px;">
+          <div style="max-width:600px; margin:0 auto;">
+            <!-- Card start -->
+            <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="width:100%; background-color:#FFFFFF; border-radius:8px 8px 0 0;">
+              <tr>
+                <td style="padding:50px 40px 30px 40px; font-family: Helvetica, Arial, sans-serif;">
+                  <!-- Logo: replace src with your branding logo URL (Admin → Branding) -->
+                  <div style="margin-bottom:8px;">
+                    <a href="{{ .SiteURL }}" target="_blank" style="text-decoration:none; color:#635BFF;">
+                      <img alt="Logo" src="REPLACE_WITH_LOGO_URL" width="120" style="display:block; height:auto; max-width:120px; border:none;" />
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            </table>
+            <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="width:100%; background-color:#FFFFFF;">
+              <tr>
+                <td style="padding:0 40px 24px 40px; font-family: Helvetica, Arial, sans-serif; font-size:14px; line-height:1.5; color:#425466;">
+                  <!-- Main content: Supabase injects or use below for confirm signup -->
+                  <p style="margin:0 0 16px 0;">Hello,</p>
+                  <p style="margin:0 0 16px 0;">Follow this link to confirm your email:</p>
+                  <p style="margin:0 0 16px 0;"><a href="{{ .ConfirmationURL }}" style="color:#635BFF;">Confirm your email</a></p>
+                  <p style="margin:0 0 16px 0;">If you didn't request this, you can ignore this email.</p>
+                </td>
+              </tr>
+            </table>
+            <!-- Footer strip (same colours as Stripe) -->
+            <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="width:100%; background-color:#F6F9FC; border-radius:0 0 8px 8px;">
+              <tr>
+                <td style="padding:32px 40px 40px 40px; font-family: Helvetica, Arial, sans-serif; font-size:12px; line-height:1.4; color:#525F7F;">
+                  <p style="margin:0 0 12px 0;">
+                    <a href="{{ .SiteURL }}/auth" style="color:#525F7F;">Log in</a>
+                    &nbsp;·&nbsp;
+                    <a href="{{ .SiteURL }}/help" style="color:#525F7F;">Help</a>
+                    &nbsp;·&nbsp;
+                    <a href="{{ .SiteURL }}/terms" style="color:#525F7F;">Terms and conditions</a>
+                    &nbsp;·&nbsp;
+                    <a href="{{ .SiteURL }}/privacy" style="color:#525F7F;">Privacy policy</a>
+                  </p>
+                  <p style="margin:0;">This email was sent to {{ .Email }}.</p>
+                </td>
+              </tr>
+            </table>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>

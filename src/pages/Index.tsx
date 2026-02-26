@@ -8,13 +8,13 @@ import {
   ListTodo,
   Clock,
   MessageSquare,
-  FileText,
+  Receipt,
   Palette,
   Code2,
   Megaphone,
   Sparkles,
   HardDrive,
-} from 'lucide-react';
+} from '@/components/icons';
 
 export default function Index() {
   return (
@@ -141,7 +141,7 @@ export default function Index() {
                   'Send invoices with automated reminders.',
                   "Know what's sent, paid, or overdue.",
                 ],
-                icon: FileText,
+                icon: Receipt,
               },
             ].map((item) => (
               <div key={item.step} className="flex gap-6 items-start">
@@ -413,6 +413,12 @@ export default function Index() {
       <footer className="py-8 border-t">
         <div className="container mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <AppLogo full height={24} className="text-base font-semibold" />
+          <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-sm text-muted-foreground">
+            <Link to="/auth" className="hover:text-foreground">Log in</Link>
+            <Link to="/help" className="hover:text-foreground">Help</Link>
+            <Link to="/terms" className="hover:text-foreground">Terms and conditions</Link>
+            <Link to="/privacy" className="hover:text-foreground">Privacy policy</Link>
+          </nav>
           <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Lance.</p>
         </div>
       </footer>

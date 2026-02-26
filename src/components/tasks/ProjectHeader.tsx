@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Clock, DollarSign, Calendar, CheckSquare, ArrowLeft, MoreVertical, Pencil, Trash2, Download, Upload } from 'lucide-react';
+import { Clock, DollarSign, Calendar, CheckSquare, ArrowLeft, MoreVertical, Pencil, Trash2, Download, Upload } from '@/components/icons';
 import { Project, Task, ProjectStatus } from './types';
 import { format } from 'date-fns';
 

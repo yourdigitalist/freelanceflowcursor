@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Palette } from 'lucide-react';
+import { Loader2, Upload, Palette } from '@/components/icons';
 
 const BRANDING_BUCKET = 'app-branding';
 const MAX_FILE_BYTES = 500 * 1024; // 500KB per image

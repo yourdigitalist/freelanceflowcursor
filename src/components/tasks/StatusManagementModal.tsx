@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { GripVertical, Plus, Trash2 } from 'lucide-react';
+import { GripVertical, Plus, Trash2 } from '@/components/icons';
 import { supabase } from '@/integrations/supabase/client';
 import { ProjectStatus, STATUS_COLORS, DEFAULT_STATUSES } from './types';
 import {

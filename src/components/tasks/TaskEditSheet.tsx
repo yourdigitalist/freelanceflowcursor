@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Send, MessageSquare, Trash2 } from 'lucide-react';
+import { Copy, Send, MessageSquare, Trash2 } from '@/components/icons';
 import { Task, ProjectStatus, TaskComment, PRIORITY_OPTIONS } from './types';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Building2, Globe, FileText, CreditCard } from 'lucide-react';
+import { User, Building2, Globe, Receipt, CreditCard } from '@/components/icons';
 import UserSettings from './settings/UserSettings';
 import BusinessSettings from './settings/BusinessSettings';
 import LocaleSettings from './settings/LocaleSettings';
@@ -36,7 +36,7 @@ export default function Settings() {
               <span className="hidden sm:inline">Locale</span>
             </TabsTrigger>
             <TabsTrigger value="invoices" className="data-[state=active]:bg-card gap-2">
-              <FileText className="h-4 w-4" />
+              <Receipt className="h-4 w-4" />
               <span className="hidden sm:inline">Invoices</span>
             </TabsTrigger>
             <TabsTrigger value="subscription" className="data-[state=active]:bg-card gap-2">

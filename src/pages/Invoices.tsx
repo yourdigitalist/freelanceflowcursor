@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { notifyStartGuideRefresh } from '@/components/layout/StartGuide';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -24,7 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, FileText, DollarSign, Calendar, MoreVertical, Pencil, Trash2, Send, Clock, Download, Upload } from 'lucide-react';
+import { Plus, Search, Receipt, DollarSign, Calendar, MoreVertical, Pencil, Trash2, Send, Clock, Download, Upload } from '@/components/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +41,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertCircle } from '@/components/icons';
 import {
   downloadCsv,
   parseCsv,
@@ -111,6 +114,30 @@ export default function Invoices() {
   const importFileInputRef = useRef<HTMLInputElement>(null);
   const [profileCurrency, setProfileCurrency] = useState<string | null>(null);
   const [profileCurrencyDisplay, setProfileCurrencyDisplay] = useState<string | null>(null);
+  const [invoiceSetupMissing, setInvoiceSetupMissing] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (!isDialogOpen || !user) {
+      setInvoiceSetupMissing(null);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('business_name, business_email, business_phone, business_street, business_city, business_country, business_address, bank_name, bank_routing_number, bank_account_number, tax_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      const missing: string[] = [];
+      if (!(data?.business_name ?? '').trim()) missing.push('Business name');
+      if (!(data?.business_email ?? '').trim()) missing.push('Business email');
+      const hasAddress = !!((data?.business_address ?? '').trim()) || (!!((data?.business_street ?? '').trim()) && !!((data?.business_city ?? '').trim()) && !!((data?.business_country ?? '').trim()));
+      if (!hasAddress) missing.push('Business address');
+      if (!(data?.bank_name ?? '').trim()) missing.push('Bank name');
+      if (!(data?.bank_routing_number ?? '').trim()) missing.push('Routing number');
+      if (!(data?.bank_account_number ?? '').trim()) missing.push('Account number');
+      setInvoiceSetupMissing(missing);
+    })();
+  }, [isDialogOpen, user]);
 
   const getInvoiceStatusBadgeStyle = (status: string) => {
     switch (status) {
@@ -289,6 +316,7 @@ export default function Invoices() {
       if (error) throw error;
       
       toast({ title: 'Invoice created' });
+      notifyStartGuideRefresh();
       setIsDialogOpen(false);
       navigate(`/invoices/${data.id}`);
     } catch (error: any) {
@@ -510,6 +538,25 @@ export default function Invoices() {
                   Start a new invoice
                 </DialogDescription>
               </DialogHeader>
+              {invoiceSetupMissing && invoiceSetupMissing.length > 0 && (
+                <Alert variant="destructive" className="border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200 [&_svg]:text-amber-600">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Complete your setup first</AlertTitle>
+                  <AlertDescription>
+                    <span className="block mb-2">These fields appear on your invoice but are not set yet:</span>
+                    <ul className="list-disc list-inside text-sm mb-2">
+                      {invoiceSetupMissing.map((label) => (
+                        <li key={label}>{label}</li>
+                      ))}
+                    </ul>
+                    <span className="block text-sm">
+                      <Link to="/settings/business" className="font-medium underline hover:no-underline" onClick={() => setIsDialogOpen(false)}>Company Settings</Link>
+                      {' · '}
+                      <Link to="/settings/invoices" className="font-medium underline hover:no-underline" onClick={() => setIsDialogOpen(false)}>Invoice Settings</Link>
+                    </span>
+                  </AlertDescription>
+                </Alert>
+              )}
               <form onSubmit={handleCreate} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="client_id">Client</Label>
@@ -780,7 +827,7 @@ export default function Invoices() {
           <CardContent className="p-0">
             {filteredInvoices.length === 0 ? (
               <div className="text-center py-12">
-                <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                <Receipt className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
                 <h3 className="text-lg font-semibold mb-1">No invoices yet</h3>
                 <p className="text-sm text-muted-foreground mb-4">
                   Create your first invoice to get started

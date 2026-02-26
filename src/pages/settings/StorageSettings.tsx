@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { HardDrive, Trash2, FileText, Image, Loader2, AlertTriangle } from 'lucide-react';
+import { HardDrive, Trash2, FileText, Image, Loader2, AlertTriangle } from '@/components/icons';
 
 const MAX_STORAGE_BYTES = 10 * 1024 * 1024; // 10MB per user
 

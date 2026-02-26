@@ -53,7 +53,7 @@ import {
   Clock,
   ChevronDown,
   ChevronRight,
-} from 'lucide-react';
+} from '@/components/icons';
 import { EmojiPicker } from '@/components/ui/emoji-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';

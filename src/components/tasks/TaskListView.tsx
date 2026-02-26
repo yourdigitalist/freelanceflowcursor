@@ -25,7 +25,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { GripVertical, Pencil, Trash2, Copy, MessageSquare, Plus, Calendar as CalendarIcon } from 'lucide-react';
+import { GripVertical, Pencil, Trash2, Copy, MessageSquare, Plus, Calendar as CalendarIcon } from '@/components/icons';
 import { Task, ProjectStatus, PRIORITY_OPTIONS } from './types';
 import { format } from 'date-fns';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';

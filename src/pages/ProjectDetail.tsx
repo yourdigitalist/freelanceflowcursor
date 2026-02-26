@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useProfileCurrency } from '@/hooks/useProfileCurrency';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { notifyStartGuideRefresh } from '@/components/layout/StartGuide';
 import { useToast } from '@/hooks/use-toast';
 import {
   downloadCsv,
@@ -248,6 +249,7 @@ export default function ProjectDetail() {
           }]);
         if (error) throw error;
         toast({ title: 'Task created successfully' });
+        notifyStartGuideRefresh();
       }
 
       setIsSheetOpen(false);
@@ -279,6 +281,7 @@ export default function ProjectDetail() {
 
       if (error) throw error;
       toast({ title: 'Task created' });
+      notifyStartGuideRefresh();
       fetchTasks();
     } catch (error: any) {
       toast({
@@ -616,6 +619,7 @@ export default function ProjectDetail() {
       setImportTaskDialogOpen(false);
       if (importTaskFileRef.current) importTaskFileRef.current.value = '';
       toast({ title: `Imported ${created} tasks` });
+      if (created > 0) notifyStartGuideRefresh();
       fetchTasks();
     } catch (err: any) {
       toast({ title: 'Import failed', description: err?.message, variant: 'destructive' });

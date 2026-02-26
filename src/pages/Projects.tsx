@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { notifyStartGuideRefresh } from '@/components/layout/StartGuide';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,7 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, FolderKanban, Calendar, Clock, MoreVertical, Pencil, Trash2, LayoutGrid, List, Download } from 'lucide-react';
+import { Plus, Search, Table, Calendar, Clock, MoreVertical, Pencil, Trash2, LayoutGrid, List, Download } from '@/components/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -209,6 +210,7 @@ export default function Projects() {
           .insert(projectData);
         if (error) throw error;
         toast({ title: 'Project created successfully' });
+        notifyStartGuideRefresh();
       }
       
       setIsDialogOpen(false);
@@ -722,7 +724,7 @@ export default function Projects() {
         ) : filteredProjects.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-12">
-              <FolderKanban className="h-12 w-12 text-muted-foreground/50 mb-4" />
+              <Table className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <h3 className="text-lg font-semibold mb-1">No projects yet</h3>
               <p className="text-sm text-muted-foreground mb-4">
                 Create your first project to get started

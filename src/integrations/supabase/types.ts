@@ -475,6 +475,50 @@ export type Database = {
         }
         Relationships: []
       }
+      app_icon_slots: {
+        Row: {
+          slot_key: string
+          icon_upload_id: string | null
+          icon_storage_path: string | null
+        }
+        Insert: {
+          slot_key: string
+          icon_upload_id?: string | null
+          icon_storage_path?: string | null
+        }
+        Update: {
+          slot_key?: string
+          icon_upload_id?: string | null
+          icon_storage_path?: string | null
+        }
+        Relationships: [
+          { foreignKeyName: "app_icon_slots_icon_upload_id_fkey"; columns: ["icon_upload_id"]; isOneToOne: false; referencedRelation: "app_icon_uploads"; referencedColumns: ["id"] }
+        ]
+      }
+      app_icon_uploads: {
+        Row: {
+          id: string
+          name: string
+          svg_content: string | null
+          storage_path: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          svg_content?: string | null
+          storage_path?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          svg_content?: string | null
+          storage_path?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       app_comms_defaults: {
         Row: {
           id: number

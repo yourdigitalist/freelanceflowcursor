@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { useSettingsDirty } from '@/contexts/SettingsDirtyContext';
-import { Loader2, Camera } from 'lucide-react';
+import { Loader2, Camera } from '@/components/icons';
 
 interface UserProfile {
   first_name: string | null;

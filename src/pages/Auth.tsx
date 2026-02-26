@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { AppLogo } from '@/components/AppLogo';
-import { Loader2, Clock, Users, FileText, BarChart3, Check } from 'lucide-react';
+import { Loader2, Clock, Users, Receipt, BarChart3, Check } from '@/components/icons';
 
 const SIGNUP_PENDING_KEY = 'signup_pending';
 
@@ -20,8 +20,18 @@ export default function Auth() {
   const [showConfirmEmailMessage, setShowConfirmEmailMessage] = useState(false);
   const [resendEmail, setResendEmail] = useState('');
   const [resendLoading, setResendLoading] = useState(false);
-  const { signIn, signUp, resetPassword, resendConfirmationEmail } = useAuth();
+  const { signIn, signUp, signInWithMagicLink, resetPassword, resendConfirmationEmail } = useAuth();
+  const [magicLinkEmail, setMagicLinkEmail] = useState('');
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [magicLinkLoading, setMagicLinkLoading] = useState(false);
   const navigate = useNavigate();
+
+  // After showing magic link success, allow re-entering email after a few seconds
+  useEffect(() => {
+    if (!magicLinkSent) return;
+    const t = setTimeout(() => setMagicLinkSent(false), 4000);
+    return () => clearTimeout(t);
+  }, [magicLinkSent]);
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   const authTab = searchParams.get('tab') === 'signup' ? 'signup' : 'signin';
@@ -112,6 +122,28 @@ export default function Auth() {
     setIsLoading(false);
   };
 
+  const handleMagicLink = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!magicLinkEmail?.trim()) return;
+    setMagicLinkLoading(true);
+    const { error, message } = await signInWithMagicLink(magicLinkEmail);
+    if (error) {
+      toast({
+        title: 'Could not send magic link',
+        description: message ?? error.message,
+        variant: 'destructive',
+      });
+    } else {
+      setMagicLinkSent(true);
+      const desc = message ?? "We sent you a sign-in link. Check your inbox (and spam) and click the link.";
+      toast({
+        title: 'Check your email',
+        description: desc,
+      });
+    }
+    setMagicLinkLoading(false);
+  };
+
   const handleResendConfirmation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resendEmail?.trim()) return;
@@ -136,7 +168,7 @@ export default function Auth() {
     { icon: Users, text: 'Client Management' },
     { icon: BarChart3, text: 'Project Tracking' },
     { icon: Clock, text: 'Time Tracking' },
-    { icon: FileText, text: 'Professional Invoicing' },
+    { icon: Receipt, text: 'Professional Invoicing' },
   ];
 
   return (
@@ -270,6 +302,41 @@ export default function Auth() {
                       Forgot your password?
                     </button>
                   </form>
+
+                  <div className="relative my-6">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-border" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase text-muted-foreground">
+                      <span className="bg-card px-2">Or</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="magic-link-email">Sign in with a magic link</Label>
+                    {magicLinkSent ? (
+                      <div className="text-sm text-muted-foreground py-2 space-y-1">
+                        <p>We sent a sign-in link to <strong>{magicLinkEmail}</strong>. Click the link in the email to sign in.</p>
+                        <p className="text-xs">If you don’t see it, check spam/junk.</p>
+                      </div>
+                    ) : (
+                      <form onSubmit={handleMagicLink} className="flex gap-2">
+                        <Input
+                          id="magic-link-email"
+                          type="email"
+                          placeholder="you@example.com"
+                          value={magicLinkEmail}
+                          onChange={(e) => setMagicLinkEmail(e.target.value)}
+                          className="flex-1"
+                          disabled={magicLinkLoading}
+                        />
+                        <Button type="submit" variant="secondary" disabled={magicLinkLoading}>
+                          {magicLinkLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                          Send link
+                        </Button>
+                      </form>
+                    )}
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="signup">
@@ -331,9 +398,9 @@ export default function Auth() {
               <div className="mt-6 text-center">
                 <p className="text-sm text-muted-foreground">
                   By continuing, you agree to our{' '}
-                  <a href="#" className="text-primary hover:underline">Terms of Service</a>
+                  <Link to="/terms" className="text-primary hover:underline">Terms of Service</Link>
                   {' '}and{' '}
-                  <a href="#" className="text-primary hover:underline">Privacy Policy</a>
+                  <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>
                 </p>
               </div>
             </CardContent>
@@ -344,6 +411,12 @@ export default function Auth() {
               ← Back to home
             </Link>
           </p>
+          <footer className="mt-8 pt-6 border-t text-center text-sm text-muted-foreground">
+            <Link to="/auth" className="hover:text-foreground mr-4">Log in</Link>
+            <Link to="/help" className="hover:text-foreground mr-4">Help</Link>
+            <Link to="/terms" className="hover:text-foreground mr-4">Terms and conditions</Link>
+            <Link to="/privacy" className="hover:text-foreground">Privacy policy</Link>
+          </footer>
         </div>
       </div>
 

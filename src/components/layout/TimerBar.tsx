@@ -4,7 +4,7 @@ import { useTimer } from '@/contexts/TimerContext';
 import { formatElapsed } from '@/contexts/TimerContext';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Square, Play, Clock, ExternalLink } from 'lucide-react';
+import { Square, Play, Clock, ExternalLink } from '@/components/icons';
 
 export function TimerBar() {
   const { user } = useAuth();
@@ -38,7 +38,7 @@ export function TimerBar() {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-card shadow-lg">
+    <div className="fixed bottom-0 left-0 right-0 z-[60] border-t bg-card shadow-lg">
       <div className="flex items-center gap-3 px-4 py-2.5 max-w-4xl mx-auto">
         <div className="flex items-center gap-2 text-foreground shrink-0">
           <Clock className="h-4 w-4 text-primary" />

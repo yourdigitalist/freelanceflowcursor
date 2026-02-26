@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { notifyStartGuideRefresh } from '@/components/layout/StartGuide';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -29,7 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Users, Mail, Phone, Building2, MoreVertical, Pencil, Trash2, Grid, List } from 'lucide-react';
+import { Plus, Search, Users, Mail, Phone, Building2, MoreVertical, Pencil, Trash2, Grid, List } from '@/components/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -169,12 +170,14 @@ export default function Clients() {
           .eq('id', editingClient.id);
         if (error) throw error;
         toast({ title: 'Client updated successfully' });
+        notifyStartGuideRefresh();
       } else {
         const { error } = await supabase
           .from('clients')
           .insert(clientData);
         if (error) throw error;
         toast({ title: 'Client created successfully' });
+        notifyStartGuideRefresh();
       }
       
       setIsDialogOpen(false);

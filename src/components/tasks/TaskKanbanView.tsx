@@ -5,7 +5,7 @@ import {
 } from '@dnd-kit/sortable';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus } from '@/components/icons';
 import { Task, ProjectStatus } from './types';
 import { TaskCard } from './TaskCard';
 import { QuickAddTask } from './QuickAddTask';

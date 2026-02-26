@@ -38,7 +38,7 @@ import {
   Calendar,
   User,
   FolderOpen,
-} from 'lucide-react';
+} from '@/components/icons';
 
 interface ReviewRequest {
   id: string;

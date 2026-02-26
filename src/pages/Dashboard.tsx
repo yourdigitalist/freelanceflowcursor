@@ -8,16 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Users,
-  FolderKanban,
-  DollarSign,
-  Clock,
-  Plus,
-  ArrowRight,
-  FileText,
-  Bell,
-} from 'lucide-react';
+import { Plus, ArrowRight, Bell } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 
 interface DashboardStats {
   totalClients: number;
@@ -296,25 +288,25 @@ export default function Dashboard() {
       title: 'Active Clients',
       value: stats.totalClients,
       subtitle: `${stats.totalClients} total`,
-      icon: Users,
+      slot: 'stat_clients' as const,
     },
     {
       title: 'Active Projects',
       value: stats.activeProjects,
       subtitle: `${stats.activeProjects} total`,
-      icon: FolderKanban,
+      slot: 'stat_projects' as const,
     },
     {
       title: 'Hours This Month',
       value: stats.hoursThisMonth.toFixed(1),
       subtitle: `${stats.unbilledHours.toFixed(1)}h unbilled`,
-      icon: Clock,
+      slot: 'stat_hours' as const,
     },
     {
       title: 'Pending Payment',
       value: fmt(stats.pendingAmount),
       subtitle: `${stats.pendingInvoices} invoices`,
-      icon: DollarSign,
+      slot: 'stat_money' as const,
     },
   ];
 
@@ -443,7 +435,7 @@ export default function Dashboard() {
                     <p className="text-xs text-muted-foreground mt-0.5">{stat.subtitle}</p>
                   </div>
                   <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <stat.icon className="h-5 w-5 text-primary" />
+                    <SlotIcon slot={stat.slot} className="h-5 w-5 text-primary" />
                   </div>
                 </div>
               </CardContent>
@@ -467,7 +459,7 @@ export default function Dashboard() {
             <CardContent>
               {recentProjects.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  <FolderKanban className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <SlotIcon slot="empty_projects" className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No active projects</p>
                   <Button asChild className="mt-4" variant="outline">
                     <Link to="/projects?new=1">Create your first project</Link>
@@ -648,7 +640,7 @@ export default function Dashboard() {
                       className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <SlotIcon slot="sidebar_invoices" className="h-4 w-4 text-muted-foreground" />
                         <div>
                           <p className="text-sm font-medium">{invoice.invoice_number}</p>
                           <p className="text-xs text-muted-foreground">{fmt(Number(invoice.total ?? 0))}</p>

@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useTimer, formatElapsed, formatDurationFromSeconds, TIMER_ENTRY_SAVED_EVENT } from '@/contexts/TimerContext';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { notifyStartGuideRefresh } from '@/components/layout/StartGuide';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +28,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Clock, Play, Square, Calendar, Trash2, Pencil, DollarSign, Filter, Download, Upload, List } from 'lucide-react';
+import { Plus, Clock, Play, Square, Calendar, Trash2, Pencil, DollarSign, Filter, Download, Upload, List } from '@/components/icons';
 import { format, differenceInMinutes, differenceInSeconds, parseISO, startOfWeek, endOfWeek, subDays, startOfMonth, endOfMonth } from 'date-fns';
 import {
   Table,
@@ -414,6 +415,7 @@ export default function TimeTracking() {
           });
         }
         toast({ title: 'Time entry added' });
+        notifyStartGuideRefresh();
       }
       
       setIsDialogOpen(false);
@@ -601,6 +603,7 @@ export default function TimeTracking() {
       setImportDialogOpen(false);
       if (importFileInputRef.current) importFileInputRef.current.value = '';
       toast({ title: `Imported ${created} time entries` });
+      if (created > 0) notifyStartGuideRefresh();
       fetchEntries();
     } catch (err: any) {
       toast({ title: 'Import failed', description: err?.message, variant: 'destructive' });

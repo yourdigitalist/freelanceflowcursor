@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Lightbulb } from 'lucide-react';
+import { Loader2, Lightbulb } from '@/components/icons';
 import { format } from 'date-fns';
 import type { Database } from '@/integrations/supabase/types';
 
