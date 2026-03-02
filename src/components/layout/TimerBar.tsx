@@ -4,7 +4,9 @@ import { useTimer } from '@/contexts/TimerContext';
 import { formatElapsed } from '@/contexts/TimerContext';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Square, Play, Clock, ExternalLink } from '@/components/icons';
+import { Input } from '@/components/ui/input';
+import { Square, Play } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 
 export function TimerBar() {
   const { user } = useAuth();
@@ -12,7 +14,7 @@ export function TimerBar() {
   const {
     draftSegments,
     timerDescription,
-    timerProject,
+    setTimerDescription,
     isLocalTimerRunning,
     getDraftTotalSeconds,
     startTimer,
@@ -23,13 +25,12 @@ export function TimerBar() {
   if (!user || draftSegments.length === 0) return null;
 
   const totalSeconds = getDraftTotalSeconds();
-  const label = timerDescription?.trim() || timerProject || 'No description yet';
 
   const handleSave = async () => {
     if (!timerDescription?.trim()) {
       toast({
-        title: 'Add a description first',
-        description: 'Open the Timer page to add what you worked on, then save your time.',
+        title: 'Add a description',
+        description: 'Type what you worked on in the bar above, then save.',
         variant: 'destructive',
       });
       return;
@@ -38,18 +39,21 @@ export function TimerBar() {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[60] border-t bg-card shadow-lg">
-      <div className="flex items-center gap-3 px-4 py-2.5 max-w-4xl mx-auto">
+    <div className="border-t bg-card shadow-lg">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 px-3 py-2 sm:px-4 sm:py-2.5 max-w-4xl mx-auto">
         <div className="flex items-center gap-2 text-foreground shrink-0">
-          <Clock className="h-4 w-4 text-primary" />
+          <SlotIcon slot="timer_bar_clock" className="h-4 w-4 text-primary" />
           <span className="font-mono font-semibold tabular-nums text-sm sm:text-base">
             {formatElapsed(totalSeconds)}
           </span>
         </div>
-        <div className="min-w-0 flex-1 truncate text-sm text-muted-foreground" title={label}>
-          {label}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <Input
+          value={timerDescription}
+          onChange={(e) => setTimerDescription(e.target.value)}
+          placeholder="What are you working on?"
+          className="h-8 flex-1 min-w-[120px] max-w-md text-sm"
+        />
+        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end sm:justify-start">
           {isLocalTimerRunning ? (
             <Button variant="outline" size="sm" onClick={stopTimer} className="gap-1.5">
               <Square className="h-3.5 w-3.5" />
@@ -66,7 +70,7 @@ export function TimerBar() {
           </Button>
           <Button variant="ghost" size="sm" asChild className="gap-1.5">
             <Link to="/time/timer">
-              <ExternalLink className="h-3.5 w-3.5" />
+              <SlotIcon slot="timer_bar_open" className="h-3.5 w-3.5" />
               Open Timer
             </Link>
           </Button>

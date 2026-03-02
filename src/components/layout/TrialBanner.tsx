@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
-import { X, Sparkles } from '@/components/icons';
+import { X } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 import { differenceInDays } from 'date-fns';
 
 interface TrialBannerProps {
@@ -65,7 +66,7 @@ export function TrialBanner({ onUpgrade, onDismiss }: TrialBannerProps) {
       }}
     >
       <div className="flex items-center justify-center gap-3 flex-wrap">
-        <Sparkles className="h-4 w-4 text-primary shrink-0" />
+        <SlotIcon slot="nav_billing" className="h-4 w-4 text-primary shrink-0" />
         <span className="text-foreground">
           {trialInfo.isExpired ? (
             <>Your free trial has ended. We couldn&apos;t charge your card. Update your payment method in Billing to keep access.</>

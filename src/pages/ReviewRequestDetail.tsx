@@ -13,6 +13,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Select,
@@ -26,19 +27,12 @@ import { getSiteUrl } from '@/lib/site-url';
 import { format } from 'date-fns';
 import {
   ArrowLeft,
-  Send,
-  ExternalLink,
-  Copy,
-  FileText,
-  Image,
-  CheckCircle,
-  XCircle,
-  MessageSquare,
   Clock,
   Calendar,
   User,
   FolderOpen,
 } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 
 interface ReviewRequest {
   id: string;
@@ -102,6 +96,7 @@ export default function ReviewRequestDetail() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [imageViewFile, setImageViewFile] = useState<ReviewFile | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!user || !id) return;
@@ -182,6 +177,18 @@ export default function ReviewRequestDetail() {
     fetchData();
   };
 
+  const handleDelete = async () => {
+    if (!request) return;
+    const { error } = await supabase.from('review_requests').delete().eq('id', request.id).eq('user_id', user!.id);
+    if (error) {
+      toast({ title: 'Error deleting request', variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Approval request deleted' });
+    setDeleteDialogOpen(false);
+    navigate('/reviews');
+  };
+
   const handleSendToClient = async () => {
     if (!request) return;
     setSending(true);
@@ -210,13 +217,13 @@ export default function ReviewRequestDetail() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'approved':
-        return <Badge className="bg-success/10 text-success border-success/20"><CheckCircle className="h-3 w-3 mr-1" />Approved</Badge>;
+        return <Badge className="bg-success/10 text-success border-success/20"><SlotIcon slot="approval_client_approve" className="h-3 w-3 mr-1" />Approved</Badge>;
       case 'rejected':
-        return <Badge className="bg-destructive/10 text-destructive border-destructive/20"><XCircle className="h-3 w-3 mr-1" />Rejected</Badge>;
+        return <Badge className="bg-destructive/10 text-destructive border-destructive/20"><SlotIcon slot="approval_client_reject" className="h-3 w-3 mr-1" />Rejected</Badge>;
       case 'commented':
-        return <Badge className="bg-primary/10 text-primary border-primary/20"><MessageSquare className="h-3 w-3 mr-1" />Commented</Badge>;
+        return <Badge className="bg-primary/10 text-primary border-primary/20"><SlotIcon slot="approval_client_comment" className="h-3 w-3 mr-1" />Commented</Badge>;
       default:
-        return <Badge className="bg-muted text-muted-foreground"><Clock className="h-3 w-3 mr-1" />Pending</Badge>;
+        return <Badge className="bg-muted text-muted-foreground"><SlotIcon slot="task_clock" className="h-3 w-3 mr-1" />Pending</Badge>;
     }
   };
 
@@ -253,19 +260,39 @@ export default function ReviewRequestDetail() {
           </div>
           <div className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={copyShareLink}>
-              <Copy className="h-4 w-4 mr-2" />
+              <SlotIcon slot="action_copy_link" className="h-4 w-4 mr-2" />
               Copy Link
             </Button>
             <Button variant="outline" onClick={openClientView}>
-              <ExternalLink className="h-4 w-4 mr-2" />
+              <SlotIcon slot="action_preview" className="h-4 w-4 mr-2" />
               View as Client
             </Button>
             <Button onClick={handleSendToClient} disabled={sending}>
-              <Send className="h-4 w-4 mr-2" />
+              <SlotIcon slot="action_send" className="h-4 w-4 mr-2" />
               {request.sent_at ? 'Send reminder' : 'Send to client'}
+            </Button>
+            <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeleteDialogOpen(true)}>
+              <SlotIcon slot="action_delete" className="h-4 w-4 mr-2" />
+              Delete
             </Button>
           </div>
         </div>
+
+        {/* Delete confirmation */}
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete approval request?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete &quot;{request.title}&quot; and its files and comments. This cannot be undone.
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+              <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Main Content */}
@@ -309,7 +336,7 @@ export default function ReviewRequestDetail() {
                             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
                           >
                             <div className="h-12 w-12 rounded bg-muted flex items-center justify-center shrink-0">
-                              <FileText className="h-6 w-6 text-muted-foreground" />
+                              <SlotIcon slot="approval_documents" className="h-6 w-6 text-muted-foreground" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="font-medium truncate">{file.file_name}</p>
@@ -359,7 +386,7 @@ export default function ReviewRequestDetail() {
                               <div className="w-80 border-l bg-card flex flex-col shrink-0 overflow-hidden">
                                 <div className="p-4 border-b shrink-0">
                                   <h3 className="font-medium flex items-center gap-2">
-                                    <MessageSquare className="h-4 w-4" />
+                                    <SlotIcon slot="approval_client_comment" className="h-4 w-4" />
                                     Comments ({fileCommentsList.length})
                                   </h3>
                                 </div>
@@ -410,7 +437,7 @@ export default function ReviewRequestDetail() {
                         })() : (
                           <div className="flex flex-1 min-h-0 overflow-hidden">
                             <div className="flex-1 overflow-auto p-6 flex flex-col items-center justify-center gap-4 bg-muted/30">
-                              <FileText className="h-16 w-16 text-muted-foreground" />
+                              <SlotIcon slot="approval_documents" className="h-16 w-16 text-muted-foreground" />
                               <p className="font-medium">{imageViewFile.file_name}</p>
                               <a
                                 href={imageViewFile.file_url}
@@ -424,7 +451,7 @@ export default function ReviewRequestDetail() {
                             <div className="w-80 border-l bg-card flex flex-col shrink-0 overflow-hidden">
                               <div className="p-4 border-b shrink-0">
                                 <h3 className="font-medium flex items-center gap-2">
-                                  <MessageSquare className="h-4 w-4" />
+                                  <SlotIcon slot="approval_client_comment" className="h-4 w-4" />
                                   Comments ({comments.filter(c => c.review_file_id === imageViewFile.id).length})
                                 </h3>
                               </div>
@@ -506,7 +533,7 @@ export default function ReviewRequestDetail() {
                       return (
                         <div key={file.id} className="space-y-3">
                           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground border-b pb-2">
-                            <FileText className="h-4 w-4" />
+                            <SlotIcon slot="approval_documents" className="h-4 w-4" />
                             {file.file_name}
                           </div>
                           <div className="space-y-4 pl-2">
@@ -598,21 +625,21 @@ export default function ReviewRequestDetail() {
                   
                   {request.due_date && (
                     <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <SlotIcon slot="project_calendar" className="h-4 w-4 text-muted-foreground" />
                       <span className="text-muted-foreground">Due:</span>
                       <span>{format(new Date(request.due_date), 'MMM d, yyyy')}</span>
                     </div>
                   )}
                   
                   <div className="flex items-center gap-2 text-sm">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <SlotIcon slot="task_clock" className="h-4 w-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Created:</span>
                     <span>{format(new Date(request.created_at), 'MMM d, yyyy')}</span>
                   </div>
                   
                   {request.sent_at && (
                     <div className="flex items-center gap-2 text-sm">
-                      <Send className="h-4 w-4 text-muted-foreground" />
+                      <SlotIcon slot="action_send" className="h-4 w-4 text-muted-foreground" />
                       <span className="text-muted-foreground">Sent:</span>
                       <span>{format(new Date(request.sent_at), 'MMM d, yyyy')}</span>
                     </div>
@@ -650,7 +677,7 @@ export default function ReviewRequestDetail() {
                   className={request.status === 'approved' ? 'w-full justify-start bg-green-600 hover:bg-green-700 text-white' : 'w-full justify-start'}
                   onClick={() => updateStatus('approved')}
                 >
-                  <CheckCircle className="h-4 w-4 mr-2" />
+                  <SlotIcon slot="approval_client_approve" className="h-4 w-4 mr-2" />
                   Approved
                 </Button>
                 <Button 
@@ -658,7 +685,7 @@ export default function ReviewRequestDetail() {
                   className={request.status === 'rejected' ? 'w-full justify-start bg-red-600 hover:bg-red-700 text-white' : 'w-full justify-start'}
                   onClick={() => updateStatus('rejected')}
                 >
-                  <XCircle className="h-4 w-4 mr-2" />
+                  <SlotIcon slot="approval_client_reject" className="h-4 w-4 mr-2" />
                   Rejected
                 </Button>
                 <Button 
@@ -666,7 +693,7 @@ export default function ReviewRequestDetail() {
                   className={request.status === 'pending' ? 'w-full justify-start bg-amber-500 hover:bg-amber-600 text-white' : 'w-full justify-start'}
                   onClick={() => updateStatus('pending')}
                 >
-                  <Clock className="h-4 w-4 mr-2" />
+                  <SlotIcon slot="task_clock" className="h-4 w-4 mr-2" />
                   Pending
                 </Button>
               </CardContent>

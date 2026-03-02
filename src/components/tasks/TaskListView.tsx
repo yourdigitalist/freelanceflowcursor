@@ -25,7 +25,8 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { GripVertical, Pencil, Trash2, Copy, MessageSquare, Plus, Calendar as CalendarIcon } from '@/components/icons';
+import { GripVertical, Trash2, MessageSquare, Plus } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 import { Task, ProjectStatus, PRIORITY_OPTIONS } from './types';
 import { format } from 'date-fns';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -275,11 +276,11 @@ function SortableRow({
       <TableCell>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onTaskClick} title="Edit">
-            <Pencil className="h-4 w-4" />
+            <SlotIcon slot="action_edit" className="h-4 w-4" />
           </Button>
           {onDuplicate && (
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onDuplicate} title="Duplicate">
-              <Copy className="h-4 w-4" />
+              <SlotIcon slot="action_duplicate" className="h-4 w-4" />
             </Button>
           )}
           <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={onDelete} title="Delete">

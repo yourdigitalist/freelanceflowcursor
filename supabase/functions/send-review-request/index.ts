@@ -148,6 +148,13 @@ serve(async (req) => {
     const primaryColor = (profile?.client_email_primary_color || "#9B63E9").trim();
     const fromDisplayName = (profile?.business_name || profile?.full_name || "Your Business").trim();
     const replyToEmail = (profile?.business_email || profile?.email || "").trim();
+    // Ensure logo URL is absolute so it loads in email clients (storage paths may be stored as relative)
+    const rawLogo = (profile?.business_logo || "").trim();
+    const logoUrl = rawLogo
+      ? rawLogo.startsWith("http://") || rawLogo.startsWith("https://")
+        ? rawLogo
+        : `${(Deno.env.get("SUPABASE_URL") || "").replace(/\/$/, "")}${rawLogo.startsWith("/") ? rawLogo : `/${rawLogo}`}`
+      : "";
     const coreHtml = `
         <h2 style="color: ${primaryColor}; margin-top: 0;">Review request: ${safeTitle}</h2>
         <p style="color: #333;">You've been asked to review <strong>${safeTitle}</strong> (v${escapeHtml(request.version)}).</p>
@@ -159,7 +166,7 @@ serve(async (req) => {
     `;
     const tokens = {
       business_name: escapeHtml(fromDisplayName),
-      logo_url: profile?.business_logo || "",
+      logo_url: logoUrl,
       primary_color: primaryColor,
       body_html: coreHtml,
       review_title: safeTitle,
@@ -167,7 +174,7 @@ serve(async (req) => {
     };
     const header = (profile?.client_email_header_html || "").trim()
       ? replaceTokens(profile.client_email_header_html, tokens)
-      : getDefaultClientHeader(profile?.business_logo || "", fromDisplayName, primaryColor);
+      : getDefaultClientHeader(logoUrl, fromDisplayName, primaryColor);
     const footer = (profile?.client_email_footer_html || "").trim()
       ? replaceTokens(profile.client_email_footer_html, tokens)
       : getDefaultClientFooter(primaryColor);

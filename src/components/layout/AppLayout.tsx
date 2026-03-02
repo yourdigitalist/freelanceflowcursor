@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { User, LogOut, Menu, ChevronDown, ChevronLeft, Bell, Sparkles, ArrowRight, ChevronUp, Building2, Globe, CreditCard, HardDrive, HelpCircle, ShieldCheck, Briefcase } from '@/components/icons';
+import { Menu, ChevronDown, ChevronLeft, ArrowRight, ChevronUp, ShieldCheck, Briefcase } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { cn } from '@/lib/utils';
 import { useBranding } from '@/hooks/useBranding';
@@ -37,7 +37,7 @@ const navigation = [
   { name: 'Clients', href: '/clients', slot: 'sidebar_clients' as const },
   { name: 'Time', href: '/time', slot: 'sidebar_time' as const },
   { name: 'Invoices', href: '/invoices', slot: 'sidebar_invoices' as const },
-  { name: 'Reviews', href: '/reviews', slot: 'sidebar_reviews' as const },
+  { name: 'Approvals', href: '/reviews', slot: 'sidebar_reviews' as const },
 ];
 export function AppLayout({
   children
@@ -110,6 +110,7 @@ export function AppLayout({
   const [timeOpen, setTimeOpen] = useState(false);
   const isTimeActive = location.pathname.startsWith('/time');
   const isOnTrial = profile?.subscription_status === 'trial';
+  const isPro = profile?.subscription_status === 'active';
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(() => {
     try { return localStorage.getItem('trial_banner_dismissed') === 'true'; } catch { return false; }
   });
@@ -239,7 +240,7 @@ export function AppLayout({
           </Link>
           <Link to="/reviews" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/reviews' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
             <SlotIcon slot="sidebar_reviews" className={cn("h-5 w-5 shrink-0", location.pathname === '/reviews' && "text-primary")} />
-            {!sidebarCollapsed && 'Reviews'}
+            {!sidebarCollapsed && 'Approvals'}
           </Link>
         </nav>
 
@@ -247,21 +248,21 @@ export function AppLayout({
         <div className={cn("space-y-2 border-t border-sidebar-border", sidebarCollapsed ? "p-2" : "p-3")}>
           {/* Notifications */}
           <Link to="/notifications" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/notifications' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <Bell className={cn("h-5 w-5 shrink-0", location.pathname === '/notifications' && "text-primary")} />
+            <SlotIcon slot="nav_bell" className={cn("h-5 w-5 shrink-0", location.pathname === '/notifications' && "text-primary")} />
             {!sidebarCollapsed && 'Notifications'}
           </Link>
 
-          {/* Upgrade Button - only show for trial/free users */}
-          {!sidebarCollapsed && isOnTrial && (
-            <Link to="/settings/subscription" className="upgrade-gradient rounded-lg p-3 block hover:opacity-90 transition-opacity">
+          {/* Billing / Free trial / Pro – show for trial (with arrow) or pro (badge only) */}
+          {!sidebarCollapsed && (isOnTrial || isPro) && (
+            <Link to="/settings/subscription" className={cn("rounded-lg p-3 block transition-opacity", isOnTrial && "upgrade-gradient hover:opacity-90")}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
-                    <Sparkles className="h-4 w-4 text-primary" />
+                  <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center shrink-0", isOnTrial ? "bg-primary/20" : "bg-primary/10")}>
+                    <SlotIcon slot="nav_billing" className={cn("h-4 w-4", isOnTrial ? "text-primary" : "text-primary")} />
                   </div>
-                  <span className="text-sm font-semibold text-sidebar-foreground truncate">Billing</span>
+                  <span className="text-sm font-semibold text-sidebar-foreground truncate">{isOnTrial ? 'Free trial' : 'Pro'}</span>
                 </div>
-                <ArrowRight className="h-4 w-4 text-primary shrink-0" />
+                {isOnTrial && <ArrowRight className="h-4 w-4 text-primary shrink-0" />}
               </div>
             </Link>
           )}
@@ -294,64 +295,34 @@ export function AppLayout({
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link to="/settings/profile" className="cursor-pointer">
-                  <User className="mr-2 h-4 w-4" />
-                  Profile
+                <Link to="/settings" className="cursor-pointer">
+                  <SlotIcon slot="nav_settings" className="mr-2 h-4 w-4" />
+                  Settings
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link to="/settings/business" className="cursor-pointer">
-                  <Building2 className="mr-2 h-4 w-4" />
-                  Company Settings
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to="/settings/invoices" className="cursor-pointer">
-                  <SlotIcon slot="sidebar_invoices" className="mr-2 h-4 w-4" />
-                  Invoice Settings
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to="/settings/locale" className="cursor-pointer">
-                  <Globe className="mr-2 h-4 w-4" />
-                  Personal Preferences
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to="/settings/notifications" className="cursor-pointer">
-                  <Bell className="mr-2 h-4 w-4" />
+                <Link to="/notifications" className="cursor-pointer">
+                  <SlotIcon slot="nav_bell" className="mr-2 h-4 w-4" />
                   Notifications
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link to="/help" className="cursor-pointer">
-                  <HelpCircle className="mr-2 h-4 w-4" />
+                  <SlotIcon slot="help_book" className="mr-2 h-4 w-4" />
                   Help Center
                 </Link>
               </DropdownMenuItem>
               {profile?.is_admin === true && (
                 <DropdownMenuItem asChild>
                   <Link to="/admin" className="cursor-pointer">
-                    <ShieldCheck className="mr-2 h-4 w-4" />
+                    <SlotIcon slot="admin_overview" className="mr-2 h-4 w-4" />
                     Admin
                   </Link>
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem asChild>
-                <Link to="/settings/subscription" className="cursor-pointer">
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Billing & Subscription
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to="/settings/storage" className="cursor-pointer">
-                  <HardDrive className="mr-2 h-4 w-4" />
-                  Storage
-                </Link>
-              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut} className="text-destructive cursor-pointer focus:text-destructive">
-                <LogOut className="mr-2 h-4 w-4" />
+                <SlotIcon slot="auth_sign_out" className="mr-2 h-4 w-4" />
                 Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -359,20 +330,20 @@ export function AppLayout({
         </div>
       </aside>
 
-      {/* Main content */}
-      <div className={cn("flex-1 transition-all duration-200", sidebarCollapsed ? "lg:pl-16" : "lg:pl-64", showTimerBar && "pb-14")}>
+      {/* Main content – use margin so content sits to the right of the sidebar */}
+      <div className={cn("flex-1 min-w-0 relative transition-all duration-200", sidebarCollapsed ? "lg:ml-16" : "lg:ml-64", showTimerBar && "pb-14")}>
         {/* Mobile top bar only - hidden on desktop to avoid empty white box */}
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-card/80 backdrop-blur-md px-4 lg:hidden">
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
           <Button variant="ghost" size="icon" className="ml-auto">
-            <Bell className="h-5 w-5" />
+            <SlotIcon slot="nav_bell" className="h-5 w-5" />
           </Button>
         </header>
 
         {/* Page content */}
-        <main className="p-4 lg:p-8">
+        <main className="p-4 lg:p-8 min-h-0">
           {children}
         </main>
 
@@ -380,7 +351,11 @@ export function AppLayout({
         <StartGuide />
       </div>
 
-      {/* Persistent timer bar when timer has unsaved time */}
-      <TimerBar />
+      {/* Timer bar – fixed at bottom of viewport so always visible; left offset on lg so it doesn't cover sidebar */}
+      {showTimerBar && (
+        <div className={cn("fixed bottom-0 right-0 z-[60] left-0", sidebarCollapsed ? "lg:left-16" : "lg:left-64")}>
+          <TimerBar />
+        </div>
+      )}
     </div>;
 }

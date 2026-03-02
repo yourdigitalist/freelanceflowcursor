@@ -25,7 +25,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Receipt, DollarSign, Calendar, MoreVertical, Pencil, Trash2, Send, Clock, Download, Upload } from '@/components/icons';
+import { Plus, Search, MoreVertical, Trash2, Send, Download, Upload } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -688,7 +689,7 @@ export default function Invoices() {
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
                 <div className="p-3 rounded-xl bg-primary/10">
-                  <DollarSign className="h-5 w-5 text-primary" />
+                  <SlotIcon slot="invoice_stat_total" className="h-5 w-5 text-primary" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total Invoiced</p>
@@ -701,7 +702,7 @@ export default function Invoices() {
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
                 <div className="p-3 rounded-xl bg-success/10">
-                  <DollarSign className="h-5 w-5 text-success" />
+                  <SlotIcon slot="invoice_stat_paid" className="h-5 w-5 text-success" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Paid</p>
@@ -714,7 +715,7 @@ export default function Invoices() {
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
                 <div className="p-3 rounded-xl bg-warning/10">
-                  <Clock className="h-5 w-5 text-warning" />
+                  <SlotIcon slot="invoice_stat_pending" className="h-5 w-5 text-warning" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Pending</p>
@@ -727,7 +728,7 @@ export default function Invoices() {
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
                 <div className="p-3 rounded-xl bg-destructive/10">
-                  <Calendar className="h-5 w-5 text-destructive" />
+                  <SlotIcon slot="invoice_stat_overdue" className="h-5 w-5 text-destructive" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Overdue</p>
@@ -827,7 +828,7 @@ export default function Invoices() {
           <CardContent className="p-0">
             {filteredInvoices.length === 0 ? (
               <div className="text-center py-12">
-                <Receipt className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                <SlotIcon slot="invoice_empty" className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
                 <h3 className="text-lg font-semibold mb-1">No invoices yet</h3>
                 <p className="text-sm text-muted-foreground mb-4">
                   Create your first invoice to get started
@@ -886,7 +887,7 @@ export default function Invoices() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => navigate(`/invoices/${invoice.id}`)}>
-                              <Pencil className="mr-2 h-4 w-4" />
+                              <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
                             {invoice.status === 'draft' && (
@@ -897,7 +898,7 @@ export default function Invoices() {
                             )}
                             {invoice.status === 'sent' && (
                               <DropdownMenuItem onClick={() => handleStatusChange(invoice.id, 'paid')}>
-                                <DollarSign className="mr-2 h-4 w-4" />
+                                <SlotIcon slot="invoice_stat_paid" className="mr-2 h-4 w-4" />
                                 Mark as Paid
                               </DropdownMenuItem>
                             )}

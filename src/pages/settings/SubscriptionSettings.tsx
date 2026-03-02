@@ -5,19 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Check, Sparkles, Crown, RotateCcw } from '@/components/icons';
+import { Loader2, Check, Crown } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 import { differenceInDays, format } from 'date-fns';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import { cn } from '@/lib/utils';
 
 interface SubscriptionProfile {
   plan_type: string | null;
@@ -68,7 +59,6 @@ export default function SubscriptionSettings() {
   const [profile, setProfile] = useState<SubscriptionProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
-  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     if (user) fetchProfile();
@@ -152,14 +142,6 @@ export default function SubscriptionSettings() {
   };
 
   const handleManageSubscription = async () => {
-    if (!profile?.stripe_customer_id) {
-      toast({
-        title: 'No billing account',
-        description: 'Choose a plan above to add a payment method, then you can manage it here.',
-        variant: 'destructive',
-      });
-      return;
-    }
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
       if (sessionError || !session?.access_token) {
@@ -200,33 +182,6 @@ export default function SubscriptionSettings() {
         description: error instanceof Error ? error.message : 'Something went wrong',
         variant: 'destructive',
       });
-    }
-  };
-
-  const handleResetToTrial = async () => {
-    if (!user?.id) return;
-    setResetting(true);
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          subscription_status: 'trial',
-          stripe_customer_id: null,
-          stripe_subscription_id: null,
-          plan_type: null,
-        })
-        .eq('user_id', user.id);
-      if (error) throw error;
-      toast({ title: 'Reset to trial', description: 'You can try upgrading again.' });
-      await fetchProfile();
-    } catch (e: unknown) {
-      toast({
-        title: 'Reset failed',
-        description: e instanceof Error ? e.message : 'Could not reset',
-        variant: 'destructive',
-      });
-    } finally {
-      setResetting(false);
     }
   };
 
@@ -274,7 +229,7 @@ export default function SubscriptionSettings() {
               }}
             >
               <div className="flex items-center gap-3">
-                <Sparkles className="h-5 w-5 text-primary shrink-0" />
+                <SlotIcon slot="settings_subscription" className="h-5 w-5 text-primary shrink-0" />
                 <div>
                   <p className="font-medium">
                     You're on the <strong>{profile?.plan_type === 'pro_annual' ? 'Early Access Annual' : 'Early Access Monthly'}</strong> plan (15-day free trial).
@@ -295,12 +250,6 @@ export default function SubscriptionSettings() {
               </div>
             </div>
           )}
-          
-          {isOnTrial && !profile?.stripe_customer_id && (
-            <p className="text-sm text-muted-foreground">
-              Add a payment method below so we can continue your plan after the trial. You won&apos;t be charged until the trial ends.
-            </p>
-          )}
           {isActive && (
             <div className="space-y-2">
               <p className="font-medium">
@@ -311,53 +260,30 @@ export default function SubscriptionSettings() {
               </p>
             </div>
           )}
-          <div className="mt-4 pt-4 border-t">
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={resetting}>
-                  {resetting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
-                  Reset to trial (for testing)
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Reset to trial?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This clears your billing link so you can go through the upgrade flow again. Use only for testing. Your Stripe subscription is not changed.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleResetToTrial}>Reset</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
         </CardContent>
       </Card>
 
       {/* Plans – always visible; show which one the user is on and allow switch / subscribe */}
       <div>
         <h3 className="text-lg font-semibold mb-4">Plans</h3>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 md:items-start">
           {plans.map((plan) => {
             const isCurrentPlan = (isActive || isOnTrial) && profile?.plan_type === plan.id;
             const hasBillingAccount = !!profile?.stripe_customer_id;
+            const showBestValue = plan.highlighted && !isCurrentPlan;
+            const showYourPlan = isCurrentPlan;
+            const topLabel = showYourPlan ? 'Your plan' : showBestValue ? 'Best Value' : null;
             return (
               <Card
                 key={plan.id}
-                className={`border-2 ${isCurrentPlan ? 'border-primary' : plan.highlighted && !isCurrentPlan ? 'border-primary/50' : 'border-transparent'}`}
+                className={`overflow-hidden border-2 ${isCurrentPlan ? 'border-primary' : plan.highlighted && !isCurrentPlan ? 'border-primary/50' : 'border-transparent'}`}
               >
-                {plan.highlighted && !isCurrentPlan && (
-                  <div className="bg-primary text-primary-foreground text-xs font-medium text-center py-1">
-                    Best Value
-                  </div>
-                )}
-                {isCurrentPlan && (
-                  <div className="bg-primary text-primary-foreground text-xs font-medium text-center py-1">
-                    Your plan
-                  </div>
-                )}
+                <div className={cn(
+                  'text-xs font-medium text-center py-2.5 rounded-t-lg',
+                  topLabel ? 'bg-primary text-primary-foreground' : 'bg-transparent'
+                )}>
+                  {topLabel || '\u00A0'}
+                </div>
                 <CardHeader>
                   <CardTitle className="flex items-baseline gap-1">
                     <span className="text-2xl font-bold">{plan.price}</span>
@@ -379,17 +305,17 @@ export default function SubscriptionSettings() {
                       className="w-full"
                       variant="outline"
                       onClick={handleManageSubscription}
-                      disabled={!hasBillingAccount}
+                      disabled={!hasBillingAccount && !isOnTrial && !isActive}
                     >
                       Manage plan
                     </Button>
-                  ) : hasBillingAccount ? (
+                  ) : (isOnTrial || isActive) ? (
                     <Button
                       className="w-full"
                       variant={plan.highlighted ? 'default' : 'outline'}
                       onClick={handleManageSubscription}
                     >
-                      Switch to this plan
+                      Change plan
                     </Button>
                   ) : (
                     <Button
@@ -418,11 +344,8 @@ export default function SubscriptionSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {profile?.stripe_customer_id ? (
+          {(profile?.stripe_customer_id || isOnTrial || isActive) ? (
             <>
-              <p className="text-sm text-muted-foreground">
-                Open the Stripe billing portal to update your payment method, download invoices, or cancel your subscription.
-              </p>
               <Button variant="outline" onClick={handleManageSubscription}>
                 Open billing portal
               </Button>

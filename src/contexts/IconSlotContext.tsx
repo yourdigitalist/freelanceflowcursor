@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { createContext, useContext, useMemo, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   Users,
@@ -10,6 +10,7 @@ import {
   DollarSign,
   Bell,
   BookOpen,
+  HelpCircle,
   Lightbulb,
   MessageSquare,
   Megaphone,
@@ -24,9 +25,26 @@ import {
   Briefcase,
   BarChart3,
   CheckCircle,
+  XCircle,
   Calendar,
   CheckSquare,
   Timer,
+  Settings,
+  Sparkles,
+  Pencil,
+  Copy,
+  Camera,
+  Phone,
+  LogOut,
+  PlayCircle,
+  ExternalLink,
+  Eye,
+  MoreVertical,
+  Printer,
+  Image,
+  Folder,
+  FileText,
+  Trash2,
 } from '@/components/icons';
 import { supabase } from '@/integrations/supabase/client';
 import type { IconSlotKey } from '@/lib/iconSlots';
@@ -84,9 +102,42 @@ const DEFAULT_ICONS: Record<IconSlotKey, IconComponent> = {
   project_check: CheckSquare,
   invoice_receipt: Receipt,
   invoice_empty: Receipt,
+  invoice_stat_total: DollarSign,
+  invoice_stat_paid: DollarSign,
+  invoice_stat_pending: Clock,
+  invoice_stat_overdue: Calendar,
   review_iris: IrisScan,
+  approval_calendar: Calendar,
+  approval_images: Image,
+  approval_documents: FileText,
+  approval_folder: Folder,
+  approval_client_approve: CheckCircle,
+  approval_client_reject: XCircle,
+  approval_client_comment: MessageSquare,
   nav_bell: Bell,
+  nav_settings: Settings,
+  nav_billing: Sparkles,
   help_book: BookOpen,
+  client_company: Building2,
+  client_email: Mail,
+  client_phone: Phone,
+  action_edit: Pencil,
+  action_duplicate: Copy,
+  profile_camera: Camera,
+  auth_sign_out: LogOut,
+  help_faqs: HelpCircle,
+  help_onboarding: PlayCircle,
+  help_feature_requests: Lightbulb,
+  help_feedback: MessageSquare,
+  help_contact: Mail,
+  timer_bar_clock: Clock,
+  timer_bar_open: ExternalLink,
+  action_preview: Eye,
+  action_more: MoreVertical,
+  action_print: Printer,
+  action_send: Mail,
+  action_copy_link: ExternalLink,
+  action_delete: Trash2,
 };
 
 type Upload = { id: string; name: string; svg_content: string | null; storage_path: string | null };
@@ -138,9 +189,11 @@ function CustomSvgIcon({ svgContent, className }: { svgContent: string; classNam
 function IconFromStoragePath({
   storagePath,
   className,
+  fallback,
 }: {
   storagePath: string;
   className?: string;
+  fallback?: React.ReactNode;
 }) {
   const { data: svgContent, isLoading } = useQuery({
     queryKey: ['app_icon_svg', storagePath] as const,
@@ -152,11 +205,13 @@ function IconFromStoragePath({
     },
     staleTime: 10 * 60 * 1000,
   });
-  if (isLoading || !svgContent) return <span className={className} />;
+  if (isLoading || !svgContent) return <>{fallback ?? <span className={className} />}</>;
   return <CustomSvgIcon svgContent={svgContent} className={className} />;
 }
 
 export function IconSlotProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
+
   const { data: slotData, refetch: refetchSlots } = useQuery({
     queryKey: ICON_SLOTS_QUERY_KEY,
     queryFn: async () => {
@@ -168,6 +223,23 @@ export function IconSlotProvider({ children }: { children: React.ReactNode }) {
     },
     staleTime: 2 * 60 * 1000,
   });
+
+  // Prefetch all assigned storage URLs as soon as we have slots, so icons load in parallel and feel instant
+  useEffect(() => {
+    const paths = [...new Set((slotData ?? []).map((r) => r.icon_storage_path).filter(Boolean))] as string[];
+    paths.forEach((storagePath) => {
+      queryClient.prefetchQuery({
+        queryKey: ['app_icon_svg', storagePath] as const,
+        queryFn: async () => {
+          const { data } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
+          const res = await fetch(data.publicUrl);
+          if (!res.ok) throw new Error('Failed to load icon');
+          return res.text();
+        },
+        staleTime: 10 * 60 * 1000,
+      });
+    });
+  }, [slotData, queryClient]);
 
   const { data: uploadData, refetch: refetchUploads } = useQuery({
     queryKey: ICON_UPLOADS_QUERY_KEY,
@@ -205,9 +277,16 @@ export function IconSlotProvider({ children }: { children: React.ReactNode }) {
   const getIcon = useMemo(() => {
     return (slot: IconSlotKey): IconComponent => {
       const assignment = assignments[slot];
+      const DefaultIcon = DEFAULT_ICONS[slot];
       if (assignment?.storagePath) {
         const path = assignment.storagePath;
-        return ({ className }) => <IconFromStoragePath storagePath={path} className={className} />;
+        return ({ className }) => (
+          <IconFromStoragePath
+            storagePath={path}
+            className={className}
+            fallback={DefaultIcon ? <DefaultIcon className={className} /> : undefined}
+          />
+        );
       }
       const uploadId = assignment?.uploadId ?? null;
       const upload = uploadId ? uploadsById[uploadId] : null;
@@ -215,7 +294,7 @@ export function IconSlotProvider({ children }: { children: React.ReactNode }) {
         const svg = upload.svg_content;
         return ({ className }) => <CustomSvgIcon svgContent={svg} className={className} />;
       }
-      return DEFAULT_ICONS[slot];
+      return DefaultIcon;
     };
   }, [assignments, uploadsById]);
 

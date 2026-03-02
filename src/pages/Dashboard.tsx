@@ -408,7 +408,7 @@ export default function Dashboard() {
           <div className="flex gap-2">
             <Button variant="outline" asChild>
               <Link to="/time">
-                <Clock className="mr-2 h-4 w-4" />
+                <SlotIcon slot="stat_hours" className="mr-2 h-4 w-4" />
                 Log Time
               </Link>
             </Button>
@@ -567,7 +567,7 @@ export default function Dashboard() {
                     {recentActivity.map((activity) => (
                       <div key={activity.id} className="flex items-start gap-3">
                         <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          <SlotIcon slot="task_clock" className="h-4 w-4 text-muted-foreground" />
                         </div>
                         <div>
                           <p className="text-sm">{activity.description}</p>
@@ -584,10 +584,10 @@ export default function Dashboard() {
 
         {/* Bottom Row */}
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Review Requests */}
+          {/* Approvals */}
           <Card className="border-0 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between pb-4">
-              <CardTitle className="text-base font-semibold">Review Requests</CardTitle>
+              <CardTitle className="text-base font-semibold">Approvals</CardTitle>
               <Button variant="ghost" size="sm" asChild className="text-primary">
                 <Link to="/reviews">
                   View all
@@ -598,7 +598,7 @@ export default function Dashboard() {
             <CardContent>
               <div className="flex items-baseline gap-2 mb-3">
                 <span className="text-3xl font-bold">{reviewCounts.total}</span>
-                <span className="text-sm text-muted-foreground">Total reviews</span>
+                <span className="text-sm text-muted-foreground">Approval requests</span>
               </div>
               <div className="flex gap-2">
                 <Badge variant="outline" className="bg-muted">{reviewCounts.pending} pending</Badge>
@@ -647,7 +647,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <Badge variant="outline" className={getStatusBadgeStyle(invoice.status)}>
-                        {invoice.status}
+                        {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
                       </Badge>
                     </Link>
                   ))}

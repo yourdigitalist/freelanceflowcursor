@@ -5,17 +5,18 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
-import { BookOpen, Lightbulb, MessageSquare, ArrowLeft, ShieldCheck, Palette, LayoutDashboard, Megaphone, Mail, LayoutGrid } from '@/components/icons';
+import { ArrowLeft, ShieldCheck } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 
 const adminNavItems = [
-  { path: '/admin/overview', label: 'Overview', icon: LayoutDashboard },
-  { path: '/admin/announcements', label: 'Announcements', icon: Megaphone },
-  { path: '/admin/comms', label: 'Comms & templates', icon: Mail },
-  { path: '/admin/branding', label: 'Branding', icon: Palette },
-  { path: '/admin/icons', label: 'Icons', icon: LayoutGrid },
-  { path: '/admin/help-content', label: 'Help content', icon: BookOpen },
-  { path: '/admin/feature-requests', label: 'Feature requests', icon: Lightbulb },
-  { path: '/admin/feedback', label: 'Feedback', icon: MessageSquare },
+  { path: '/admin/overview', label: 'Overview', slot: 'admin_overview' as const },
+  { path: '/admin/announcements', label: 'Announcements', slot: 'admin_announcements' as const },
+  { path: '/admin/comms', label: 'Comms & templates', slot: 'admin_comms' as const },
+  { path: '/admin/branding', label: 'Branding', slot: 'admin_branding' as const },
+  { path: '/admin/icons', label: 'Icons', slot: 'admin_icons' as const },
+  { path: '/admin/help-content', label: 'Help content', slot: 'admin_help_content' as const },
+  { path: '/admin/feature-requests', label: 'Feature requests', slot: 'admin_feature_requests' as const },
+  { path: '/admin/feedback', label: 'Feedback', slot: 'admin_feedback' as const },
 ];
 
 export default function AdminLayout() {
@@ -63,7 +64,6 @@ export default function AdminLayout() {
             <nav className="space-y-0.5 pt-2 border-t">
               {adminNavItems.map((item) => {
                 const isActive = location.pathname === item.path;
-                const Icon = item.icon;
                 return (
                   <Link
                     key={item.path}
@@ -73,7 +73,7 @@ export default function AdminLayout() {
                       isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     )}
                   >
-                    <Icon className="h-4 w-4 shrink-0" />
+                    <SlotIcon slot={item.slot} className="h-4 w-4 shrink-0" />
                     {item.label}
                   </Link>
                 );

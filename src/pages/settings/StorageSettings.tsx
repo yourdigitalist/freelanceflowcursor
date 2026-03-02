@@ -119,7 +119,7 @@ export default function StorageSettings() {
     }
   };
 
-  const reviewTitle = confirmDelete?.review_requests?.title || 'this review';
+  const reviewTitle = confirmDelete?.review_requests?.title || 'this approval';
 
   return (
     <div className="space-y-6 max-w-3xl">

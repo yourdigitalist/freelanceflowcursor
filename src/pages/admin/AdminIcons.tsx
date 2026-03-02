@@ -213,26 +213,27 @@ export default function AdminIcons() {
                     : 'No icons match your search.'}
                 </p>
               ) : (
-                <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-2">
+                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3">
                   {filteredPaths.map((path) => (
                     <button
                       key={path}
                       type="button"
                       onClick={() => pickerSlot && handleAssign(pickerSlot, path)}
                       disabled={saving}
-                      className="flex flex-col items-center gap-1 p-2 rounded-lg border bg-card hover:bg-muted/50 transition-colors disabled:opacity-50"
+                      className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border bg-card hover:bg-muted/70 hover:border-muted-foreground/30 transition-colors disabled:opacity-50"
                       title={displayName(path)}
                     >
-                      <div className="h-10 w-10 flex items-center justify-center overflow-hidden rounded bg-background">
+                      <div className="h-14 w-14 flex items-center justify-center overflow-hidden rounded-md bg-muted/80 shrink-0">
                         <img
                           src={publicUrl(path)}
                           alt=""
-                          className="max-h-full max-w-full object-contain text-foreground"
+                          className="h-10 w-10 object-contain pointer-events-none"
+                          style={{ filter: 'brightness(0) opacity(0.85)' }}
                         />
                       </div>
-                      <span className="text-[10px] truncate w-full text-center text-muted-foreground">
-                        {displayName(path).slice(0, 12)}
-                        {displayName(path).length > 12 ? '…' : ''}
+                      <span className="text-xs truncate w-full text-center text-foreground/90 font-medium">
+                        {displayName(path).slice(0, 14)}
+                        {displayName(path).length > 14 ? '…' : ''}
                       </span>
                     </button>
                   ))}

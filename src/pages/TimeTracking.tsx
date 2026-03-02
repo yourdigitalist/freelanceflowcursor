@@ -28,7 +28,8 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Clock, Play, Square, Calendar, Trash2, Pencil, DollarSign, Filter, Download, Upload, List } from '@/components/icons';
+import { Plus, Play, Square, Trash2, Filter, Download, Upload, List } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 import { format, differenceInMinutes, differenceInSeconds, parseISO, startOfWeek, endOfWeek, subDays, startOfMonth, endOfMonth } from 'date-fns';
 import {
   Table,
@@ -981,7 +982,7 @@ export default function TimeTracking() {
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
                 <div className="p-3 rounded-xl bg-primary/10">
-                  <Clock className="h-5 w-5 text-primary" />
+                  <SlotIcon slot="stat_hours" className="h-5 w-5 text-primary" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total Hours</p>
@@ -994,7 +995,7 @@ export default function TimeTracking() {
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
                 <div className="p-3 rounded-xl bg-success/10">
-                  <DollarSign className="h-5 w-5 text-success" />
+                  <SlotIcon slot="stat_money" className="h-5 w-5 text-success" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Billable Hours</p>
@@ -1007,7 +1008,7 @@ export default function TimeTracking() {
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
                 <div className="p-3 rounded-xl bg-primary/10">
-                  <Calendar className="h-5 w-5 text-primary" />
+                  <SlotIcon slot="task_calendar" className="h-5 w-5 text-primary" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Entries</p>
@@ -1077,7 +1078,7 @@ export default function TimeTracking() {
           <CardContent>
             {filteredEntries.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <SlotIcon slot="empty_time" className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No time entries found</p>
                 <p className="text-sm">Start the timer or log time manually</p>
               </div>
@@ -1123,7 +1124,7 @@ export default function TimeTracking() {
                             className="h-8 w-8 text-muted-foreground hover:text-foreground"
                             onClick={() => openLogDialog(entry)}
                           >
-                            <Pencil className="h-4 w-4" />
+                            <SlotIcon slot="action_edit" className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"

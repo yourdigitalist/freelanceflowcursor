@@ -12,7 +12,14 @@ export const ICON_SLOT_GROUPS = [
       { key: 'sidebar_projects', label: 'Projects' },
       { key: 'sidebar_time', label: 'Time' },
       { key: 'sidebar_invoices', label: 'Invoices' },
-      { key: 'sidebar_reviews', label: 'Reviews' },
+      { key: 'sidebar_reviews', label: 'Approvals' },
+    ],
+  },
+  {
+    group: 'Timer bar',
+    slots: [
+      { key: 'timer_bar_clock', label: 'Timer bar – Clock (elapsed)' },
+      { key: 'timer_bar_open', label: 'Timer bar – Open Timer link' },
     ],
   },
   {
@@ -26,7 +33,7 @@ export const ICON_SLOT_GROUPS = [
       { key: 'empty_invoices', label: 'Empty state – Invoices' },
       { key: 'empty_clients', label: 'Empty state – Clients' },
       { key: 'empty_time', label: 'Empty state – Time' },
-      { key: 'empty_reviews', label: 'Empty state – Reviews' },
+      { key: 'empty_reviews', label: 'Empty state – Approvals' },
     ],
   },
   {
@@ -87,14 +94,70 @@ export const ICON_SLOT_GROUPS = [
     slots: [
       { key: 'invoice_receipt', label: 'Invoice list – Receipt' },
       { key: 'invoice_empty', label: 'Invoice empty state' },
+      { key: 'invoice_stat_total', label: 'Invoice dashboard – Total invoiced' },
+      { key: 'invoice_stat_paid', label: 'Invoice dashboard – Paid' },
+      { key: 'invoice_stat_pending', label: 'Invoice dashboard – Pending' },
+      { key: 'invoice_stat_overdue', label: 'Invoice dashboard – Overdue' },
       { key: 'review_iris', label: 'Review – Iris/approval' },
     ],
   },
   {
-    group: 'Notifications & help',
+    group: 'Approvals',
+    slots: [
+      { key: 'approval_calendar', label: 'Pick date (calendar)' },
+      { key: 'approval_images', label: 'Images upload' },
+      { key: 'approval_documents', label: 'Documents upload' },
+      { key: 'approval_folder', label: 'Folder' },
+      { key: 'approval_client_approve', label: 'Client view – Approve' },
+      { key: 'approval_client_reject', label: 'Client view – Reject' },
+      { key: 'approval_client_comment', label: 'Client view – Comment' },
+    ],
+  },
+  {
+    group: 'User menu & nav',
     slots: [
       { key: 'nav_bell', label: 'Notifications (bell)' },
-      { key: 'help_book', label: 'Help – Book' },
+      { key: 'nav_settings', label: 'Settings (gear)' },
+      { key: 'nav_billing', label: 'Billing / Sparkles' },
+      { key: 'help_book', label: 'Help Center' },
+      { key: 'auth_sign_out', label: 'Sign out' },
+    ],
+  },
+  {
+    group: 'Help Center',
+    slots: [
+      { key: 'help_faqs', label: 'FAQs (info)' },
+      { key: 'help_onboarding', label: 'Onboarding (play)' },
+      { key: 'help_feature_requests', label: 'Feature requests (lightbulb)' },
+      { key: 'help_feedback', label: 'Feedback (message)' },
+      { key: 'help_contact', label: 'Contact (envelope)' },
+    ],
+  },
+  {
+    group: 'Client card',
+    slots: [
+      { key: 'client_company', label: 'Company (building)' },
+      { key: 'client_email', label: 'Email' },
+      { key: 'client_phone', label: 'Phone' },
+    ],
+  },
+  {
+    group: 'Actions',
+    slots: [
+      { key: 'action_edit', label: 'Edit (pencil)' },
+      { key: 'action_duplicate', label: 'Duplicate (copy)' },
+      { key: 'action_preview', label: 'Preview (eye)' },
+      { key: 'action_more', label: 'More options (three dots)' },
+      { key: 'action_print', label: 'Print (printer)' },
+      { key: 'action_send', label: 'Send / envelope (Send to Client, Send Invoice)' },
+      { key: 'action_copy_link', label: 'Copy link' },
+      { key: 'action_delete', label: 'Delete (trash)' },
+    ],
+  },
+  {
+    group: 'Profile',
+    slots: [
+      { key: 'profile_camera', label: 'Avatar / Photo (camera)' },
     ],
   },
 ] as const;

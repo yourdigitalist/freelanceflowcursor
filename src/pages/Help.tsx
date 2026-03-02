@@ -21,16 +21,12 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import {
-  HelpCircle,
-  MessageCircle,
-  Mail,
-  PlayCircle,
-  Lightbulb,
   Loader2,
   ChevronUp,
   Paperclip,
   CheckCircle2,
 } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 import { cn } from '@/lib/utils';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -69,12 +65,13 @@ const STATUS_STYLE: Record<string, string> = {
 
 type HelpSection = 'faqs' | 'onboarding' | 'features' | 'feedback' | 'contact';
 
-const SIDEBAR_ITEMS: { key: HelpSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { key: 'faqs', label: 'FAQs', icon: HelpCircle },
-  { key: 'onboarding', label: 'Onboarding', icon: PlayCircle },
-  { key: 'features', label: 'Feature requests', icon: Lightbulb },
-  { key: 'feedback', label: 'Feedback', icon: MessageCircle },
-  { key: 'contact', label: 'Contact', icon: Mail },
+const HELP_SLOTS = ['help_faqs', 'help_onboarding', 'help_feature_requests', 'help_feedback', 'help_contact'] as const;
+const SIDEBAR_ITEMS: { key: HelpSection; label: string; slot: (typeof HELP_SLOTS)[number] }[] = [
+  { key: 'faqs', label: 'FAQs', slot: 'help_faqs' },
+  { key: 'onboarding', label: 'Onboarding', slot: 'help_onboarding' },
+  { key: 'features', label: 'Feature requests', slot: 'help_feature_requests' },
+  { key: 'feedback', label: 'Feedback', slot: 'help_feedback' },
+  { key: 'contact', label: 'Contact', slot: 'help_contact' },
 ];
 
 const CONTACT_EMAIL = 'marina@yourdigitalist.com';
@@ -324,7 +321,6 @@ export default function Help() {
             </div>
             <nav className="space-y-0.5 pt-2 border-t">
               {SIDEBAR_ITEMS.map((item) => {
-                const Icon = item.icon;
                 const isActive = section === item.key;
                 return (
                   <button
@@ -336,7 +332,7 @@ export default function Help() {
                       isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     )}
                   >
-                    <Icon className="h-4 w-4 shrink-0" />
+                    <SlotIcon slot={item.slot} className="h-4 w-4 shrink-0" />
                     <span className="truncate">{item.label}</span>
                   </button>
                 );

@@ -19,15 +19,12 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import {
-  FileText,
-  MessageSquare,
-  CheckCircle,
-  XCircle,
   ChevronLeft,
   ChevronRight,
   ZoomIn,
   ZoomOut,
 } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 import { cn } from '@/lib/utils';
 
 interface ReviewRequest {
@@ -284,14 +281,14 @@ export default function ClientReview() {
             </div>
             <div className="flex items-center gap-3">
               <Badge variant={request.status === 'approved' ? 'default' : request.status === 'rejected' ? 'destructive' : 'secondary'}>
-                {request.status}
+                {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
               </Badge>
               <Button variant="outline" size="sm" onClick={() => submitApproval(false)}>
-                <XCircle className="h-4 w-4 mr-2" />
+                <SlotIcon slot="approval_client_reject" className="h-4 w-4 mr-2" />
                 Reject
               </Button>
               <Button size="sm" onClick={() => submitApproval(true)}>
-                <CheckCircle className="h-4 w-4 mr-2" />
+                <SlotIcon slot="approval_client_approve" className="h-4 w-4 mr-2" />
                 Approve
               </Button>
             </div>
@@ -320,7 +317,7 @@ export default function ClientReview() {
                     </div>
                   ) : (
                     <div className="h-10 w-10 rounded bg-muted flex items-center justify-center flex-shrink-0">
-                      <FileText className="h-5 w-5 text-muted-foreground" />
+                      <SlotIcon slot="approval_documents" className="h-5 w-5 text-muted-foreground" />
                     </div>
                   )}
                   <span className="text-sm truncate">{file.file_name}</span>
@@ -397,7 +394,7 @@ export default function ClientReview() {
                   </div>
                 ) : (
                   <div className="text-center">
-                    <FileText className="h-24 w-24 text-muted-foreground mx-auto mb-4" />
+                    <SlotIcon slot="approval_documents" className="h-24 w-24 text-muted-foreground mx-auto mb-4" />
                     <p className="font-medium">{selectedFile.file_name}</p>
                     <a
                       href={selectedFile.file_url}
@@ -421,7 +418,7 @@ export default function ClientReview() {
         <aside className="w-80 border-l bg-card hidden lg:flex flex-col">
           <div className="p-4 border-b">
             <h2 className="font-medium flex items-center gap-2">
-              <MessageSquare className="h-4 w-4" />
+              <SlotIcon slot="approval_client_comment" className="h-4 w-4" />
               Comments ({comments.length})
             </h2>
           </div>
@@ -472,7 +469,7 @@ export default function ClientReview() {
                             <img src={file.file_url} alt="" className="h-full w-full object-cover" />
                           </div>
                         ) : (
-                          <FileText className="h-4 w-4 flex-shrink-0" />
+                          <SlotIcon slot="approval_documents" className="h-4 w-4 flex-shrink-0" />
                         )}
                         <span className="truncate">{file.file_name}</span>
                       </div>
@@ -537,7 +534,7 @@ export default function ClientReview() {
                   submitComment();
                 }
               }}>
-                <MessageSquare className="h-4 w-4" />
+                <SlotIcon slot="approval_client_comment" className="h-4 w-4" />
               </Button>
             </div>
           </div>

@@ -2,7 +2,8 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Clock, MessageSquare, Calendar, GripVertical } from '@/components/icons';
+import { GripVertical } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 import { Task, ProjectStatus, PRIORITY_OPTIONS } from './types';
 import { format } from 'date-fns';
 
@@ -63,21 +64,21 @@ export function TaskCard({ task, status, commentCount = 0, onClick, isDragging }
           
           {task.due_date && (
             <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
+              <SlotIcon slot="task_calendar" className="h-3 w-3" />
               {format(new Date(task.due_date), 'MMM d')}
             </span>
           )}
 
           {task.estimated_hours && (
             <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <Clock className="h-3 w-3" />
+              <SlotIcon slot="task_clock" className="h-3 w-3" />
               {task.estimated_hours}h
             </span>
           )}
 
           {commentCount > 0 && (
             <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <MessageSquare className="h-3 w-3" />
+              <SlotIcon slot="task_message" className="h-3 w-3" />
               {commentCount}
             </span>
           )}

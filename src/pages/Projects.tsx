@@ -26,7 +26,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Table, Calendar, Clock, MoreVertical, Pencil, Trash2, LayoutGrid, List, Download } from '@/components/icons';
+import { Plus, Search, Table, MoreVertical, Trash2, LayoutGrid, List, Download } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -766,7 +767,7 @@ export default function Projects() {
                             e.stopPropagation();
                             openEditDialog(project);
                           }}>
-                            <Pencil className="mr-2 h-4 w-4" />
+                            <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
                             Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -791,12 +792,12 @@ export default function Projects() {
                     <div className="flex items-center gap-3">
                       {project.due_date && (
                         <span className="flex items-center gap-1">
-                          <Calendar className="h-3.5 w-3.5" />
+                          <SlotIcon slot="task_calendar" className="h-3.5 w-3.5" />
                           {format(new Date(project.due_date), 'MMM d')}
                         </span>
                       )}
                       <span className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" />
+                        <SlotIcon slot="task_clock" className="h-3.5 w-3.5" />
                         {(project.hours || 0).toFixed(1)}h
                       </span>
                     </div>
@@ -830,12 +831,12 @@ export default function Projects() {
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     {project.due_date && (
                       <span className="flex items-center gap-1">
-                        <Calendar className="h-3.5 w-3.5" />
+                        <SlotIcon slot="task_calendar" className="h-3.5 w-3.5" />
                         {format(new Date(project.due_date), 'MMM d')}
                       </span>
                     )}
                     <span className="flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" />
+                      <SlotIcon slot="task_clock" className="h-3.5 w-3.5" />
                       {(project.hours || 0).toFixed(1)}h
                     </span>
                     <span>{project.task_count || 0} tasks</span>

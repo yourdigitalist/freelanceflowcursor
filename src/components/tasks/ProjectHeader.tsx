@@ -8,7 +8,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Clock, DollarSign, Calendar, CheckSquare, ArrowLeft, MoreVertical, Pencil, Trash2, Download, Upload } from '@/components/icons';
+import { ArrowLeft, MoreVertical, Trash2, Download, Upload } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 import { Project, Task, ProjectStatus } from './types';
 import { format } from 'date-fns';
 
@@ -134,7 +135,7 @@ export function ProjectHeader({
               <DropdownMenuContent align="end">
                 {onEdit && (
                   <DropdownMenuItem onClick={onEdit}>
-                    <Pencil className="h-4 w-4 mr-2" />
+                    <SlotIcon slot="action_edit" className="h-4 w-4 mr-2" />
                     Edit
                   </DropdownMenuItem>
                 )}
@@ -156,7 +157,7 @@ export function ProjectHeader({
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-primary/10 rounded-lg">
-                <Clock className="h-5 w-5 text-primary" />
+                <SlotIcon slot="project_clock" className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Hours</p>
@@ -170,7 +171,7 @@ export function ProjectHeader({
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-success/10 rounded-lg">
-                <DollarSign className="h-5 w-5 text-success" />
+                <SlotIcon slot="project_dollar" className="h-5 w-5 text-success" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Rate</p>
@@ -187,7 +188,7 @@ export function ProjectHeader({
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-warning/10 rounded-lg">
-                <Calendar className="h-5 w-5 text-warning" />
+                <SlotIcon slot="project_calendar" className="h-5 w-5 text-warning" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Due Date</p>
@@ -203,7 +204,7 @@ export function ProjectHeader({
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-accent/10 rounded-lg">
-                <CheckSquare className="h-5 w-5 text-accent" />
+                <SlotIcon slot="project_check" className="h-5 w-5 text-accent" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Tasks</p>

@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { useSettingsDirty } from '@/contexts/SettingsDirtyContext';
-import { Loader2, Camera } from '@/components/icons';
+import { Loader2 } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 
 interface UserProfile {
   first_name: string | null;
@@ -128,7 +129,7 @@ export default function UserSettings() {
               </AvatarFallback>
             </Avatar>
             <Button type="button" variant="outline" size="sm">
-              <Camera className="mr-2 h-4 w-4" />
+              <SlotIcon slot="profile_camera" className="mr-2 h-4 w-4" />
               Upload Photo
             </Button>
           </div>

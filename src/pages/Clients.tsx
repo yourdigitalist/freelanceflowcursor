@@ -30,7 +30,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Users, Mail, Phone, Building2, MoreVertical, Pencil, Trash2, Grid, List } from '@/components/icons';
+import { Plus, Search, Users, MoreVertical, Trash2, Grid, List } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -492,7 +493,7 @@ export default function Clients() {
         ) : filteredClients.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-12">
-              <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />
+              <SlotIcon slot="empty_clients" className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <h3 className="text-lg font-semibold mb-1">No clients yet</h3>
               <p className="text-sm text-muted-foreground mb-4">
                 Get started by adding your first client
@@ -523,7 +524,7 @@ export default function Clients() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => openEditDialog(client)}>
-                              <Pencil className="mr-2 h-4 w-4" />
+                              <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem
@@ -549,7 +550,7 @@ export default function Clients() {
                           <p className="font-semibold">{client.name}</p>
                           {client.company && (
                             <p className="text-sm text-muted-foreground flex items-center gap-1">
-                              <Building2 className="h-3 w-3" />
+                              <SlotIcon slot="client_company" className="h-3 w-3" />
                               {client.company}
                             </p>
                           )}
@@ -559,7 +560,7 @@ export default function Clients() {
                         <>
                           {client.email && (
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Mail className="h-4 w-4" />
+                              <SlotIcon slot="client_email" className="h-4 w-4" />
                               <a href={`mailto:${client.email}`} className="hover:text-primary truncate" onClick={(e) => e.stopPropagation()}>
                                 {client.email}
                               </a>
@@ -567,7 +568,7 @@ export default function Clients() {
                           )}
                           {client.phone && (
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Phone className="h-4 w-4" />
+                              <SlotIcon slot="client_phone" className="h-4 w-4" />
                               <a href={`tel:${client.phone}`} className="hover:text-primary" onClick={(e) => e.stopPropagation()}>
                                 {client.phone}
                               </a>
@@ -600,7 +601,7 @@ export default function Clients() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => openEditDialog(client)}>
-                              <Pencil className="mr-2 h-4 w-4" />
+                              <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem
@@ -672,7 +673,7 @@ export default function Clients() {
                     </p>
                     <div className="flex gap-2 pt-4">
                       <Button onClick={() => { openEditDialog(viewingClient); setViewingClient(null); }}>
-                        <Pencil className="mr-2 h-4 w-4" />
+                        <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
                         Edit
                       </Button>
                       <Button variant="outline" onClick={() => setViewingClient(null)}>

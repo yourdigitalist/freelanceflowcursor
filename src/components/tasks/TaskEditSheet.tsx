@@ -17,7 +17,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Send, MessageSquare, Trash2 } from '@/components/icons';
+import { Send, MessageSquare, Trash2 } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 import { Task, ProjectStatus, TaskComment, PRIORITY_OPTIONS } from './types';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -146,7 +147,7 @@ export function TaskEditSheet({
                   size="sm"
                   onClick={() => onDuplicate(task)}
                 >
-                  <Copy className="h-4 w-4 mr-2" />
+                  <SlotIcon slot="action_duplicate" className="h-4 w-4 mr-2" />
                   Duplicate
                 </Button>
               )}

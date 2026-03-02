@@ -35,25 +35,20 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import {
   Plus,
-  Folder,
-  FolderPlus,
   MoreVertical,
-  Edit,
-  Trash2,
-  Send,
-  ExternalLink,
-  FileText,
-  Image,
   Upload,
   X,
-  CalendarIcon,
   CheckCircle,
   XCircle,
   MessageSquare,
   Clock,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
+  LayoutGrid,
+  List,
 } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 import { EmojiPicker } from '@/components/ui/emoji-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
@@ -92,6 +87,17 @@ interface Client {
 interface Project {
   id: string;
   name: string;
+}
+
+function FileThumbnail({ file }: { file: File }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+  if (!url) return <div className="h-8 w-8 rounded overflow-hidden bg-muted animate-pulse" />;
+  return <img src={url} alt="" className="h-8 w-8 rounded object-cover bg-background" />;
 }
 
 const FOLDER_COLORS = [
@@ -140,6 +146,9 @@ export default function ReviewRequests() {
   const [folderFilter, setFolderFilter] = useState<string>('all');
   // Collapsible folder sections: which are open (default open for "none" and first folder)
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
+  /** In cards view: null = showing folder list; 'none' = inside "No folder"; folder.id = inside that folder */
+  const [openedFolderId, setOpenedFolderId] = useState<string | null>(null);
 
   // When creating a new request, auto-fill recipients with the selected client's email
   useEffect(() => {
@@ -399,45 +408,55 @@ export default function ReviewRequests() {
     }
   };
 
-  // Allowed MIME types for client-side validation
-  const ALLOWED_FILE_TYPES = [
-    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-    'application/pdf', 'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  const DOC_TYPES = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   ];
-  const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB (images and documents)
+  const MAX_FILE_SIZE_MB = 5;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+  const validateAndAddFiles = (
+    files: File[],
+    allowedTypes: string[],
+    typeLabel: string,
+  ) => {
     const validFiles: File[] = [];
     const errors: string[] = [];
-
     for (const file of files) {
-      // Check file size
       if (file.size > MAX_FILE_SIZE) {
-        errors.push(`${file.name}: File too large (max 2MB)`);
+        errors.push(`${file.name}: too large (max ${MAX_FILE_SIZE_MB}MB)`);
         continue;
       }
-      
-      // Check file type
-      if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-        errors.push(`${file.name}: File type not allowed`);
+      if (!allowedTypes.includes(file.type)) {
+        errors.push(`${file.name}: not a valid ${typeLabel} type`);
         continue;
       }
-      
       validFiles.push(file);
     }
-
     if (errors.length > 0) {
-      toast({ 
-        title: 'Some files were rejected', 
-        description: errors.join('\n'),
-        variant: 'destructive' 
-      });
+      toast({ title: 'Some files were rejected', description: errors.join('\n'), variant: 'destructive' });
     }
-
-    setRequestFiles(prev => [...prev, ...validFiles]);
+    if (validFiles.length > 0) {
+      setRequestFiles((prev) => [...prev, ...validFiles]);
+    }
   };
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    validateAndAddFiles(files, IMAGE_TYPES, 'image');
+    e.target.value = '';
+  };
+
+  const handleDocFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    validateAndAddFiles(files, DOC_TYPES, 'document');
+    e.target.value = '';
+  };
+
+  const imageFiles = requestFiles.filter((f) => f.type.startsWith('image/'));
+  const docFiles = requestFiles.filter((f) => !f.type.startsWith('image/'));
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -448,7 +467,7 @@ export default function ReviewRequests() {
       case 'commented':
         return <Badge className="bg-primary/10 text-primary border-primary/20"><MessageSquare className="h-3 w-3 mr-1" />Commented</Badge>;
       default:
-        return <Badge className="bg-muted text-muted-foreground"><Clock className="h-3 w-3 mr-1" />Pending</Badge>;
+        return <Badge className="bg-muted text-muted-foreground"><SlotIcon slot="task_clock" className="h-3 w-3 mr-1" />Pending</Badge>;
     }
   };
 
@@ -490,17 +509,17 @@ export default function ReviewRequests() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Review Requests</h1>
-            <p className="text-muted-foreground">Manage work sent for client review</p>
+            <h1 className="text-2xl font-bold text-foreground">Approvals</h1>
+            <p className="text-muted-foreground">Send work for client approval and track status</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => { resetFolderForm(); setFolderDialogOpen(true); }}>
-              <FolderPlus className="h-4 w-4 mr-2" />
+              <SlotIcon slot="approval_folder" className="h-4 w-4 mr-2" />
               Create Folder
             </Button>
             <Button onClick={() => { resetRequestForm(); setRequestDialogOpen(true); }}>
               <Plus className="h-4 w-4 mr-2" />
-              Create Request
+              New approval
             </Button>
           </div>
         </div>
@@ -555,34 +574,124 @@ export default function ReviewRequests() {
               ))}
             </SelectContent>
           </Select>
+          <div className="flex rounded-md border border-input bg-background p-0.5">
+            <Button
+              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => { setViewMode('list'); setOpenedFolderId(null); }}
+              title="List view"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => { setViewMode('cards'); setOpenedFolderId(null); }}
+              title="Cards view"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
-        {/* Collapsible folder directory with request cards */}
+        {/* Folder list (accordion in list view) or folder-as-cards (click to open in cards view) */}
         {filteredRequests.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
-              No review requests yet
+              No approval requests yet
             </CardContent>
           </Card>
-        ) : (
-          <div className="space-y-2">
-            {/* No folder section */}
-            {requestsByFolder.none.length > 0 && (
-              <Collapsible
-                open={openSections['none'] !== false}
-                onOpenChange={(open) => setSectionOpen('none', open)}
-              >
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" className="w-full justify-start gap-2 h-9 font-medium">
-                    {openSections['none'] === false ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    <Folder className="h-4 w-4 text-muted-foreground" />
-                    No folder
-                    <span className="text-muted-foreground text-sm ml-1">({requestsByFolder.none.length})</span>
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 pl-6 pt-2">
-                    {requestsByFolder.none.map((request) => (
+        ) : viewMode === 'cards' && openedFolderId === null ? (
+          /* Cards view: folder grid – click a folder to open it (empty folders always visible) */
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <Card
+              className="cursor-pointer hover:shadow-md transition-shadow border-2 border-dashed hover:border-primary/30"
+              onClick={() => setOpenedFolderId('none')}
+            >
+              <CardContent className="p-6 flex flex-col items-center justify-center min-h-[120px] gap-2">
+                <SlotIcon slot="approval_folder" className="h-10 w-10 text-muted-foreground" />
+                <span className="font-medium">No folder</span>
+                <span className="text-sm text-muted-foreground">{requestsByFolder.none.length} request{requestsByFolder.none.length !== 1 ? 's' : ''}</span>
+              </CardContent>
+            </Card>
+            {folders.map((folder) => {
+              const folderRequests = requestsByFolder.byId[folder.id] || [];
+              return (
+                <Card
+                  key={folder.id}
+                  className="cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => setOpenedFolderId(folder.id)}
+                >
+                  <CardContent className="p-6 flex flex-col items-center justify-center min-h-[120px] gap-2">
+                    <span className="text-3xl" style={{ color: folder.color }}>{folder.emoji}</span>
+                    <span className="font-medium text-center truncate w-full">{folder.name}</span>
+                    <span className="text-sm text-muted-foreground">{folderRequests.length} request{folderRequests.length !== 1 ? 's' : ''}</span>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        ) : viewMode === 'cards' && openedFolderId !== null ? (
+          /* Cards view: inside a folder – back button + request cards */
+          (() => {
+            const isNone = openedFolderId === 'none';
+            const folder = isNone ? null : folders.find((f) => f.id === openedFolderId);
+            const requestsInFolder = isNone ? requestsByFolder.none : (requestsByFolder.byId[openedFolderId] || []);
+            const isEmpty = requestsInFolder.length === 0;
+            return (
+              <div className="space-y-4">
+                <Button variant="ghost" className="gap-2 -ml-2" onClick={() => setOpenedFolderId(null)}>
+                  <ChevronLeft className="h-4 w-4" />
+                  Back to folders
+                </Button>
+                <div className="flex items-center gap-2 pb-2">
+                  {isNone ? (
+                    <>
+                      <SlotIcon slot="approval_folder" className="h-5 w-5 text-muted-foreground" />
+                      <h2 className="font-semibold">No folder</h2>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-2xl" style={{ color: folder?.color }}>{folder?.emoji}</span>
+                      <h2 className="font-semibold">{folder?.name}</h2>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => folder && handleEditFolder(folder)}>
+                            <SlotIcon slot="action_edit" className="h-4 w-4 mr-2" />Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => folder && handleDeleteFolder(folder)} className="text-destructive">
+                            <SlotIcon slot="action_delete" className="h-4 w-4 mr-2" />Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </>
+                  )}
+                </div>
+                {isEmpty ? (
+                  <div className="flex flex-col items-center justify-center py-12 px-4 rounded-lg border border-dashed bg-muted/30">
+                    <p className="text-sm text-muted-foreground mb-3">No approval requests in this folder yet</p>
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        resetRequestForm();
+                        setRequestFolderId(isNone ? '' : openedFolderId);
+                        setRequestDialogOpen(true);
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add approval request
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {requestsInFolder.map((request) => (
                       <Card
                         key={request.id}
                         className="hover:shadow-md transition-shadow cursor-pointer group border-0 shadow-sm"
@@ -604,21 +713,21 @@ export default function ReviewRequests() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/reviews/${request.id}`); }}>
-                                  <FileText className="h-4 w-4 mr-2" />View Details
+                                  <SlotIcon slot="approval_documents" className="h-4 w-4 mr-2" />View Details
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditRequest(request); }}>
-                                  <Edit className="h-4 w-4 mr-2" />Edit
+                                  <SlotIcon slot="action_edit" className="h-4 w-4 mr-2" />Edit
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); copyShareLink(request); }}>
-                                  <ExternalLink className="h-4 w-4 mr-2" />Copy Link
+                                  <SlotIcon slot="action_copy_link" className="h-4 w-4 mr-2" />Copy Link
                                 </DropdownMenuItem>
                                 {!request.sent_at && (
                                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleSendRequest(request); }}>
-                                    <Send className="h-4 w-4 mr-2" />Mark as Sent
+                                    <SlotIcon slot="action_send" className="h-4 w-4 mr-2" />Mark as Sent
                                   </DropdownMenuItem>
                                 )}
                                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDeleteRequest(request); }} className="text-destructive">
-                                  <Trash2 className="h-4 w-4 mr-2" />Delete
+                                  <SlotIcon slot="action_delete" className="h-4 w-4 mr-2" />Delete
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -627,7 +736,7 @@ export default function ReviewRequests() {
                             {getStatusBadge(request.status)}
                             {request.sent_at && (
                               <Badge variant="outline" className="text-xs">
-                                <Send className="h-3 w-3 mr-1" />Sent
+                                <SlotIcon slot="action_send" className="h-3 w-3 mr-1" />Sent
                               </Badge>
                             )}
                           </div>
@@ -640,10 +749,86 @@ export default function ReviewRequests() {
                       </Card>
                     ))}
                   </div>
+                )}
+              </div>
+            );
+          })()
+        ) : (
+          <div className="space-y-2">
+            {/* List view: No folder section */}
+            {requestsByFolder.none.length > 0 && (
+              <Collapsible
+                open={openSections['none'] !== false}
+                onOpenChange={(open) => setSectionOpen('none', open)}
+              >
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" className="w-full justify-start gap-2 h-9 font-medium">
+                    {openSections['none'] === false ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    <SlotIcon slot="approval_folder" className="h-4 w-4 text-muted-foreground" />
+                    No folder
+                    <span className="text-muted-foreground text-sm ml-1">({requestsByFolder.none.length})</span>
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="pl-6 pt-2 space-y-1">
+                    {requestsByFolder.none.map((request) => (
+                      <div
+                        key={request.id}
+                        className="flex items-center gap-3 py-2 px-3 rounded-lg border bg-card hover:bg-muted/50 cursor-pointer group"
+                        onClick={() => navigate(`/reviews/${request.id}`)}
+                      >
+                        <div className="flex-1 min-w-0 grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center">
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{request.title}</p>
+                            <p className="text-sm text-muted-foreground">v{request.version} • {request.clients?.name || 'No client'}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {getStatusBadge(request.status)}
+                            {request.sent_at && (
+                              <Badge variant="outline" className="text-xs">
+                                <SlotIcon slot="action_send" className="h-3 w-3 mr-1" />Sent
+                              </Badge>
+                            )}
+                          </div>
+                          {request.due_date ? (
+                            <span className="text-sm text-muted-foreground whitespace-nowrap">
+                              Due {format(new Date(request.due_date), 'MMM d, yyyy')}
+                            </span>
+                          ) : <span />}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/reviews/${request.id}`); }}>
+                                <SlotIcon slot="approval_documents" className="h-4 w-4 mr-2" />View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditRequest(request); }}>
+                                <SlotIcon slot="action_edit" className="h-4 w-4 mr-2" />Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); copyShareLink(request); }}>
+                                <SlotIcon slot="action_copy_link" className="h-4 w-4 mr-2" />Copy Link
+                              </DropdownMenuItem>
+                              {!request.sent_at && (
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleSendRequest(request); }}>
+                                  <SlotIcon slot="action_send" className="h-4 w-4 mr-2" />Mark as Sent
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDeleteRequest(request); }} className="text-destructive">
+                                <SlotIcon slot="action_delete" className="h-4 w-4 mr-2" />Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </CollapsibleContent>
               </Collapsible>
             )}
-            {/* Each folder section (include empty folders with "Add review request" CTA) */}
+            {/* Each folder section (list view) */}
             {folders.map((folder) => {
               const folderRequests = requestsByFolder.byId[folder.id] || [];
               const sectionId = folder.id;
@@ -671,45 +856,56 @@ export default function ReviewRequests() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => handleEditFolder(folder)}>
-                          <Edit className="h-4 w-4 mr-2" />Edit
+                          <SlotIcon slot="action_edit" className="h-4 w-4 mr-2" />Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleDeleteFolder(folder)} className="text-destructive">
-                          <Trash2 className="h-4 w-4 mr-2" />Delete
+                          <SlotIcon slot="action_delete" className="h-4 w-4 mr-2" />Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
                   <CollapsibleContent>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 pl-6 pt-2">
-                      {isEmpty ? (
-                        <div className="col-span-full flex flex-col items-center justify-center py-8 px-4 rounded-lg border border-dashed bg-muted/30">
-                          <p className="text-sm text-muted-foreground mb-3">No review requests in this folder yet</p>
-                          <Button
-                            variant="secondary"
-                            onClick={() => {
-                              resetRequestForm();
-                              setRequestFolderId(folder.id);
-                              setRequestDialogOpen(true);
-                            }}
-                          >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add review request
-                          </Button>
-                        </div>
-                      ) : folderRequests.map((request) => (
-                        <Card
-                          key={request.id}
-                          className="hover:shadow-md transition-shadow cursor-pointer group border-0 shadow-sm"
-                          onClick={() => navigate(`/reviews/${request.id}`)}
+                    {isEmpty ? (
+                      <div className="pl-6 pt-2 flex flex-col items-center justify-center py-8 px-4 rounded-lg border border-dashed bg-muted/30">
+                        <p className="text-sm text-muted-foreground mb-3">No approval requests in this folder yet</p>
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            resetRequestForm();
+                            setRequestFolderId(folder.id);
+                            setRequestDialogOpen(true);
+                          }}
                         >
-                          <CardContent className="p-4 space-y-3">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-medium truncate">{request.title}</h3>
-                                <p className="text-sm text-muted-foreground">
-                                  v{request.version} • {request.clients?.name || 'No client'}
-                                </p>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add approval request
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="pl-6 pt-2 space-y-1">
+                        {folderRequests.map((request) => (
+                          <div
+                            key={request.id}
+                            className="flex items-center gap-3 py-2 px-3 rounded-lg border bg-card hover:bg-muted/50 cursor-pointer group"
+                            onClick={() => navigate(`/reviews/${request.id}`)}
+                          >
+                            <div className="flex-1 min-w-0 grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center">
+                              <div className="min-w-0">
+                                <p className="font-medium truncate">{request.title}</p>
+                                <p className="text-sm text-muted-foreground">v{request.version} • {request.clients?.name || 'No client'}</p>
                               </div>
+                              <div className="flex items-center gap-2">
+                                {getStatusBadge(request.status)}
+                                {request.sent_at && (
+                                  <Badge variant="outline" className="text-xs">
+                                    <SlotIcon slot="action_send" className="h-3 w-3 mr-1" />Sent
+                                  </Badge>
+                                )}
+                              </div>
+                              {request.due_date ? (
+                                <span className="text-sm text-muted-foreground whitespace-nowrap">
+                                  Due {format(new Date(request.due_date), 'MMM d, yyyy')}
+                                </span>
+                              ) : <span />}
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                                   <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -718,42 +914,29 @@ export default function ReviewRequests() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/reviews/${request.id}`); }}>
-                                    <FileText className="h-4 w-4 mr-2" />View Details
+                                    <SlotIcon slot="approval_documents" className="h-4 w-4 mr-2" />View Details
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditRequest(request); }}>
-                                    <Edit className="h-4 w-4 mr-2" />Edit
+                                    <SlotIcon slot="action_edit" className="h-4 w-4 mr-2" />Edit
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); copyShareLink(request); }}>
-                                    <ExternalLink className="h-4 w-4 mr-2" />Copy Link
+                                    <SlotIcon slot="action_copy_link" className="h-4 w-4 mr-2" />Copy Link
                                   </DropdownMenuItem>
                                   {!request.sent_at && (
                                     <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleSendRequest(request); }}>
-                                      <Send className="h-4 w-4 mr-2" />Mark as Sent
+                                      <SlotIcon slot="action_send" className="h-4 w-4 mr-2" />Mark as Sent
                                     </DropdownMenuItem>
                                   )}
                                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDeleteRequest(request); }} className="text-destructive">
-                                    <Trash2 className="h-4 w-4 mr-2" />Delete
+                                    <SlotIcon slot="action_delete" className="h-4 w-4 mr-2" />Delete
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
-                            <div className="flex items-center gap-2">
-                              {getStatusBadge(request.status)}
-                              {request.sent_at && (
-                                <Badge variant="outline" className="text-xs">
-                                  <Send className="h-3 w-3 mr-1" />Sent
-                                </Badge>
-                              )}
-                            </div>
-                            {request.due_date && (
-                              <p className="text-xs text-muted-foreground">
-                                Due: {format(new Date(request.due_date), 'MMM d, yyyy')}
-                              </p>
-                            )}
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </CollapsibleContent>
                 </Collapsible>
               );
@@ -809,8 +992,8 @@ export default function ReviewRequests() {
       <Dialog open={requestDialogOpen} onOpenChange={setRequestDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingRequest ? 'Edit Request' : 'Send for Review'}</DialogTitle>
-            <p className="text-sm text-muted-foreground">Create a review request and send to clients</p>
+            <DialogTitle>{editingRequest ? 'Edit approval' : 'Send for approval'}</DialogTitle>
+            <p className="text-sm text-muted-foreground">Create an approval request and send to clients</p>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -828,7 +1011,7 @@ export default function ReviewRequests() {
             </div>
             
             <div className="space-y-2">
-              <Label>Review Title *</Label>
+              <Label>Title *</Label>
               <Input 
                 value={requestTitle} 
                 onChange={e => setRequestTitle(e.target.value)} 
@@ -890,7 +1073,7 @@ export default function ReviewRequests() {
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-start text-left font-normal">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    <SlotIcon slot="approval_calendar" className="mr-2 h-4 w-4" />
                     {requestDueDate ? format(requestDueDate, 'PPP') : 'Pick a date'}
                   </Button>
                 </PopoverTrigger>
@@ -902,36 +1085,82 @@ export default function ReviewRequests() {
             
             {!editingRequest && (
               <>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <Label>Files *</Label>
-                  <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
-                    <input
-                      type="file"
-                      multiple
-                      onChange={handleFileChange}
-                      className="hidden"
-                      id="file-upload"
-                      accept="image/*,.pdf,.doc,.docx"
-                    />
-                    <label htmlFor="file-upload" className="cursor-pointer">
-                      <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                      <p className="text-sm font-medium">Click to upload or drag & drop</p>
-                      <p className="text-xs text-muted-foreground">PDF, Images, Documents (max 2MB each)</p>
-                    </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        onChange={handleImageFileChange}
+                        className="hidden"
+                        id="upload-images"
+                      />
+                      <label htmlFor="upload-images" className="cursor-pointer block">
+                        <SlotIcon slot="approval_images" className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-sm font-medium">Images</p>
+                        <p className="text-xs text-muted-foreground">JPG, PNG, GIF, WebP (max {MAX_FILE_SIZE_MB}MB)</p>
+                      </label>
+                    </div>
+                    <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
+                      <input
+                        type="file"
+                        multiple
+                        accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        onChange={handleDocFileChange}
+                        className="hidden"
+                        id="upload-docs"
+                      />
+                      <label htmlFor="upload-docs" className="cursor-pointer block">
+                        <SlotIcon slot="approval_documents" className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-sm font-medium">Documents</p>
+                        <p className="text-xs text-muted-foreground">PDF, Word (max {MAX_FILE_SIZE_MB}MB)</p>
+                      </label>
+                    </div>
                   </div>
                   {requestFiles.length > 0 && (
-                    <div className="space-y-2">
-                      {requestFiles.map((file, i) => (
-                        <div key={i} className="flex items-center justify-between p-2 bg-muted rounded">
-                          <div className="flex items-center gap-2">
-                            {file.type.startsWith('image/') ? <Image className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-                            <span className="text-sm truncate max-w-[200px]">{file.name}</span>
+                    <div className="space-y-3 pt-1">
+                      {imageFiles.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-1.5">Images ({imageFiles.length})</p>
+                          <div className="flex flex-wrap gap-2">
+                            {requestFiles.map((file, i) =>
+                              file.type.startsWith('image/') ? (
+                                <div key={i} className="flex items-center gap-2 p-2 bg-muted rounded-lg">
+                                  <div className="h-8 w-8 rounded overflow-hidden bg-background shrink-0">
+                                    <FileThumbnail file={file} />
+                                  </div>
+                                  <span className="text-sm truncate max-w-[120px]">{file.name}</span>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setRequestFiles((prev) => prev.filter((_, j) => j !== i))}>
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ) : null,
+                            )}
                           </div>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRequestFiles(prev => prev.filter((_, j) => j !== i))}>
-                            <X className="h-3 w-3" />
-                          </Button>
                         </div>
-                      ))}
+                      )}
+                      {docFiles.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-1.5">Documents ({docFiles.length})</p>
+                          <div className="space-y-1">
+                            {requestFiles.map((file, i) =>
+                              !file.type.startsWith('image/') ? (
+                                <div key={i} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <SlotIcon slot="approval_documents" className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                    <span className="text-sm truncate">{file.name}</span>
+                                  </div>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setRequestFiles((prev) => prev.filter((_, j) => j !== i))}>
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ) : null,
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -967,7 +1196,7 @@ export default function ReviewRequests() {
               onClick={handleSaveRequest} 
               disabled={uploading || !requestTitle.trim() || !requestClientId || (!editingRequest && (requestFiles.length === 0 || requestRecipients.length === 0))}
             >
-              {uploading ? 'Uploading...' : editingRequest ? 'Update' : 'Send for Review'}
+              {uploading ? 'Uploading...' : editingRequest ? 'Update' : 'Send for approval'}
             </Button>
           </DialogFooter>
         </DialogContent>

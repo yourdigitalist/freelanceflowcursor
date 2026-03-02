@@ -12,7 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Trash2, Send, DollarSign, Mail, Loader2, Eye, Clock, Printer, ListTodo, Wallet, Pencil, Download, MoreVertical } from '@/components/icons';
+import { ArrowLeft, Plus, Trash2, Send, Loader2, ListTodo, Wallet, Download } from '@/components/icons';
+import { SlotIcon } from '@/contexts/IconSlotContext';
 import { format } from 'date-fns';
 import { formatCurrency, currencies } from '@/lib/locale-data';
 import {
@@ -991,13 +992,13 @@ export default function InvoiceDetail() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => setIsPreviewOpen(true)}>
-              <Eye className="mr-2 h-4 w-4" />
+              <SlotIcon slot="action_preview" className="mr-2 h-4 w-4" />
               Preview
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon" className="h-9 w-9">
-                  <MoreVertical className="h-4 w-4" />
+                  <SlotIcon slot="action_more" className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -1013,7 +1014,7 @@ export default function InvoiceDetail() {
                 )}
                 {invoice.status === 'sent' && (
                   <DropdownMenuItem onClick={markAsPaid}>
-                    <DollarSign className="mr-2 h-4 w-4" />
+                    <SlotIcon slot="invoice_stat_paid" className="mr-2 h-4 w-4" />
                     Mark as Paid
                   </DropdownMenuItem>
                 )}
@@ -1056,7 +1057,7 @@ export default function InvoiceDetail() {
                       }
                     }}
                   >
-                    <Pencil className="h-4 w-4" />
+                    <SlotIcon slot="action_edit" className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Edit Invoice</TooltipContent>
@@ -1089,7 +1090,7 @@ export default function InvoiceDetail() {
                   setIsSendModalOpen(true);
                 }}
               >
-                <Mail className="mr-2 h-4 w-4" />
+                <SlotIcon slot="action_send" className="mr-2 h-4 w-4" />
                 {invoice.status === 'paid' ? 'Send receipt' : invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send to Client'}
               </Button>
             )}
@@ -1211,7 +1212,7 @@ export default function InvoiceDetail() {
               <div className="flex flex-wrap gap-2">
                 {invoice.client_id && (
                   <Button variant="outline" size="sm" onClick={fetchUnbilledEntries}>
-                    <Clock className="mr-2 h-4 w-4" />
+                    <SlotIcon slot="invoice_stat_pending" className="mr-2 h-4 w-4" />
                     Import Time
                   </Button>
                 )}
@@ -1512,7 +1513,7 @@ export default function InvoiceDetail() {
             <DialogTitle>Invoice Preview</DialogTitle>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => window.print()}>
-                <Printer className="mr-2 h-4 w-4" />
+                <SlotIcon slot="action_print" className="mr-2 h-4 w-4" />
                 Print
               </Button>
               <Button size="sm" onClick={() => {
@@ -1520,7 +1521,7 @@ export default function InvoiceDetail() {
                 setEmailMessage(resolveEmailMessage(profile?.invoice_email_message_default ?? ''));
                 setIsSendModalOpen(true);
               }}>
-                <Mail className="mr-2 h-4 w-4" />
+                <SlotIcon slot="action_send" className="mr-2 h-4 w-4" />
                 Send Invoice
               </Button>
             </div>
@@ -1863,7 +1864,7 @@ export default function InvoiceDetail() {
                 </>
               ) : (
                 <>
-                  <Mail className="mr-2 h-4 w-4" />
+                  <SlotIcon slot="action_send" className="mr-2 h-4 w-4" />
                   {sendModalMode === 'receipt' ? 'Send receipt' : invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send Invoice'}
                 </>
               )}

@@ -70,14 +70,37 @@ serve(async (req) => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("stripe_customer_id")
+    .select("stripe_customer_id, stripe_subscription_id, subscription_status")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const customerId = profile?.stripe_customer_id as string | null;
+  let customerId = profile?.stripe_customer_id as string | null;
+
+  const stripe = new Stripe(stripeSecret);
+
+  // If user is on trial/active but profile has no stripe_customer_id (e.g. return from checkout was missed), try to recover from Stripe by email
+  if (!customerId && (profile?.subscription_status === "trial" || profile?.subscription_status === "active")) {
+    const email = user.email?.trim();
+    if (email) {
+      const customers = await stripe.customers.list({ email, limit: 1 });
+      const customer = customers.data[0];
+      if (customer?.id) {
+        customerId = customer.id;
+        await supabase
+          .from("profiles")
+          .update({ stripe_customer_id: customerId })
+          .eq("user_id", user.id);
+      }
+    }
+  }
+
   if (!customerId) {
+    const isTrial = profile?.subscription_status === "trial";
+    const message = isTrial
+      ? "No billing account found. Add a payment method by choosing a plan above and completing checkout—then you can open the billing portal to manage or cancel."
+      : "No billing account found. Subscribe to a plan first.";
     return new Response(
-      JSON.stringify({ error: "No billing account found. Subscribe first." }),
+      JSON.stringify({ error: message }),
       {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -85,13 +108,30 @@ serve(async (req) => {
     );
   }
 
-  const stripe = new Stripe(stripeSecret);
-
   try {
-    const session = await stripe.billingPortal.sessions.create({
+    const subscriptionId = profile?.stripe_subscription_id as string | null;
+    const params: {
+      customer: string;
+      return_url: string;
+      flow_data?: {
+        type: "subscription_update";
+        subscription_update: { subscription: string };
+        after_completion: { type: "redirect"; redirect: { return_url: string } };
+      };
+    } = {
       customer: customerId,
       return_url: returnUrl,
-    });
+    };
+    // If user has a subscription, open portal directly to "update subscription" for that subscription
+    // so Stripe shows only the current plan as selected (not both monthly and yearly).
+    if (subscriptionId?.startsWith("sub_")) {
+      params.flow_data = {
+        type: "subscription_update",
+        subscription_update: { subscription: subscriptionId },
+        after_completion: { type: "redirect", redirect: { return_url: returnUrl } },
+      };
+    }
+    const session = await stripe.billingPortal.sessions.create(params);
 
     return new Response(JSON.stringify({ url: session.url }), {
       status: 200,
