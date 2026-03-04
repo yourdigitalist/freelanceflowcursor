@@ -99,10 +99,10 @@ serve(async (req) => {
       );
     }
 
-    // Validate share token and get review request
+    // Validate share token and get review request (need user_id, project_id for approval notification)
     const { data: request, error: requestError } = await supabase
       .from("review_requests")
-      .select("id")
+      .select("id, user_id, project_id")
       .eq("share_token", token)
       .single();
 
@@ -145,6 +145,18 @@ serve(async (req) => {
         content: status === "approved" ? "Approved this review" : "Rejected this review",
         commenter_name: commenter_name.trim(),
         commenter_email: commenter_email.trim().toLowerCase(),
+      });
+    }
+
+    // When client approves and the review is linked to a project, notify the freelancer to invoice
+    if (status === "approved" && request.project_id && request.user_id) {
+      const invoiceLink = `/invoices?project_id=${request.project_id}&from_review=1`;
+      await supabase.from("notifications").insert({
+        user_id: request.user_id,
+        type: "review",
+        title: "Review approved",
+        body: "Create an invoice for this project?",
+        link: invoiceLink,
       });
     }
 

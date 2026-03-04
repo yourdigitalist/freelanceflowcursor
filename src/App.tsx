@@ -7,7 +7,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import Onboarding from "./pages/Onboarding";
@@ -35,14 +34,18 @@ import AdminOverview from "./pages/admin/AdminOverview";
 import AdminIcons from "./pages/admin/AdminIcons";
 import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
 import AdminComms from "./pages/admin/AdminComms";
+import LandingContentSettings from "./pages/admin/LandingContentSettings";
 import Notifications from "./pages/Notifications";
 import Help from "./pages/Help";
+import Notes from "./pages/Notes";
+import Insights from "./pages/Insights";
 import ReviewRequests from "./pages/ReviewRequests";
 import ReviewRequestDetail from "./pages/ReviewRequestDetail";
 import ClientReview from "./pages/ClientReview";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
+import LpTest from "./pages/LpTest";
 import { BrandingApply } from "@/components/BrandingApply";
 import { TimerProvider } from "@/contexts/TimerContext";
 import { IconSlotProvider } from "@/contexts/IconSlotContext";
@@ -138,19 +141,24 @@ function AppRoutes() {
   
   return (
     <Routes>
-      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Index />} />
+      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LpTest />} />
       <Route path="/auth" element={user ? <Navigate to="/dashboard" replace /> : <Auth />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/lptest" element={<LpTest />} />
       <Route path="/onboarding" element={<OnboardingRoute><Onboarding /></OnboardingRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
+      <Route path="/clients/list" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
+      <Route path="/clients/active" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
       <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
       <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
       <Route path="/time" element={<Navigate to="/time/timer" replace />} />
       <Route path="/time/timer" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
       <Route path="/time/logs" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
+      <Route path="/notes" element={<ProtectedRoute><Notes /></ProtectedRoute>} />
+      <Route path="/insights" element={<ProtectedRoute><Insights /></ProtectedRoute>} />
       <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
       <Route path="/invoices/:id" element={<ProtectedRoute><InvoiceDetail /></ProtectedRoute>} />
       <Route path="/reviews" element={<ProtectedRoute><ReviewRequests /></ProtectedRoute>} />
@@ -168,6 +176,7 @@ function AppRoutes() {
         <Route path="help-content" element={<HelpContentSettings />} />
         <Route path="feature-requests" element={<FeatureRequestSettings />} />
         <Route path="feedback" element={<FeedbackSettings />} />
+        <Route path="landing-content" element={<LandingContentSettings />} />
       </Route>
       <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>
         <Route index element={<Navigate to="profile" replace />} />

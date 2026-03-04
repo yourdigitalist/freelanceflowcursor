@@ -22,11 +22,17 @@ export type Database = {
           company: string | null
           country: string | null
           created_at: string
+          currency: string | null
           email: string | null
+          estimated_value: number | null
           first_name: string | null
           id: string
           last_name: string | null
+          last_contacted_at: string | null
+          lead_source: string | null
           name: string
+          next_action: string | null
+          next_follow_up_at: string | null
           notes: string | null
           phone: string | null
           postal_code: string | null
@@ -34,6 +40,7 @@ export type Database = {
           status: string | null
           street: string | null
           street2: string | null
+          tags: string[]
           tax_id: string | null
           updated_at: string
           user_id: string
@@ -45,11 +52,17 @@ export type Database = {
           company?: string | null
           country?: string | null
           created_at?: string
+          currency?: string | null
           email?: string | null
+          estimated_value?: number | null
           first_name?: string | null
           id?: string
           last_name?: string | null
+          last_contacted_at?: string | null
+          lead_source?: string | null
           name: string
+          next_action?: string | null
+          next_follow_up_at?: string | null
           notes?: string | null
           phone?: string | null
           postal_code?: string | null
@@ -57,6 +70,7 @@ export type Database = {
           status?: string | null
           street?: string | null
           street2?: string | null
+          tags?: string[]
           tax_id?: string | null
           updated_at?: string
           user_id: string
@@ -68,11 +82,17 @@ export type Database = {
           company?: string | null
           country?: string | null
           created_at?: string
+          currency?: string | null
           email?: string | null
+          estimated_value?: number | null
           first_name?: string | null
           id?: string
           last_name?: string | null
+          last_contacted_at?: string | null
+          lead_source?: string | null
           name?: string
+          next_action?: string | null
+          next_follow_up_at?: string | null
           notes?: string | null
           phone?: string | null
           postal_code?: string | null
@@ -80,11 +100,53 @@ export type Database = {
           status?: string | null
           street?: string | null
           street2?: string | null
+          tags?: string[]
           tax_id?: string | null
           updated_at?: string
           user_id?: string
         }
         Relationships: []
+      }
+      client_activities: {
+        Row: {
+          body: string
+          client_id: string
+          created_at: string
+          id: string
+          occurred_at: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          client_id: string
+          created_at?: string
+          id?: string
+          occurred_at?: string
+          type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          occurred_at?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_activities_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       invoice_items: {
         Row: {
@@ -442,6 +504,73 @@ export type Database = {
         }
         Relationships: []
       }
+      notes: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          content: string | null
+          client_id: string | null
+          project_id: string | null
+          tags: string[]
+          icon_emoji: string | null
+          cover_color: string | null
+          note_comment: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title?: string
+          content?: string | null
+          client_id?: string | null
+          project_id?: string | null
+          tags?: string[]
+          icon_emoji?: string | null
+          cover_color?: string | null
+          note_comment?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          content?: string | null
+          client_id?: string | null
+          project_id?: string | null
+          tags?: string[]
+          icon_emoji?: string | null
+          cover_color?: string | null
+          note_comment?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_branding: {
         Row: {
           id: number
@@ -471,6 +600,24 @@ export type Database = {
           primary_color?: string | null
           logo_size?: string | null
           logo_width?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      landing_content: {
+        Row: {
+          id: number
+          content: Json
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          content?: Json
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          content?: Json
           updated_at?: string
         }
         Relationships: []

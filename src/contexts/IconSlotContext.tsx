@@ -44,6 +44,7 @@ import {
   Image,
   Folder,
   FileText,
+  Smile,
   Trash2,
 } from '@/components/icons';
 import { supabase } from '@/integrations/supabase/client';
@@ -56,6 +57,8 @@ const DEFAULT_ICONS: Record<IconSlotKey, IconComponent> = {
   sidebar_clients: Users,
   sidebar_projects: Table,
   sidebar_time: Clock,
+  sidebar_notes: FileText,
+  sidebar_insights: Sparkles,
   sidebar_invoices: Receipt,
   sidebar_reviews: IrisScan,
   stat_clients: Users,
@@ -68,6 +71,7 @@ const DEFAULT_ICONS: Record<IconSlotKey, IconComponent> = {
   empty_time: Clock,
   empty_reviews: IrisScan,
   admin_overview: LayoutDashboard,
+  admin_landing_content: LayoutDashboard,
   admin_announcements: Megaphone,
   admin_comms: Mail,
   admin_branding: Palette,
@@ -138,6 +142,9 @@ const DEFAULT_ICONS: Record<IconSlotKey, IconComponent> = {
   action_send: Mail,
   action_copy_link: ExternalLink,
   action_delete: Trash2,
+  notes_add_icon: Smile,
+  notes_add_cover: Image,
+  notes_add_comment: MessageSquare,
 };
 
 type Upload = { id: string; name: string; svg_content: string | null; storage_path: string | null };

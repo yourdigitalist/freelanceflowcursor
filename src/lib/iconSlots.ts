@@ -11,6 +11,8 @@ export const ICON_SLOT_GROUPS = [
       { key: 'sidebar_clients', label: 'Clients' },
       { key: 'sidebar_projects', label: 'Projects' },
       { key: 'sidebar_time', label: 'Time' },
+      { key: 'sidebar_notes', label: 'Notes' },
+      { key: 'sidebar_insights', label: 'Smart Summaries' },
       { key: 'sidebar_invoices', label: 'Invoices' },
       { key: 'sidebar_reviews', label: 'Approvals' },
     ],
@@ -40,6 +42,7 @@ export const ICON_SLOT_GROUPS = [
     group: 'Admin',
     slots: [
       { key: 'admin_overview', label: 'Overview' },
+      { key: 'admin_landing_content', label: 'Landing content' },
       { key: 'admin_announcements', label: 'Announcements' },
       { key: 'admin_comms', label: 'Comms & templates' },
       { key: 'admin_branding', label: 'Branding' },
@@ -158,6 +161,14 @@ export const ICON_SLOT_GROUPS = [
     group: 'Profile',
     slots: [
       { key: 'profile_camera', label: 'Avatar / Photo (camera)' },
+    ],
+  },
+  {
+    group: 'Notes editor',
+    slots: [
+      { key: 'notes_add_icon', label: 'Add icon (emoji / note)' },
+      { key: 'notes_add_cover', label: 'Add cover (image)' },
+      { key: 'notes_add_comment', label: 'Add comment' },
     ],
   },
 ] as const;

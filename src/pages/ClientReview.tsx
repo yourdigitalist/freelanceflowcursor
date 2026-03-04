@@ -392,10 +392,39 @@ export default function ClientReview() {
                       </div>
                     )}
                   </div>
+                ) : selectedFile.file_type === 'application/pdf' ? (
+                  <div className="flex flex-col w-full h-full max-w-4xl">
+                    <div className="flex-1 min-h-0 rounded-lg overflow-hidden border bg-white shadow-lg">
+                      <iframe
+                        src={selectedFile.file_url}
+                        title={selectedFile.file_name}
+                        className="w-full h-full min-h-[60vh]"
+                      />
+                    </div>
+                    <div className="shrink-0 pt-4 pb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-border/50 mt-4">
+                      <div className="text-sm text-muted-foreground flex items-center flex-wrap gap-2">
+                        <Badge variant="secondary" className="text-[10px] shrink-0">PDF Beta</Badge>
+                        <span>Comments on this PDF are listed in the <strong>Comments</strong> panel to the right. They are not shown as bubbles on the PDF.</span>
+                      </div>
+                      <Button
+                        variant="secondary"
+                        className="shrink-0"
+                        onClick={() => {
+                          setPendingPin(null);
+                          if (!identitySaved) setIdentityDialogOpen(true);
+                          else setCommentDialogOpen(true);
+                        }}
+                      >
+                        <SlotIcon slot="approval_client_comment" className="h-4 w-4 mr-2" />
+                        Add comment
+                      </Button>
+                    </div>
+                  </div>
                 ) : (
                   <div className="text-center">
                     <SlotIcon slot="approval_documents" className="h-24 w-24 text-muted-foreground mx-auto mb-4" />
                     <p className="font-medium">{selectedFile.file_name}</p>
+                    <p className="text-sm text-muted-foreground mb-2">Download only — viewing and comments not available for this file type.</p>
                     <a
                       href={selectedFile.file_url}
                       target="_blank"
@@ -408,9 +437,16 @@ export default function ClientReview() {
                 )}
               </div>
             )}
-            <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-sm text-muted-foreground bg-background/80 px-3 py-1 rounded-full">
-              Click on the image to add a comment
-            </p>
+            {selectedFile?.file_type?.startsWith('image/') && (
+              <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-sm text-muted-foreground bg-background/80 px-3 py-1 rounded-full">
+                Click on the image to add a comment
+              </p>
+            )}
+            {selectedFile?.file_type && !selectedFile.file_type.startsWith('image/') && selectedFile.file_type !== 'application/pdf' && (
+              <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-sm text-muted-foreground bg-background/80 px-3 py-1 rounded-full">
+                Download-only file
+              </p>
+            )}
           </div>
         </main>
 
@@ -426,7 +462,7 @@ export default function ClientReview() {
             <div className="p-4 space-y-6">
               {comments.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  No comments yet. Click on the image to add one.
+                  No comments yet. Click on the image or PDF to add one.
                 </p>
               ) : files.length <= 1 ? (
                 fileComments.map((comment, i) => (

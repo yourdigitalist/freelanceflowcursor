@@ -46,6 +46,13 @@ interface RecentInvoice {
   status: string;
 }
 
+interface FollowUpClient {
+  id: string;
+  name: string;
+  next_action: string | null;
+  next_follow_up_at: string | null;
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const { formatCurrency: fmt } = useProfileCurrency();
@@ -63,6 +70,7 @@ export default function Dashboard() {
   const [totalInvoicesCount, setTotalInvoicesCount] = useState(0);
   const [reviewCounts, setReviewCounts] = useState({ total: 0, pending: 0, approved: 0 });
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [followUps, setFollowUps] = useState<FollowUpClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<{ full_name: string | null }>({ full_name: null });
 
@@ -234,6 +242,16 @@ export default function Dashboard() {
         pending: reviewPending ?? 0,
         approved: reviewApproved ?? 0,
       });
+
+      // Clients with next action or follow-up date
+      const { data: followUpClients } = await supabase
+        .from('clients')
+        .select('id, name, next_action, next_follow_up_at')
+        .eq('user_id', user!.id)
+        .or('next_action.not.is.null,next_follow_up_at.not.is.null')
+        .order('next_follow_up_at', { ascending: true, nullsFirst: false })
+        .limit(10);
+      setFollowUps((followUpClients as FollowUpClient[]) || []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -547,6 +565,47 @@ export default function Dashboard() {
                         <p className="text-xs text-muted-foreground ml-0 truncate">
                           {getTimeAgo(new Date(n.created_at))}
                         </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Follow-ups / Next actions */}
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-base font-semibold">Follow-ups</CardTitle>
+                <Button variant="ghost" size="sm" asChild className="text-primary">
+                  <Link to="/clients">
+                    View all
+                    <ArrowRight className="ml-1 h-4 w-4" />
+                  </Link>
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {followUps.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No follow-ups or next actions</p>
+                ) : (
+                  <ul className="space-y-3">
+                    {followUps.map((c) => (
+                      <li key={c.id}>
+                        <Link
+                          to={`/clients?open=${c.id}`}
+                          className="block text-sm font-medium text-primary hover:underline"
+                        >
+                          {c.name}
+                        </Link>
+                        {c.next_follow_up_at && (
+                          <p className="text-xs text-muted-foreground">
+                            Follow-up {new Date(c.next_follow_up_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        )}
+                        {c.next_action && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            Next: {c.next_action}
+                          </p>
+                        )}
                       </li>
                     ))}
                   </ul>

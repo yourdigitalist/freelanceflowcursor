@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -30,7 +31,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Users, MoreVertical, Trash2, Grid, List } from '@/components/icons';
+import { Plus, Search, MoreVertical, Trash2, Grid, List, PanelLeft, Download, Upload, GripVertical } from '@/components/icons';
+import { downloadCsv, parseCsv, getClientsTemplateRows, CLIENTS_CSV_HEADERS } from '@/lib/csv';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import {
   DropdownMenu,
@@ -40,6 +42,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  closestCenter,
+} from '@dnd-kit/core';
 
 interface Client {
   id: string;
@@ -57,10 +69,26 @@ interface Client {
   postal_code: string | null;
   country: string | null;
   avatar_color: string | null;
-  status: string;
+  status: string | null;
   notes: string | null;
+  next_action: string | null;
+  next_follow_up_at: string | null;
+  lead_source: string | null;
+  estimated_value: number | null;
+  currency: string | null;
+  tags: string[] | null;
+  last_contacted_at: string | null;
   created_at: string;
   project_count?: number;
+}
+
+interface ClientActivity {
+  id: string;
+  client_id: string;
+  type: 'note' | 'email' | 'call' | 'meeting' | 'other';
+  body: string;
+  occurred_at: string;
+  created_at: string;
 }
 
 const AVATAR_COLORS = [
@@ -73,19 +101,125 @@ const AVATAR_COLORS = [
   '#06B6D4', // Cyan
 ];
 
+const CRM_STAGES: Array<{ value: string; label: string }> = [
+  { value: 'lead_new', label: 'New lead' },
+  { value: 'lead_contacted', label: 'Contacted' },
+  { value: 'lead_qualified', label: 'Qualified' },
+  { value: 'proposal_sent', label: 'Proposal sent' },
+  { value: 'negotiation', label: 'Negotiation' },
+  { value: 'won', label: 'Won' },
+  { value: 'onboarding', label: 'Onboarding' },
+  { value: 'active', label: 'Active' },
+  { value: 'paused', label: 'Paused' },
+  { value: 'inactive', label: 'Inactive' },
+  { value: 'closed_lost', label: 'Closed lost' },
+];
+
+function DraggableClientCard({
+  client,
+  onOpen,
+  onEdit,
+  onDelete,
+}: {
+  client: Client;
+  onOpen: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: client.id,
+    data: { clientId: client.id, currentStatus: client.status || 'active' },
+  });
+  return (
+    <Card
+      ref={setNodeRef}
+      className={`border shadow-sm hover:shadow transition-shadow flex-shrink-0 relative ${isDragging ? 'opacity-60 shadow-lg' : ''}`}
+      onClick={onOpen}
+    >
+      {/* Drag handle - grab here to move card between columns */}
+      <div
+        className="absolute left-1.5 top-1/2 -translate-y-1/2 z-10 touch-none cursor-grab active:cursor-grabbing rounded p-0.5 hover:bg-muted/80"
+        onClick={(e) => e.stopPropagation()}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      </div>
+      <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-7 w-7">
+              <MoreVertical className="h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onEdit}>
+              <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onDelete} className="text-destructive">
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <CardContent className="p-3 space-y-1 pl-8 pr-9">
+        <p className="font-medium text-sm truncate">{client.name}</p>
+        {client.company && <p className="text-xs text-muted-foreground truncate">{client.company}</p>}
+        {client.next_follow_up_at && (
+          <p className="text-xs text-muted-foreground">Follow-up {client.next_follow_up_at.slice(0, 10)}</p>
+        )}
+        {client.next_action && (
+          <p className="text-xs text-muted-foreground truncate" title={client.next_action}>
+            Next: {client.next_action}
+          </p>
+        )}
+        <p className="text-xs text-muted-foreground pt-1">{client.project_count || 0} projects</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DroppableColumn({
+  id,
+  children,
+  className,
+}: {
+  id: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div ref={setNodeRef} className={className + (isOver ? ' ring-2 ring-primary/50' : '')}>
+      {children}
+    </div>
+  );
+}
+
 export default function Clients() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [addWithStatus, setAddWithStatus] = useState<string | null>(null);
   const [clientPhone, setClientPhone] = useState('');
   const [selectedColor, setSelectedColor] = useState(AVATAR_COLORS[4]);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'board'>('board');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewingClient, setViewingClient] = useState<Client | null>(null);
+  const [activities, setActivities] = useState<ClientActivity[]>([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [newActivityType, setNewActivityType] = useState<ClientActivity['type']>('note');
+  const [newActivityBody, setNewActivityBody] = useState('');
+  const [importing, setImporting] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) {
@@ -94,9 +228,46 @@ export default function Clients() {
   }, [user]);
 
   useEffect(() => {
+    if (!viewingClient?.id) return;
+    fetchActivities(viewingClient.id);
+  }, [viewingClient?.id]);
+
+  useEffect(() => {
     setClientPhone(editingClient?.phone || '');
     setSelectedColor(editingClient?.avatar_color || AVATAR_COLORS[4]);
   }, [editingClient]);
+
+  // Sync view mode and status filter from URL
+  useEffect(() => {
+    const path = location.pathname;
+    if (path === '/clients/active') {
+      setViewMode('list');
+      setStatusFilter('active');
+    } else if (path === '/clients/list') {
+      setViewMode('list');
+      if (statusFilter === 'active') setStatusFilter('all');
+    } else if (path === '/clients' || path.startsWith('/clients/')) {
+      setViewMode('board');
+      if (statusFilter === 'active') setStatusFilter('all');
+    }
+  }, [location.pathname]);
+
+  // Open client sheet when ?open=<id> is in URL (e.g. from Dashboard follow-ups)
+  useEffect(() => {
+    const openId = new URLSearchParams(location.search).get('open');
+    if (!openId || clients.length === 0) return;
+    const c = clients.find((x) => x.id === openId);
+    if (c) setViewingClient(c);
+  }, [location.search, clients]);
+
+  const setViewModeAndNavigate = (mode: 'grid' | 'list' | 'board', status?: string) => {
+    setViewMode(mode);
+    if (status !== undefined) setStatusFilter(status);
+    if (mode === 'board') navigate('/clients');
+    else if (mode === 'list' && status === 'active') navigate('/clients/active');
+    else if (mode === 'list') navigate('/clients/list');
+    else navigate('/clients');
+  };
 
   const fetchClients = async () => {
     try {
@@ -143,6 +314,20 @@ export default function Clients() {
     const lastName = formData.get('last_name') as string;
     const fullName = `${firstName} ${lastName}`.trim();
     
+    const tagsRaw = ((formData.get('tags') as string) || '').trim();
+    const tags = tagsRaw
+      ? tagsRaw
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : [];
+
+    const estimatedValueRaw = (formData.get('estimated_value') as string) || '';
+    const estimatedValue = estimatedValueRaw.trim() ? Number(estimatedValueRaw) : null;
+
+    const followUpRaw = (formData.get('next_follow_up_at') as string) || '';
+    const nextFollowUpAt = followUpRaw ? new Date(followUpRaw).toISOString() : null;
+
     const clientData = {
       name: fullName,
       first_name: firstName || null,
@@ -160,6 +345,12 @@ export default function Clients() {
       avatar_color: selectedColor,
       status: formData.get('status') as string,
       notes: formData.get('notes') as string || null,
+      lead_source: (formData.get('lead_source') as string) || null,
+      next_action: (formData.get('next_action') as string) || null,
+      next_follow_up_at: nextFollowUpAt,
+      estimated_value: estimatedValue,
+      currency: ((formData.get('currency') as string) || 'USD') || 'USD',
+      tags,
       user_id: user!.id,
     };
 
@@ -226,21 +417,261 @@ export default function Clients() {
         client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         client.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         client.company?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || client.status === statusFilter;
+      const stage = client.status || 'active';
+      const matchesStatus = statusFilter === 'all' || stage === statusFilter;
       return matchesSearch && matchesStatus;
     }
   );
+
+  // Sort by pipeline stage order so list/grid/board show clients grouped by status
+  const stageOrder = CRM_STAGES.map((s) => s.value);
+  const sortedClients = [...filteredClients].sort((a, b) => {
+    const aStage = a.status || 'active';
+    const bStage = b.status || 'active';
+    return stageOrder.indexOf(aStage) - stageOrder.indexOf(bStage);
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
         return 'bg-success/10 text-success';
-      case 'inactive':
-        return 'bg-muted text-muted-foreground';
-      case 'lead':
+      case 'won':
+        return 'bg-success/10 text-success';
+      case 'onboarding':
+        return 'bg-primary/10 text-primary';
+      case 'proposal_sent':
+      case 'negotiation':
         return 'bg-warning/10 text-warning';
+      case 'lead_new':
+      case 'lead_contacted':
+      case 'lead_qualified':
+        return 'bg-warning/10 text-warning';
+      case 'inactive':
+      case 'closed_lost':
+        return 'bg-muted text-muted-foreground';
+      case 'paused':
+        return 'bg-muted text-muted-foreground';
       default:
         return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  const getStageLabel = (value: string | null) => {
+    const v = value || 'active';
+    return CRM_STAGES.find((s) => s.value === v)?.label || v;
+  };
+
+  const getStatusBorderClass = (status: string | null) => {
+    const s = status || 'active';
+    if (['active', 'won'].includes(s)) return 'border-l-success';
+    if (['lead_new', 'lead_contacted', 'lead_qualified', 'proposal_sent', 'negotiation', 'onboarding'].includes(s)) return 'border-l-warning';
+    return 'border-l-muted-foreground/50';
+  };
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || over.id === active.id) return;
+    const clientId = active.data.current?.clientId as string | undefined;
+    const currentStatus = (active.data.current?.currentStatus as string) || 'active';
+    // over.id can be a column (stage value) or another card (client id) when dropped on a card
+    let newStatus = String(over.id);
+    if (!CRM_STAGES.some((s) => s.value === newStatus)) {
+      const targetClient = clients.find((c) => c.id === newStatus);
+      newStatus = targetClient?.status || 'active';
+    }
+    if (!clientId || !CRM_STAGES.some((s) => s.value === newStatus) || currentStatus === newStatus) return;
+    try {
+      const { error } = await supabase.from('clients').update({ status: newStatus }).eq('id', clientId);
+      if (error) throw error;
+      setClients((prev) =>
+        prev.map((c) => (c.id === clientId ? { ...c, status: newStatus } : c))
+      );
+      toast({ title: 'Status updated' });
+    } catch (err: any) {
+      toast({ title: 'Error updating status', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const downloadTemplate = () => {
+    const rows = getClientsTemplateRows();
+    downloadCsv('clients_template.csv', rows);
+    toast({ title: 'Template downloaded' });
+  };
+
+  const exportClientsCsv = () => {
+    const headers = CLIENTS_CSV_HEADERS;
+    const rows = [
+      headers,
+      ...sortedClients.map((c) => [
+        c.first_name ?? '',
+        c.last_name ?? '',
+        c.email ?? '',
+        c.phone ?? '',
+        c.company ?? '',
+        c.status ?? '',
+        c.next_action ?? '',
+        c.next_follow_up_at ? c.next_follow_up_at.slice(0, 10) : '',
+        c.lead_source ?? '',
+        c.estimated_value ?? '',
+        c.currency ?? '',
+        (c.tags || []).join('; '),
+        c.notes ?? '',
+        c.street ?? '',
+        c.street2 ?? '',
+        c.city ?? '',
+        c.state ?? '',
+        c.postal_code ?? '',
+        c.country ?? '',
+        c.tax_id ?? '',
+      ]),
+    ];
+    downloadCsv('clients_export.csv', rows);
+    toast({ title: 'Clients exported' });
+  };
+
+  const handleCsvImport = async (file: File) => {
+    if (!user) return;
+    setImporting(true);
+    try {
+      const rows = await parseCsv(file);
+      if (rows.length < 2) {
+        toast({ title: 'No data rows', description: 'CSV must have a header row and at least one data row.', variant: 'destructive' });
+        return;
+      }
+      const headerRow = rows[0].map((h) => String(h).trim().toLowerCase());
+      const get = (key: string) => {
+        const i = headerRow.indexOf(key.toLowerCase());
+        return i >= 0 ? (row: string[]) => (row[i] ?? '').trim() : () => '';
+      };
+      let created = 0;
+      let updated = 0;
+      let errors: string[] = [];
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r];
+        const firstName = get('first_name')(row);
+        const lastName = get('last_name')(row);
+        const name = `${firstName} ${lastName}`.trim() || (get('email')(row) || 'Unknown');
+        const email = get('email')(row);
+        if (!email) {
+          errors.push(`Row ${r + 1}: email required`);
+          continue;
+        }
+        const tagsRaw = get('tags')(row);
+        const tags = tagsRaw ? tagsRaw.split(/[,;]/).map((t) => t.trim()).filter(Boolean) : [];
+        const estimatedVal = get('estimated_value')(row);
+        const estimatedValue = estimatedVal ? Number(estimatedVal) : null;
+        const nextFollowUp = get('next_follow_up_at')(row);
+        const nextFollowUpAt = nextFollowUp ? new Date(nextFollowUp).toISOString() : null;
+        const clientData = {
+          name,
+          first_name: firstName || null,
+          last_name: lastName || null,
+          email,
+          phone: get('phone')(row) || null,
+          company: get('company')(row) || null,
+          tax_id: get('tax_id')(row) || null,
+          street: get('street')(row) || null,
+          street2: get('street2')(row) || null,
+          city: get('city')(row) || null,
+          state: get('state')(row) || null,
+          postal_code: get('postal_code')(row) || null,
+          country: get('country')(row) || null,
+          avatar_color: AVATAR_COLORS[4],
+          status: get('status')(row) || 'active',
+          notes: get('notes')(row) || null,
+          next_action: get('next_action')(row) || null,
+          next_follow_up_at: nextFollowUpAt,
+          lead_source: get('lead_source')(row) || null,
+          estimated_value: estimatedValue,
+          currency: get('currency')(row) || 'USD',
+          tags,
+          user_id: user.id,
+        };
+        const existing = clients.find((c) => c.email?.toLowerCase() === email.toLowerCase());
+        if (existing) {
+          const { error } = await supabase.from('clients').update(clientData).eq('id', existing.id);
+          if (error) errors.push(`Row ${r + 1}: ${error.message}`);
+          else updated++;
+        } else {
+          const { error } = await supabase.from('clients').insert(clientData);
+          if (error) errors.push(`Row ${r + 1}: ${error.message}`);
+          else created++;
+        }
+      }
+      if (created > 0 || updated > 0) {
+        fetchClients();
+        toast({ title: 'Import complete', description: `Created ${created}, updated ${updated}.${errors.length ? ` ${errors.length} errors.` : ''}` });
+      }
+      if (errors.length > 0 && created === 0 && updated === 0) {
+        toast({ title: 'Import failed', description: errors.slice(0, 3).join(' '), variant: 'destructive' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Import error', description: err.message, variant: 'destructive' });
+    } finally {
+      setImporting(false);
+      if (csvInputRef.current) csvInputRef.current.value = '';
+    }
+  };
+
+  const fetchActivities = async (clientId: string) => {
+    setActivitiesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('client_activities')
+        .select('id, client_id, type, body, occurred_at, created_at')
+        .eq('client_id', clientId)
+        .order('occurred_at', { ascending: false });
+      if (error) throw error;
+      setActivities((data as ClientActivity[]) || []);
+    } catch (error) {
+      console.error('Error fetching activities:', error);
+    } finally {
+      setActivitiesLoading(false);
+    }
+  };
+
+  const addActivity = async () => {
+    if (!user || !viewingClient) return;
+    const body = newActivityBody.trim();
+    if (!body) return;
+    try {
+      const { error } = await supabase.from('client_activities').insert({
+        user_id: user.id,
+        client_id: viewingClient.id,
+        type: newActivityType,
+        body,
+        occurred_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+      setNewActivityBody('');
+      await fetchActivities(viewingClient.id);
+      toast({ title: 'Activity added' });
+    } catch (error: any) {
+      toast({
+        title: 'Error adding activity',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const deleteActivity = async (activityId: string) => {
+    if (!viewingClient) return;
+    try {
+      const { error } = await supabase
+        .from('client_activities')
+        .delete()
+        .eq('id', activityId);
+      if (error) throw error;
+      await fetchActivities(viewingClient.id);
+      toast({ title: 'Activity deleted' });
+    } catch (error: any) {
+      toast({
+        title: 'Error deleting activity',
+        description: error.message,
+        variant: 'destructive',
+      });
     }
   };
 
@@ -262,26 +693,50 @@ export default function Clients() {
               Manage your client relationships
             </p>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={(open) => {
-            setIsDialogOpen(open);
-            if (!open) {
-              setEditingClient(null);
-              setClientPhone('');
-              setSelectedColor(AVATAR_COLORS[4]);
-            }
-          }}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Client
-              </Button>
-            </DialogTrigger>
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleCsvImport(f);
+            }}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={downloadTemplate} title="Download template CSV">
+              <Download className="mr-2 h-4 w-4" />
+              Template
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportClientsCsv} disabled={sortedClients.length === 0} title="Export clients as CSV">
+              <Download className="mr-2 h-4 w-4" />
+              Export
+            </Button>
+            <Button variant="outline" size="sm" disabled={importing} onClick={() => csvInputRef.current?.click()} title="Import clients from CSV">
+              <Upload className="mr-2 h-4 w-4" />
+              {importing ? 'Importing…' : 'Import'}
+            </Button>
+            <Dialog open={isDialogOpen} onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) {
+                setEditingClient(null);
+                setAddWithStatus(null);
+                setClientPhone('');
+                setSelectedColor(AVATAR_COLORS[4]);
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Client
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] w-[95vw]">
               <DialogHeader>
                 <DialogTitle>{editingClient ? 'Edit Client' : 'Add New Client'}</DialogTitle>
               </DialogHeader>
-              <ScrollArea className="max-h-[calc(90vh-120px)] pr-4">
-                <form onSubmit={handleSubmit} className="space-y-4">
+              <ScrollArea className="max-h-[calc(90vh-120px)]">
+                <form onSubmit={handleSubmit} className="space-y-4 py-1 pr-6 pl-1">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="first_name">First Name *</Label>
@@ -381,16 +836,83 @@ export default function Clients() {
                   
                   <div className="space-y-2">
                     <Label htmlFor="status">Status</Label>
-                    <Select name="status" defaultValue={editingClient?.status || 'active'}>
+                    <Select name="status" defaultValue={editingClient?.status || addWithStatus || 'active'}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                        <SelectItem value="lead">Lead</SelectItem>
+                        {CRM_STAGES.map((s) => (
+                          <SelectItem key={s.value} value={s.value}>
+                            {s.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="next_follow_up_at">Next follow-up</Label>
+                      <Input
+                        id="next_follow_up_at"
+                        name="next_follow_up_at"
+                        type="date"
+                        defaultValue={editingClient?.next_follow_up_at ? editingClient.next_follow_up_at.slice(0, 10) : ''}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lead_source">Lead source</Label>
+                      <Input
+                        id="lead_source"
+                        name="lead_source"
+                        placeholder="e.g. Referral, Website, Upwork"
+                        defaultValue={editingClient?.lead_source || ''}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="next_action">Next action</Label>
+                    <Input
+                      id="next_action"
+                      name="next_action"
+                      placeholder="e.g. Send proposal, Follow up on invoice"
+                      defaultValue={editingClient?.next_action || ''}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="estimated_value">Estimated value</Label>
+                      <Input
+                        id="estimated_value"
+                        name="estimated_value"
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        defaultValue={editingClient?.estimated_value ?? ''}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="currency">Currency</Label>
+                      <Input
+                        id="currency"
+                        name="currency"
+                        placeholder="USD"
+                        defaultValue={editingClient?.currency || 'USD'}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="tags">Tags</Label>
+                    <Input
+                      id="tags"
+                      name="tags"
+                      placeholder="e.g. retainer, agency, warm"
+                      defaultValue={(editingClient?.tags || []).join(', ')}
+                    />
+                    <p className="text-xs text-muted-foreground">Comma-separated.</p>
                   </div>
                   
                   <div className="space-y-2">
@@ -432,6 +954,7 @@ export default function Clients() {
               </ScrollArea>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {/* Search, Status Filter & View Toggle */}
@@ -452,29 +975,42 @@ export default function Clients() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="lead">Lead</SelectItem>
+                {CRM_STAGES.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <div className="flex border rounded-lg overflow-hidden">
-            <Button
-              variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('grid')}
-              className="rounded-none"
-            >
-              <Grid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('list')}
-              className="rounded-none"
-            >
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
+              <Button
+                variant={viewMode === 'board' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewModeAndNavigate('board')}
+                className="rounded-none"
+                title="Board by status"
+              >
+                <PanelLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewModeAndNavigate('grid')}
+                className="rounded-none"
+                title="Grid"
+              >
+                <Grid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewModeAndNavigate('list', statusFilter === 'active' ? 'active' : undefined)}
+                className="rounded-none"
+                title="List"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -506,12 +1042,84 @@ export default function Clients() {
           </Card>
         ) : (
           <>
+            {viewMode === 'board' ? (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <div className="overflow-x-auto pb-4 -mx-1">
+                  <div className="flex gap-4 min-w-max">
+                    {CRM_STAGES.map((stage) => {
+                      const columnClients = sortedClients.filter((c) => (c.status || 'active') === stage.value);
+                      return (
+                        <div
+                          key={stage.value}
+                          className="flex flex-col w-[280px] shrink-0 rounded-lg border bg-background shadow-sm"
+                        >
+                          <div className="p-3 border-b flex items-center justify-between">
+                            <span className="font-medium text-sm">{stage.label}</span>
+                            <div className="flex items-center gap-1">
+                              <Badge variant="secondary" className="text-xs">
+                                {columnClients.length}
+                              </Badge>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0"
+                                title="Add client"
+                                onClick={() => {
+                                  setAddWithStatus(stage.value);
+                                  setEditingClient(null);
+                                  setIsDialogOpen(true);
+                                }}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          <DroppableColumn
+                            id={stage.value}
+                            className="p-2 flex flex-col gap-2 overflow-y-auto max-h-[60vh]"
+                          >
+                            {columnClients.length === 0 ? (
+                              <div className="flex flex-col items-center gap-2 py-4">
+                                <p className="text-xs text-muted-foreground">No clients</p>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs"
+                                  onClick={() => {
+                                    setAddWithStatus(stage.value);
+                                    setEditingClient(null);
+                                    setIsDialogOpen(true);
+                                  }}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Add client
+                                </Button>
+                              </div>
+                            ) : (
+                              columnClients.map((client) => (
+                                <DraggableClientCard
+                                  key={client.id}
+                                  client={client}
+                                  onOpen={() => setViewingClient(client)}
+                                  onEdit={() => openEditDialog(client)}
+                                  onDelete={() => handleDelete(client.id)}
+                                />
+                              ))
+                            )}
+                          </DroppableColumn>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </DndContext>
+            ) : (
             <div className={viewMode === 'grid' ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3" : "space-y-3"}>
-              {filteredClients.map((client) => (
+              {sortedClients.map((client) => (
                 <Card
                   key={client.id}
-                  className="border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => viewMode === 'grid' && setViewingClient(client)}
+                  className={`${viewMode === 'list' ? 'border-l-4 ' + getStatusBorderClass(client.status) : 'border-0'} shadow-sm hover:shadow-md transition-shadow cursor-pointer`}
+                  onClick={() => (viewMode === 'grid' || viewMode === 'list') && setViewingClient(client)}
                 >
                   <CardContent className={viewMode === 'grid' ? "p-5 relative" : "p-4 flex items-center justify-between"}>
                     {viewMode === 'grid' && (
@@ -575,8 +1183,8 @@ export default function Clients() {
                             </div>
                           )}
                           <div className="flex items-center justify-between pt-2">
-                            <Badge className={getStatusColor(client.status)}>
-                              {client.status}
+                            <Badge className={getStatusColor(client.status || 'active')}>
+                              {getStageLabel(client.status)}
                             </Badge>
                             <span className="text-sm text-muted-foreground">
                               {client.project_count || 0} projects
@@ -591,7 +1199,7 @@ export default function Clients() {
                           {client.email}
                         </span>
                         <Badge className={getStatusColor(client.status)}>
-                          {client.status}
+                          {getStageLabel(client.status)}
                         </Badge>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -619,6 +1227,7 @@ export default function Clients() {
                 </Card>
               ))}
             </div>
+            )}
 
             <Sheet open={!!viewingClient} onOpenChange={(open) => !open && setViewingClient(null)}>
               <SheetContent className="sm:max-w-md">
@@ -639,9 +1248,118 @@ export default function Clients() {
                         {viewingClient.company && (
                           <p className="text-sm text-muted-foreground">{viewingClient.company}</p>
                         )}
-                        <Badge className={getStatusColor(viewingClient.status)}>
-                          {viewingClient.status}
+                        <Badge className={getStatusColor(viewingClient.status || 'active')}>
+                          {getStageLabel(viewingClient.status)}
                         </Badge>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Next follow-up</p>
+                        <p className="text-sm">
+                          {viewingClient.next_follow_up_at
+                            ? viewingClient.next_follow_up_at.slice(0, 10)
+                            : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Lead source</p>
+                        <p className="text-sm">{viewingClient.lead_source || '—'}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Next action</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm">{viewingClient.next_action || '—'}</p>
+                        {viewingClient.next_action && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs"
+                            onClick={async () => {
+                              if (!viewingClient) return;
+                              try {
+                                const { error } = await supabase
+                                  .from('clients')
+                                  .update({ next_action: null })
+                                  .eq('id', viewingClient.id);
+                                if (error) throw error;
+                                setViewingClient({ ...viewingClient, next_action: null });
+                                fetchClients();
+                                toast({ title: 'Next action cleared' });
+                              } catch (err: any) {
+                                toast({ title: 'Error', description: err.message, variant: 'destructive' });
+                              }
+                            }}
+                          >
+                            Mark done
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(viewingClient.tags || []).map((t) => (
+                        <Badge key={t} variant="secondary">
+                          {t}
+                        </Badge>
+                      ))}
+                    </div>
+                    <div className="pt-2 border-t">
+                      <p className="text-sm font-semibold mb-2">Activity</p>
+                      <div className="flex items-start gap-2">
+                        <Select value={newActivityType} onValueChange={(v) => setNewActivityType(v as ClientActivity['type'])}>
+                          <SelectTrigger className="w-[130px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="note">Note</SelectItem>
+                            <SelectItem value="email">Email</SelectItem>
+                            <SelectItem value="call">Call</SelectItem>
+                            <SelectItem value="meeting">Meeting</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <div className="flex-1 space-y-2">
+                          <Textarea
+                            value={newActivityBody}
+                            onChange={(e) => setNewActivityBody(e.target.value)}
+                            rows={2}
+                            placeholder="Add an activity note…"
+                          />
+                          <div className="flex justify-end">
+                            <Button size="sm" onClick={addActivity} disabled={!newActivityBody.trim()}>
+                              Add
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {activitiesLoading ? (
+                          <p className="text-sm text-muted-foreground">Loading activity…</p>
+                        ) : activities.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No activity yet.</p>
+                        ) : (
+                          activities.map((a) => (
+                            <div key={a.id} className="rounded-lg border p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-xs text-muted-foreground">
+                                    {a.type} • {a.occurred_at.slice(0, 10)}
+                                  </p>
+                                  <p className="text-sm whitespace-pre-wrap">{a.body}</p>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0"
+                                  onClick={() => deleteActivity(a.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
                     {viewingClient.email && (

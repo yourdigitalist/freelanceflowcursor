@@ -25,3 +25,6 @@ verify_jwt = false
 verify_jwt = false
 [functions.complete-onboarding-after-checkout]
 verify_jwt = false
+
+[functions.generate-client-summary]
+verify_jwt = false

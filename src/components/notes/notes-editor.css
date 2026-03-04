@@ -1,0 +1,93 @@
+/* Custom toolbar (Lucide) – layout only */
+.rich-text-editor-wrapper .ql-toolbar.ql-snow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 40px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Checklist in content: tight spacing, identical layout when checked/unchecked so text doesn’t move */
+.rich-text-editor-wrapper .ql-editor ul[data-checked="false"],
+.rich-text-editor-wrapper .ql-editor ul[data-checked="true"] {
+  list-style: none;
+  padding-left: 1.5em;
+  margin-left: 0;
+  margin-bottom: 0.25em;
+}
+.rich-text-editor-wrapper .ql-editor ul[data-checked="false"] li,
+.rich-text-editor-wrapper .ql-editor ul[data-checked="true"] li {
+  list-style: none;
+  padding-left: 1.15em;
+  position: relative;
+  line-height: 1.5;
+  min-height: 1.5em;
+  display: block;
+}
+.rich-text-editor-wrapper .ql-editor ul[data-checked="false"] li::marker,
+.rich-text-editor-wrapper .ql-editor ul[data-checked="true"] li::marker {
+  display: none;
+  content: "";
+}
+/* Same box for both states – same size, same border color, same line weight */
+.rich-text-editor-wrapper .ql-editor ul[data-checked="false"] li::before,
+.rich-text-editor-wrapper .ql-editor ul[data-checked="true"] li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.3em;
+  width: 1em;
+  height: 1em;
+  border-radius: 3px;
+  box-sizing: border-box;
+  display: block;
+  border: 1.5px solid #64748b;
+  background: transparent;
+}
+.rich-text-editor-wrapper .ql-editor ul[data-checked="true"] li {
+  text-decoration: line-through;
+  color: var(--muted-foreground);
+}
+/* Checked: same box (same border color/size), only add checkmark in primary */
+.rich-text-editor-wrapper .ql-editor ul[data-checked="true"] li::before {
+  color: var(--primary);
+  content: "\2713";
+  font-size: 0.75em;
+  font-weight: normal;
+  line-height: 1em;
+  text-align: center;
+}
+
+/* Code block: in-flow, compact, easy to select and delete (no big floating box) */
+.rich-text-editor-wrapper .ql-editor pre.ql-syntax,
+.rich-text-editor-wrapper .ql-editor .ql-code-block {
+  margin: 0.5em 0;
+  padding: 0.75em 1em;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 0;
+  display: block;
+}
+.rich-text-editor-wrapper .ql-editor .ql-code-block-container {
+  margin: 0.5em 0;
+}
+
+/* Horizontal rule / divider – visible grey line (in editor or any wrapper) */
+.rich-text-editor-wrapper hr,
+.rich-text-editor-wrapper .ql-editor hr {
+  display: block !important;
+  height: 0 !important;
+  border: none !important;
+  border-top: 1px solid #94a3b8 !important;
+  margin: 0.75em 0 !important;
+  padding: 0 !important;
+  min-height: 0;
+  opacity: 1;
+}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,6 +16,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
@@ -332,8 +341,27 @@ export default function ReviewRequests() {
           requestRecipients.map(email => ({ review_request_id: requestId, email }))
         );
       }
-      
-      toast({ title: editingRequest ? 'Request updated' : 'Request created' });
+
+      // Send approval email when creating (same as "Send to client" on detail page)
+      if (!editingRequest && requestId) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const response = await supabase.functions.invoke('send-review-request', {
+            body: { reviewRequestId: requestId, origin: getSiteUrl() || window.location.origin },
+          });
+          if (session && response.data && !response.error) {
+            await supabase.from('review_requests').update({ sent_at: new Date().toISOString() }).eq('id', requestId);
+            toast({ title: 'Approval sent', description: 'Recipients have been emailed the review link.' });
+          } else {
+            toast({ title: 'Request created', description: 'Share the link with clients from the approval page.' });
+          }
+        } catch (_) {
+          toast({ title: 'Request created', description: 'Share the link with clients from the approval page.' });
+        }
+      } else if (editingRequest) {
+        toast({ title: 'Request updated' });
+      }
+
       setRequestDialogOpen(false);
       resetRequestForm();
       fetchData();
@@ -409,13 +437,16 @@ export default function ReviewRequests() {
   };
 
   const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-  const DOC_TYPES = [
-    'application/pdf',
+  const PDF_TYPES = ['application/pdf'];
+  const WORD_TYPES = [
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   ];
   const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB (images and documents)
   const MAX_FILE_SIZE_MB = 5;
+
+  const [wordWarningOpen, setWordWarningOpen] = useState(false);
+  const pendingWordFilesRef = useRef<File[]>([]);
 
   const validateAndAddFiles = (
     files: File[],
@@ -449,14 +480,49 @@ export default function ReviewRequests() {
     e.target.value = '';
   };
 
-  const handleDocFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePdfFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    validateAndAddFiles(files, DOC_TYPES, 'document');
+    validateAndAddFiles(files, PDF_TYPES, 'PDF');
     e.target.value = '';
   };
 
+  const handleWordFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const valid: File[] = [];
+    const errors: string[] = [];
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        errors.push(`${file.name}: too large (max ${MAX_FILE_SIZE_MB}MB)`);
+        continue;
+      }
+      if (!WORD_TYPES.includes(file.type)) {
+        errors.push(`${file.name}: not a valid Word document`);
+        continue;
+      }
+      valid.push(file);
+    }
+    if (errors.length > 0) {
+      toast({ title: 'Some files were rejected', description: errors.join('\n'), variant: 'destructive' });
+    }
+    if (valid.length > 0) {
+      pendingWordFilesRef.current = valid;
+      setWordWarningOpen(true);
+    }
+    e.target.value = '';
+  };
+
+  const confirmWordFiles = () => {
+    const pending = pendingWordFilesRef.current;
+    if (pending.length > 0) {
+      setRequestFiles((prev) => [...prev, ...pending]);
+      pendingWordFilesRef.current = [];
+    }
+    setWordWarningOpen(false);
+  };
+
   const imageFiles = requestFiles.filter((f) => f.type.startsWith('image/'));
-  const docFiles = requestFiles.filter((f) => !f.type.startsWith('image/'));
+  const pdfFiles = requestFiles.filter((f) => f.type === 'application/pdf');
+  const wordFiles = requestFiles.filter((f) => WORD_TYPES.includes(f.type));
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -1087,16 +1153,9 @@ export default function ReviewRequests() {
               <>
                 <div className="space-y-3">
                   <Label>Files *</Label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/jpeg,image/png,image/gif,image/webp"
-                        onChange={handleImageFileChange}
-                        className="hidden"
-                        id="upload-images"
-                      />
+                      <input type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleImageFileChange} className="hidden" id="upload-images" />
                       <label htmlFor="upload-images" className="cursor-pointer block">
                         <SlotIcon slot="approval_images" className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                         <p className="text-sm font-medium">Images</p>
@@ -1104,18 +1163,22 @@ export default function ReviewRequests() {
                       </label>
                     </div>
                     <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
-                      <input
-                        type="file"
-                        multiple
-                        accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        onChange={handleDocFileChange}
-                        className="hidden"
-                        id="upload-docs"
-                      />
-                      <label htmlFor="upload-docs" className="cursor-pointer block">
+                      <input type="file" multiple accept=".pdf,application/pdf" onChange={handlePdfFileChange} className="hidden" id="upload-pdf" />
+                      <label htmlFor="upload-pdf" className="cursor-pointer block">
                         <SlotIcon slot="approval_documents" className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                        <p className="text-sm font-medium">Documents</p>
-                        <p className="text-xs text-muted-foreground">PDF, Word (max {MAX_FILE_SIZE_MB}MB)</p>
+                        <div className="text-sm font-medium flex items-center justify-center gap-1.5">
+                          PDF
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-normal">Beta</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">View & comment in browser (max {MAX_FILE_SIZE_MB}MB)</p>
+                      </label>
+                    </div>
+                    <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-amber-500/30 border-amber-500/20 transition-colors">
+                      <input type="file" multiple accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleWordFileChange} className="hidden" id="upload-word" />
+                      <label htmlFor="upload-word" className="cursor-pointer block">
+                        <SlotIcon slot="approval_documents" className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-sm font-medium">Word (doc/docx)</p>
+                        <p className="text-xs text-amber-600 dark:text-amber-400">Download only (max {MAX_FILE_SIZE_MB}MB)</p>
                       </label>
                     </div>
                   </div>
@@ -1141,12 +1204,12 @@ export default function ReviewRequests() {
                           </div>
                         </div>
                       )}
-                      {docFiles.length > 0 && (
+                      {pdfFiles.length > 0 && (
                         <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-1.5">Documents ({docFiles.length})</p>
+                          <p className="text-xs font-medium text-muted-foreground mb-1.5">PDF (Beta) – view & comment ({pdfFiles.length})</p>
                           <div className="space-y-1">
                             {requestFiles.map((file, i) =>
-                              !file.type.startsWith('image/') ? (
+                              file.type === 'application/pdf' ? (
                                 <div key={i} className="flex items-center justify-between p-2 bg-muted rounded-lg">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <SlotIcon slot="approval_documents" className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -1161,9 +1224,45 @@ export default function ReviewRequests() {
                           </div>
                         </div>
                       )}
+                      {wordFiles.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-1.5">Word (doc/docx) – download only ({wordFiles.length})</p>
+                          <div className="space-y-1">
+                            {requestFiles.map((file, i) =>
+                              WORD_TYPES.includes(file.type) ? (
+                                <div key={i} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <SlotIcon slot="approval_documents" className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                    <span className="text-sm truncate">{file.name}</span>
+                                    <Badge variant="secondary" className="text-xs shrink-0">Download only</Badge>
+                                  </div>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setRequestFiles((prev) => prev.filter((_, j) => j !== i))}>
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ) : null,
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
+
+                {/* Word files: download-only warning */}
+                <AlertDialog open={wordWarningOpen} onOpenChange={setWordWarningOpen}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Word files are download only</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Word documents (.doc, .docx) cannot be viewed or commented on in the browser. Clients will only be able to download them. For in-browser viewing and comments, use PDF instead.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogAction onClick={confirmWordFiles}>I understand, add anyway</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
                 
                 <div className="space-y-2">
                   <Label>Recipients *</Label>
