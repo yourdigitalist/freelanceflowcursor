@@ -1,7 +1,7 @@
 "use client";
 
 import Marquee from "@/components/landing/magicui/marquee";
-import Section from "@/components/landing/section";
+import Section from "@/components/landing/Section";
 import { cn } from "@/lib/utils";
 import { useLandingContent } from "@/hooks/useLandingContent";
 import { motion } from "framer-motion";

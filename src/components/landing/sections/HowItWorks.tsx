@@ -1,5 +1,5 @@
 import FeaturesVertical from "@/components/landing/features-vertical";
-import Section from "@/components/landing/section";
+import Section from "@/components/landing/Section";
 import { useLandingContent } from "@/hooks/useLandingContent";
 import { Sparkles, Upload, Zap } from "lucide-react";
 

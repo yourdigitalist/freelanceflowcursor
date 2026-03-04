@@ -1,4 +1,4 @@
-import Section from "@/components/landing/section";
+import Section from "@/components/landing/Section";
 import {
   Accordion,
   AccordionContent,

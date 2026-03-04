@@ -1,5 +1,5 @@
 import BlurFade from "@/components/landing/magicui/blur-fade";
-import Section from "@/components/landing/section";
+import Section from "@/components/landing/Section";
 import {
   Carousel,
   CarouselContent,

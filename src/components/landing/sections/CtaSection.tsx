@@ -1,4 +1,4 @@
-import Section from "@/components/landing/section";
+import Section from "@/components/landing/Section";
 import { buttonVariants } from "@/components/ui/button";
 import { useLandingContent } from "@/hooks/useLandingContent";
 import { cn } from "@/lib/utils";

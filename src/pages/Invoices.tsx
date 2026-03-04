@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -101,6 +101,8 @@ export default function Invoices() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTaxId, setSelectedTaxId] = useState<string>('');
   const [createClientId, setCreateClientId] = useState<string>('');
+  const [createProjectId, setCreateProjectId] = useState<string>('');
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Filters
   type DateRangePreset = 'all' | 'this_week' | 'this_month' | 'last_90' | 'custom';
@@ -168,6 +170,19 @@ export default function Invoices() {
       })();
     }
   }, [user]);
+
+  // Open New Invoice dialog with project pre-selected when coming from approved review (e.g. notification or review detail CTA)
+  useEffect(() => {
+    const projectId = searchParams.get('project_id');
+    const fromReview = searchParams.get('from_review') === '1';
+    if (!projectId || !fromReview || projects.length === 0 || !user) return;
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) return;
+    setCreateClientId(project.client_id || '');
+    setCreateProjectId(projectId);
+    setIsDialogOpen(true);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, projects, user]);
 
   const fmt = (amount: number) => formatCurrency(amount, profileCurrency, profileCurrencyDisplay);
 
@@ -285,8 +300,8 @@ export default function Invoices() {
     }
 
     const selectedTax = taxes.find(t => t.id === selectedTaxId);
-    const clientId = (formData.get('client_id') as string) || null;
-    const projectId = (formData.get('project_id') as string) || null;
+    const clientId = createClientId || (formData.get('client_id') as string) || null;
+    const projectId = createProjectId || (formData.get('project_id') as string) || null;
     let invoiceNumber: string;
     try {
       invoiceNumber = await getNextInvoiceNumber();
@@ -319,6 +334,7 @@ export default function Invoices() {
       toast({ title: 'Invoice created' });
       notifyStartGuideRefresh();
       setIsDialogOpen(false);
+      setCreateProjectId('');
       navigate(`/invoices/${data.id}`);
     } catch (error: any) {
       toast({
@@ -525,7 +541,7 @@ export default function Invoices() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) setCreateProjectId(''); setIsDialogOpen(open); }}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -579,11 +595,16 @@ export default function Invoices() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="project_id">Project (optional)</Label>
-                  <Select name="project_id">
+                  <Select
+                    name="project_id"
+                    value={createProjectId || 'none'}
+                    onValueChange={(v) => setCreateProjectId(v === 'none' ? '' : v)}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select project" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">No project</SelectItem>
                       {projectsForCreateClient.map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -647,6 +647,26 @@ export default function ReviewRequestDetail() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Create invoice CTA when approved and linked to a project */}
+            {request.status === 'approved' && request.project_id && (
+              <Card className="border-primary/30 bg-primary/5">
+                <CardHeader>
+                  <CardTitle className="text-lg">Create invoice?</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    This review was approved. Create an invoice for this project.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <Button asChild className="w-full">
+                    <Link to={`/invoices?project_id=${request.project_id}&from_review=1`}>
+                      <SlotIcon slot="sidebar_invoices" className="h-4 w-4 mr-2" />
+                      Create invoice for this project
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Recipients */}
             <Card>

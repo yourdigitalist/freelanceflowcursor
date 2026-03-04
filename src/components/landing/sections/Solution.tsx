@@ -3,7 +3,7 @@
 import FlickeringGrid from "@/components/landing/magicui/flickering-grid";
 import Ripple from "@/components/landing/magicui/ripple";
 import Safari from "@/components/landing/safari";
-import Section from "@/components/landing/section";
+import Section from "@/components/landing/Section";
 import { cn } from "@/lib/utils";
 import { useLandingContent } from "@/hooks/useLandingContent";
 import { motion } from "framer-motion";

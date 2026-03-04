@@ -1,5 +1,5 @@
 import FeaturesHorizontal from "@/components/landing/features-horizontal";
-import Section from "@/components/landing/section";
+import Section from "@/components/landing/Section";
 import { useLandingContent } from "@/hooks/useLandingContent";
 import { Clock, FileText, FolderKanban, MessageSquare } from "lucide-react";
 
