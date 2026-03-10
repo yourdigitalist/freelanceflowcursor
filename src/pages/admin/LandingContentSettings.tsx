@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useLandingContent, useLandingContentMutation } from '@/hooks/useLandingContent';
 import type { LandingContent } from '@/lib/landingContent';
@@ -14,7 +14,16 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload } from '@/components/icons';
+import { useQuery } from '@tanstack/react-query';
+import { Loader2, Upload, Search } from '@/components/icons';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { listAllIconPaths, getAppIconPublicUrl, displayNameForIconPath } from '@/lib/appIcons';
 
 const LANDING_BUCKET = 'landing-images';
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2MB
@@ -42,6 +51,24 @@ export default function LandingContentSettings() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
   const heroImageRef = useRef<HTMLInputElement>(null);
+  const solutionImageRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const { data: appIconPaths = [], isLoading: loadingIconPaths } = useQuery({
+    queryKey: ['app_icons_bucket_list'],
+    queryFn: listAllIconPaths,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const [problemIconPickerBox, setProblemIconPickerBox] = useState<number | null>(null);
+  const [problemIconSearch, setProblemIconSearch] = useState('');
+  const filteredProblemIconPaths = useMemo(() => {
+    if (!problemIconSearch.trim()) return appIconPaths;
+    const q = problemIconSearch.toLowerCase().trim();
+    return appIconPaths.filter(
+      (path) =>
+        displayNameForIconPath(path).toLowerCase().includes(q) || path.toLowerCase().includes(q)
+    );
+  }, [appIconPaths, problemIconSearch]);
 
   const uploadImage = async (file: File, path: string): Promise<string> => {
     const { error } = await supabase.storage.from(LANDING_BUCKET).upload(path, file, { upsert: true });
@@ -66,6 +93,32 @@ export default function LandingContentSettings() {
       const url = await uploadImage(file, `hero-${Date.now()}.${file.name.split('.').pop() || 'jpg'}`);
       update('hero', { imageUrl: url });
       toast({ title: 'Hero image uploaded' });
+    } catch (err) {
+      toast({ title: 'Upload failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
+    } finally {
+      setUploading(null);
+      e.target.value = '';
+    }
+  };
+
+  const handleSolutionBoxImage = async (boxIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !form?.solution?.boxes) return;
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Please select an image file', variant: 'destructive' });
+      return;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      toast({ title: 'File too large (max 2 MB)', variant: 'destructive' });
+      return;
+    }
+    setUploading(`solution-${boxIndex}`);
+    try {
+      const url = await uploadImage(file, `solution-${boxIndex}-${Date.now()}.${file.name.split('.').pop() || 'jpg'}`);
+      const boxes = [...form.solution.boxes];
+      boxes[boxIndex] = { ...boxes[boxIndex], imageUrl: url };
+      update('solution', { boxes });
+      toast({ title: 'Image uploaded' });
     } catch (err) {
       toast({ title: 'Upload failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
     } finally {
@@ -214,15 +267,89 @@ export default function LandingContentSettings() {
           <AccordionTrigger>Problem</AccordionTrigger>
           <AccordionContent className="space-y-4 pt-2">
             <div className="grid gap-2">
-              <Label>Closing line</Label>
-              <Input value={form.problem.closing} onChange={(e) => update('problem', { closing: e.target.value })} />
+              <Label>Section title (e.g. PROBLEM)</Label>
+              <Input value={form.problem.title} onChange={(e) => update('problem', { title: e.target.value })} placeholder="Problem" />
             </div>
-            <Label>Bullets (one per line)</Label>
-            <Textarea
-              value={form.problem.bullets.join('\n')}
-              onChange={(e) => update('problem', { bullets: e.target.value.split('\n').filter(Boolean) })}
-              rows={6}
-            />
+            <div className="grid gap-2">
+              <Label>Main heading</Label>
+              <Input value={form.problem.subtitle} onChange={(e) => update('problem', { subtitle: e.target.value })} placeholder="Freelance admin shouldn't be your full-time job." />
+            </div>
+            <p className="text-sm text-muted-foreground">Three problem boxes (icon, heading, description).</p>
+            {(form.problem.boxes ?? []).map((box, i) => (
+              <Card key={i}>
+                <CardHeader className="py-3">
+                  <CardTitle className="text-sm">Box {i + 1}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="grid gap-2">
+                    <Label>Icon (from Admin → Icons uploads)</Label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {box.icon ? (
+                        <div className="h-14 w-14 flex items-center justify-center overflow-hidden rounded-md border bg-muted/80 shrink-0">
+                          <img
+                            src={getAppIconPublicUrl(box.icon)}
+                            alt=""
+                            className="h-10 w-10 object-contain"
+                            style={{ filter: 'brightness(0) opacity(0.85)' }}
+                          />
+                        </div>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setProblemIconSearch('');
+                          setProblemIconPickerBox(i);
+                        }}
+                      >
+                        Choose icon
+                      </Button>
+                      {box.icon ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const boxes = [...(form.problem.boxes ?? [])];
+                            boxes[i] = { ...boxes[i], icon: '' };
+                            update('problem', { boxes });
+                          }}
+                        >
+                          Clear
+                        </Button>
+                      ) : null}
+                    </div>
+                    {appIconPaths.length === 0 && (
+                      <p className="text-xs text-muted-foreground">Upload SVG icons in Admin → Icons first.</p>
+                    )}
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Heading</Label>
+                    <Input
+                      value={box.heading}
+                      onChange={(e) => {
+                        const boxes = [...(form.problem.boxes ?? [])];
+                        boxes[i] = { ...boxes[i], heading: e.target.value };
+                        update('problem', { boxes });
+                      }}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Description</Label>
+                    <Textarea
+                      rows={3}
+                      value={box.text}
+                      onChange={(e) => {
+                        const boxes = [...(form.problem.boxes ?? [])];
+                        boxes[i] = { ...boxes[i], text: e.target.value };
+                        update('problem', { boxes });
+                      }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </AccordionContent>
         </AccordionItem>
 
@@ -230,20 +357,89 @@ export default function LandingContentSettings() {
           <AccordionTrigger>Solution</AccordionTrigger>
           <AccordionContent className="space-y-4 pt-2">
             <div className="grid gap-2">
-              <Label>Title</Label>
-              <Input value={form.solution.title} onChange={(e) => update('solution', { title: e.target.value })} />
+              <Label>Section title (e.g. SOLUTION)</Label>
+              <Input value={form.solution.title} onChange={(e) => update('solution', { title: e.target.value })} placeholder="Solution" />
             </div>
             <div className="grid gap-2">
-              <Label>Subtitle</Label>
-              <Input value={form.solution.subtitle} onChange={(e) => update('solution', { subtitle: e.target.value })} />
+              <Label>Big header</Label>
+              <Input value={form.solution.subtitle} onChange={(e) => update('solution', { subtitle: e.target.value })} placeholder="Lance takes care of the business in your business." />
             </div>
             <div className="grid gap-2">
-              <Label>Description</Label>
-              <Input value={form.solution.description} onChange={(e) => update('solution', { description: e.target.value })} />
+              <Label>Subheader / description</Label>
+              <Textarea value={form.solution.description} onChange={(e) => update('solution', { description: e.target.value })} rows={3} placeholder="One light, friendly workspace..." />
             </div>
+            <p className="text-sm text-muted-foreground">
+              Solution box images: recommended <strong>1200×600px (2:1)</strong> or <strong>800×512px</strong>. Displayed at max height 256px in the card.
+            </p>
+            {(form.solution.boxes ?? []).map((box, i) => (
+              <Card key={i}>
+                <CardHeader className="py-3">
+                  <CardTitle className="text-sm">Box {i + 1}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="grid gap-2">
+                    <Label>Heading</Label>
+                    <Input
+                      value={box.heading}
+                      onChange={(e) => {
+                        const boxes = [...(form.solution.boxes ?? [])];
+                        boxes[i] = { ...boxes[i], heading: e.target.value };
+                        update('solution', { boxes });
+                      }}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Text</Label>
+                    <Textarea
+                      rows={3}
+                      value={box.text}
+                      onChange={(e) => {
+                        const boxes = [...(form.solution.boxes ?? [])];
+                        boxes[i] = { ...boxes[i], text: e.target.value };
+                        update('solution', { boxes });
+                      }}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Image</Label>
+                    <input
+                      ref={(el) => { solutionImageRefs.current[i] = el; }}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleSolutionBoxImage(i, e)}
+                    />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => solutionImageRefs.current[i]?.click()}
+                        disabled={uploading === `solution-${i}`}
+                      >
+                        {uploading === `solution-${i}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                        Upload image
+                      </Button>
+                      {box.imageUrl ? (
+                        <>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => {
+                            const boxes = [...(form.solution.boxes ?? [])];
+                            boxes[i] = { ...boxes[i], imageUrl: '' };
+                            update('solution', { boxes });
+                          }}>
+                            Remove
+                          </Button>
+                          <img src={box.imageUrl} alt="" className="h-16 w-24 rounded object-cover border" />
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
             <div className="grid gap-2">
-              <Label>Closing</Label>
-              <Input value={form.solution.closing} onChange={(e) => update('solution', { closing: e.target.value })} />
+              <Label>CTA button under section</Label>
+              <Input value={form.solution.ctaButtonText} onChange={(e) => update('solution', { ctaButtonText: e.target.value })} placeholder="Get started for free" />
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -547,6 +743,88 @@ export default function LandingContentSettings() {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+
+      <Dialog
+        open={problemIconPickerBox !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setProblemIconPickerBox(null);
+            setProblemIconSearch('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              {problemIconPickerBox !== null
+                ? `Pick icon for Problem box ${problemIconPickerBox + 1}`
+                : 'Pick icon'}
+            </DialogTitle>
+            <DialogDescription>
+              Search by name, then click an icon to assign it. Icons are loaded from the same bucket as Admin → Icons.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 flex-1 min-h-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search icons by name…"
+                value={problemIconSearch}
+                onChange={(e) => setProblemIconSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <div className="flex-1 overflow-auto rounded-md border bg-muted/30 p-4 min-h-[280px]">
+              {loadingIconPaths ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredProblemIconPaths.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  {appIconPaths.length === 0
+                    ? 'No SVG files in the bucket. Upload icons in Admin → Icons (bucket: app-icons).'
+                    : 'No icons match your search.'}
+                </p>
+              ) : (
+                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                  {filteredProblemIconPaths.map((path) => (
+                    <button
+                      key={path}
+                      type="button"
+                      onClick={() => {
+                        if (problemIconPickerBox === null) return;
+                        const boxes = [...(form?.problem.boxes ?? [])];
+                        boxes[problemIconPickerBox] = {
+                          ...boxes[problemIconPickerBox],
+                          icon: path,
+                        };
+                        update('problem', { boxes });
+                        setProblemIconPickerBox(null);
+                        setProblemIconSearch('');
+                      }}
+                      className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border bg-card hover:bg-muted/70 hover:border-muted-foreground/30 transition-colors"
+                      title={displayNameForIconPath(path)}
+                    >
+                      <div className="h-14 w-14 flex items-center justify-center overflow-hidden rounded-md bg-muted/80 shrink-0">
+                        <img
+                          src={getAppIconPublicUrl(path)}
+                          alt=""
+                          className="h-10 w-10 object-contain pointer-events-none"
+                          style={{ filter: 'brightness(0) opacity(0.85)' }}
+                        />
+                      </div>
+                      <span className="text-xs truncate w-full text-center text-foreground/90 font-medium">
+                        {displayNameForIconPath(path).slice(0, 14)}
+                        {displayNameForIconPath(path).length > 14 ? '…' : ''}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

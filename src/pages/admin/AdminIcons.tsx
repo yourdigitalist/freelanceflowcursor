@@ -18,50 +18,7 @@ import { ICON_SLOT_GROUPS } from '@/lib/iconSlots';
 import { Loader2, Search } from '@/components/icons';
 import type { IconSlotKey } from '@/lib/iconSlots';
 import type { SlotAssignmentValue } from '@/contexts/IconSlotContext';
-
-const BUCKET = 'app-icons';
-const LIST_PAGE_SIZE = 500;
-
-/** List all SVG paths in the bucket (root and uploads folder, with pagination) */
-async function listAllIconPaths(): Promise<string[]> {
-  const paths: string[] = [];
-  const listFolder = async (folder: string): Promise<void> => {
-    let offset = 0;
-    let hasMore = true;
-    while (hasMore) {
-      const { data, error } = await supabase.storage
-        .from(BUCKET)
-        .list(folder || undefined, { limit: LIST_PAGE_SIZE, offset });
-      if (error) {
-        if (error.message?.includes('not found') || error.message?.includes('Listing')) return;
-        throw error;
-      }
-      const items = data ?? [];
-      for (const item of items) {
-        const name = item.name;
-        if (name.toLowerCase().endsWith('.svg')) {
-          paths.push(folder ? `${folder}/${name}` : name);
-        }
-      }
-      hasMore = items.length === LIST_PAGE_SIZE;
-      offset += items.length;
-    }
-  };
-  await listFolder('');
-  await listFolder('uploads');
-  await listFolder('icons');
-  return paths.sort((a, b) => a.localeCompare(b));
-}
-
-function publicUrl(path: string): string {
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  return data.publicUrl;
-}
-
-function displayName(path: string): string {
-  const base = path.split('/').pop() ?? path;
-  return base.replace(/\.svg$/i, '').replace(/[-_]/g, ' ');
-}
+import { listAllIconPaths, getAppIconPublicUrl, displayNameForIconPath } from '@/lib/appIcons';
 
 export default function AdminIcons() {
   const { toast } = useToast();
@@ -84,6 +41,9 @@ export default function AdminIcons() {
       return name.toLowerCase().includes(q) || path.toLowerCase().includes(q);
     });
   }, [bucketPaths, search]);
+
+  const publicUrl = getAppIconPublicUrl;
+  const displayName = displayNameForIconPath;
 
   const handleAssign = async (slotKey: string, storagePath: string | null) => {
     setSaving(true);

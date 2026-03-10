@@ -38,7 +38,6 @@ import LandingContentSettings from "./pages/admin/LandingContentSettings";
 import Notifications from "./pages/Notifications";
 import Help from "./pages/Help";
 import Notes from "./pages/Notes";
-import Insights from "./pages/Insights";
 import ReviewRequests from "./pages/ReviewRequests";
 import ReviewRequestDetail from "./pages/ReviewRequestDetail";
 import ClientReview from "./pages/ClientReview";
@@ -158,7 +157,6 @@ function AppRoutes() {
       <Route path="/time/timer" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
       <Route path="/time/logs" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
       <Route path="/notes" element={<ProtectedRoute><Notes /></ProtectedRoute>} />
-      <Route path="/insights" element={<ProtectedRoute><Insights /></ProtectedRoute>} />
       <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
       <Route path="/invoices/:id" element={<ProtectedRoute><InvoiceDetail /></ProtectedRoute>} />
       <Route path="/reviews" element={<ProtectedRoute><ReviewRequests /></ProtectedRoute>} />
@@ -195,11 +193,11 @@ function AppRoutes() {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <AuthProvider>
           <BrandingApply />
           <IconSlotProvider>
             <TimerProvider>
@@ -208,9 +206,9 @@ const App = () => (
               </ErrorBoundary>
             </TimerProvider>
           </IconSlotProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </TooltipProvider>
   </QueryClientProvider>
 );
 

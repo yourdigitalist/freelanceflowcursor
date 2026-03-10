@@ -12,7 +12,6 @@ export const ICON_SLOT_GROUPS = [
       { key: 'sidebar_projects', label: 'Projects' },
       { key: 'sidebar_time', label: 'Time' },
       { key: 'sidebar_notes', label: 'Notes' },
-      { key: 'sidebar_insights', label: 'Smart Summaries' },
       { key: 'sidebar_invoices', label: 'Invoices' },
       { key: 'sidebar_reviews', label: 'Approvals' },
     ],

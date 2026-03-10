@@ -58,7 +58,6 @@ const DEFAULT_ICONS: Record<IconSlotKey, IconComponent> = {
   sidebar_projects: Table,
   sidebar_time: Clock,
   sidebar_notes: FileText,
-  sidebar_insights: Sparkles,
   sidebar_invoices: Receipt,
   sidebar_reviews: IrisScan,
   stat_clients: Users,

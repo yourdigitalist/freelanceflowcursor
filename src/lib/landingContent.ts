@@ -23,15 +23,15 @@ export interface LandingContent {
   };
   problem: {
     title: string;
-    bullets: string[];
-    closing: string;
+    subtitle: string;
+    boxes: { icon: string; heading: string; text: string }[];
   };
   solution: {
     title: string;
     subtitle: string;
     description: string;
-    items: { label: string; value: string }[];
-    closing: string;
+    boxes: { heading: string; text: string; imageUrl: string }[];
+    ctaButtonText: string;
   };
   howItWorks: {
     title: string;
@@ -114,25 +114,53 @@ export const DEFAULT_LANDING_CONTENT: LandingContent = {
   },
   problem: {
     title: 'Problem',
-    bullets: [
-      'Too many tabs and subscriptions, not enough time',
-      'Guessing your hours',
-      'Chasing payments',
+    subtitle: 'Freelance admin shouldn’t be your full‑time job.',
+    boxes: [
+      {
+        icon: 'brain',
+        heading: 'Too many tabs and subscriptions, not enough time',
+        text: "Spreadsheets for projects, one app for time, another for invoices… and somehow you're still not sure what's due, when, or for who.",
+      },
+      {
+        icon: 'zap',
+        heading: 'Guessing your hours',
+        text: 'Reconstructing your week from memory is stressful and usually wrong. You either under‑bill or over‑bill.',
+      },
+      {
+        icon: 'shield',
+        heading: 'Chasing payments',
+        text: 'Sending invoices, remembering who\'s late, and writing "just bumping this to the top of your inbox" for the 4th time drains your energy and your calendar.',
+      },
     ],
-    closing: 'Freelance admin shouldn’t be your full‑time job.',
   },
   solution: {
     title: 'Solution',
     subtitle: 'Lance takes care of the “business” in your business.',
     description:
       'One light, friendly workspace where projects, time tracking, and invoicing all play nicely together, so you can focus on the work you’re actually hired for.',
-    items: [
-      { label: 'A home for every client', value: '' },
-      { label: 'Time tracking, accurately', value: '' },
-      { label: 'Invoicing on autopilot', value: '' },
-      { label: 'Delight clients with clarity', value: '' },
+    boxes: [
+      {
+        heading: 'A home for every client',
+        text: "Keep projects, notes, files, and timelines in one place. See what's active, what's waiting on the client, and what's done at a glance.",
+        imageUrl: '',
+      },
+      {
+        heading: 'Time tracking, accurately',
+        text: 'Start a timer once and forget about it. Switch between tasks without losing your place, and turn tracked time into billable hours in a click.',
+        imageUrl: '',
+      },
+      {
+        heading: 'Invoicing on autopilot',
+        text: "Generate clean, professional invoices from your time logs and project fees. Know exactly who's paid, who's late, and what's coming up.",
+        imageUrl: '',
+      },
+      {
+        heading: 'Delight clients with clarity',
+        text: "Share clear summaries of hours, deliverables, and status so clients always know what they're paying for, and keep coming back.",
+        imageUrl: '',
+      },
     ],
-    closing: '',
+    ctaButtonText: 'Get started for free',
   },
   howItWorks: {
     title: 'How it works',

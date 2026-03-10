@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -265,17 +266,18 @@ export function AppLayout({
             <SlotIcon slot="sidebar_notes" className={cn("h-4 w-4 shrink-0", location.pathname === '/notes' && "text-primary")} />
             {!sidebarCollapsed && 'Notes'}
           </Link>
-          <Link to="/insights" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/insights' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <SlotIcon slot="sidebar_insights" className={cn("h-4 w-4 shrink-0", location.pathname === '/insights' && "text-primary")} />
-            {!sidebarCollapsed && 'Smart Summaries'}
-          </Link>
           <Link to="/invoices" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/invoices' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
             <SlotIcon slot="sidebar_invoices" className={cn("h-4 w-4 shrink-0", location.pathname === '/invoices' && "text-primary")} />
             {!sidebarCollapsed && 'Invoices'}
           </Link>
           <Link to="/reviews" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/reviews' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
             <SlotIcon slot="sidebar_reviews" className={cn("h-4 w-4 shrink-0", location.pathname === '/reviews' && "text-primary")} />
-            {!sidebarCollapsed && 'Approvals'}
+            {!sidebarCollapsed && (
+              <>
+                Approvals
+                <Badge className="bg-purple-600 hover:bg-purple-600 text-white text-[10px] px-1.5 py-0 font-medium shrink-0">Beta</Badge>
+              </>
+            )}
           </Link>
         </nav>
 
