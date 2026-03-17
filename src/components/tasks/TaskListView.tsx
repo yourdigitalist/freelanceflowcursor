@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
@@ -25,13 +25,15 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { GripVertical, Trash2, MessageSquare, Plus } from '@/components/icons';
+import { GripVertical, Trash2, MessageSquare, Plus, ChevronUp, ChevronDown } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { Task, ProjectStatus, PRIORITY_OPTIONS } from './types';
 import { format } from 'date-fns';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { cn } from '@/lib/utils';
 import { QuickAddTask } from './QuickAddTask';
+
+export type TaskListSortKey = 'title' | 'status' | 'priority' | 'estimated_hours' | 'due_date';
 
 interface TaskListViewProps {
   tasks: Task[];
@@ -292,6 +294,45 @@ function SortableRow({
   );
 }
 
+function SortableHead({
+  label,
+  sortKey,
+  currentSortKey,
+  sortDir,
+  onSort,
+  className,
+}: {
+  label: string;
+  sortKey: TaskListSortKey;
+  currentSortKey: TaskListSortKey | null;
+  sortDir: 'asc' | 'desc';
+  onSort: (key: TaskListSortKey) => void;
+  className?: string;
+}) {
+  const isActive = currentSortKey === sortKey;
+  return (
+    <TableHead className={className}>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="-ml-2 h-8 font-medium hover:bg-muted hover:text-foreground"
+        onClick={() => onSort(sortKey)}
+      >
+        {label}
+        {isActive ? (
+          sortDir === 'asc' ? (
+            <ChevronUp className="ml-1 h-4 w-4" />
+          ) : (
+            <ChevronDown className="ml-1 h-4 w-4" />
+          )
+        ) : (
+          <span className="ml-1 inline-block w-4" aria-hidden />
+        )}
+      </Button>
+    </TableHead>
+  );
+}
+
 export function TaskListView({
   tasks,
   statuses,
@@ -308,6 +349,63 @@ export function TaskListView({
   defaultStatusId,
 }: TaskListViewProps) {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [sortKey, setSortKey] = useState<TaskListSortKey | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (key: TaskListSortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  };
+
+  const sortedTasks = useMemo(() => {
+    if (!sortKey) return tasks;
+    const statusPos = (s: ProjectStatus) => s.position;
+    const statusName = (t: Task) => statuses.find((s) => s.id === t.status_id)?.name ?? '';
+    const priorityOrder = (p: string) => ['low', 'medium', 'high', 'urgent'].indexOf(p);
+    const cmp = (a: Task, b: Task): number => {
+      let va: string | number | null;
+      let vb: string | number | null;
+      switch (sortKey) {
+        case 'title':
+          va = a.title.toLowerCase();
+          vb = b.title.toLowerCase();
+          break;
+        case 'status': {
+          const sa = statuses.find((s) => s.id === a.status_id);
+          const sb = statuses.find((s) => s.id === b.status_id);
+          va = sa ? statusPos(sa) : 999;
+          vb = sb ? statusPos(sb) : 999;
+          if (va === vb) {
+            va = statusName(a);
+            vb = statusName(b);
+          }
+          break;
+        }
+        case 'priority':
+          va = priorityOrder(a.priority ?? 'medium');
+          vb = priorityOrder(b.priority ?? 'medium');
+          break;
+        case 'estimated_hours':
+          va = a.estimated_hours ?? -1;
+          vb = b.estimated_hours ?? -1;
+          break;
+        case 'due_date':
+          va = a.due_date ? new Date(a.due_date).getTime() : 0;
+          vb = b.due_date ? new Date(b.due_date).getTime() : 0;
+          break;
+        default:
+          return 0;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    };
+    return [...tasks].sort(cmp);
+  }, [tasks, sortKey, sortDir, statuses]);
 
   return (
     <div className="border rounded-lg bg-card overflow-hidden">
@@ -315,17 +413,17 @@ export function TaskListView({
         <TableHeader>
           <TableRow>
             <TableHead className="w-8"></TableHead>
-            <TableHead>Title</TableHead>
-            <TableHead className="w-[180px]">Status</TableHead>
-            <TableHead className="w-[120px]">Priority</TableHead>
-            <TableHead className="w-[100px] whitespace-nowrap min-w-[100px]">Est. Hours</TableHead>
-            <TableHead className="w-[140px]">Due Date</TableHead>
+            <SortableHead label="Title" sortKey="title" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+            <SortableHead label="Status" sortKey="status" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="w-[180px]" />
+            <SortableHead label="Priority" sortKey="priority" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="w-[120px]" />
+            <SortableHead label="Est. Hours" sortKey="estimated_hours" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="w-[100px] whitespace-nowrap min-w-[100px]" />
+            <SortableHead label="Due Date" sortKey="due_date" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="w-[140px]" />
             <TableHead className="w-[100px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            {tasks.map((task) => (
+          <SortableContext items={sortedTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+            {sortedTasks.map((task) => (
               <SortableRow
                 key={task.id}
                 task={task}
@@ -342,7 +440,7 @@ export function TaskListView({
               />
             ))}
           </SortableContext>
-          {tasks.length === 0 && !showQuickAdd && (
+          {sortedTasks.length === 0 && !showQuickAdd && (
             <TableRow>
               <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                 No tasks yet. Add your first task to get started.
