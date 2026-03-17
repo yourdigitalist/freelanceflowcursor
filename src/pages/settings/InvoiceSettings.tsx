@@ -43,6 +43,7 @@ interface InvoiceProfile {
   invoice_number_reset_yearly: boolean | null;
   invoice_notes_default: string | null;
   invoice_footer: string | null;
+  invoice_bank_details_default: string | null;
   invoice_email_message_default: string | null;
   invoice_email_subject_default: string | null;
   reminder_enabled: boolean | null;
@@ -107,6 +108,7 @@ export default function InvoiceSettings() {
       invoice_number_reset_yearly: invoiceResetYearly,
       invoice_notes_default: formData.get('invoice_notes_default') as string || null,
       invoice_footer: formData.get('invoice_footer') as string || null,
+      invoice_bank_details_default: formData.get('invoice_bank_details_default') as string || null,
       invoice_email_message_default: formData.get('invoice_email_message_default') as string || null,
       invoice_email_subject_default: formData.get('invoice_email_subject_default') as string || null,
       reminder_enabled: reminderEnabled,
@@ -131,14 +133,32 @@ export default function InvoiceSettings() {
   }, [dirtyContext]);
 
   const fetchProfile = async () => {
+    const withBankDefault = 'hourly_rate, invoice_prefix, invoice_include_year, invoice_number_start, invoice_number_padding, invoice_number_reset_yearly, invoice_notes_default, invoice_footer, invoice_bank_details_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_days_before, reminder_subject_default, reminder_body_default';
+    const withoutBankDefault = 'hourly_rate, invoice_prefix, invoice_include_year, invoice_number_start, invoice_number_padding, invoice_number_reset_yearly, invoice_notes_default, invoice_footer, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_days_before, reminder_subject_default, reminder_body_default';
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('profiles')
-        .select('hourly_rate, invoice_prefix, invoice_include_year, invoice_number_start, invoice_number_padding, invoice_number_reset_yearly, invoice_notes_default, invoice_footer, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_days_before, reminder_subject_default, reminder_body_default')
+        .select(withBankDefault)
         .eq('user_id', user!.id)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        const tryFallback = /column.*does not exist|invoice_bank_details_default|42703/i.test(String(error.message));
+        if (tryFallback) {
+          const fallback = await supabase
+            .from('profiles')
+            .select(withoutBankDefault)
+            .eq('user_id', user!.id)
+            .maybeSingle();
+          if (!fallback.error) {
+            data = fallback.data;
+          } else {
+            throw fallback.error;
+          }
+        } else {
+          throw error;
+        }
+      }
       setProfile(data);
       if (data) {
         setReminderEnabled(!!data.reminder_enabled);
@@ -406,6 +426,19 @@ export default function InvoiceSettings() {
               />
               <p className="text-xs text-muted-foreground">
                 This text appears at the bottom of every invoice (can be overridden per invoice)
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invoice_bank_details_default">Bank / Payment details</Label>
+              <Textarea
+                id="invoice_bank_details_default"
+                name="invoice_bank_details_default"
+                defaultValue={profile?.invoice_bank_details_default ?? ''}
+                placeholder="Bank name, account number, routing number, payment instructions..."
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">
+                Pre-filled on new invoices and shown on the PDF (can be overridden per invoice)
               </p>
             </div>
           </CardContent>

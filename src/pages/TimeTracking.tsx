@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Play, Square, Trash2, Filter, Download, Upload, List } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
@@ -151,6 +152,8 @@ export default function TimeTracking() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const importFileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
   const location = useLocation();
   const isTimerView = location.pathname === '/time/timer';
 
@@ -209,7 +212,6 @@ export default function TimeTracking() {
       const { data, error } = await supabase
         .from('projects')
         .select('id, name, client_id')
-        .eq('status', 'active')
         .order('name');
 
       if (error) throw error;
@@ -440,6 +442,7 @@ export default function TimeTracking() {
         .delete()
         .eq('id', id);
       if (error) throw error;
+      setSelectedEntryIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
       toast({ title: 'Entry deleted' });
       fetchEntries();
     } catch (error: any) {
@@ -449,6 +452,15 @@ export default function TimeTracking() {
         variant: 'destructive',
       });
     }
+  };
+
+  const toggleEntrySelection = (id: string) => {
+    setSelectedEntryIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const getStatusBadge = (entry: TimeEntry) => {
@@ -504,6 +516,47 @@ export default function TimeTracking() {
 
     return true;
   });
+
+  const selectAllFiltered = () => {
+    setSelectedEntryIds(new Set(filteredEntries.map((e) => e.id)));
+  };
+  const clearSelection = () => setSelectedEntryIds(new Set());
+  const allFilteredSelected = filteredEntries.length > 0 && filteredEntries.every((e) => selectedEntryIds.has(e.id));
+  const someSelected = selectedEntryIds.size > 0;
+
+  const handleDeleteSelected = async () => {
+    if (selectedEntryIds.size === 0) return;
+    if (!confirm(`Delete ${selectedEntryIds.size} selected entr${selectedEntryIds.size === 1 ? 'y' : 'ies'}?`)) return;
+    try {
+      const ids = Array.from(selectedEntryIds);
+      for (const id of ids) {
+        const { error } = await supabase.from('time_entries').delete().eq('id', id);
+        if (error) throw error;
+      }
+      setSelectedEntryIds(new Set());
+      toast({ title: `${ids.length} entr${ids.length === 1 ? 'y' : 'ies'} deleted` });
+      fetchEntries();
+    } catch (error: any) {
+      toast({ title: 'Error deleting entries', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteAllFiltered = async () => {
+    if (filteredEntries.length === 0) return;
+    if (!confirm(`Delete all ${filteredEntries.length} entr${filteredEntries.length === 1 ? 'y' : 'ies'} in this view? This cannot be undone.`)) return;
+    try {
+      const ids = filteredEntries.map((e) => e.id);
+      for (const id of ids) {
+        const { error } = await supabase.from('time_entries').delete().eq('id', id);
+        if (error) throw error;
+      }
+      setSelectedEntryIds(new Set());
+      toast({ title: `${ids.length} entr${ids.length === 1 ? 'y' : 'ies'} deleted` });
+      fetchEntries();
+    } catch (error: any) {
+      toast({ title: 'Error deleting entries', description: error.message, variant: 'destructive' });
+    }
+  };
 
   /** Total duration in seconds for display and totals. Prefer total_duration_seconds (includes seconds). */
   const getEntrySeconds = (e: TimeEntry) => {
@@ -651,21 +704,22 @@ export default function TimeTracking() {
             {!isTimerView && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Download className="mr-2 h-4 w-4" />
-                  CSV
+                <Button variant="outline" size="sm" title="Template, export, or import CSV">
+                  <Download className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={handleDownloadTimeTemplate}>
-                  Download template
+                  <Download className="h-4 w-4 mr-2" />
+                  Template
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleExportTimeCsv}>
-                  Export CSV {filteredEntries.length > 0 ? `(${filteredEntries.length})` : ''}
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setImportDialogOpen(true)}>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Import CSV
+                <DropdownMenuItem onClick={() => setImportDialogOpen(true)} disabled={importing}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  {importing ? 'Importing…' : 'Import'}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1072,8 +1126,19 @@ export default function TimeTracking() {
 
         {/* Time Entries Table */}
         <Card className="border-0 shadow-sm">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle>Time Entries</CardTitle>
+            {filteredEntries.length > 0 && (
+              selectionMode ? (
+                <Button variant="ghost" size="sm" onClick={() => { setSelectionMode(false); clearSelection(); }}>
+                  Done
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => setSelectionMode(true)}>
+                  Select
+                </Button>
+              )
+            )}
           </CardHeader>
           <CardContent>
             {filteredEntries.length === 0 ? (
@@ -1083,9 +1148,35 @@ export default function TimeTracking() {
                 <p className="text-sm">Start the timer or log time manually</p>
               </div>
             ) : (
-              <Table>
+              <>
+                {selectionMode && (
+                  <div className="flex flex-wrap items-center gap-3 mb-4 py-2 border-b">
+                    <Button variant="ghost" size="sm" onClick={selectAllFiltered}>
+                      Select all
+                    </Button>
+                    {someSelected && (
+                      <>
+                        <span className="text-sm text-muted-foreground">
+                          {selectedEntryIds.size} selected
+                        </span>
+                        <Button variant="ghost" size="sm" onClick={clearSelection}>
+                          Clear
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={handleDeleteSelected} className="text-destructive hover:text-destructive">
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Delete selected
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={handleDeleteAllFiltered} className="text-destructive hover:text-destructive">
+                          Delete all ({filteredEntries.length})
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
+                <Table>
                 <TableHeader>
                   <TableRow>
+                    {selectionMode && <TableHead className="w-10"></TableHead>}
                     <TableHead>Date</TableHead>
                     <TableHead>Project</TableHead>
                     <TableHead>Task</TableHead>
@@ -1098,6 +1189,15 @@ export default function TimeTracking() {
                 <TableBody>
                   {filteredEntries.map((entry) => (
                     <TableRow key={entry.id}>
+                      {selectionMode && (
+                        <TableCell className="w-10">
+                          <Checkbox
+                            checked={selectedEntryIds.has(entry.id)}
+                            onCheckedChange={() => toggleEntrySelection(entry.id)}
+                            aria-label={`Select entry ${entry.id}`}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell>
                         {format(parseISO(entry.started_at || entry.start_time), 'MMM d, yyyy')}
                       </TableCell>
@@ -1121,7 +1221,7 @@ export default function TimeTracking() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            className="h-8 w-8 text-muted-foreground hover:text-primary-foreground"
                             onClick={() => openLogDialog(entry)}
                           >
                             <SlotIcon slot="action_edit" className="h-4 w-4" />
@@ -1140,6 +1240,7 @@ export default function TimeTracking() {
                   ))}
                 </TableBody>
               </Table>
+              </>
             )}
           </CardContent>
         </Card>

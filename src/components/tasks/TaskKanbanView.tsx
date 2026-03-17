@@ -83,7 +83,7 @@ function KanbanColumn({ status, tasks, commentCounts, onTaskClick, onQuickAdd }:
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-start text-muted-foreground hover:text-foreground"
+            className="w-full justify-start text-muted-foreground hover:text-primary-foreground"
             onClick={() => setShowQuickAdd(true)}
           >
             <Plus className="h-4 w-4 mr-2" />

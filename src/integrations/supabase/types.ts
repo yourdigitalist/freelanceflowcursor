@@ -301,6 +301,7 @@ export type Database = {
           invoice_email_message_default: string | null
           invoice_email_subject_default: string | null
           invoice_footer: string | null
+          invoice_bank_details_default: string | null
           invoice_notes_default: string | null
           invoice_prefix: string | null
           invoice_include_year: boolean | null
@@ -369,6 +370,7 @@ export type Database = {
           invoice_email_message_default?: string | null
           invoice_email_subject_default?: string | null
           invoice_footer?: string | null
+          invoice_bank_details_default?: string | null
           invoice_notes_default?: string | null
           invoice_prefix?: string | null
           invoice_include_year?: boolean | null
@@ -437,6 +439,7 @@ export type Database = {
           invoice_email_message_default?: string | null
           invoice_email_subject_default?: string | null
           invoice_footer?: string | null
+          invoice_bank_details_default?: string | null
           invoice_notes_default?: string | null
           invoice_prefix?: string | null
           invoice_include_year?: boolean | null
@@ -504,6 +507,33 @@ export type Database = {
         }
         Relationships: []
       }
+      note_folders: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          emoji: string | null
+          color: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          emoji?: string | null
+          color?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          emoji?: string | null
+          color?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       notes: {
         Row: {
           id: string
@@ -512,6 +542,7 @@ export type Database = {
           content: string | null
           client_id: string | null
           project_id: string | null
+          folder_id: string | null
           tags: string[]
           icon_emoji: string | null
           cover_color: string | null
@@ -526,6 +557,7 @@ export type Database = {
           content?: string | null
           client_id?: string | null
           project_id?: string | null
+          folder_id?: string | null
           tags?: string[]
           icon_emoji?: string | null
           cover_color?: string | null
@@ -540,6 +572,7 @@ export type Database = {
           content?: string | null
           client_id?: string | null
           project_id?: string | null
+          folder_id?: string | null
           tags?: string[]
           icon_emoji?: string | null
           cover_color?: string | null
@@ -567,6 +600,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notes_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "note_folders"
             referencedColumns: ["id"]
           },
         ]

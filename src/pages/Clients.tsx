@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -219,6 +220,7 @@ export default function Clients() {
   const [newActivityType, setNewActivityType] = useState<ClientActivity['type']>('note');
   const [newActivityBody, setNewActivityBody] = useState('');
   const [importing, setImporting] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -563,6 +565,21 @@ export default function Clients() {
         const estimatedValue = estimatedVal ? Number(estimatedVal) : null;
         const nextFollowUp = get('next_follow_up_at')(row);
         const nextFollowUpAt = nextFollowUp ? new Date(nextFollowUp).toISOString() : null;
+        const rawStatus = get('status')(row) || 'active';
+        const normalizedStatus = (() => {
+          const lower = rawStatus.toLowerCase();
+          const byValue = CRM_STAGES.find((s) => s.value === lower);
+          if (byValue) return byValue.value;
+          const byLabel = CRM_STAGES.find((s) => s.label.toLowerCase() === lower);
+          if (byLabel) return byLabel.value;
+          if (/^proposal/i.test(rawStatus)) return 'proposal_sent';
+          if (/^in\s*progress$/i.test(rawStatus)) return 'onboarding';
+          if (/^closed\s*lost$/i.test(rawStatus)) return 'closed_lost';
+          if (/^lead\s*new$/i.test(rawStatus)) return 'lead_new';
+          if (/^lead\s*contacted$/i.test(rawStatus)) return 'lead_contacted';
+          if (/^lead\s*qualified$/i.test(rawStatus)) return 'lead_qualified';
+          return 'active';
+        })();
         const clientData = {
           name,
           first_name: firstName || null,
@@ -578,7 +595,7 @@ export default function Clients() {
           postal_code: get('postal_code')(row) || null,
           country: get('country')(row) || null,
           avatar_color: AVATAR_COLORS[4],
-          status: get('status')(row) || 'active',
+          status: normalizedStatus,
           notes: get('notes')(row) || null,
           next_action: get('next_action')(row) || null,
           next_follow_up_at: nextFollowUpAt,
@@ -700,22 +717,62 @@ export default function Clients() {
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) handleCsvImport(f);
+              if (f) {
+                setImportDialogOpen(false);
+                handleCsvImport(f);
+              }
             }}
           />
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={downloadTemplate} title="Download template CSV">
-              <Download className="mr-2 h-4 w-4" />
-              Template
-            </Button>
-            <Button variant="outline" size="sm" onClick={exportClientsCsv} disabled={sortedClients.length === 0} title="Export clients as CSV">
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
-            <Button variant="outline" size="sm" disabled={importing} onClick={() => csvInputRef.current?.click()} title="Import clients from CSV">
-              <Upload className="mr-2 h-4 w-4" />
-              {importing ? 'Importing…' : 'Import'}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" title="Template, export, or import CSV">
+                  <Download className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={downloadTemplate}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Template
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={exportClientsCsv} disabled={sortedClients.length === 0}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setImportDialogOpen(true)} disabled={importing}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  {importing ? 'Importing…' : 'Import'}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Import clients from CSV</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3 text-sm text-muted-foreground">
+                  <p>1. Download the <strong className="text-foreground">Template</strong> to get the correct column headers.</p>
+                  <p>2. Fill in your client data. <strong className="text-foreground">Email</strong> is required. Rows with an existing email will update that client.</p>
+                  <p>3. In the <strong className="text-foreground">status</strong> column, use one of these values (labels like &quot;Active&quot; or &quot;Proposal sent&quot; also work):</p>
+                  <ul className="list-disc pl-5 space-y-0.5 text-foreground">
+                    {CRM_STAGES.map((s) => (
+                      <li key={s.value}><code className="text-xs bg-muted px-1 rounded">{s.value}</code> — {s.label}</li>
+                    ))}
+                  </ul>
+                  <p>4. Save as CSV and choose your file below.</p>
+                </div>
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button variant="outline" size="sm" onClick={() => { downloadTemplate(); setImportDialogOpen(false); }}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Template
+                  </Button>
+                  <Button size="sm" onClick={() => csvInputRef.current?.click()}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Choose CSV file
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             <Dialog open={isDialogOpen} onOpenChange={(open) => {
               setIsDialogOpen(open);
               if (!open) {

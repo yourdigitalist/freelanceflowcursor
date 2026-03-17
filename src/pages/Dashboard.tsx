@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useProfileCurrency } from '@/hooks/useProfileCurrency';
@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, ArrowRight, Bell } from '@/components/icons';
+import { Plus, ArrowRight, Bell, Search } from '@/components/icons';
+import { Input } from '@/components/ui/input';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 
 interface DashboardStats {
@@ -53,8 +54,17 @@ interface FollowUpClient {
   next_follow_up_at: string | null;
 }
 
+interface NotificationItem {
+  id: string;
+  title: string | null;
+  link: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { formatCurrency: fmt } = useProfileCurrency();
   const [stats, setStats] = useState<DashboardStats>({
     totalClients: 0,
@@ -415,15 +425,34 @@ export default function Dashboard() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        {/* Header: greeting | search (pill) | buttons */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="min-w-0 shrink-0">
             <h1 className="text-2xl font-bold tracking-tight">{getGreeting()}, {firstName}!</h1>
             <p className="text-muted-foreground">
               Here's what's happening with your business.
             </p>
           </div>
-          <div className="flex gap-2">
+          <form
+            className="flex-1 flex justify-center min-w-0 max-w-sm mx-auto sm:mx-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const q = new FormData(e.currentTarget).get('q');
+              if (typeof q === 'string' && q.trim()) navigate(`/search?q=${encodeURIComponent(q.trim())}`);
+            }}
+          >
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                type="search"
+                name="q"
+                placeholder="Search"
+                className="w-full rounded-full bg-white dark:bg-card border border-input shadow-sm pl-9 pr-3 text-sm h-8 focus-visible:ring-2"
+                aria-label="Search"
+              />
+            </div>
+          </form>
+          <div className="flex gap-2 shrink-0 justify-center sm:justify-end">
             <Button variant="outline" asChild>
               <Link to="/time">
                 <SlotIcon slot="stat_hours" className="mr-2 h-4 w-4" />
@@ -461,9 +490,8 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Main Content Grid */}
+        {/* Active Projects (66%) + Quick Actions (33%) */}
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Active Projects - spans 2 columns */}
           <Card className="border-0 shadow-sm lg:col-span-2">
             <CardHeader className="flex flex-row items-center justify-between pb-4">
               <CardTitle className="text-base font-semibold">Active Projects</CardTitle>
@@ -526,119 +554,169 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Right column: Notifications summary + Recent Activity */}
-          <div className="space-y-6">
-            {/* Notification summary */}
-            <Card className="border-0 shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Bell className="h-4 w-4" />
-                  Notifications
-                  {unreadNotifications.length > 0 && (
-                    <Badge variant="secondary" className="text-xs">
-                      {unreadNotifications.length} unread
-                    </Badge>
-                  )}
-                </CardTitle>
-                <Button variant="ghost" size="sm" asChild className="text-primary">
-                  <Link to="/notifications">
-                    View all
-                    <ArrowRight className="ml-1 h-4 w-4" />
-                  </Link>
-                </Button>
-              </CardHeader>
-              <CardContent>
+          <Card className="border-0 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <Link
+                to="/projects?new=1"
+                className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:shadow-md transition-shadow"
+              >
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <SlotIcon slot="sidebar_projects" className="h-5 w-5 text-primary" />
+                </div>
+                <span className="text-sm font-medium">Create project</span>
+              </Link>
+              <Link
+                to="/invoices"
+                className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:shadow-md transition-shadow"
+              >
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <SlotIcon slot="sidebar_invoices" className="h-5 w-5 text-primary" />
+                </div>
+                <span className="text-sm font-medium">Send invoice</span>
+              </Link>
+              <Link
+                to="/time"
+                className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:shadow-md transition-shadow"
+              >
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <SlotIcon slot="sidebar_time" className="h-5 w-5 text-primary" />
+                </div>
+                <span className="text-sm font-medium">Log time</span>
+              </Link>
+              <Link
+                to="/notes"
+                className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:shadow-md transition-shadow"
+              >
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <SlotIcon slot="sidebar_notes" className="h-5 w-5 text-primary" />
+                </div>
+                <span className="text-sm font-medium">New note</span>
+              </Link>
+              <Link
+                to="/clients"
+                className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:shadow-md transition-shadow"
+              >
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <SlotIcon slot="sidebar_clients" className="h-5 w-5 text-primary" />
+                </div>
+                <span className="text-sm font-medium">New client</span>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Notifications, Follow-ups, Recent Activity - 33% each, max 4 items */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Bell className="h-4 w-4" />
+                Notifications
+                {unreadNotifications.length > 0 && (
+                  <Badge variant="secondary" className="text-xs">
+                    {unreadNotifications.length} unread
+                  </Badge>
+                )}
+              </CardTitle>
+              <Button variant="ghost" size="sm" asChild className="text-primary">
+                <Link to="/notifications">
+                  View all
+                  <ArrowRight className="ml-1 h-4 w-4" />
+                </Link>
+              </Button>
+            </CardHeader>
+            <CardContent>
                 {notifications.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No notifications yet</p>
                 ) : (
                   <ul className="space-y-2">
-                    {notifications.slice(0, 3).map((n) => (
-                      <li key={n.id}>
-                        <Link
-                          to={n.link && n.link.startsWith('/') ? n.link : n.link ? `/${n.link}` : '/notifications'}
-                          className="flex items-start gap-2 text-sm hover:underline"
-                        >
-                          <span className={!n.read_at ? 'font-medium text-foreground' : 'text-muted-foreground'}>
-                            {n.title}
-                          </span>
-                        </Link>
-                        <p className="text-xs text-muted-foreground ml-0 truncate">
-                          {getTimeAgo(new Date(n.created_at))}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
+                    {notifications.slice(0, 4).map((n) => (
+                    <li key={n.id}>
+                      <Link
+                        to={n.link && n.link.startsWith('/') ? n.link : n.link ? `/${n.link}` : '/notifications'}
+                        className="flex items-start gap-2 text-sm hover:underline"
+                      >
+                        <span className={!n.read_at ? 'font-medium text-foreground' : 'text-muted-foreground'}>
+                          {n.title}
+                        </span>
+                      </Link>
+                      <p className="text-xs text-muted-foreground ml-0 truncate">
+                        {getTimeAgo(new Date(n.created_at))}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
 
-            {/* Follow-ups / Next actions */}
-            <Card className="border-0 shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-base font-semibold">Follow-ups</CardTitle>
-                <Button variant="ghost" size="sm" asChild className="text-primary">
-                  <Link to="/clients">
-                    View all
-                    <ArrowRight className="ml-1 h-4 w-4" />
-                  </Link>
-                </Button>
-              </CardHeader>
-              <CardContent>
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-base font-semibold">Follow-ups</CardTitle>
+              <Button variant="ghost" size="sm" asChild className="text-primary">
+                <Link to="/clients">
+                  View all
+                  <ArrowRight className="ml-1 h-4 w-4" />
+                </Link>
+              </Button>
+            </CardHeader>
+            <CardContent>
                 {followUps.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No follow-ups or next actions</p>
                 ) : (
                   <ul className="space-y-3">
-                    {followUps.map((c) => (
-                      <li key={c.id}>
-                        <Link
-                          to={`/clients?open=${c.id}`}
-                          className="block text-sm font-medium text-primary hover:underline"
-                        >
-                          {c.name}
-                        </Link>
-                        {c.next_follow_up_at && (
-                          <p className="text-xs text-muted-foreground">
-                            Follow-up {new Date(c.next_follow_up_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </p>
-                        )}
-                        {c.next_action && (
-                          <p className="text-xs text-muted-foreground truncate">
-                            Next: {c.next_action}
-                          </p>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
+                    {followUps.slice(0, 4).map((c) => (
+                    <li key={c.id}>
+                      <Link
+                        to={`/clients?open=${c.id}`}
+                        className="block text-sm font-medium text-primary hover:underline"
+                      >
+                        {c.name}
+                      </Link>
+                      {c.next_follow_up_at && (
+                        <p className="text-xs text-muted-foreground">
+                          Follow-up {new Date(c.next_follow_up_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                      )}
+                      {c.next_action && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          Next: {c.next_action}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
 
-            {/* Recent Activity */}
-            <Card className="border-0 shadow-sm">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
-              </CardHeader>
-              <CardContent>
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
+            </CardHeader>
+            <CardContent>
                 {recentActivity.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
                 ) : (
                   <div className="space-y-4">
-                    {recentActivity.map((activity) => (
-                      <div key={activity.id} className="flex items-start gap-3">
-                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                          <SlotIcon slot="task_clock" className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                        <div>
-                          <p className="text-sm">{activity.description}</p>
-                          <p className="text-xs text-muted-foreground">{activity.time_ago}</p>
-                        </div>
+                    {recentActivity.slice(0, 4).map((activity) => (
+                    <div key={activity.id} className="flex items-start gap-3">
+                      <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                        <SlotIcon slot="task_clock" className="h-4 w-4 text-muted-foreground" />
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                      <div>
+                        <p className="text-sm">{activity.description}</p>
+                        <p className="text-xs text-muted-foreground">{activity.time_ago}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Bottom Row */}

@@ -234,7 +234,7 @@ export default function Onboarding() {
             <div className="flex items-center gap-2">
               <AppLogo full height={28} />
             </div>
-            <Button variant="ghost" size="sm" onClick={() => signOut()} className="text-muted-foreground hover:text-foreground">
+            <Button variant="ghost" size="sm" onClick={() => signOut()} className="text-muted-foreground hover:text-primary-foreground">
               <LogOut className="h-4 w-4 mr-1.5" />
               Sign out
             </Button>

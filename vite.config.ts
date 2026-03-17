@@ -8,10 +8,15 @@ export default defineConfig({
     host: "localhost",
     port: 5173,
     strictPort: false,
-    // Open in default system browser. Do NOT use Cursor's in-editor browser—it hangs on localhost.
-    open: true,
-    hmr: {
-      overlay: false,
+    open: false,
+    hmr: { overlay: false },
+    watch: {
+      ignored: [
+        "**/docs/**",
+        "**/tmp-lp-rebuild/**",
+        "**/supabase/functions/**",
+        "**/magicuidesign-saas-template-*/**",
+      ],
     },
   },
   plugins: [react()],
@@ -20,8 +25,9 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  // Pre-bundle heavy deps to speed up first dev startup
+  // Only scan deps from the app entry (root index.html). Other HTML files (docs/, supabase/, tmp-*) break the scan and cause ERR_EMPTY_RESPONSE.
   optimizeDeps: {
+    entries: ["index.html"],
     include: ["react", "react-dom", "react-router-dom", "@supabase/supabase-js"],
   },
 });

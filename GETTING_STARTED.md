@@ -77,14 +77,14 @@ Your app talks to Supabase (your database and auth). It needs a file named `.env
    npm run dev
    ```
 2. Press Enter.
-3. You should see something like:
+3. Wait until you see **"ready"** and the Local URL (this can take 20–60 seconds the first time):
    ```
-   VITE v5.x.x  ready in xxx ms
-   ➜  Local:   http://localhost:8080/
+   VITE v7.x.x  ready in xxx ms
+   ➜  Local:   http://localhost:5173/
    ```
-4. Open your browser and go to: **http://localhost:8080**
+4. Open the app in **Chrome or Safari** (not Cursor’s in-editor browser): run `npm run open` or Cmd+click the `http://localhost:5173` link in the terminal.
 
-You should see the Lance landing page. You can click **Get Started** to sign in or sign up (using the Supabase project you set up).
+You should see the Lance landing page. The first load in the browser may take 30–60 seconds if your machine is busy (e.g. Cursor is “Analyzing…” files in the background). You can click **Get Started** to sign in or sign up (using the Supabase project you set up).
 
 ---
 
@@ -102,7 +102,7 @@ You should see the Lance landing page. You can click **Get Started** to sign in 
 | Install dependencies       | `npm install`  |
 | Start the app              | `npm run dev`  |
 | Stop the app               | Ctrl + C       |
-| Open the app in browser    | http://localhost:8080 |
+| Open the app in browser    | `npm run open` or open http://localhost:5173 |
 
 ---
 

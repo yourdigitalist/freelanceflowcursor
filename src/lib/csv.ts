@@ -103,6 +103,14 @@ export const INVOICES_CSV_HEADERS = [
   'client_name',
   'project_name',
   'notes',
+  'subtotal',
+  'tax_rate',
+  'tax_amount',
+  'total',
+  'line_description',
+  'quantity',
+  'unit_price',
+  'amount',
 ];
 
 export const INVOICE_ITEMS_CSV_HEADERS = [
@@ -137,6 +145,17 @@ export const CLIENTS_CSV_HEADERS = [
   'tax_id',
 ];
 
+export const PROJECTS_CSV_HEADERS = [
+  'name',
+  'client_name',
+  'description',
+  'status',
+  'budget',
+  'hourly_rate',
+  'start_date',
+  'due_date',
+];
+
 export function getTasksTemplateRows(): string[][] {
   return [TASKS_CSV_HEADERS];
 }
@@ -155,4 +174,8 @@ export function getInvoiceItemsTemplateRows(): string[][] {
 
 export function getClientsTemplateRows(): string[][] {
   return [CLIENTS_CSV_HEADERS];
+}
+
+export function getProjectsTemplateRows(): string[][] {
+  return [PROJECTS_CSV_HEADERS];
 }

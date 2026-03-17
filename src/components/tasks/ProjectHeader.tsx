@@ -100,21 +100,22 @@ export function ProjectHeader({
           {(onDownloadTaskTemplate || onExportTasksCsv || onOpenImportTasks) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4 mr-2" />
-                  CSV
+                <Button variant="outline" size="sm" title="Template, export, or import CSV">
+                  <Download className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={onDownloadTaskTemplate}>
-                  Download template
+                  <Download className="h-4 w-4 mr-2" />
+                  Template
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onExportTasksCsv}>
-                  Export tasks {exportTaskCount > 0 ? `(${exportTaskCount})` : ''}
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onOpenImportTasks}>
                   <Upload className="h-4 w-4 mr-2" />
-                  Import CSV
+                  Import
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

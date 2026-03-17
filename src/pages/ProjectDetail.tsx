@@ -449,22 +449,57 @@ export default function ProjectDetail() {
     if (!user || !id) return;
 
     try {
-      // Delete existing statuses
-      await supabase.from('project_statuses').delete().eq('project_id', id);
+      const { data: oldStatuses, error: fetchErr } = await supabase
+        .from('project_statuses')
+        .select('id, position')
+        .eq('project_id', id)
+        .order('position', { ascending: true });
+      if (fetchErr) throw fetchErr;
+      const oldOrdered = oldStatuses ?? [];
 
-      // Insert new statuses
+      // Insert new statuses first (before deleting old), so we can reassign tasks and avoid ON DELETE SET NULL clearing status_id
       const statusesToInsert = newStatuses.map((s, i) => ({
         ...s,
         project_id: id,
         user_id: user.id,
         position: i,
       }));
-
-      const { error } = await supabase.from('project_statuses').insert(statusesToInsert);
+      const { data: insertedRows, error } = await supabase
+        .from('project_statuses')
+        .insert(statusesToInsert)
+        .select('id, position');
       if (error) throw error;
+      const inserted = (insertedRows ?? []).slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+      const oldIdToNewId = new Map<string, string>();
+      for (let i = 0; i < oldOrdered.length && i < inserted.length; i++) {
+        const targetId = inserted[i]?.id;
+        if (targetId) oldIdToNewId.set(oldOrdered[i].id, targetId);
+      }
+
+      // Reassign tasks to new status ids before deleting old statuses (FK is ON DELETE SET NULL, so delete would clear status_id)
+      if (oldIdToNewId.size > 0) {
+        for (const [oldId, newId] of oldIdToNewId) {
+          const { error: updateErr } = await supabase
+            .from('tasks')
+            .update({ status_id: newId })
+            .eq('project_id', id)
+            .eq('status_id', oldId);
+          if (updateErr) throw updateErr;
+        }
+      }
+
+      // Now safe to delete old statuses (only the old rows; new ones stay)
+      if (oldOrdered.length > 0) {
+        const { error: deleteErr } = await supabase
+          .from('project_statuses')
+          .delete()
+          .in('id', oldOrdered.map((s) => s.id));
+        if (deleteErr) throw deleteErr;
+      }
 
       toast({ title: 'Statuses updated' });
       fetchStatuses();
+      fetchTasks();
     } catch (error: any) {
       toast({
         title: 'Error saving statuses',
@@ -592,13 +627,44 @@ export default function ProjectDetail() {
         toast({ title: 'CSV must have title column', variant: 'destructive' });
         return;
       }
+      const resolveStatusId = (rawStatus: string): string | null => {
+        if (!rawStatus || statuses.length === 0) return statuses[0]?.id ?? null;
+        const slug = rawStatus.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        const byExact = statuses.find((s) => s.name === rawStatus.trim());
+        if (byExact) return byExact.id;
+        const statusSlug = (s: { name: string }) => s.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        const bySlug = statuses.find((s) => statusSlug(s) === slug);
+        if (bySlug) return bySlug.id;
+        if (['completed', 'done', 'closed'].includes(slug)) {
+          const done = statuses.find((s) => s.is_done_status);
+          if (done) return done.id;
+        }
+        if (['in_progress', 'inprogress', 'progress', 'active'].includes(slug)) {
+          const progress = statuses.find((s) => statusSlug(s).includes('progress'));
+          if (progress) return progress.id;
+        }
+        if (['in_review', 'inreview', 'review'].includes(slug)) {
+          const review = statuses.find((s) => statusSlug(s).includes('review'));
+          if (review) return review.id;
+        }
+        if (['todo', 'not_started', 'haven\'t_started', 'havent_started', 'pending', 'open'].includes(slug)) {
+          const first = statuses.find((s) => !s.is_done_status) ?? statuses[0];
+          if (first) return first.id;
+        }
+        if (['cancelled', 'canceled'].includes(slug)) {
+          const cancelled = statuses.find((s) => statusSlug(s).includes('cancel'));
+          if (cancelled) return cancelled.id;
+          return statuses[0]?.id ?? null;
+        }
+        return statuses[0]?.id ?? null;
+      };
       let created = 0;
       for (const row of dataRows) {
         const title = row[titleIdx]?.trim();
         if (!title) continue;
         const description = descIdx >= 0 ? row[descIdx]?.trim() || null : null;
-        const statusName = statusIdx >= 0 ? row[statusIdx]?.trim() : '';
-        const statusId = statusName ? statuses.find((s) => s.name === statusName)?.id ?? null : statuses[0]?.id ?? null;
+        const statusRaw = statusIdx >= 0 ? row[statusIdx]?.trim() : '';
+        const statusId = resolveStatusId(statusRaw);
         const priority = (priorityIdx >= 0 ? row[priorityIdx]?.trim() : 'medium') || 'medium';
         const dueDate = dueDateIdx >= 0 ? row[dueDateIdx]?.trim() || null : null;
         const estimatedHours = estIdx >= 0 ? (parseFloat(row[estIdx]) || null) : null;

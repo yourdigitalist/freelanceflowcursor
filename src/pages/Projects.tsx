@@ -12,6 +12,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -26,7 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Table, MoreVertical, Trash2, LayoutGrid, List, Download } from '@/components/icons';
+import { Plus, Search, Table, MoreVertical, Trash2, LayoutGrid, List, Download, Upload } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import {
   DropdownMenu,
@@ -37,7 +38,7 @@ import {
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { EmojiPicker } from '@/components/ui/emoji-picker';
-import { downloadCsv, getTasksTemplateRows, TASKS_CSV_HEADERS, parseCsv } from '@/lib/csv';
+import { downloadCsv, getProjectsTemplateRows, PROJECTS_CSV_HEADERS, parseCsv } from '@/lib/csv';
 
 interface Client {
   id: string;
@@ -66,6 +67,13 @@ const ICON_COLORS = [
   '#9B63E9', '#22C55E', '#3B82F6', '#F59E0B', '#EF4444', '#EC4899', '#06B6D4', '#8B5CF6'
 ];
 
+const PROJECT_STATUSES: Array<{ value: string; label: string }> = [
+  { value: 'active', label: 'Active' },
+  { value: 'on_hold', label: 'On Hold' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
 export default function Projects() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -81,13 +89,9 @@ export default function Projects() {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [selectedEmoji, setSelectedEmoji] = useState('📁');
   const [selectedColor, setSelectedColor] = useState('#9B63E9');
-  const [exportTasksDialogOpen, setExportTasksDialogOpen] = useState(false);
-  const [exportTaskProjectId, setExportTaskProjectId] = useState<string>('all');
-  const [exportingTasks, setExportingTasks] = useState(false);
-  const [importTasksDialogOpen, setImportTasksDialogOpen] = useState(false);
-  const [importTaskProjectId, setImportTaskProjectId] = useState<string>('');
-  const [importingTasks, setImportingTasks] = useState(false);
-  const importTaskFileRef = useRef<HTMLInputElement>(null);
+  const [importProjectsDialogOpen, setImportProjectsDialogOpen] = useState(false);
+  const [importingProjects, setImportingProjects] = useState(false);
+  const projectsCsvInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) {
@@ -169,7 +173,6 @@ export default function Projects() {
       const { data, error } = await supabase
         .from('clients')
         .select('id, name')
-        .eq('status', 'active')
         .order('name');
 
       if (error) throw error;
@@ -281,120 +284,98 @@ export default function Projects() {
     setIsDialogOpen(true);
   };
 
-  const handleDownloadTaskTemplate = () => {
-    downloadCsv('tasks_template.csv', getTasksTemplateRows());
+  const downloadProjectsTemplate = () => {
+    downloadCsv('projects_template.csv', getProjectsTemplateRows());
     toast({ title: 'Template downloaded' });
   };
 
-  const handleExportAllTasks = async () => {
-    if (!user) return;
-    setExportingTasks(true);
-    try {
-      let query = supabase
-        .from('tasks')
-        .select('*, projects(name)')
-        .order('created_at', { ascending: false });
-      if (exportTaskProjectId !== 'all') {
-        query = query.eq('project_id', exportTaskProjectId);
-      }
-      const { data: tasksData, error } = await query;
-      if (error) throw error;
-      const tasks = (tasksData || []) as Array<{ project_id: string; title: string; description: string | null; status: string; status_id: string | null; priority: string | null; due_date: string | null; estimated_hours: number | null; projects: { name: string } | null }>;
-      const projectIds = [...new Set(tasks.map((t) => t.project_id))];
-      const { data: statusesData } = await supabase.from('project_statuses').select('id, name').in('project_id', projectIds);
-      const statusIdToName = new Map<string, string>();
-      (statusesData || []).forEach((s: { id: string; name: string }) => statusIdToName.set(s.id, s.name));
-      const rows = [
-        TASKS_CSV_HEADERS,
-        ...tasks.map((t) => [
-          t.title,
-          t.description ?? '',
-          (t.status_id && statusIdToName.get(t.status_id)) ?? t.status ?? '',
-          t.priority ?? '',
-          t.due_date ?? '',
-          String(t.estimated_hours ?? ''),
-          (t.projects as { name: string } | null)?.name ?? '',
-        ]),
-      ];
-      downloadCsv(`tasks_export_${format(new Date(), 'yyyy-MM-dd')}.csv`, rows);
-      toast({ title: `Exported ${tasks.length} tasks` });
-      setExportTasksDialogOpen(false);
-    } catch (err: any) {
-      toast({ title: 'Export failed', description: err?.message, variant: 'destructive' });
-    } finally {
-      setExportingTasks(false);
-    }
+  const exportProjectsCsv = () => {
+    const clientName = (p: Project) => (p.clients as { name?: string } | null)?.name ?? '';
+    const rows = [
+      PROJECTS_CSV_HEADERS,
+      ...filteredProjects.map((p) => [
+        p.name ?? '',
+        clientName(p),
+        p.description ?? '',
+        p.status ?? 'active',
+        p.budget != null ? String(p.budget) : '',
+        p.hourly_rate != null ? String(p.hourly_rate) : '',
+        p.start_date ?? '',
+        p.due_date ?? '',
+      ]),
+    ];
+    downloadCsv(`projects_export_${format(new Date(), 'yyyy-MM-dd')}.csv`, rows);
+    toast({ title: `Exported ${filteredProjects.length} project(s)` });
   };
 
-  const handleImportTasksCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user || !importTaskProjectId) return;
-    setImportingTasks(true);
+  const handleImportProjectsCsv = async (file: File) => {
+    if (!user) return;
+    setImportingProjects(true);
+    setImportProjectsDialogOpen(false);
     try {
-      const { data: statusesData } = await supabase
-        .from('project_statuses')
-        .select('id, name')
-        .eq('project_id', importTaskProjectId)
-        .order('position');
-      const statuses = statusesData || [];
-      const { count } = await supabase
-        .from('tasks')
-        .select('*', { count: 'exact', head: true })
-        .eq('project_id', importTaskProjectId);
-      let position = count ?? 0;
-
       const rows = await parseCsv(file);
       if (rows.length < 2) {
-        toast({ title: 'No data rows in file', variant: 'destructive' });
+        toast({ title: 'No data rows', description: 'CSV must have a header row and at least one data row.', variant: 'destructive' });
         return;
       }
-      const header = rows[0].map((h) => h.toLowerCase().replace(/\s/g, '_'));
-      const dataRows = rows.slice(1);
-      const titleIdx = header.indexOf('title');
-      const descIdx = header.indexOf('description');
-      const statusIdx = header.indexOf('status');
-      const priorityIdx = header.indexOf('priority');
-      const dueDateIdx = header.indexOf('due_date');
-      const estIdx = header.indexOf('estimated_hours');
-      if (titleIdx === -1) {
-        toast({ title: 'CSV must have title column', variant: 'destructive' });
-        return;
-      }
+      const headerRow = rows[0].map((h) => String(h).trim().toLowerCase().replace(/\s/g, '_'));
+      const get = (key: string) => {
+        const i = headerRow.indexOf(key.toLowerCase());
+        return i >= 0 ? (row: string[]) => (row[i] ?? '').trim() : () => '';
+      };
       let created = 0;
-      for (const row of dataRows) {
-        const title = row[titleIdx]?.trim();
-        if (!title) continue;
-        const description = descIdx >= 0 ? row[descIdx]?.trim() || null : null;
-        const statusName = statusIdx >= 0 ? row[statusIdx]?.trim() : '';
-        const statusId = statusName ? statuses.find((s: { name: string }) => s.name === statusName)?.id ?? null : statuses[0]?.id ?? null;
-        const priority = (priorityIdx >= 0 ? row[priorityIdx]?.trim() : 'medium') || 'medium';
-        const dueDate = dueDateIdx >= 0 ? row[dueDateIdx]?.trim() || null : null;
-        const estimatedHours = estIdx >= 0 ? (parseFloat(row[estIdx]) || null) : null;
-        const { error } = await supabase.from('tasks').insert({
-          title,
-          description,
-          status_id: statusId,
-          priority,
-          due_date: dueDate || null,
-          estimated_hours: estimatedHours,
-          project_id: importTaskProjectId,
+      const errors: string[] = [];
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r];
+        const name = get('name')(row);
+        if (!name) {
+          errors.push(`Row ${r + 1}: name required`);
+          continue;
+        }
+        const rawStatus = get('status')(row) || 'active';
+        const normalizedStatus = PROJECT_STATUSES.some((s) => s.value === rawStatus.toLowerCase())
+          ? rawStatus.toLowerCase()
+          : PROJECT_STATUSES.find((s) => s.label.toLowerCase() === rawStatus.toLowerCase())?.value ?? 'active';
+        const clientName = get('client_name')(row);
+        const clientId = clientName ? (clients.find((c) => c.name === clientName)?.id ?? null) : null;
+        const budgetVal = get('budget')(row);
+        const budget = budgetVal ? parseFloat(budgetVal) || null : null;
+        const rateVal = get('hourly_rate')(row);
+        const hourlyRate = rateVal ? parseFloat(rateVal) || null : null;
+        const startDate = get('start_date')(row) || null;
+        const dueDate = get('due_date')(row) || null;
+        const projectData = {
+          name,
+          description: get('description')(row) || null,
+          status: normalizedStatus,
+          budget,
+          hourly_rate: hourlyRate,
+          start_date: startDate ? new Date(startDate).toISOString().slice(0, 10) : null,
+          due_date: dueDate ? new Date(dueDate).toISOString().slice(0, 10) : null,
+          client_id: clientId,
+          icon_emoji: '📁',
+          icon_color: '#9B63E9',
           user_id: user.id,
-          position,
-          status: 'todo',
-        });
-        if (!error) {
+        };
+        const { error } = await supabase.from('projects').insert(projectData);
+        if (error) {
+          errors.push(`Row ${r + 1}: ${error.message}`);
+        } else {
           created++;
-          position++;
         }
       }
-      setImportTasksDialogOpen(false);
-      setImportTaskProjectId('');
-      if (importTaskFileRef.current) importTaskFileRef.current.value = '';
-      toast({ title: `Imported ${created} tasks` });
+      if (projectsCsvInputRef.current) projectsCsvInputRef.current.value = '';
+      fetchProjects();
+      if (created > 0) {
+        toast({ title: 'Import complete', description: `Created ${created} project(s).${errors.length ? ` ${errors.length} error(s).` : ''}` });
+      }
+      if (errors.length > 0 && created === 0) {
+        toast({ title: 'Import failed', description: errors.slice(0, 3).join(' '), variant: 'destructive' });
+      }
     } catch (err: any) {
-      toast({ title: 'Import failed', description: err?.message, variant: 'destructive' });
+      toast({ title: 'Import error', description: err.message, variant: 'destructive' });
     } finally {
-      setImportingTasks(false);
+      setImportingProjects(false);
     }
   };
 
@@ -410,25 +391,65 @@ export default function Projects() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <input
+              ref={projectsCsvInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleImportProjectsCsv(f);
+              }}
+            />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Download className="mr-2 h-4 w-4" />
-                  CSV
+                <Button variant="outline" size="sm" title="Template, export, or import CSV">
+                  <Download className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleDownloadTaskTemplate}>
-                  Download task template
+                <DropdownMenuItem onClick={downloadProjectsTemplate}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Template
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setExportTasksDialogOpen(true)}>
-                  Export all tasks
+                <DropdownMenuItem onClick={exportProjectsCsv} disabled={filteredProjects.length === 0}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setImportTasksDialogOpen(true)}>
-                  Import tasks
+                <DropdownMenuItem onClick={() => setImportProjectsDialogOpen(true)}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <Dialog open={importProjectsDialogOpen} onOpenChange={setImportProjectsDialogOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Import projects from CSV</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3 text-sm text-muted-foreground">
+                  <p>1. Download the <strong className="text-foreground">Template</strong> to get the correct column headers.</p>
+                  <p>2. Fill in your project data. <strong className="text-foreground">Name</strong> is required. Use <strong className="text-foreground">client_name</strong> to link a project to a client (must match an existing client name exactly).</p>
+                  <p>3. In the <strong className="text-foreground">status</strong> column, use one of these values:</p>
+                  <ul className="list-disc pl-5 space-y-0.5 text-foreground">
+                    {PROJECT_STATUSES.map((s) => (
+                      <li key={s.value}><code className="text-xs bg-muted px-1 rounded">{s.value}</code> — {s.label}</li>
+                    ))}
+                  </ul>
+                  <p>4. Save as CSV and choose your file below.</p>
+                </div>
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button variant="outline" size="sm" onClick={() => { downloadProjectsTemplate(); setImportProjectsDialogOpen(false); }}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Template
+                  </Button>
+                  <Button size="sm" onClick={() => projectsCsvInputRef.current?.click()}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Choose CSV file
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
             setIsDialogOpen(open);
             if (!open) {
@@ -588,77 +609,6 @@ export default function Projects() {
           </div>
         </div>
 
-        <Dialog open={exportTasksDialogOpen} onOpenChange={setExportTasksDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Export tasks to CSV</DialogTitle>
-              <DialogDescription>
-                Choose a project to export only that project&apos;s tasks, or export all tasks.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Project</Label>
-                <Select value={exportTaskProjectId} onValueChange={setExportTaskProjectId}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All projects</SelectItem>
-                    {filteredProjects.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button className="w-full" disabled={exportingTasks} onClick={handleExportAllTasks}>
-                {exportingTasks ? 'Exporting…' : 'Export CSV'}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={importTasksDialogOpen} onOpenChange={setImportTasksDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Import tasks from CSV</DialogTitle>
-              <DialogDescription>
-                Select a project and choose a CSV file. Tasks will be added to that project. Use the task template for the correct format.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Project</Label>
-                <Select value={importTaskProjectId} onValueChange={setImportTaskProjectId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filteredProjects.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <input
-                ref={importTaskFileRef}
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={handleImportTasksCsv}
-              />
-              <Button
-                variant="outline"
-                className="w-full"
-                disabled={importingTasks || !importTaskProjectId}
-                onClick={() => importTaskFileRef.current?.click()}
-              >
-                {importingTasks ? 'Importing…' : 'Choose CSV file'}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
         {/* Filters */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="relative flex-1 max-w-sm">
@@ -758,7 +708,7 @@ export default function Projects() {
                       </Badge>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>

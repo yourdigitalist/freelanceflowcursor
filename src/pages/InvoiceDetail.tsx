@@ -118,6 +118,7 @@ interface UserProfile {
   invoice_show_rate: boolean | null;
   invoice_show_line_date: boolean | null;
   invoice_footer: string | null;
+  invoice_bank_details_default: string | null;
   invoice_notes_default: string | null;
   invoice_email_message_default: string | null;
   invoice_email_subject_default: string | null;
@@ -260,10 +261,10 @@ export default function InvoiceDetail() {
       setInvoiceFooter(profile.invoice_footer || '');
     }
     if ((invoice as Invoice).bank_details == null || (invoice as Invoice).bank_details === '') {
-      setBankDetails('');
+      setBankDetails(profile?.invoice_bank_details_default ?? '');
     }
     preloadedDefaultsRef.current = invoice.id;
-  }, [invoice?.id, invoice?.notes, (invoice as Invoice)?.invoice_footer, (invoice as Invoice)?.bank_details, profile?.invoice_notes_default, profile?.invoice_footer]);
+  }, [invoice?.id, invoice?.notes, (invoice as Invoice)?.invoice_footer, (invoice as Invoice)?.bank_details, profile?.invoice_notes_default, profile?.invoice_footer, profile?.invoice_bank_details_default]);
 
   const getInvoiceStatusBadgeStyle = (status: string) => {
     switch (status) {
@@ -279,16 +280,33 @@ export default function InvoiceDetail() {
   };
 
   const fetchProfile = async () => {
+    const columnsWithBankDefault = 'full_name, email, company_name, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, currency, currency_display, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, invoice_footer, invoice_bank_details_default, invoice_notes_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_subject_default, reminder_body_default, hourly_rate';
+    const columnsWithoutBankDefault = 'full_name, email, company_name, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, currency, currency_display, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, invoice_footer, invoice_notes_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_subject_default, reminder_body_default, hourly_rate';
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('profiles')
-        .select('full_name, email, company_name, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, currency, currency_display, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, invoice_footer, invoice_notes_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_subject_default, reminder_body_default, hourly_rate')
+        .select(columnsWithBankDefault)
         .eq('user_id', user!.id)
         .maybeSingle();
       if (error) {
-        console.error('Error fetching profile:', error);
-        toast({ title: 'Could not load business details', description: 'Showing placeholder. You can still edit the invoice.', variant: 'destructive' });
-        return;
+        const tryFallback = /column.*does not exist|invoice_bank_details_default|42703/i.test(String(error.message));
+        if (tryFallback) {
+          const fallback = await supabase
+            .from('profiles')
+            .select(columnsWithoutBankDefault)
+            .eq('user_id', user!.id)
+            .maybeSingle();
+          if (fallback.error) {
+            console.error('Error fetching profile:', fallback.error);
+            toast({ title: 'Could not load business details', description: 'Showing placeholder. You can still edit the invoice.', variant: 'destructive' });
+            return;
+          }
+          data = fallback.data;
+        } else {
+          console.error('Error fetching profile:', error);
+          toast({ title: 'Could not load business details', description: 'Showing placeholder. You can still edit the invoice.', variant: 'destructive' });
+          return;
+        }
       }
       if (data) {
         setProfile(data);
@@ -1486,7 +1504,7 @@ export default function InvoiceDetail() {
           <CardHeader>
             <CardTitle>Bank details</CardTitle>
             {isEditMode && (
-              <p className="text-sm text-muted-foreground">Leave empty to use default from Company settings. Shown on the invoice PDF.</p>
+              <p className="text-sm text-muted-foreground">Leave empty to use the default from Invoice Settings. Shown on the invoice PDF.</p>
             )}
           </CardHeader>
           <CardContent>
@@ -1494,12 +1512,12 @@ export default function InvoiceDetail() {
               <Textarea
                 value={bankDetails}
                 onChange={(e) => setBankDetails(e.target.value)}
-                placeholder="Bank name, account number, routing, payment instructions..."
+                placeholder={profile?.invoice_bank_details_default ? 'Leave empty to use default from Invoice Settings' : 'Bank name, account number, routing, payment instructions...'}
                 rows={3}
               />
             ) : (
               <p className="text-sm text-muted-foreground whitespace-pre-wrap min-h-[2rem]">
-                {bankDetails.trim() || '—'}
+                {bankDetails.trim() || profile?.invoice_bank_details_default?.trim() || '—'}
               </p>
             )}
           </CardContent>

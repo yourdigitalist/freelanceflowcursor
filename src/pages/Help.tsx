@@ -76,6 +76,36 @@ const SIDEBAR_ITEMS: { key: HelpSection; label: string; slot: (typeof HELP_SLOTS
 
 const CONTACT_EMAIL = 'marina@yourdigitalist.com';
 
+const BUILD_IN_FAQS: { id: string; title: string; body: string }[] = [
+  {
+    id: 'upload-clients',
+    title: 'How do I upload clients?',
+    body: `<p>You can import many clients at once from a CSV file.</p>
+<ol class="list-decimal pl-5 space-y-2 my-3">
+  <li>Go to <strong>Clients</strong> and click <strong>Import</strong> to see full instructions.</li>
+  <li>Click <strong>Template</strong> to download a CSV with the correct column headers.</li>
+  <li>Fill in your data. <strong>Email</strong> is required for each row. If a client with that email already exists, the row will update that client.</li>
+  <li>In the <strong>status</strong> column, use one of these values (or the display label in parentheses):
+    <ul class="list-disc pl-5 mt-1">
+      <li><code>lead_new</code> (New lead)</li>
+      <li><code>lead_contacted</code> (Contacted)</li>
+      <li><code>lead_qualified</code> (Qualified)</li>
+      <li><code>proposal_sent</code> (Proposal sent)</li>
+      <li><code>negotiation</code> (Negotiation)</li>
+      <li><code>won</code> (Won)</li>
+      <li><code>onboarding</code> (Onboarding)</li>
+      <li><code>active</code> (Active)</li>
+      <li><code>paused</code> (Paused)</li>
+      <li><code>inactive</code> (Inactive)</li>
+      <li><code>closed_lost</code> (Closed lost)</li>
+    </ul>
+  </li>
+  <li>Save the file as CSV and choose it in the Import dialog.</li>
+</ol>
+<p>Tip: The Import dialog on the Clients page lists all accepted statuses and lets you download the template before choosing your file.</p>`,
+  },
+];
+
 function isHtml(s: string | null): boolean {
   if (!s || !s.trim()) return false;
   const t = s.trim();
@@ -307,7 +337,8 @@ export default function Help() {
     toast({ title: 'Opening your email client...', description: `Message will be sent to ${CONTACT_EMAIL}` });
   };
 
-  const faqItems = helpContent.filter((r) => r.category === 'faq');
+  const faqItemsFromDb = helpContent.filter((r) => r.category === 'faq');
+  const faqItems = [...BUILD_IN_FAQS, ...faqItemsFromDb];
   const onboardingItems = helpContent.filter((r) => r.category === 'onboarding');
 
   return (

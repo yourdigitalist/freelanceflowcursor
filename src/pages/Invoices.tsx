@@ -55,6 +55,7 @@ import { formatCurrency } from '@/lib/locale-data';
 interface Client {
   id: string;
   name: string;
+  company?: string | null;
 }
 
 interface Project {
@@ -82,7 +83,7 @@ interface Invoice {
   total: number;
   client_id: string | null;
   project_id: string | null;
-  clients: { name: string } | null;
+  clients: { name: string; company?: string | null } | null;
   projects: { name: string } | null;
   notes?: string | null;
   created_at: string;
@@ -192,7 +193,7 @@ export default function Invoices() {
         .from('invoices')
         .select(`
           *,
-          clients(name),
+          clients(name, company),
           projects(name)
         `)
         .order('created_at', { ascending: false });
@@ -210,7 +211,7 @@ export default function Invoices() {
     try {
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name')
+        .select('id, name, company')
         .order('name');
       if (error) throw error;
       setClients(data || []);
@@ -422,9 +423,17 @@ export default function Invoices() {
         inv.issue_date,
         inv.due_date ?? '',
         inv.status ?? '',
-        inv.clients?.name ?? '',
+        inv.clients?.name ?? inv.clients?.company ?? '',
         inv.projects?.name ?? '',
         inv.notes ?? '',
+        inv.subtotal ?? '',
+        inv.tax_rate ?? '',
+        inv.tax_amount ?? '',
+        inv.total ?? '',
+        '', // line_description
+        '', // quantity
+        '', // unit_price
+        '', // amount
       ]),
     ];
     downloadCsv(`invoices_export_${format(new Date(), 'yyyy-MM-dd')}.csv`, rows);
@@ -450,11 +459,31 @@ export default function Invoices() {
       const clientNameIdx = header.indexOf('client_name');
       const projectNameIdx = header.indexOf('project_name');
       const notesIdx = header.indexOf('notes');
+      const subtotalIdx = header.indexOf('subtotal');
+      const taxRateIdx = header.indexOf('tax_rate');
+      const taxAmountIdx = header.indexOf('tax_amount');
+      const totalIdx = header.indexOf('total');
+      const lineDescIdx = header.indexOf('line_description');
+      const quantityIdx = header.indexOf('quantity');
+      const unitPriceIdx = header.indexOf('unit_price');
+      const amountIdx = header.indexOf('amount');
       if (invoiceNumberIdx === -1 || issueDateIdx === -1) {
         toast({ title: 'CSV must have invoice_number and issue_date columns', variant: 'destructive' });
         return;
       }
       const defaultTax = taxes[0];
+      const parseNum = (val: string | undefined): number => {
+        if (val === undefined || val === null || val === '') return 0;
+        const n = Number(String(val).replace(/,/g, '').trim());
+        return Number.isFinite(n) ? n : 0;
+      };
+      const normalizeStatus = (s: string): string => {
+        const lower = (s || 'draft').trim().toLowerCase();
+        if (['draft', 'sent', 'paid', 'overdue'].includes(lower)) return lower;
+        if (lower === 'completed') return 'paid';
+        if (lower === 'in progress' || lower === 'in_progress') return 'sent';
+        return lower || 'draft';
+      };
       let created = 0;
       for (const row of dataRows) {
         const invoiceNumber = row[invoiceNumberIdx]?.trim();
@@ -463,7 +492,12 @@ export default function Invoices() {
         let clientId: string | null = null;
         const clientName = clientNameIdx >= 0 ? row[clientNameIdx]?.trim() : '';
         if (clientName) {
-          const client = clients.find((c) => c.name === clientName);
+          const key = clientName.toLowerCase().trim();
+          const client = clients.find(
+            (c) =>
+              (c.name && c.name.trim().toLowerCase() === key) ||
+              (c.company && c.company.trim().toLowerCase() === key)
+          );
           clientId = client?.id ?? null;
         }
         let projectId: string | null = null;
@@ -473,23 +507,55 @@ export default function Invoices() {
           projectId = project?.id ?? null;
         }
         const dueDate = dueDateIdx >= 0 ? row[dueDateIdx]?.trim() || null : null;
-        const status = (statusIdx >= 0 ? row[statusIdx]?.trim() : 'draft') || 'draft';
+        const rawStatus = statusIdx >= 0 ? row[statusIdx]?.trim() : 'draft';
+        const status = normalizeStatus(rawStatus);
         const notes = notesIdx >= 0 ? row[notesIdx]?.trim() || null : null;
-        const { error } = await supabase.from('invoices').insert({
-          invoice_number: invoiceNumber,
-          issue_date: issueDate,
-          due_date: dueDate || null,
-          status: status,
-          client_id: clientId,
-          project_id: projectId,
-          notes,
-          subtotal: 0,
-          tax_rate: defaultTax?.rate ?? 0,
-          tax_amount: 0,
-          total: 0,
-          user_id: user.id,
-        });
-        if (!error) created++;
+        const subtotal = subtotalIdx >= 0 ? parseNum(row[subtotalIdx]) : 0;
+        const taxRate = taxRateIdx >= 0 ? parseNum(row[taxRateIdx]) : (defaultTax?.rate ?? 0);
+        const taxAmount = taxAmountIdx >= 0 ? parseNum(row[taxAmountIdx]) : 0;
+        const total = totalIdx >= 0 ? parseNum(row[totalIdx]) : 0;
+        const lineDescription = lineDescIdx >= 0 ? row[lineDescIdx]?.trim() || null : null;
+        const quantity = quantityIdx >= 0 ? parseNum(row[quantityIdx]) : null;
+        const unitPrice = unitPriceIdx >= 0 ? parseNum(row[unitPriceIdx]) : 0;
+        const lineAmount = amountIdx >= 0 ? parseNum(row[amountIdx]) : 0;
+        const { data: inserted, error } = await supabase
+          .from('invoices')
+          .insert({
+            invoice_number: invoiceNumber,
+            issue_date: issueDate,
+            due_date: dueDate || null,
+            status,
+            client_id: clientId,
+            project_id: projectId,
+            notes,
+            subtotal,
+            tax_rate: taxRate,
+            tax_amount: taxAmount,
+            total,
+            user_id: user.id,
+          })
+          .select('id')
+          .single();
+        if (error) continue;
+        created++;
+        const hasLineItem =
+          (lineDescription && lineDescription.length > 0) ||
+          (lineAmount > 0) ||
+          (quantity != null && quantity > 0) ||
+          unitPrice > 0;
+        if (inserted?.id && hasLineItem) {
+          const desc = lineDescription || 'Line item';
+          const qty = quantity != null && quantity > 0 ? quantity : 1;
+          const up = unitPrice > 0 ? unitPrice : lineAmount / (qty || 1);
+          const amt = lineAmount > 0 ? lineAmount : up * qty;
+          await supabase.from('invoice_items').insert({
+            invoice_id: inserted.id,
+            description: desc,
+            quantity: qty,
+            unit_price: up,
+            amount: amt,
+          });
+        }
       }
       setImportDialogOpen(false);
       if (importFileInputRef.current) importFileInputRef.current.value = '';
@@ -523,21 +589,22 @@ export default function Invoices() {
           <div className="flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Download className="mr-2 h-4 w-4" />
-                  CSV
+                <Button variant="outline" size="sm" title="Template, export, or import CSV">
+                  <Download className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={handleDownloadTemplate}>
-                  Download template
+                  <Download className="h-4 w-4 mr-2" />
+                  Template
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportCsv}>
-                  Export CSV {filteredInvoices.length > 0 ? `(${filteredInvoices.length})` : ''}
+                <DropdownMenuItem onClick={handleExportCsv} disabled={filteredInvoices.length === 0}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setImportDialogOpen(true)}>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Import CSV
+                <DropdownMenuItem onClick={() => setImportDialogOpen(true)} disabled={importing}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  {importing ? 'Importing…' : 'Import'}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

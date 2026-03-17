@@ -36,6 +36,7 @@ import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
 import AdminComms from "./pages/admin/AdminComms";
 import LandingContentSettings from "./pages/admin/LandingContentSettings";
 import Notifications from "./pages/Notifications";
+import SearchResults from "./pages/SearchResults";
 import Help from "./pages/Help";
 import Notes from "./pages/Notes";
 import ReviewRequests from "./pages/ReviewRequests";
@@ -163,6 +164,7 @@ function AppRoutes() {
       <Route path="/reviews/:id" element={<ProtectedRoute><ReviewRequestDetail /></ProtectedRoute>} />
       <Route path="/review/:token" element={<ClientReview />} />
         <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+      <Route path="/search" element={<ProtectedRoute><SearchResults /></ProtectedRoute>} />
       <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
         <Route index element={<Navigate to="overview" replace />} />
