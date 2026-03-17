@@ -361,6 +361,24 @@ export default function Notes() {
     }
   }, [user, toast]);
 
+  const handleUploadNoteImage = useCallback(
+    async (file: File): Promise<string | null> => {
+      if (!user) return null;
+      try {
+        const ext = file.name.split('.').pop() || 'png';
+        const path = `${user.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const { error } = await supabase.storage.from('note-images').upload(path, file, { upsert: false });
+        if (error) throw error;
+        const { data } = supabase.storage.from('note-images').getPublicUrl(path);
+        return data.publicUrl;
+      } catch (err: any) {
+        toast({ title: 'Upload failed', description: err.message ?? 'Could not upload image', variant: 'destructive' });
+        return null;
+      }
+    },
+    [user, toast]
+  );
+
   const downloadNoteAsDoc = useCallback(() => {
     if (!selectedNote || !title) return;
     const dateLabel = selectedNote.updated_at
@@ -419,9 +437,9 @@ export default function Notes() {
                 </Button>
               </div>
             </div>
-            <div className="flex gap-1 items-center">
+            <div className="flex flex-wrap items-center gap-2">
               <Select value={folderFilter} onValueChange={setFolderFilter}>
-                <SelectTrigger className="h-8 text-xs flex-1">
+                <SelectTrigger className="h-8 text-xs w-[140px]">
                   <SelectValue placeholder="Folder" />
                 </SelectTrigger>
                 <SelectContent>
@@ -440,28 +458,28 @@ export default function Notes() {
                   </Button>
                 ) : null;
               })()}
+              {allTagsFromNotes.length > 0 && (
+                <Select
+                  value={tagFilter.length === 0 ? 'all' : tagFilter[0]}
+                  onValueChange={(v) => setTagFilter(v === 'all' ? [] : [v])}
+                >
+                  <SelectTrigger className="h-8 text-xs w-[120px]">
+                    <SelectValue placeholder="Tag" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All tags</SelectItem>
+                    {allTagsFromNotes.map((tag) => (
+                      <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {(folderFilter !== 'all' || tagFilter.length > 0) && (
+                <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setFolderFilter('all'); setTagFilter([]); }}>
+                  Clear filters
+                </Button>
+              )}
             </div>
-            {allTagsFromNotes.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                <span className="text-[10px] text-muted-foreground self-center mr-0.5">Tag:</span>
-                {allTagsFromNotes.map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => setTagFilter((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))}
-                    className={cn(
-                      'text-[10px] px-1.5 py-0.5 rounded border transition-colors',
-                      tagFilter.includes(tag) ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/80 border-transparent hover:bg-muted'
-                    )}
-                  >
-                    {tag}
-                  </button>
-                ))}
-                {tagFilter.length > 0 && (
-                  <button type="button" onClick={() => setTagFilter([])} className="text-[10px] text-muted-foreground hover:underline">Clear</button>
-                )}
-              </div>
-            )}
           </div>
           <ScrollArea className="flex-1">
             <div className="p-2 space-y-1.5">
@@ -576,6 +594,7 @@ export default function Notes() {
                   coverColor={coverColor}
                   onCoverColorChange={setCoverColor}
                   onRequestCreateTask={handleRequestCreateTask}
+                  onUploadImage={handleUploadNoteImage}
                   updatedAt={selectedNote.created_at}
                   clientName={selectedNote.client_id ? (clients.find((c) => c.id === selectedNote.client_id)?.name ?? null) : null}
                   projectName={selectedNote.project_id ? (projects.find((p) => p.id === selectedNote.project_id)?.name ?? null) : null}

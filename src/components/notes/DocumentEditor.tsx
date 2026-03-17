@@ -22,7 +22,6 @@ try {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Tag,
   CheckSquare,
@@ -36,7 +35,6 @@ import {
   Link,
   Image,
   Quote,
-  Code,
   RemoveFormatting,
   SeparatorHorizontal,
   type LucideIcon,
@@ -144,6 +142,7 @@ interface DocumentEditorProps {
   coverColor?: string;
   onCoverColorChange?: (color: string) => void;
   onRequestCreateTask?: (selectedText: string) => void;
+  onUploadImage?: (file: File) => Promise<string | null>;
   updatedAt?: string | null;
   placeholder?: string;
   className?: string;
@@ -165,6 +164,7 @@ export function DocumentEditor({
   coverColor = '',
   onCoverColorChange,
   onRequestCreateTask,
+  onUploadImage,
   updatedAt,
   placeholder = 'Write your note… Type @ to link a client, project, or task.',
   className,
@@ -181,6 +181,10 @@ export function DocumentEditor({
   const [coverPopoverOpen, setCoverPopoverOpen] = useState(false);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
+  const [imageUploading, setImageUploading] = useState(false);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [tagsDialogOpen, setTagsDialogOpen] = useState(false);
   const [newTagInput, setNewTagInput] = useState('');
   const [selectionRange, setSelectionRange] = useState<{ index: number; length: number } | null>(null);
   const [createTaskButtonPos, setCreateTaskButtonPos] = useState<{ top: number; left: number } | null>(null);
@@ -194,6 +198,14 @@ export function DocumentEditor({
     if (!q) return;
     const sel = q.getSelection(true);
     if (sel) savedSelectionRef.current = { index: sel.index, length: sel.length };
+  }, []);
+
+  const getSelectionOrSaved = useCallback(() => {
+    const q = quillRef.current?.getEditor();
+    if (!q) return null;
+    const sel = q.getSelection(true);
+    if (sel) return sel;
+    return savedSelectionRef.current;
   }, []);
 
   const applyFormat = useCallback((name: string, value?: string | number | boolean) => {
@@ -218,34 +230,72 @@ export function DocumentEditor({
     }
   }, [getSelectionOrSaved]);
 
-  const getSelectionOrSaved = useCallback(() => {
+  const openLinkDialog = useCallback(() => {
     const q = quillRef.current?.getEditor();
-    if (!q) return null;
-    const sel = q.getSelection(true);
-    if (sel) return sel;
-    return savedSelectionRef.current;
-  }, []);
+    if (!q) return;
+    const sel = getSelectionOrSaved();
+    if (sel) {
+      const format = q.getFormat(sel.index);
+      const current = typeof format.link === 'string' ? format.link : '';
+      setLinkUrl(current || 'https://');
+      setLinkDialogOpen(true);
+    }
+  }, [getSelectionOrSaved]);
 
-  const handleLink = useCallback(() => {
+  const handleLinkApply = useCallback(() => {
     const q = quillRef.current?.getEditor();
     if (!q) return;
     const sel = getSelectionOrSaved();
     const index = sel?.index ?? 0;
     const length = sel?.length ?? 0;
     q.setSelection(index, length, 'user');
-    const format = q.getFormat(index);
-    const currentLink = typeof format.link === 'string' ? format.link : '';
-    const url = prompt('Link URL', currentLink || 'https://');
-    if (url == null) return;
-    q.setSelection(index, length, 'user');
-    q.format('link', url || false, 'user');
-  }, [getSelectionOrSaved]);
+    q.format('link', linkUrl.trim() || false, 'user');
+    setLinkDialogOpen(false);
+    setLinkUrl('');
+  }, [linkUrl, getSelectionOrSaved]);
 
   const openImageDialog = useCallback(() => {
     saveSelection();
     setImageUrl('');
     setImageDialogOpen(true);
   }, [saveSelection]);
+
+  const handleImageFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file || !file.type.startsWith('image/')) return;
+      const q = quillRef.current?.getEditor();
+      if (!q) return;
+      const sel = getSelectionOrSaved();
+      const index = sel?.index ?? q.getLength() - 1;
+      setImageUploading(true);
+      try {
+        let url: string | null = null;
+        if (onUploadImage) {
+          url = await onUploadImage(file);
+        }
+        if (!url) {
+          url = await new Promise<string>((res, rej) => {
+            const r = new FileReader();
+            r.onload = () => res(r.result as string);
+            r.onerror = rej;
+            r.readAsDataURL(file);
+          });
+        }
+        if (url) {
+          q.insertEmbed(index, 'image', url, 'user');
+          q.setSelection(index + 1, 0, 'user');
+          setImageDialogOpen(false);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setImageUploading(false);
+      }
+    },
+    [getSelectionOrSaved, onUploadImage]
+  );
 
   const handleInsertImageFromDialog = useCallback(() => {
     const q = quillRef.current?.getEditor();
@@ -270,6 +320,14 @@ export function DocumentEditor({
       (q as { format: (name: string, value: boolean, source?: string) => void }).format('clean', false, 'user');
     }
   }, [getSelectionOrSaved]);
+
+  const handleHeaderChange = useCallback((value: string) => {
+    const q = quillRef.current?.getEditor();
+    if (!q) return;
+    const sel = savedSelectionRef.current;
+    if (sel) q.setSelection(sel.index, sel.length, 'user');
+    q.format('header', value ? Number(value) : false, 'user');
+  }, []);
 
   const handleInsertDivider = useCallback(() => {
     if (!dividerBlotRegistered) return;
@@ -509,56 +567,60 @@ export function DocumentEditor({
       <div className="px-4 py-2 flex items-center gap-2 flex-wrap border-b">
         <span className="text-xs text-muted-foreground">Type <kbd className="px-1 py-0.5 rounded bg-muted font-mono">@</kbd> in the editor to link a client, project, or task</span>
         <div className="flex-1" />
-        <Popover open={tagsPopoverOpen} onOpenChange={setTagsPopoverOpen} modal={false}>
-          <PopoverTrigger asChild>
-            <Button type="button" variant="ghost" size="sm" className="text-muted-foreground">
-              <Tag className="h-4 w-4 mr-1.5" />
-              Tags
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64" align="end" onOpenAutoFocus={(e) => e.preventDefault()}>
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Tags</p>
-              <div className="flex gap-2 flex-wrap">
-                {tags.map((t) => (
-                  <Badge key={t} variant="secondary" className="pr-1">
-                    {t}
-                    <button type="button" className="ml-1 rounded hover:bg-muted-foreground/20" onClick={() => removeTag(t)} aria-label={`Remove ${t}`}>×</button>
-                  </Badge>
-                ))}
-              </div>
-              {suggestedTags.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Reuse</p>
-                  <div className="flex gap-1 flex-wrap">
-                    {suggestedTags.filter((t) => !tags.includes(t)).map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => { onTagsChange([...tags, t]); }}
-                        className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80"
-                      >
-                        + {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Add new tag"
-                  value={newTagInput}
-                  onChange={(e) => setNewTagInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                  className="h-8"
-                />
-                <Button size="sm" onClick={addTag}>Add</Button>
-              </div>
-              <Button size="sm" variant="secondary" className="mt-2 w-full" onClick={() => setTagsPopoverOpen(false)}>Done</Button>
-            </div>
-          </PopoverContent>
-        </Popover>
+        <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setTagsDialogOpen(true)}>
+          <Tag className="h-4 w-4 mr-1.5" />
+          Tags
+        </Button>
       </div>
+
+      {/* Tags dialog - stays open while adding so input works */}
+      <Dialog open={tagsDialogOpen} onOpenChange={setTagsDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Tags</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="flex gap-2 flex-wrap">
+              {tags.map((t) => (
+                <Badge key={t} variant="secondary" className="pr-1">
+                  {t}
+                  <button type="button" className="ml-1 rounded hover:bg-muted-foreground/20" onClick={() => removeTag(t)} aria-label={`Remove ${t}`}>×</button>
+                </Badge>
+              ))}
+            </div>
+            {suggestedTags.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Reuse</p>
+                <div className="flex gap-1 flex-wrap">
+                  {suggestedTags.filter((t) => !tags.includes(t)).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => onTagsChange([...tags, t])}
+                      className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80"
+                    >
+                      + {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add new tag"
+                value={newTagInput}
+                onChange={(e) => setNewTagInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                className="h-8"
+              />
+              <Button size="sm" onClick={addTag}>Add</Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setTagsDialogOpen(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Editor - white background */}
       <div className="px-4 pb-6">
@@ -568,16 +630,14 @@ export function DocumentEditor({
             className="ql-toolbar ql-snow flex flex-wrap items-center gap-0.5 p-2 border-b border-muted rounded-t-lg bg-muted/30"
             onMouseDown={(e) => {
               saveSelection();
+              if ((e.target as HTMLElement).closest?.('select')) return;
               e.preventDefault();
             }}
           >
             <select
               className="ql-header h-8 min-w-[6rem] rounded border border-transparent bg-transparent text-sm px-2 text-muted-foreground hover:text-foreground"
               defaultValue=""
-              onChange={(e) => {
-                const v = e.target.value;
-                applyFormat('header', v ? Number(v) : false);
-              }}
+              onChange={(e) => handleHeaderChange(e.target.value)}
             >
               <option value="">Normal</option>
               <option value="1">Heading 1</option>
@@ -593,10 +653,9 @@ export function DocumentEditor({
             <ToolbarButton Icon={ListOrdered} onClick={() => applyFormatToggle('list', 'ordered')} title="Numbered list (toggle)" />
             <ToolbarButton Icon={Square} onClick={() => applyFormatToggle('list', 'unchecked')} title="Checklist (toggle)" />
             <span className="w-px h-5 bg-border mx-0.5" />
-            <ToolbarButton Icon={Link} onClick={handleLink} title="Link (select text first)" />
+            <ToolbarButton Icon={Link} onClick={openLinkDialog} title="Link (select text first)" />
             <ToolbarButton Icon={Image} onClick={openImageDialog} title="Insert image" />
             <ToolbarButton Icon={Quote} onClick={() => applyFormatToggle('blockquote')} title="Blockquote (toggle)" />
-            <ToolbarButton Icon={Code} onClick={() => applyFormatToggle('code-block')} title="Code block – format as code snippet (toggle)" />
             {dividerBlotRegistered && (
               <ToolbarButton Icon={SeparatorHorizontal} onClick={handleInsertDivider} title="Line separator" />
             )}
@@ -656,13 +715,55 @@ export function DocumentEditor({
         </div>
       )}
 
-      {/* Insert image dialog */}
+      {/* Link dialog - apply URL to selected text */}
+      <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Link</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="link-url">URL</Label>
+              <Input
+                id="link-url"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https://"
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleLinkApply())}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleLinkApply}>Apply</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Insert image dialog - upload or URL */}
       <Dialog open={imageDialogOpen} onOpenChange={setImageDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Insert image</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Upload image</Label>
+              <input
+                type="file"
+                accept="image/*"
+                className="block w-full text-sm text-muted-foreground file:mr-2 file:rounded file:border-0 file:bg-primary file:px-4 file:py-2 file:text-primary-foreground"
+                onChange={handleImageFile}
+                disabled={!!imageUploading}
+              />
+              {imageUploading && <p className="text-xs text-muted-foreground">Uploading…</p>}
+            </div>
+            <div className="relative">
+              <span className="absolute left-0 top-1/2 -translate-y-1/2 w-full border-t" />
+              <span className="relative block text-center">
+                <span className="bg-background px-2 text-xs text-muted-foreground">or paste URL</span>
+              </span>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="image-url">Image URL</Label>
               <Input
@@ -676,7 +777,7 @@ export function DocumentEditor({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setImageDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleInsertImageFromDialog} disabled={!imageUrl.trim()}>Insert</Button>
+            <Button onClick={handleInsertImageFromDialog} disabled={!imageUrl.trim()}>Insert from URL</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
