@@ -266,11 +266,16 @@ export default function ReviewRequests() {
 
   const handleSaveRequest = async () => {
     if (!user || !requestTitle.trim() || !requestClientId) return;
+    if (!editingRequest && requestFiles.length === 0) {
+      toast({ title: 'Please upload at least one file', variant: 'destructive' });
+      return;
+    }
     
     setUploading(true);
     
     try {
       let requestId = editingRequest?.id;
+      let createdNew = false;
       
       if (editingRequest) {
         const { error } = await supabase
@@ -305,33 +310,42 @@ export default function ReviewRequests() {
         
         if (error) throw error;
         requestId = data.id;
+        createdNew = true;
       }
       
       // Upload files for new requests using validated edge function
       if (!editingRequest && requestFiles.length > 0 && requestId) {
-        for (const file of requestFiles) {
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('review_request_id', requestId);
-          
-          const { data: session } = await supabase.auth.getSession();
-          
-          const response = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-review-file`,
-            {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${session?.session?.access_token}`,
-              },
-              body: formData,
+        try {
+          for (const file of requestFiles) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('review_request_id', requestId);
+
+            const { data: session } = await supabase.auth.getSession();
+
+            const response = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-review-file`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${session?.session?.access_token}`,
+                },
+                body: formData,
+              }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok || result.error) {
+              throw new Error(result.error || 'Failed to upload file');
             }
-          );
-          
-          const result = await response.json();
-          
-          if (!response.ok || result.error) {
-            throw new Error(result.error || 'Failed to upload file');
           }
+        } catch (e) {
+          // Roll back: avoid creating an unsent approval with no files
+          if (createdNew && requestId) {
+            await supabase.from('review_requests').delete().eq('id', requestId);
+          }
+          throw e;
         }
       }
       
@@ -345,18 +359,18 @@ export default function ReviewRequests() {
       // Send approval email when creating (same as "Send to client" on detail page)
       if (!editingRequest && requestId) {
         try {
-          const { data: { session } } = await supabase.auth.getSession();
-          const response = await supabase.functions.invoke('send-review-request', {
+          const { data, error } = await supabase.functions.invoke('send-review-request', {
             body: { reviewRequestId: requestId, origin: getSiteUrl() || window.location.origin },
           });
-          if (session && response.data && !response.error) {
-            await supabase.from('review_requests').update({ sent_at: new Date().toISOString() }).eq('id', requestId);
-            toast({ title: 'Approval sent', description: 'Recipients have been emailed the review link.' });
-          } else {
-            toast({ title: 'Request created', description: 'Share the link with clients from the approval page.' });
-          }
-        } catch (_) {
-          toast({ title: 'Request created', description: 'Share the link with clients from the approval page.' });
+          if (error) throw error;
+          if (data?.error) throw new Error(data.error);
+          toast({ title: 'Approval sent', description: 'Recipients have been emailed the review link.' });
+        } catch (err: any) {
+          toast({
+            title: 'Email failed to send',
+            description: err?.message || 'The request was created, but email could not be sent. You can still share the link from the approval page.',
+            variant: 'destructive',
+          });
         }
       } else if (editingRequest) {
         toast({ title: 'Request updated' });
@@ -396,28 +410,20 @@ export default function ReviewRequests() {
 
   const handleSendRequest = async (request: ReviewRequest) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const response = await supabase.functions.invoke('send-review-request', {
+      const { data, error } = await supabase.functions.invoke('send-review-request', {
         body: { reviewRequestId: request.id, origin: getSiteUrl() || window.location.origin },
       });
-      if (session && response.data && !response.error) {
-        toast({ title: 'Review request sent', description: 'Recipients have been emailed the review link.' });
-        fetchData();
-        return;
-      }
-    } catch (_) {
-      // Fall through to mark as sent locally
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: 'Review request sent', description: 'Recipients have been emailed the review link.' });
+      fetchData();
+    } catch (err: any) {
+      toast({
+        title: 'Error sending',
+        description: err?.message || 'Could not send email. You can still copy/share the link.',
+        variant: 'destructive',
+      });
     }
-    const { error } = await supabase
-      .from('review_requests')
-      .update({ sent_at: new Date().toISOString() })
-      .eq('id', request.id);
-    if (error) {
-      toast({ title: 'Error sending request', variant: 'destructive' });
-      return;
-    }
-    toast({ title: 'Request marked as sent', description: 'Share the link with your client' });
-    fetchData();
   };
 
   const getClientReviewUrl = (request: ReviewRequest) => {

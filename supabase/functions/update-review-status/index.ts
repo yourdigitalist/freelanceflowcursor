@@ -148,16 +148,31 @@ serve(async (req) => {
       });
     }
 
-    // When client approves and the review is linked to a project, notify the freelancer to invoice
-    if (status === "approved" && request.project_id && request.user_id) {
-      const invoiceLink = `/invoices?project_id=${request.project_id}&from_review=1`;
-      await supabase.from("notifications").insert({
-        user_id: request.user_id,
-        type: "review",
-        title: "Review approved",
-        body: "Create an invoice for this project?",
-        link: invoiceLink,
-      });
+    // In-app notification for the freelancer (request owner) when client approves or rejects
+    if (request.user_id) {
+      if (status === "approved") {
+        const link = request.project_id
+          ? `/invoices?project_id=${request.project_id}&from_review=1`
+          : "/review-requests";
+        const body = request.project_id
+          ? "Create an invoice for this project?"
+          : "A client approved your review request.";
+        await supabase.from("notifications").insert({
+          user_id: request.user_id,
+          type: "review",
+          title: "Review approved",
+          body,
+          link,
+        });
+      } else {
+        await supabase.from("notifications").insert({
+          user_id: request.user_id,
+          type: "review",
+          title: "Review rejected",
+          body: "A client rejected your review request.",
+          link: "/review-requests",
+        });
+      }
     }
 
     console.log(`Review ${request.id} ${status} by ${commenter_email}`);

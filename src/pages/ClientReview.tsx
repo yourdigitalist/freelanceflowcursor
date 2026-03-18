@@ -36,6 +36,11 @@ interface ReviewRequest {
   due_date: string | null;
 }
 
+interface SenderProfile {
+  business_logo: string | null;
+  business_name: string | null;
+}
+
 interface ReviewFile {
   id: string;
   file_url: string;
@@ -64,6 +69,7 @@ export default function ClientReview() {
   const { toast } = useToast();
   
   const [request, setRequest] = useState<ReviewRequest | null>(null);
+  const [senderProfile, setSenderProfile] = useState<SenderProfile | null>(null);
   const [files, setFiles] = useState<ReviewFile[]>([]);
   const [comments, setComments] = useState<ReviewComment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,6 +111,7 @@ export default function ClientReview() {
       }
 
       setRequest(data.request);
+      setSenderProfile(data.profile || null);
       setFiles(data.files || []);
       setComments(data.comments || []);
       
@@ -162,6 +169,21 @@ export default function ClientReview() {
     if (!request || !selectedFile || !commentContent.trim()) return;
     
     setSubmitting(true);
+    const tempId = `temp_${Date.now()}`;
+    const optimistic: ReviewComment = {
+      id: tempId,
+      content: commentContent.trim(),
+      commenter_name: commenterName,
+      commenter_email: commenterEmail,
+      x_position: pendingPin?.x || null,
+      y_position: pendingPin?.y || null,
+      created_at: new Date().toISOString(),
+      review_file_id: selectedFile.id,
+    };
+    setComments((prev) => [...prev, optimistic]);
+    setCommentContent('');
+    setPendingPin(null);
+    setCommentDialogOpen(false);
     
     try {
       // Use edge function to submit comment (works without auth)
@@ -178,19 +200,20 @@ export default function ClientReview() {
       });
 
       if (submitError || data?.error) {
+        setComments((prev) => prev.filter((c) => c.id !== tempId));
         toast({ title: data?.error || 'Error adding comment', variant: 'destructive' });
         setSubmitting(false);
         return;
       }
 
-      toast({ title: 'Comment added' });
-      setCommentContent('');
-      setPendingPin(null);
-      setCommentDialogOpen(false);
+      // Replace optimistic with real comment from server
+      if (data?.comment) {
+        setComments((prev) => prev.map((c) => (c.id === tempId ? data.comment : c)));
+      }
       setSubmitting(false);
-      fetchData();
     } catch (err) {
       console.error('Error submitting comment:', err);
+      setComments((prev) => prev.filter((c) => c.id !== tempId));
       toast({ title: 'Error adding comment', variant: 'destructive' });
       setSubmitting(false);
     }
@@ -203,9 +226,11 @@ export default function ClientReview() {
       setIdentityDialogOpen(true);
       return;
     }
-    
+
+    const previousStatus = request.status;
+    setRequest((prev) => (prev ? { ...prev, status: approved ? 'approved' : 'rejected' } : null));
+
     try {
-      // Use edge function to update status (works without auth)
       const { data, error: submitError } = await supabase.functions.invoke('update-review-status', {
         body: {
           token,
@@ -216,6 +241,7 @@ export default function ClientReview() {
       });
 
       if (submitError || data?.error) {
+        setRequest((prev) => (prev ? { ...prev, status: previousStatus } : null));
         toast({ title: data?.error || 'Error updating status', variant: 'destructive' });
         return;
       }
@@ -224,6 +250,7 @@ export default function ClientReview() {
       fetchData();
     } catch (err) {
       console.error('Error updating status:', err);
+      setRequest((prev) => (prev ? { ...prev, status: previousStatus } : null));
       toast({ title: 'Error updating status', variant: 'destructive' });
     }
   };
@@ -276,11 +303,27 @@ export default function ClientReview() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold">{request.title}</h1>
-              <p className="text-sm text-muted-foreground">v{request.version}</p>
+              <div className="flex items-center gap-3">
+                {senderProfile?.business_logo ? (
+                  <img
+                    src={senderProfile.business_logo}
+                    alt={senderProfile.business_name || 'Company logo'}
+                    className="h-7 w-7 rounded object-contain bg-white border"
+                    loading="eager"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                ) : null}
+                <div>
+                  <h1 className="text-xl font-semibold">{request.title}</h1>
+                  <p className="text-sm text-muted-foreground">v{request.version}</p>
+                </div>
+              </div>
             </div>
             <div className="flex items-center gap-3">
-              <Badge variant={request.status === 'approved' ? 'default' : request.status === 'rejected' ? 'destructive' : 'secondary'}>
+              <Badge
+                variant={request.status === 'rejected' ? 'destructive' : 'secondary'}
+                className={request.status === 'approved' ? 'bg-green-600 hover:bg-green-600 text-white border-0' : ''}
+              >
                 {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
               </Badge>
               <Button variant="outline" size="sm" onClick={() => submitApproval(false)}>

@@ -1,3 +1,8 @@
+/* Editor content: extra top padding so first line isn't flush with top */
+.rich-text-editor-wrapper .ql-editor {
+  padding-top: 14px;
+}
+
 /* Custom toolbar (Lucide) – layout only */
 .rich-text-editor-wrapper .ql-toolbar.ql-snow {
   display: flex;

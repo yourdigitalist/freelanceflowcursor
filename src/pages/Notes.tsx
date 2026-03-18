@@ -372,7 +372,15 @@ export default function Notes() {
         const { data } = supabase.storage.from('note-images').getPublicUrl(path);
         return data.publicUrl;
       } catch (err: any) {
-        toast({ title: 'Upload failed', description: err.message ?? 'Could not upload image', variant: 'destructive' });
+        const msg = err.message ?? 'Could not upload image';
+        const isBucketMissing = /bucket|not found|does not exist/i.test(String(msg));
+        toast({
+          title: 'Upload failed',
+          description: isBucketMissing
+            ? 'Note images storage is not set up. Create the "note-images" bucket in Supabase (Storage) or run the migration: supabase db push.'
+            : msg,
+          variant: 'destructive',
+        });
         return null;
       }
     },

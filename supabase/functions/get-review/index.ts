@@ -86,7 +86,8 @@ serve(async (req) => {
         description,
         version,
         status,
-        due_date
+        due_date,
+        user_id
       `)
       .eq("share_token", token)
       .single();
@@ -96,6 +97,20 @@ serve(async (req) => {
         JSON.stringify({ error: "Review not found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Fetch sender branding for client header (logo + business name)
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("business_logo, business_name, full_name")
+      .eq("user_id", request.user_id)
+      .maybeSingle();
+
+    // Ensure logo is a loadable absolute URL (profiles may store path or full URL)
+    let businessLogo: string | null = profile?.business_logo || null;
+    if (businessLogo && !businessLogo.startsWith("http")) {
+      const path = businessLogo.replace(/^\/+/, "");
+      businessLogo = `${supabaseUrl}/storage/v1/object/public/business-logos/${path}`;
     }
 
     // Get files
@@ -134,6 +149,10 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         request, 
+        profile: {
+          business_logo: businessLogo,
+          business_name: profile?.business_name || profile?.full_name || null,
+        },
         files: filesWithSignedUrls, 
         comments: comments || [] 
       }),

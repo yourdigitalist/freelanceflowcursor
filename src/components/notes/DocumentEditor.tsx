@@ -622,9 +622,21 @@ export function DocumentEditor({
         </DialogContent>
       </Dialog>
 
-      {/* Editor - white background */}
+      {/* Editor - white background. Clicks on links open in new tab (Quill doesn't do this by default). */}
       <div className="px-4 pb-6">
-        <div className="rich-text-editor-wrapper [&_.ql-toolbar]:rounded-t-lg [&_.ql-container]:rounded-b-lg [&_.ql-editor]:min-h-[300px] [&_.ql-editor]:text-base [&_.ql-container]:bg-white [&_.ql-editor]:bg-white [&_.ql-snow]:border-muted">
+        <div
+          className="rich-text-editor-wrapper [&_.ql-toolbar]:rounded-t-lg [&_.ql-container]:rounded-b-lg [&_.ql-editor]:min-h-[300px] [&_.ql-editor]:text-base [&_.ql-container]:bg-white [&_.ql-editor]:bg-white [&_.ql-snow]:border-muted"
+          onClick={(e) => {
+            const a = (e.target as HTMLElement).closest?.('a[href]');
+            if (a) {
+              const href = (a as HTMLAnchorElement).href;
+              if (href && !href.startsWith('javascript:')) {
+                e.preventDefault();
+                window.open(href, '_blank', 'noopener,noreferrer');
+              }
+            }
+          }}
+        >
           {/* Custom toolbar: mousedown keeps editor focus so selection is preserved for Link/Image/Code/Clear */}
           <div
             className="ql-toolbar ql-snow flex flex-wrap items-center gap-0.5 p-2 border-b border-muted rounded-t-lg bg-muted/30"

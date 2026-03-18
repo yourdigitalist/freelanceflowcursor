@@ -69,6 +69,12 @@ serve(async (req) => {
   }
 
   try {
+    if (!Deno.env.get("RESEND_API_KEY")) {
+      return new Response(JSON.stringify({ error: "Email is not configured (missing RESEND_API_KEY)." }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
