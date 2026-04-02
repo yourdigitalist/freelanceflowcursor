@@ -1,7 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getBrowserCountry } from '@/lib/locale-data';
-import { countries as countryList } from '@/components/ui/phone-input';
 import {
   Popover,
   PopoverContent,
@@ -20,24 +18,27 @@ import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { AppLogo } from '@/components/AppLogo';
 import {
   Check,
   Loader2,
   ArrowRight,
-  Receipt,
-  Timer,
   LogOut,
+} from '@/components/icons';
+import {
   LayoutDashboard,
   Users,
   FolderKanban,
   BookOpen,
   MessageSquare,
   Bell,
-} from '@/components/icons';
+  Receipt,
+  Timer,
+} from 'lucide-react';
 import { currencies } from '@/lib/locale-data';
+import { cn } from '@/lib/utils';
 
 const STRIPE_PRICE_MONTHLY = import.meta.env.VITE_STRIPE_PRICE_MONTHLY as string | undefined;
 const STRIPE_PRICE_ANNUAL = import.meta.env.VITE_STRIPE_PRICE_ANNUAL as string | undefined;
@@ -84,6 +85,18 @@ async function getAccessTokenWithRetry(maxAttempts = 6): Promise<string | null> 
   return null;
 }
 
+/** Display amounts for savings copy (keep in sync with Stripe prices). */
+const PLAN_MONTHLY_AMOUNT = 29;
+const PLAN_ANNUAL_AMOUNT = 290;
+
+const planBenefits = [
+  'Clients, projects & time tracking',
+  'Invoicing, estimates & PDFs',
+  'Client approvals & review requests',
+  'Notes, notifications & dashboard',
+  'Email support',
+] as const;
+
 const plans = [
   {
     id: 'pro_monthly',
@@ -91,7 +104,7 @@ const plans = [
     price: '$29',
     period: '/month',
     priceId: STRIPE_PRICE_MONTHLY,
-    description: 'Full access. 15-day free trial.',
+    subtitle: 'Pay month to month. Full access after trial.',
   },
   {
     id: 'pro_annual',
@@ -99,10 +112,18 @@ const plans = [
     price: '$290',
     period: '/year',
     priceId: STRIPE_PRICE_ANNUAL,
-    description: '2 months free. 15-day free trial.',
+    subtitle: 'Best for committed freelancers—2 months free vs monthly.',
     highlighted: true,
   },
 ];
+
+const monthlyIfPaidMonthly = PLAN_MONTHLY_AMOUNT * 12;
+const annualSaveVsMonthly = monthlyIfPaidMonthly - PLAN_ANNUAL_AMOUNT;
+const annualSavePercent =
+  monthlyIfPaidMonthly > 0
+    ? Math.round((annualSaveVsMonthly / monthlyIfPaidMonthly) * 100)
+    : 0;
+const annualEffectiveMonthly = (PLAN_ANNUAL_AMOUNT / 12).toFixed(2);
 
 export default function Onboarding() {
   const { user, signOut } = useAuth();
@@ -128,6 +149,7 @@ export default function Onboarding() {
   const [selectedUseFirst, setSelectedUseFirst] = useState<string>('');
   const [businessName, setBusinessName] = useState('');
   const [currency, setCurrency] = useState('USD');
+  const [currencyOpen, setCurrencyOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState('pro_annual');
   const [loading, setLoading] = useState(false);
   const [completingCheckout, setCompletingCheckout] = useState(false);
@@ -387,18 +409,23 @@ export default function Onboarding() {
               <p className="text-muted-foreground mt-1">You can use everything—we’ll highlight this.</p>
             </div>
             <div className="grid gap-3">
-              {useFirstOptions.map((opt) => (
-                <Card
-                  key={opt.id}
-                  className={`cursor-pointer transition-all border-2 ${selectedUseFirst === opt.id ? 'border-primary' : 'border-transparent hover:border-border'}`}
-                  onClick={() => setSelectedUseFirst(opt.id)}
-                >
-                  <CardContent className="py-4 flex items-center gap-3">
-                    <opt.icon className="h-5 w-5 text-primary" />
-                    {opt.label}
-                  </CardContent>
-                </Card>
-              ))}
+              {useFirstOptions.map((opt) => {
+                const Icon = opt.icon;
+                return (
+                  <Card
+                    key={opt.id}
+                    className={`cursor-pointer transition-all border-2 ${selectedUseFirst === opt.id ? 'border-primary' : 'border-transparent hover:border-border'}`}
+                    onClick={() => setSelectedUseFirst(opt.id)}
+                  >
+                    <CardContent className="py-4 flex items-center gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                        <Icon className="h-5 w-5 text-primary" strokeWidth={2} aria-hidden />
+                      </span>
+                      <span className="font-medium text-foreground">{opt.label}</span>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
             <div className="flex justify-between">
               <Button variant="ghost" onClick={() => setStep('role')}>Back</Button>
@@ -428,7 +455,7 @@ export default function Onboarding() {
                 </div>
                 <div className="space-y-2">
                   <Label>Currency</Label>
-                  <Popover>
+                  <Popover open={currencyOpen} onOpenChange={setCurrencyOpen}>
                     <PopoverTrigger asChild>
                       <Button variant="outline" className="w-full justify-between font-normal">
                         <span>{currencies.find((c) => c.value === currency)?.label?.split(' - ')[0] || currency}</span>
@@ -441,7 +468,14 @@ export default function Onboarding() {
                         <CommandList>
                           <CommandEmpty>No currency found.</CommandEmpty>
                           {currencies.slice(0, 80).map((c) => (
-                            <CommandItem key={c.value} value={`${c.value} ${c.label}`} onSelect={() => setCurrency(c.value)}>
+                            <CommandItem
+                              key={c.value}
+                              value={`${c.value} ${c.label}`}
+                              onSelect={() => {
+                                setCurrency(c.value);
+                                setCurrencyOpen(false);
+                              }}
+                            >
                               {c.label}
                             </CommandItem>
                           ))}
@@ -462,46 +496,88 @@ export default function Onboarding() {
         )}
 
         {step === 'plan' && (
-          <div className="space-y-6">
-            <div className="text-center">
-              <h1 className="text-2xl font-bold">Choose your plan</h1>
-              <p className="text-muted-foreground mt-1">
-                Start your 15-day free trial. Cancel anytime before it ends.
+          <div className="space-y-8 max-w-4xl mx-auto">
+            <div className="text-center space-y-2">
+              <h1 className="text-3xl font-bold tracking-tight">Choose your plan</h1>
+              <p className="text-muted-foreground text-base max-w-lg mx-auto">
+                Start with a 15-day free trial. You won’t be charged today—cancel anytime before the trial ends.
               </p>
             </div>
-            <div className="rounded-lg border-2 border-primary/20 bg-primary/5 p-4 text-center text-sm">
-              <p className="font-medium">You won’t be charged today.</p>
-              <p className="text-muted-foreground mt-1">
-                Trial ends 15 days from now. We’ll remind you before then.
+            <div className="rounded-2xl border border-primary/25 bg-gradient-to-b from-primary/8 to-primary/5 px-5 py-4 text-center shadow-sm">
+              <p className="font-semibold text-foreground">No charge today</p>
+              <p className="text-muted-foreground text-sm mt-1">
+                Full access during your trial. We’ll email you before the trial ends.
               </p>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              {plans.map((p) => (
-                <Card
-                  key={p.id}
-                  className={`cursor-pointer transition-all border-2 ${
-                    selectedPlanId === p.id ? 'border-primary' : 'border-transparent hover:border-border'
-                  } ${p.highlighted ? 'ring-2 ring-primary/20' : ''}`}
-                  onClick={() => setSelectedPlanId(p.id)}
-                >
-                  {p.highlighted && (
-                    <div className="bg-primary text-primary-foreground text-xs font-medium text-center py-1">
-                      Best value
-                    </div>
-                  )}
-                  <CardHeader>
-                    <CardTitle className="flex items-baseline gap-1">
-                      <span className="text-2xl font-bold">{p.price}</span>
-                      <span className="text-muted-foreground text-sm">{p.period}</span>
-                    </CardTitle>
-                    <CardDescription>{p.description}</CardDescription>
-                  </CardHeader>
-                </Card>
-              ))}
+            <div className="grid gap-5 md:grid-cols-2 md:items-stretch">
+              {plans.map((p) => {
+                const selected = selectedPlanId === p.id;
+                const hasPrice = Boolean(p.priceId);
+                return (
+                  <Card
+                    key={p.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedPlanId(p.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedPlanId(p.id);
+                      }
+                    }}
+                    className={cn(
+                      'cursor-pointer transition-all rounded-2xl border-2 shadow-sm hover:shadow-md flex flex-col overflow-hidden',
+                      selected ? 'border-primary ring-2 ring-primary/25' : 'border-border/80 hover:border-border',
+                      p.highlighted && 'md:scale-[1.02] md:z-10'
+                    )}
+                  >
+                    {p.highlighted && (
+                      <div className="bg-primary text-primary-foreground text-xs font-semibold tracking-wide text-center py-2 px-3">
+                        POPULAR — 2 months free on annual
+                      </div>
+                    )}
+                    <CardHeader className="pb-2 pt-6 px-6">
+                      <CardTitle className="text-lg font-semibold">{p.name}</CardTitle>
+                      <p className="text-sm text-muted-foreground font-normal leading-snug">{p.subtitle}</p>
+                      <div className="pt-4 flex flex-wrap items-baseline gap-1">
+                        <span className="text-4xl font-bold tracking-tight">{p.price}</span>
+                        <span className="text-muted-foreground text-lg">{p.period}</span>
+                      </div>
+                      {p.highlighted && (
+                        <p className="text-sm text-primary font-medium pt-2">
+                          ~${annualEffectiveMonthly}/mo billed annually · Save {annualSavePercent}% vs ${PLAN_MONTHLY_AMOUNT}/mo × 12
+                          {' '}(save ${annualSaveVsMonthly}/yr)
+                        </p>
+                      )}
+                      {!p.highlighted && (
+                        <p className="text-sm text-muted-foreground pt-2">${PLAN_MONTHLY_AMOUNT}/mo × 12 = ${monthlyIfPaidMonthly}/yr if paid monthly all year.</p>
+                      )}
+                    </CardHeader>
+                    <CardContent className="px-6 pb-6 pt-0 flex-1 flex flex-col">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                        Everything included
+                      </p>
+                      <ul className="space-y-2.5 flex-1">
+                        {planBenefits.map((line) => (
+                          <li key={line} className="flex gap-2.5 text-sm text-foreground">
+                            <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                            <span>{line}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {!hasPrice && (
+                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-4 rounded-md bg-amber-500/10 px-2 py-1.5">
+                          Stripe price ID missing in env—add VITE_STRIPE_PRICE_{p.id === 'pro_monthly' ? 'MONTHLY' : 'ANNUAL'} for checkout.
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center pt-2">
               <Button variant="ghost" onClick={() => setStep('optional')}>Back</Button>
-              <Button onClick={handleContinueToPayment} disabled={loading || !plans.find((p) => p.id === selectedPlanId)?.priceId}>
+              <Button onClick={handleContinueToPayment} disabled={loading} size="lg" className="min-w-[200px]">
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Continue to payment
               </Button>

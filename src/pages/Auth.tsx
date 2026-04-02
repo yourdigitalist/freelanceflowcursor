@@ -238,8 +238,8 @@ export default function Auth() {
 
           <Card className="border-0 shadow-xl">
             {showConfirmEmailMessage && (
-              <div className="mx-6 mt-6 px-4 pt-5 pb-4 rounded-lg bg-primary/10 border border-primary/20 text-sm space-y-4">
-                <p className="text-center text-foreground leading-relaxed">
+              <div className="mx-6 mt-8 mb-1 px-5 pt-10 pb-5 rounded-xl bg-primary/10 border border-primary/20 text-sm space-y-4">
+                <p className="text-center text-foreground leading-relaxed pt-0.5">
                   We sent a <strong>confirmation link</strong> to your email. Open it to verify your account, then continue onboarding.
                 </p>
                 <form onSubmit={handleResendConfirmation} className="flex flex-col gap-3">
