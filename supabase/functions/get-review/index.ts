@@ -106,11 +106,22 @@ serve(async (req) => {
       .eq("user_id", request.user_id)
       .maybeSingle();
 
-    // Ensure logo is a loadable absolute URL (profiles may store path or full URL)
+    // Ensure logo is a loadable URL. Use signed URL so it works on the public client page (no auth).
     let businessLogo: string | null = profile?.business_logo || null;
-    if (businessLogo && !businessLogo.startsWith("http")) {
-      const path = businessLogo.replace(/^\/+/, "");
-      businessLogo = `${supabaseUrl}/storage/v1/object/public/business-logos/${path}`;
+    if (businessLogo) {
+      if (!businessLogo.startsWith("http")) {
+        const path = businessLogo.replace(/^\/+/, "");
+        businessLogo = `${supabaseUrl}/storage/v1/object/public/business-logos/${path}`;
+      }
+      // If logo is from our storage, serve a signed URL so unauthenticated client can load it
+      const storagePrefix = `${supabaseUrl}/storage/v1/object/public/business-logos/`;
+      if (businessLogo.startsWith(storagePrefix)) {
+        const path = businessLogo.slice(storagePrefix.length);
+        const { data: signed } = await supabase.storage
+          .from("business-logos")
+          .createSignedUrl(path, 86400); // 24h
+        if (signed?.signedUrl) businessLogo = signed.signedUrl;
+      }
     }
 
     // Get files

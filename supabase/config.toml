@@ -28,3 +28,9 @@ verify_jwt = false
 
 [functions.generate-client-summary]
 verify_jwt = false
+
+[functions.send-trial-reminders]
+verify_jwt = false
+
+[functions.billing-health]
+verify_jwt = false

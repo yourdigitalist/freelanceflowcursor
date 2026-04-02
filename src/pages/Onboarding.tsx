@@ -77,6 +77,31 @@ export default function Onboarding() {
   const [loading, setLoading] = useState(false);
   const [completingCheckout, setCompletingCheckout] = useState(false);
   const checkoutCompleteAttemptedRef = useRef(false);
+  const resendSyncAttemptedRef = useRef(false);
+
+  // Sync this user to Resend (marketing lists) once when they hit onboarding after signup
+  useEffect(() => {
+    if (!user?.id || resendSyncAttemptedRef.current) return;
+    resendSyncAttemptedRef.current = true;
+    const syncToResend = async () => {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!supabaseUrl || !session?.access_token) return;
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/sync-users-to-resend`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ user_id: user.id }),
+        });
+      } catch {
+        // Non-blocking; full sync or cron can backfill
+      }
+    };
+    syncToResend();
+  }, [user?.id]);
 
   // Handle return from Stripe Checkout: ?checkout_success=1&session_id=...
   useEffect(() => {

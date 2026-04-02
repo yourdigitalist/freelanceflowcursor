@@ -8,6 +8,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -141,6 +142,18 @@ serve(async (req) => {
   }
 
   try {
+    if (!Deno.env.get("RESEND_API_KEY")) {
+      return new Response(JSON.stringify({ error: "Email is not configured (missing RESEND_API_KEY)." }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!RESEND_FROM_EMAIL || !RESEND_FROM_EMAIL.includes("@")) {
+      return new Response(JSON.stringify({ error: "Email is not configured (missing or invalid RESEND_FROM_EMAIL)." }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -405,7 +418,7 @@ serve(async (req) => {
         : `Invoice ${invoice.invoice_number} from ${fromDisplayName} - ${formatCurrency(Number(invoice.total || 0), profile?.currency, profile?.currency_display, profile?.number_format)}`;
 
     const emailPayload: any = {
-      from: `${fromDisplayName} <onboarding@resend.dev>`,
+      from: `${fromDisplayName} <${RESEND_FROM_EMAIL}>`,
       to: [recipientEmail],
       subject: emailSubject,
       html: emailHtml,

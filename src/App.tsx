@@ -35,6 +35,7 @@ import AdminIcons from "./pages/admin/AdminIcons";
 import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
 import AdminComms from "./pages/admin/AdminComms";
 import LandingContentSettings from "./pages/admin/LandingContentSettings";
+import SystemCheck from "./pages/admin/SystemCheck";
 import Notifications from "./pages/Notifications";
 import SearchResults from "./pages/SearchResults";
 import Help from "./pages/Help";
@@ -169,6 +170,7 @@ function AppRoutes() {
       <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
         <Route index element={<Navigate to="overview" replace />} />
         <Route path="overview" element={<AdminOverview />} />
+        <Route path="system-check" element={<SystemCheck />} />
         <Route path="announcements" element={<AdminAnnouncements />} />
         <Route path="comms" element={<AdminComms />} />
         <Route path="branding" element={<BrandingSettings />} />

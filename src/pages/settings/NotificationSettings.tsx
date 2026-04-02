@@ -70,6 +70,19 @@ export default function NotificationSettings() {
         load();
       } else {
         toast({ title: 'Preferences saved' });
+        // Push marketing preference to Resend so unsubscribes take effect immediately
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (!supabaseUrl || !session?.access_token || !user?.id) return;
+          fetch(`${supabaseUrl}/functions/v1/sync-users-to-resend`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ user_id: user.id }),
+          }).catch(() => {});
+        });
       }
     },
     [user, prefs, toast, load]
@@ -263,6 +276,26 @@ export default function NotificationSettings() {
                 onCheckedChange={(v) => setChannel('reviews', 'overdue', 'email', v)}
               />
             </div>
+          </div>
+
+          {/* Marketing */}
+          <div>
+            <h3 className="text-sm font-medium mb-3">Marketing</h3>
+            <div className="space-y-0 pl-2 border-l border-muted">
+              <ChannelRow
+                label="Product updates and tips – Email"
+                checked={prefs.marketing?.email ?? true}
+                onCheckedChange={(v) =>
+                  updateAndSave((prev) => ({
+                    ...prev,
+                    marketing: { ...prev.marketing, email: v },
+                  }))
+                }
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1 pl-2">
+              You can also unsubscribe via the link in any marketing email. See our Terms for details.
+            </p>
           </div>
 
           {/* Import / Export */}

@@ -6,6 +6,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
+const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") || "").trim().replace(/\/$/, "");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,50 +66,105 @@ serve(async (req) => {
     });
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
   if (!Deno.env.get("RESEND_API_KEY")) {
     return new Response(JSON.stringify({ error: "RESEND_API_KEY not set" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-  const { data: profiles, error } = await supabase
-    .from("profiles")
-    .select("user_id, email, full_name, trial_end_date")
-    .eq("subscription_status", "trial")
-    .not("trial_end_date", "is", null);
-
-  if (error) {
-    console.error("Error fetching trial profiles:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+  if (!RESEND_FROM_EMAIL || !RESEND_FROM_EMAIL.includes("@")) {
+    return new Response(JSON.stringify({ error: "RESEND_FROM_EMAIL not set" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  // Only profiles with subscription_status = 'trial' AND trial_end_date set are included.
-  // Accounts created manually or before onboarding may have trial_end_date = null and won't get reminders until it's set.
-  const toSend: { email: string; name: string; daysLeft: number }[] = [];
-  for (const p of profiles || []) {
-    const trialEnd = p.trial_end_date as string | null;
-    if (!trialEnd) continue;
-    const email = (p.email as string) || "";
-    if (!email) continue;
-    const daysLeft = getDaysUntil(trialEnd);
-    if (daysLeft === 5 || daysLeft === 1 || daysLeft === 0) {
-      toSend.push({
-        email,
-        name: (p.full_name as string) || "there",
-        daysLeft,
+  // Auth: either a cron key (recommended) or an admin user's JWT.
+  const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const token = authHeader.replace("Bearer ", "");
+  const cronKey = Deno.env.get("TRIAL_REMINDERS_CRON_KEY");
+
+  if (!(cronKey && token === cronKey)) {
+    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+    const { data: { user } } = await userClient.auth.getUser(token);
+    if (!user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: profile } = await userClient.from("profiles").select("is_admin").eq("user_id", user.id).maybeSingle();
+    if (!profile?.is_admin) {
+      return new Response(JSON.stringify({ error: "Admin required" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
   }
 
-  const baseUrl = req.headers.get("origin") || "https://app.lance.com";
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  // Optional test mode for deliverability checks without touching production trial dates.
+  // Body: { testEmail?: string, testDaysLeft?: 5|1|0, testName?: string }
+  let testBody: { testEmail?: string; testDaysLeft?: number; testName?: string } = {};
+  try {
+    const text = await req.text();
+    if (text) testBody = JSON.parse(text);
+  } catch {
+    // ignore
+  }
+
+  const toSend: { email: string; name: string; daysLeft: number }[] = [];
+  const testEmail = (testBody.testEmail || "").trim();
+  if (testEmail) {
+    const daysLeft = testBody.testDaysLeft === 5 || testBody.testDaysLeft === 1 || testBody.testDaysLeft === 0
+      ? testBody.testDaysLeft
+      : 5;
+    toSend.push({ email: testEmail, name: (testBody.testName || "there").trim() || "there", daysLeft });
+  } else {
+    const { data: profiles, error } = await supabase
+      .from("profiles")
+      .select("user_id, email, full_name, trial_end_date")
+      .eq("subscription_status", "trial")
+      .not("trial_end_date", "is", null);
+
+    if (error) {
+      console.error("Error fetching trial profiles:", error);
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Only profiles with subscription_status = 'trial' AND trial_end_date set are included.
+    // Accounts created manually or before onboarding may have trial_end_date = null and won't get reminders until it's set.
+    for (const p of profiles || []) {
+      const trialEnd = p.trial_end_date as string | null;
+      if (!trialEnd) continue;
+      const email = (p.email as string) || "";
+      if (!email) continue;
+      const daysLeft = getDaysUntil(trialEnd);
+      if (daysLeft === 5 || daysLeft === 1 || daysLeft === 0) {
+        toSend.push({
+          email,
+          name: (p.full_name as string) || "there",
+          daysLeft,
+        });
+      }
+    }
+  }
+
+  const baseUrl = APP_BASE_URL || req.headers.get("origin") || "https://app.lance.com";
   const billingUrl = `${baseUrl}/settings/subscription`;
   const [{ data: branding }, { data: comms }] = await Promise.all([
     supabase
@@ -166,7 +223,7 @@ serve(async (req) => {
     const html = `${header}<h2 style="margin: 0 0 12px; color: ${primaryColor};">${escapeHtml(subject)}</h2><p>${safeBody}</p>${footer}`;
 
     const { error: sendError } = await resend.emails.send({
-      from: "Lance <onboarding@resend.dev>",
+      from: `Lance <${RESEND_FROM_EMAIL}>`,
       to: email,
       subject,
       text: body,

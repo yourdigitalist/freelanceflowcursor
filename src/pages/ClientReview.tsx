@@ -300,18 +300,36 @@ export default function ClientReview() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-card border-b">
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto pl-0 pr-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="flex items-center gap-3">
-                {senderProfile?.business_logo ? (
-                  <img
-                    src={senderProfile.business_logo}
-                    alt={senderProfile.business_name || 'Company logo'}
-                    className="h-7 w-7 rounded object-contain bg-white border"
-                    loading="eager"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                  />
+              <div className="flex items-center gap-8">
+                {(senderProfile?.business_logo || senderProfile?.business_name) ? (
+                  <div className="flex-shrink-0 flex items-center">
+                    {senderProfile?.business_logo ? (
+                      <>
+                        <img
+                          src={senderProfile.business_logo}
+                          alt={senderProfile.business_name || 'Company logo'}
+                          className="max-h-[120px] max-w-[120px] w-auto h-auto object-contain object-left"
+                          loading="eager"
+                          onError={(e) => {
+                            const el = e.currentTarget;
+                            el.style.display = 'none';
+                            const fallback = el.nextElementSibling as HTMLElement | null;
+                            if (fallback) fallback.style.display = 'inline';
+                          }}
+                        />
+                        <span className="text-2xl text-muted-foreground font-medium hidden">
+                          {(senderProfile?.business_name || '?').charAt(0).toUpperCase()}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-2xl text-muted-foreground font-medium">
+                        {(senderProfile?.business_name || '?').charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
                 ) : null}
                 <div>
                   <h1 className="text-xl font-semibold">{request.title}</h1>

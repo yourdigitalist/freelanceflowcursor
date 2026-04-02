@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
+const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") || "").trim().replace(/\/$/, "");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -75,6 +77,12 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    if (!RESEND_FROM_EMAIL || !RESEND_FROM_EMAIL.includes("@")) {
+      return new Response(JSON.stringify({ error: "Email is not configured (missing or invalid RESEND_FROM_EMAIL)." }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -103,7 +111,8 @@ serve(async (req) => {
       });
     }
 
-    const baseUrl = (origin && typeof origin === "string") ? origin.replace(/\/$/, "") : "https://app.example.com";
+    const baseUrlFromRequest = (origin && typeof origin === "string") ? origin.trim().replace(/\/$/, "") : "";
+    const baseUrl = baseUrlFromRequest || APP_BASE_URL || "https://app.example.com";
 
     const rateLimitKey = `send-review-request:${user.id}`;
     const { allowed, remaining } = await checkRateLimit(supabase, rateLimitKey, RATE_LIMIT_MAX_EMAILS);
@@ -195,7 +204,7 @@ serve(async (req) => {
     }
 
     const { data: emailData, error: emailError } = await resend.emails.send({
-      from: `${fromDisplayName} <onboarding@resend.dev>`,
+      from: `${fromDisplayName} <${RESEND_FROM_EMAIL}>`,
       to: toAddresses,
       subject: `Review request from ${fromDisplayName}: ${request.title} (v${request.version})`,
       html: emailHtml,

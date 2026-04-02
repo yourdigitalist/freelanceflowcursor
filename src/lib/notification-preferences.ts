@@ -31,6 +31,8 @@ export interface NotificationPreferences {
     daysBefore?: number;
   };
   importExport?: ChannelPref;
+  /** Marketing / product updates and tips. Default true at signup; user can unsubscribe in settings or via email link. */
+  marketing?: { email?: boolean };
 }
 
 const DEFAULT_DAYS = 7;
@@ -55,6 +57,7 @@ export function getDefaultPreferences(): NotificationPreferences {
       daysBefore: DEFAULT_DAYS,
     },
     importExport: { inApp: true, email: false },
+    marketing: { email: true },
   };
 }
 
@@ -67,6 +70,7 @@ export function mergeWithDefaults(prefs: NotificationPreferences | null | undefi
     invoices: { ...def.invoices, ...prefs.invoices },
     reviews: { ...def.reviews, ...prefs.reviews },
     importExport: { ...def.importExport, ...prefs.importExport },
+    marketing: { ...def.marketing, ...prefs.marketing },
   };
   // Enforce policy in case legacy rows still have email=true.
   if (merged.projects?.dueSoon) merged.projects.dueSoon.email = false;
@@ -74,5 +78,7 @@ export function mergeWithDefaults(prefs: NotificationPreferences | null | undefi
   if (merged.tasks?.dueSoon) merged.tasks.dueSoon.email = false;
   if (merged.tasks?.overdue) merged.tasks.overdue.email = false;
   if (merged.importExport) merged.importExport.email = false;
+  // Marketing email: default true if not set (opted in at signup)
+  if (merged.marketing?.email === undefined) merged.marketing = { ...merged.marketing, email: true };
   return merged;
 }

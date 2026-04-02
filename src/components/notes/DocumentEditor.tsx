@@ -190,6 +190,9 @@ export function DocumentEditor({
   const [createTaskButtonPos, setCreateTaskButtonPos] = useState<{ top: number; left: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const savedSelectionRef = useRef<{ index: number; length: number } | null>(null);
+  const linkUrlInputRef = useRef<HTMLInputElement>(null);
+  const linkDialogOpenRef = useRef(false);
+  const handleLinkApplyRef = useRef<() => void>(() => {});
 
   const modules = useMemo(() => QUILL_MODULES, []);
 
@@ -233,6 +236,7 @@ export function DocumentEditor({
   const openLinkDialog = useCallback(() => {
     const q = quillRef.current?.getEditor();
     if (!q) return;
+    saveSelection(); // Must save before dialog opens so we still have the selection when applying
     const sel = getSelectionOrSaved();
     if (sel) {
       const format = q.getFormat(sel.index);
@@ -240,16 +244,25 @@ export function DocumentEditor({
       setLinkUrl(current || 'https://');
       setLinkDialogOpen(true);
     }
-  }, [getSelectionOrSaved]);
+  }, [getSelectionOrSaved, saveSelection]);
 
   const handleLinkApply = useCallback(() => {
     const q = quillRef.current?.getEditor();
     if (!q) return;
+    const raw = linkUrl.trim();
+    if (!raw) {
+      setLinkDialogOpen(false);
+      setLinkUrl('');
+      return;
+    }
+    // Quill's Link format only allows http, https, mailto, tel; else it sanitizes to about:blank. Normalize so any input works.
+    const hasProtocol = /^(https?|mailto|tel):/i.test(raw);
+    const urlForQuill = hasProtocol ? raw : `https://${raw}`;
     const sel = getSelectionOrSaved();
     const index = sel?.index ?? 0;
     const length = sel?.length ?? 0;
     q.setSelection(index, length, 'user');
-    q.format('link', linkUrl.trim() || false, 'user');
+    q.format('link', urlForQuill, 'user');
     setLinkDialogOpen(false);
     setLinkUrl('');
   }, [linkUrl, getSelectionOrSaved]);
@@ -355,6 +368,27 @@ export function DocumentEditor({
     atMentionIndexRef.current = null;
     setShowAtPopover(false);
   }, []);
+
+  // Keep refs in sync for the link-dialog Enter handler (so listener added on mount always sees latest)
+  useEffect(() => {
+    linkDialogOpenRef.current = linkDialogOpen;
+    handleLinkApplyRef.current = handleLinkApply;
+  }, [linkDialogOpen, handleLinkApply]);
+
+  // Single document capture listener (added on mount so it runs before Radix's dialog listener)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return;
+      if (!linkDialogOpenRef.current) return;
+      const target = e.target as HTMLElement | null;
+      if (!target || (target.id !== 'link-url' && target.getAttribute('data-link-input') !== 'true')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      handleLinkApplyRef.current();
+    };
+    document.addEventListener('keydown', handler, true);
+    return () => document.removeEventListener('keydown', handler, true);
+  }, []); // run once on mount
 
   useEffect(() => {
     const q = quillRef.current?.getEditor();
@@ -727,28 +761,38 @@ export function DocumentEditor({
         </div>
       )}
 
-      {/* Link dialog - apply URL to selected text */}
+      {/* Link dialog - apply URL to selected text. Enter in input applies link (capture phase so we run before Radix closes dialog). */}
       <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Link</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <form
+            onSubmit={(e) => { e.preventDefault(); handleLinkApply(); }}
+            className="space-y-4 py-2"
+          >
             <div className="space-y-2">
               <Label htmlFor="link-url">URL</Label>
               <Input
+                ref={linkUrlInputRef}
                 id="link-url"
+                data-link-input="true"
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
-                placeholder="https://"
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleLinkApply())}
+                placeholder="https:// (optional – any text is saved as link)"
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleLinkApply();
+                }}
               />
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleLinkApply}>Apply</Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
+              <Button type="submit">Apply</Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

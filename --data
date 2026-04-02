@@ -1,0 +1,22 @@
+HTTP/2 405 
+date: Thu, 02 Apr 2026 09:12:26 GMT
+content-type: application/json
+server: cloudflare
+cf-ray: 9e5eb637e9d6eec5-WAW
+cf-cache-status: DYNAMIC
+access-control-allow-origin: *
+strict-transport-security: max-age=31536000; includeSubDomains; preload
+vary: Accept-Encoding
+x-content-type-options: nosniff
+access-control-allow-headers: authorization, content-type
+access-control-allow-methods: POST, OPTIONS
+sb-gateway-version: 1
+sb-project-ref: mtgocbkjrfpffzjkhmox
+sb-request-id: 019d4d77-1efc-7f57-a9c6-caaf8a47a90e
+x-deno-execution-id: 6d4d6dd7-0805-4282-a030-d0828b4b5284
+x-sb-edge-region: eu-central-1
+x-served-by: supabase-edge-runtime
+set-cookie: __cf_bm=ZEhcV4dnugOzXq7KPJNY4TG.uhpFXUdHx71d9vOywDo-1775121146-1.0.1.1-iJncoHFU88nxnDHt2Jg3GQ7Kwp686LOdxEiJ7ygLv_x_ejv5DKwLDGcU3CuuU.RXA3UJuKPKS0y7tTUVdirNBCMcqhYbruei_n6qgsI1ohA; path=/; expires=Thu, 02-Apr-26 09:42:26 GMT; domain=.supabase.co; HttpOnly; Secure; SameSite=None
+alt-svc: h3=":443"; ma=86400
+
+{"error":"Method not allowed"}
