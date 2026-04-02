@@ -11,6 +11,7 @@ import { AppLogo } from '@/components/AppLogo';
 import { Loader2, Clock, Users, Receipt, BarChart3, Check } from '@/components/icons';
 
 const SIGNUP_PENDING_KEY = 'signup_pending';
+const SIGNUP_EMAIL_KEY = 'signup_email';
 
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
@@ -88,7 +89,9 @@ export default function Auth() {
         variant: 'destructive',
       });
     } else {
-      sessionStorage.setItem('signup_pending', '1');
+      sessionStorage.setItem(SIGNUP_PENDING_KEY, '1');
+      sessionStorage.setItem(SIGNUP_EMAIL_KEY, email.trim());
+      setResendEmail(email.trim());
       navigate('/onboarding');
       toast({
         title: 'Check your email',
@@ -235,17 +238,38 @@ export default function Auth() {
 
           <Card className="border-0 shadow-xl">
             {showConfirmEmailMessage && (
-              <div className="mx-6 mt-6 p-4 rounded-lg bg-primary/10 border border-primary/20 text-sm space-y-3">
-                <p className="text-center">Check your email to confirm your account. After confirming, you’ll complete setup on the onboarding page.</p>
-                <form onSubmit={handleResendConfirmation} className="flex flex-col gap-2">
-                  <Input
-                    type="email"
-                    placeholder="Your signup email"
-                    value={resendEmail}
-                    onChange={(e) => setResendEmail(e.target.value)}
-                    className="h-9"
-                  />
-                  <Button type="submit" variant="secondary" size="sm" disabled={resendLoading}>
+              <div className="mx-6 mt-6 px-4 pt-5 pb-4 rounded-lg bg-primary/10 border border-primary/20 text-sm space-y-4">
+                <p className="text-center text-foreground leading-relaxed">
+                  We sent a <strong>confirmation link</strong> to your email. Open it to verify your account, then continue onboarding.
+                </p>
+                <form onSubmit={handleResendConfirmation} className="flex flex-col gap-3">
+                  {resendEmail ? (
+                    <p className="text-center text-muted-foreground text-xs">
+                      Didn&apos;t get it? We can send another to{' '}
+                      <span className="font-medium text-foreground">{resendEmail}</span>
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="resend-email" className="text-xs text-muted-foreground">
+                        Email to resend confirmation to
+                      </Label>
+                      <Input
+                        id="resend-email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={resendEmail}
+                        onChange={(e) => setResendEmail(e.target.value)}
+                        className="h-9"
+                        autoComplete="email"
+                      />
+                    </div>
+                  )}
+                  <Button
+                    type="submit"
+                    variant="secondary"
+                    size="sm"
+                    disabled={resendLoading || !resendEmail.trim()}
+                  >
                     {resendLoading && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
                     Resend confirmation email
                   </Button>

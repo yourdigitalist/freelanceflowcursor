@@ -23,11 +23,26 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { AppLogo } from '@/components/AppLogo';
-import { Check, Loader2, ArrowRight, Building2, User, Receipt, Table, Timer, LogOut } from '@/components/icons';
+import {
+  Check,
+  Loader2,
+  ArrowRight,
+  Receipt,
+  Timer,
+  LogOut,
+  LayoutDashboard,
+  Users,
+  FolderKanban,
+  BookOpen,
+  MessageSquare,
+  Bell,
+} from '@/components/icons';
 import { currencies } from '@/lib/locale-data';
 
 const STRIPE_PRICE_MONTHLY = import.meta.env.VITE_STRIPE_PRICE_MONTHLY as string | undefined;
 const STRIPE_PRICE_ANNUAL = import.meta.env.VITE_STRIPE_PRICE_ANNUAL as string | undefined;
+
+const ONBOARDING_STEP_KEY = 'onboarding_step';
 
 type Step = 'role' | 'useFirst' | 'optional' | 'plan';
 
@@ -35,13 +50,39 @@ const roles = [
   { id: 'freelancer', label: 'Freelancer' },
   { id: 'consultant', label: 'Consultant' },
   { id: 'designer', label: 'Designer' },
+  { id: 'developer', label: 'Developer or engineer' },
+  { id: 'agency', label: 'Agency' },
+  { id: 'coach', label: 'Coach or trainer' },
+  { id: 'photographer', label: 'Photographer or videographer' },
+  { id: 'other', label: 'Other' },
 ];
 
+/** Matches main app navigation (sidebar) so icons and labels stay consistent. */
 const useFirstOptions = [
-  { id: 'invoices', label: 'Invoices', icon: Receipt },
-  { id: 'projects', label: 'Projects', icon: Table },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'clients', label: 'Clients', icon: Users },
+  { id: 'projects', label: 'Projects', icon: FolderKanban },
   { id: 'time', label: 'Time tracking', icon: Timer },
+  { id: 'notes', label: 'Notes', icon: BookOpen },
+  { id: 'invoices', label: 'Invoices', icon: Receipt },
+  { id: 'reviews', label: 'Client approvals', icon: MessageSquare },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
 ];
+
+async function getAccessTokenWithRetry(maxAttempts = 6): Promise<string | null> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session?.access_token) {
+      return sessionData.session.access_token;
+    }
+    const { data: refreshed, error } = await supabase.auth.refreshSession();
+    if (!error && refreshed.session?.access_token) {
+      return refreshed.session.access_token;
+    }
+    await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
+  }
+  return null;
+}
 
 const plans = [
   {
@@ -68,7 +109,21 @@ export default function Onboarding() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
-  const [step, setStep] = useState<Step>('role');
+  const [step, setStep] = useState<Step>(() => {
+    if (typeof window === 'undefined') return 'role';
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('checkout_success') === '1') {
+        const saved = sessionStorage.getItem(ONBOARDING_STEP_KEY);
+        if (saved && ['role', 'useFirst', 'optional', 'plan'].includes(saved)) {
+          return saved as Step;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return 'role';
+  });
   const [selectedRole, setSelectedRole] = useState<string>('');
   const [selectedUseFirst, setSelectedUseFirst] = useState<string>('');
   const [businessName, setBusinessName] = useState('');
@@ -112,16 +167,24 @@ export default function Onboarding() {
     checkoutCompleteAttemptedRef.current = true;
     setCompletingCheckout(true);
 
+    const clearCheckoutParams = () => {
+      setSearchParams((p) => {
+        const next = new URLSearchParams(p);
+        next.delete('checkout_success');
+        next.delete('session_id');
+        return next;
+      });
+    };
+
     (async () => {
       try {
-        const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
-        if (refreshError || !session?.access_token) {
-          toast({ title: 'Session expired', description: 'Please sign in again and go to Settings → Subscription to finish.', variant: 'destructive' });
-          setSearchParams((p) => {
-            const next = new URLSearchParams(p);
-            next.delete('checkout_success');
-            next.delete('session_id');
-            return next;
+        const accessToken = await getAccessTokenWithRetry();
+        if (!accessToken) {
+          checkoutCompleteAttemptedRef.current = false;
+          toast({
+            title: 'Could not restore your session',
+            description: 'Refresh this page after signing in again, or open Settings → Subscription to finish setup.',
+            variant: 'destructive',
           });
           setCompletingCheckout(false);
           return;
@@ -129,6 +192,7 @@ export default function Onboarding() {
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         if (!supabaseUrl || !anonKey) {
+          checkoutCompleteAttemptedRef.current = false;
           toast({ title: 'App config error', variant: 'destructive' });
           setCompletingCheckout(false);
           return;
@@ -137,7 +201,7 @@ export default function Onboarding() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
             apikey: anonKey,
           },
           body: JSON.stringify({ session_id: sessionId }),
@@ -145,29 +209,33 @@ export default function Onboarding() {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           const isAuth = res.status === 401;
+          if (isAuth) {
+            checkoutCompleteAttemptedRef.current = false;
+            toast({
+              title: 'Session not ready yet',
+              description: 'Refresh the page in a moment, or sign out and back in. Your Stripe payment was still processed.',
+              variant: 'destructive',
+            });
+            setCompletingCheckout(false);
+            return;
+          }
+          clearCheckoutParams();
           toast({
-            title: isAuth ? 'Session expired' : 'Setup incomplete',
-            description: isAuth ? 'Please sign in again. You can then go to Settings → Subscription to complete setup.' : (data?.error || 'Please try again.'),
+            title: 'Setup incomplete',
+            description: typeof data?.error === 'string' ? data.error : 'Please try again from Settings → Subscription.',
             variant: 'destructive',
-          });
-          setSearchParams((p) => {
-            const next = new URLSearchParams(p);
-            next.delete('checkout_success');
-            next.delete('session_id');
-            return next;
           });
           setCompletingCheckout(false);
           return;
         }
-        setSearchParams({});
+        clearCheckoutParams();
         navigate('/dashboard', { replace: true });
-      } catch (e) {
-        toast({ title: 'Something went wrong', description: 'Please try again or go to Settings → Subscription.', variant: 'destructive' });
-        setSearchParams((p) => {
-          const next = new URLSearchParams(p);
-          next.delete('checkout_success');
-          next.delete('session_id');
-          return next;
+      } catch {
+        checkoutCompleteAttemptedRef.current = false;
+        toast({
+          title: 'Something went wrong',
+          description: 'Refresh the page to retry. If payment went through, use Settings → Subscription.',
+          variant: 'destructive',
         });
       } finally {
         setCompletingCheckout(false);
@@ -188,8 +256,8 @@ export default function Onboarding() {
     setLoading(true);
     try {
       await saveOptionalProfile();
-      const { data: { session } } = await supabase.auth.refreshSession();
-      if (!session?.access_token) {
+      const accessToken = await getAccessTokenWithRetry();
+      if (!accessToken) {
         toast({ title: 'Please sign in again', variant: 'destructive' });
         setLoading(false);
         return;
@@ -208,7 +276,7 @@ export default function Onboarding() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           apikey: anonKey,
         },
         body: JSON.stringify({ priceId, successUrl, cancelUrl }),

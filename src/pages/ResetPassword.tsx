@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Briefcase, Loader2, CheckCircle } from '@/components/icons';
+import { AppLogo } from '@/components/AppLogo';
+import { Loader2, CheckCircle } from '@/components/icons';
 
 export default function ResetPassword() {
   const [isLoading, setIsLoading] = useState(false);
@@ -96,9 +97,8 @@ export default function ResetPassword() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-4">
       <div className="w-full max-w-md animate-fade-in">
-        <Link to="/" className="flex items-center justify-center gap-2 mb-8">
-          <Briefcase className="h-8 w-8 text-primary" />
-          <span className="text-2xl font-bold text-gradient">Lance</span>
+        <Link to="/" className="flex items-center justify-center mb-8">
+          <AppLogo full height={36} />
         </Link>
 
         <Card className="border-0 shadow-xl">
