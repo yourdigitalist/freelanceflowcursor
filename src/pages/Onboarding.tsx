@@ -36,6 +36,7 @@ import {
   Bell,
   Receipt,
   Timer,
+  ShieldCheck,
 } from 'lucide-react';
 import { currencies } from '@/lib/locale-data';
 import { cn } from '@/lib/utils';
@@ -85,16 +86,11 @@ async function getAccessTokenWithRetry(maxAttempts = 6): Promise<string | null> 
   return null;
 }
 
-/** Display amounts for savings copy (keep in sync with Stripe prices). */
-const PLAN_MONTHLY_AMOUNT = 29;
-const PLAN_ANNUAL_AMOUNT = 290;
-
 const planBenefits = [
   'Clients, projects & time tracking',
   'Invoicing, estimates & PDFs',
   'Client approvals & review requests',
   'Notes, notifications & dashboard',
-  'Email support',
 ] as const;
 
 const plans = [
@@ -117,13 +113,32 @@ const plans = [
   },
 ];
 
-const monthlyIfPaidMonthly = PLAN_MONTHLY_AMOUNT * 12;
-const annualSaveVsMonthly = monthlyIfPaidMonthly - PLAN_ANNUAL_AMOUNT;
-const annualSavePercent =
-  monthlyIfPaidMonthly > 0
-    ? Math.round((annualSaveVsMonthly / monthlyIfPaidMonthly) * 100)
-    : 0;
-const annualEffectiveMonthly = (PLAN_ANNUAL_AMOUNT / 12).toFixed(2);
+function StripeSecuredBy() {
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 py-6 mt-2 border-t border-border/60">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" aria-hidden />
+        <span>Secure, PCI-compliant checkout</span>
+      </div>
+      <div className="hidden sm:block h-4 w-px bg-border shrink-0" aria-hidden />
+      <a
+        href="https://stripe.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <span className="text-xs uppercase tracking-wide">Secured by</span>
+        <svg role="img" viewBox="0 0 24 24" className="h-6 w-6 shrink-0" aria-hidden>
+          <path
+            fill="#635BFF"
+            d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.662l.89-5.494C18.252.975 15.697 0 12.165 0 9.472 0 7.218.902 5.98 2.168 4.657 3.517 4.194 5.315 4.194 7.26c0 2.35.918 4.072 3.633 5.308 1.88.847 3.92 1.507 3.92 2.528 0 .98-.84 1.546-2.354 1.546-2.01 0-4.834-.995-6.724-2.218l-.89 5.493C5.175 22.99 8.918 24 12.166 24c2.79 0 5.023-.826 6.393-2.137 1.351-1.294 1.878-3.008 1.878-4.9 0-2.45-.908-4.2-3.632-5.438l-.829-.375z"
+          />
+        </svg>
+        <span className="text-[#635BFF] font-semibold text-lg leading-none">Stripe</span>
+      </a>
+    </div>
+  );
+}
 
 export default function Onboarding() {
   const { user, signOut } = useAuth();
@@ -512,7 +527,6 @@ export default function Onboarding() {
             <div className="grid gap-5 md:grid-cols-2 md:items-stretch">
               {plans.map((p) => {
                 const selected = selectedPlanId === p.id;
-                const hasPrice = Boolean(p.priceId);
                 return (
                   <Card
                     key={p.id}
@@ -543,15 +557,6 @@ export default function Onboarding() {
                         <span className="text-4xl font-bold tracking-tight">{p.price}</span>
                         <span className="text-muted-foreground text-lg">{p.period}</span>
                       </div>
-                      {p.highlighted && (
-                        <p className="text-sm text-primary font-medium pt-2">
-                          ~${annualEffectiveMonthly}/mo billed annually · Save {annualSavePercent}% vs ${PLAN_MONTHLY_AMOUNT}/mo × 12
-                          {' '}(save ${annualSaveVsMonthly}/yr)
-                        </p>
-                      )}
-                      {!p.highlighted && (
-                        <p className="text-sm text-muted-foreground pt-2">${PLAN_MONTHLY_AMOUNT}/mo × 12 = ${monthlyIfPaidMonthly}/yr if paid monthly all year.</p>
-                      )}
                     </CardHeader>
                     <CardContent className="px-6 pb-6 pt-0 flex-1 flex flex-col">
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
@@ -575,6 +580,7 @@ export default function Onboarding() {
                 );
               })}
             </div>
+            <StripeSecuredBy />
             <div className="flex justify-between items-center pt-2">
               <Button variant="ghost" onClick={() => setStep('optional')}>Back</Button>
               <Button onClick={handleContinueToPayment} disabled={loading} size="lg" className="min-w-[200px]">
