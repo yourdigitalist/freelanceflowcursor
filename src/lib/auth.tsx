@@ -80,8 +80,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${getSiteUrl() || window.location.origin}/reset-password`,
+    const base = (getSiteUrl() || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
+    const redirectTo = base ? `${base}/reset-password` : undefined;
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      ...(redirectTo ? { redirectTo } : {}),
     });
     return { error };
   };

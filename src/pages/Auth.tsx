@@ -106,9 +106,16 @@ export default function Auth() {
     const { error } = await resetPassword(forgotPasswordEmail);
 
     if (error) {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const hint =
+        /redirect|url|not allowed/i.test(error.message)
+          ? ` In Supabase: Authentication → URL Configuration → add ${origin}/reset-password (or ${origin}/**) to Redirect URLs.`
+          : /rate|smtp|email/i.test(error.message)
+            ? ' Check Supabase Authentication → SMTP (custom SMTP is required for reliable delivery in production) and Auth logs for details.'
+            : '';
       toast({
-        title: 'Error',
-        description: error.message,
+        title: "Couldn't send recovery email",
+        description: `${error.message}${hint}`,
         variant: 'destructive',
       });
     } else {
