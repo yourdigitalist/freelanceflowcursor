@@ -40,3 +40,15 @@ See also [MAGIC_LINK_EMAIL_SETUP.md](./MAGIC_LINK_EMAIL_SETUP.md) — the same S
 ## 5) Rate limits
 
 If you tested many times in a short period, wait and retry, or check logs for rate-limit messages.
+
+## 6) Clicking reset link opens the dashboard (skips new password)
+
+That should **not** happen. Common cause: the recovery tokens land on **`/`** (site root) instead of **`/reset-password`**. The home route then treats you as signed in and sends you to the dashboard.
+
+- In **Authentication → URL Configuration**, keep **`https://getlance.app/reset-password`** allowed (or `https://getlance.app/**`).
+- The app includes **`RecoveryHashRedirect`** so if a recovery link still hits `/` with a hash, you are sent to `/reset-password` before the dashboard redirect.
+
+## 7) Styling + spam (looks plain vs review emails)
+
+- **Styling:** Password reset content is controlled in **Authentication → Email Templates → Reset password**. Use the Lance-branded HTML in [`EMAIL_TEMPLATE_SUPABASE.html`](./EMAIL_TEMPLATE_SUPABASE.html) and follow [`EMAIL_TEMPLATE_README.md`](./EMAIL_TEMPLATE_README.md) (replace logo URL, then paste into Supabase).
+- **Spam:** Auth mail uses **SMTP through Supabase**; review emails use the **Resend API**. They can land differently. Match **sender** to your transactional mail, use the styled template, and see [EMAIL_TEMPLATE_README.md § spam](EMAIL_TEMPLATE_README.md#why-auth-email-went-to-spam-but-review-requests-didnt).

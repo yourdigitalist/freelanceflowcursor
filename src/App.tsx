@@ -48,6 +48,7 @@ import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import LpTest from "./pages/LpTest";
 import { BrandingApply } from "@/components/BrandingApply";
+import { RecoveryHashRedirect } from "@/components/RecoveryHashRedirect";
 import { TimerProvider } from "@/contexts/TimerContext";
 import { IconSlotProvider } from "@/contexts/IconSlotContext";
 
@@ -206,6 +207,7 @@ const App = () => (
           <IconSlotProvider>
             <TimerProvider>
               <ErrorBoundary>
+                <RecoveryHashRedirect />
                 <AppRoutes />
               </ErrorBoundary>
             </TimerProvider>

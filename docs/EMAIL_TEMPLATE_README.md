@@ -1,48 +1,88 @@
-# Email template (Stripe-style)
+# Supabase Auth emails — Lance styling
 
-The template in `EMAIL_TEMPLATE_SUPABASE.html` is a clean, Stripe-style frame for auth and transactional emails.
+Auth emails (password reset, magic link, confirm signup) are edited in **Supabase Dashboard → Authentication → Email Templates**. They are **not** sent by the app’s Resend Edge Functions, but you can make them **look the same** by using the shared HTML frame in [`EMAIL_TEMPLATE_SUPABASE.html`](./EMAIL_TEMPLATE_SUPABASE.html).
 
-## Colours (same as Stripe)
+## Do this once
 
-- **Outer background:** `#F1F5F9`
-- **Card/content:** `#FFFFFF` (rounded 8px)
-- **Footer strip:** `#F6F9FC`
-- **Body text:** `#425466`
-- **Footer text:** `#525F7F`
-- **Links:** `#635BFF` (or `#525F7F` in footer)
+1. **Logo URL**  
+   In **Admin → Branding**, copy your **logo** full URL (must be `https://...`).  
+   In `EMAIL_TEMPLATE_SUPABASE.html`, replace **`REPLACE_WITH_LOGO_URL`** with that URL (same URL you’d use anywhere else).  
+   If you change the logo later, update it in **each** Supabase template that uses this file.
 
-## Logo
+2. **Paste the full HTML** into each auth template body  
+   Open **Authentication → Email Templates** and, for **Reset password**, **Magic link**, and **Confirm signup** (and any others you use), paste the full file, then **replace only the “MAIN CONTENT” block** using the snippets below.
 
-Replace `REPLACE_WITH_LOGO_URL` in the template with your logo URL:
+3. **Subjects (optional)**  
+   In each template, set a clear subject, e.g.  
+   - Reset: `Reset your Lance password`  
+   - Magic link: `Your Lance sign-in link`  
+   - Confirm: `Confirm your email for Lance`
 
-- **Admin → Branding:** upload a logo, then copy the logo URL shown there (or from the app’s branding settings). Use that full URL as `REPLACE_WITH_LOGO_URL`.
+## Main content blocks (swap the commented section in the HTML file)
 
-Supabase Auth templates cannot read your database, so the logo is a fixed URL you set once. If you change the logo in Branding, update the URL in each Supabase email template that uses it.
+### Reset password
 
-## Footer links
+Use the default block already in `EMAIL_TEMPLATE_SUPABASE.html` (heading “Reset your password”, button “Reset password”, `{{ .ConfirmationURL }}`).
 
-The template footer includes:
+### Magic link
 
-- **Log in** → `{{ .SiteURL }}/auth`
-- **Help** → `{{ .SiteURL }}/help`
-- **Terms and conditions** → `{{ .SiteURL }}/terms`
-- **Privacy policy** → `{{ .SiteURL }}/privacy`
+Replace the MAIN CONTENT block with:
 
-Ensure **Site URL** in Supabase (Project Settings → Authentication) is your production app URL (e.g. `https://app.getlance.app`) so these links point to the right place.
+```html
+      <h2 style="margin: 0 0 16px 0; font-size: 18px; color: #9B63E9;">Sign in to Lance</h2>
+      <p style="margin: 0 0 16px 0;">Hi,</p>
+      <p style="margin: 0 0 20px 0;">Click the button below to sign in to your account. This link is for one-time use.</p>
+      <p style="margin: 0 0 24px 0;">
+        <a href="{{ .ConfirmationURL }}" style="display: inline-block; background: #9B63E9; color: #ffffff !important; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">Sign in</a>
+      </p>
+      <p style="margin: 0 0 12px 0; font-size: 13px; color: #6b7280;">If the button doesn’t work, copy and paste this link:</p>
+      <p style="margin: 0; font-size: 12px; word-break: break-all; color: #6b7280;">{{ .ConfirmationURL }}</p>
+      <p style="margin: 24px 0 0 0; font-size: 14px; color: #374151;">If you didn’t request this email, you can ignore it.</p>
+```
 
-## Using in Supabase
+### Confirm signup
 
-1. Open **Supabase Dashboard → Authentication → Email Templates**.
-2. Choose a template (e.g. **Confirm signup**).
-3. Paste the contents of `EMAIL_TEMPLATE_SUPABASE.html` into the **Body** (HTML).
-4. Replace `REPLACE_WITH_LOGO_URL` with your branding logo URL.
-5. For **Confirm signup**, the body section already uses `{{ .ConfirmationURL }}`. For **Magic Link** or **Reset password**, change the main paragraph to use `{{ .ConfirmationURL }}` (or the variable shown in the default template) and adjust the button/link text as needed.
+Replace the MAIN CONTENT block with:
 
-## Other templates (Magic Link, Reset password)
+```html
+      <h2 style="margin: 0 0 16px 0; font-size: 18px; color: #9B63E9;">Confirm your email</h2>
+      <p style="margin: 0 0 16px 0;">Hi,</p>
+      <p style="margin: 0 0 20px 0;">Thanks for signing up for Lance. Confirm your email address to get started.</p>
+      <p style="margin: 0 0 24px 0;">
+        <a href="{{ .ConfirmationURL }}" style="display: inline-block; background: #9B63E9; color: #ffffff !important; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">Confirm email</a>
+      </p>
+      <p style="margin: 0 0 12px 0; font-size: 13px; color: #6b7280;">If the button doesn’t work, copy and paste this link:</p>
+      <p style="margin: 0; font-size: 12px; word-break: break-all; color: #6b7280;">{{ .ConfirmationURL }}</p>
+      <p style="margin: 24px 0 0 0; font-size: 14px; color: #374151;">If you didn’t create an account, you can ignore this email.</p>
+```
 
-Use the same HTML frame and only change the middle “main content” block:
+Always keep **`{{ .ConfirmationURL }}`** exactly as Supabase expects (variable name may differ for your project—match the **default** template for that email type).
 
-- **Magic Link:** e.g. “Click here to sign in: {{ .ConfirmationURL }}”
-- **Reset password:** e.g. “Reset your password: {{ .ConfirmationURL }}”
+## Why auth email went to spam but review requests didn’t
 
-Supabase variable names are in the default template for each type; keep those when you swap the body text.
+- **Different pipeline:** Review requests use the **Resend API** from Edge Functions. Auth mail uses **SMTP through Supabase** (even if Resend is the provider). Headers and routing can differ slightly.
+- **Content:** “Password reset” messages are filtered more aggressively by Gmail and others.
+- **Fix checklist**
+  1. In **Supabase → Authentication → SMTP**, set **Sender email** to the **same** verified domain address you use for transactional mail (e.g. `hello@getlance.app`), and **Sender name** `Lance` (or your product name).
+  2. Ensure **SPF/DKIM** for that domain are valid in Resend (you already verified the domain).
+  3. Use the **styled HTML** above so the message looks legitimate (not bare default text).
+  4. In Gmail, **“Report not spam”** once—this trains the mailbox for future messages.
+  5. Avoid testing the same reset flow dozens of times in a row (rate + reputation).
+
+## Resend API key for SMTP vs Edge Functions
+
+You can use the **same** Resend API key for:
+
+- **Supabase Edge Function secret** `RESEND_API_KEY` (HTTP API for invoices/reviews), and  
+- **Supabase SMTP password** (when using Resend’s SMTP with username `resend`).
+
+Resend does **not** show full keys again in the dashboard after creation. If you didn’t save it, **create a new API key**, update both places, and revoke the old key if needed.
+
+Resend SMTP (typical):
+
+- Host: `smtp.resend.com`
+- Port: `465` (SSL) or `587` (TLS)
+- Username: `resend`
+- Password: your `re_...` API key
+
+Confirm current values in [Resend’s documentation](https://resend.com/docs).
