@@ -214,16 +214,6 @@ export default function Onboarding() {
     (async () => {
       try {
         const accessToken = await getAccessTokenWithRetry();
-        if (!accessToken) {
-          checkoutCompleteAttemptedRef.current = false;
-          toast({
-            title: 'Could not restore your session',
-            description: 'Refresh this page after signing in again, or open Settings → Subscription to finish setup.',
-            variant: 'destructive',
-          });
-          setCompletingCheckout(false);
-          return;
-        }
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         if (!supabaseUrl || !anonKey) {
@@ -236,24 +226,13 @@ export default function Onboarding() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
             apikey: anonKey,
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
           },
           body: JSON.stringify({ session_id: sessionId }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          const isAuth = res.status === 401;
-          if (isAuth) {
-            checkoutCompleteAttemptedRef.current = false;
-            toast({
-              title: 'Session not ready yet',
-              description: 'Refresh the page in a moment, or sign out and back in. Your Stripe payment was still processed.',
-              variant: 'destructive',
-            });
-            setCompletingCheckout(false);
-            return;
-          }
           clearCheckoutParams();
           toast({
             title: 'Setup incomplete',

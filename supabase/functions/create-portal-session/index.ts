@@ -109,28 +109,13 @@ serve(async (req) => {
   }
 
   try {
-    const subscriptionId = profile?.stripe_subscription_id as string | null;
     const params: {
       customer: string;
       return_url: string;
-      flow_data?: {
-        type: "subscription_update";
-        subscription_update: { subscription: string };
-        after_completion: { type: "redirect"; redirect: { return_url: string } };
-      };
     } = {
       customer: customerId,
       return_url: returnUrl,
     };
-    // If user has a subscription, open portal directly to "update subscription" for that subscription
-    // so Stripe shows only the current plan as selected (not both monthly and yearly).
-    if (subscriptionId?.startsWith("sub_")) {
-      params.flow_data = {
-        type: "subscription_update",
-        subscription_update: { subscription: subscriptionId },
-        after_completion: { type: "redirect", redirect: { return_url: returnUrl } },
-      };
-    }
     const session = await stripe.billingPortal.sessions.create(params);
 
     return new Response(JSON.stringify({ url: session.url }), {

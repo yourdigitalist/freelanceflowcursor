@@ -32,26 +32,17 @@ serve(async (req) => {
     });
   }
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const anonKey = req.headers.get("apikey") || Deno.env.get("SUPABASE_ANON_KEY") || "";
-  const supabaseAuth = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
-  if (authError || !user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+  const authHeader = req.headers.get("Authorization");
+  let authedUserId: string | null = null;
+  if (authHeader?.startsWith("Bearer ") && anonKey) {
+    const supabaseAuth = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
     });
+    const { data: { user } } = await supabaseAuth.auth.getUser();
+    authedUserId = user?.id ?? null;
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -82,7 +73,15 @@ serve(async (req) => {
     });
 
     const userId = (session.client_reference_id || session.metadata?.user_id) as string | null;
-    if (!userId || userId !== user.id) {
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Session missing user_id" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // If caller is authenticated, enforce it matches the checkout session owner.
+    if (authedUserId && userId !== authedUserId) {
       return new Response(JSON.stringify({ error: "Session does not match user" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -130,7 +129,7 @@ serve(async (req) => {
         trial_start_date: trialStart,
         trial_end_date: trialEnd,
       })
-      .eq("user_id", user.id);
+      .eq("user_id", userId);
 
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
