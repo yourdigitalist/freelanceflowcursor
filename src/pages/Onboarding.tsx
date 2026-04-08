@@ -129,7 +129,7 @@ function StripeSecuredBy() {
       >
         <span className="text-xs uppercase tracking-wide">Secured by</span>
         <img
-          src="/Stripe_Logo__revised_2016.svg-2a68dc80-ef9e-4b91-82da-a207fd5b4c42.png"
+          src="/stripe-logo.svg"
           alt="Stripe"
           className="h-6 w-auto shrink-0"
         />
