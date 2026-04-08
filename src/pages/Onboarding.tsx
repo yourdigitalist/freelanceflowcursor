@@ -128,13 +128,11 @@ function StripeSecuredBy() {
         className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
       >
         <span className="text-xs uppercase tracking-wide">Secured by</span>
-        <svg role="img" viewBox="0 0 24 24" className="h-6 w-6 shrink-0" aria-hidden>
-          <path
-            fill="#635BFF"
-            d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.662l.89-5.494C18.252.975 15.697 0 12.165 0 9.472 0 7.218.902 5.98 2.168 4.657 3.517 4.194 5.315 4.194 7.26c0 2.35.918 4.072 3.633 5.308 1.88.847 3.92 1.507 3.92 2.528 0 .98-.84 1.546-2.354 1.546-2.01 0-4.834-.995-6.724-2.218l-.89 5.493C5.175 22.99 8.918 24 12.166 24c2.79 0 5.023-.826 6.393-2.137 1.351-1.294 1.878-3.008 1.878-4.9 0-2.45-.908-4.2-3.632-5.438l-.829-.375z"
-          />
-        </svg>
-        <span className="text-[#635BFF] font-semibold text-lg leading-none">Stripe</span>
+        <img
+          src="/Stripe_Logo__revised_2016.svg-2a68dc80-ef9e-4b91-82da-a207fd5b4c42.png"
+          alt="Stripe"
+          className="h-6 w-auto shrink-0"
+        />
       </a>
     </div>
   );
