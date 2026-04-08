@@ -92,10 +92,11 @@ export default function Auth() {
       sessionStorage.setItem(SIGNUP_PENDING_KEY, '1');
       sessionStorage.setItem(SIGNUP_EMAIL_KEY, email.trim());
       setResendEmail(email.trim());
-      navigate('/onboarding');
+      setShowConfirmEmailMessage(true);
+      setAuthTab('signup');
       toast({
         title: 'Check your email',
-        description: "We sent a confirmation link. After confirming, you'll complete setup here.",
+        description: "If this is a new account, we sent a confirmation link. If you already signed up before, try Sign In or Reset password.",
       });
     }
     
