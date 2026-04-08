@@ -570,11 +570,6 @@ export default function Onboarding() {
                           </li>
                         ))}
                       </ul>
-                      {!hasPrice && (
-                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-4 rounded-md bg-amber-500/10 px-2 py-1.5">
-                          Stripe price ID missing in env—add VITE_STRIPE_PRICE_{p.id === 'pro_monthly' ? 'MONTHLY' : 'ANNUAL'} for checkout.
-                        </p>
-                      )}
                     </CardContent>
                   </Card>
                 );
