@@ -80,8 +80,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, content-type",
 };
 
-// Resend plan limit: 3 segments. Use these for targeting (Trial vs Paid vs everyone).
-const SEGMENT_NAMES = ["All Users", "Trial", "Paid"] as const;
+// Resend free plan segment cap: keep only Trial/Paid as custom segments.
+// Use existing default "General" segment as the marketing-subscribed list.
+const SEGMENT_NAMES = ["Trial", "Paid"] as const;
 
 type ProfileRow = {
   user_id: string;
@@ -105,10 +106,12 @@ function isMarketingOptedIn(prefs: ProfileRow["notification_preferences"]): bool
 }
 
 function getSegmentNames(p: ProfileRow): string[] {
-  const names: string[] = ["All Users"];
+  const names: string[] = [];
   const status = (p.subscription_status || "").toLowerCase();
   const plan = (p.plan_type || "").toLowerCase();
 
+  // Marketing-subscribed users belong to the default "General" segment.
+  if (isMarketingOptedIn(p.notification_preferences)) names.push("General");
   if (status === "trial") names.push("Trial");
   else if (status === "active" || plan === "pro" || plan === "team") names.push("Paid");
 
@@ -204,10 +207,6 @@ serve(async (req) => {
   const segmentIdsByName: Record<string, string> = {};
   for (const s of existingSegments || []) {
     if (s.name) segmentIdsByName[s.name] = s.id;
-  }
-  // Resend default segment is often "General" – use it as "All Users" so we don't use a slot, and "Paid"/"Trial" can exist
-  if (segmentIdsByName["General"] && !segmentIdsByName["All Users"]) {
-    segmentIdsByName["All Users"] = segmentIdsByName["General"];
   }
   for (const name of SEGMENT_NAMES) {
     if (segmentIdsByName[name]) continue;

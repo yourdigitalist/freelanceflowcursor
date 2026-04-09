@@ -208,26 +208,6 @@ export default function NotificationSettings() {
                 checked={getChannel('invoices', 'overdue', 'email')}
                 onCheckedChange={(v) => setChannel('invoices', 'overdue', 'email', v)}
               />
-              <ChannelRow
-                label="Sent – In-app"
-                checked={getChannel('invoices', 'sent', 'inApp')}
-                onCheckedChange={(v) => setChannel('invoices', 'sent', 'inApp', v)}
-              />
-              <ChannelRow
-                label="Sent – Email"
-                checked={getChannel('invoices', 'sent', 'email')}
-                onCheckedChange={(v) => setChannel('invoices', 'sent', 'email', v)}
-              />
-              <ChannelRow
-                label="Paid – In-app"
-                checked={getChannel('invoices', 'paid', 'inApp')}
-                onCheckedChange={(v) => setChannel('invoices', 'paid', 'inApp', v)}
-              />
-              <ChannelRow
-                label="Paid – Email"
-                checked={getChannel('invoices', 'paid', 'email')}
-                onCheckedChange={(v) => setChannel('invoices', 'paid', 'email', v)}
-              />
             </div>
           </div>
 
@@ -298,23 +278,6 @@ export default function NotificationSettings() {
             </p>
           </div>
 
-          {/* Import / Export */}
-          <div>
-            <h3 className="text-sm font-medium mb-3">Import &amp; export</h3>
-            <div className="space-y-0 pl-2 border-l border-muted">
-              <ChannelRow
-                label="In-app"
-                checked={prefs.importExport?.inApp ?? true}
-                onCheckedChange={(v) =>
-                  updateAndSave((prev) => ({
-                    ...prev,
-                    importExport: { ...prev.importExport, inApp: v },
-                  }))
-                }
-              />
-              <ChannelRow label="Email" checked={false} onCheckedChange={() => {}} disabled />
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>

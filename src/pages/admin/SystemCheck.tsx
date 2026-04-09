@@ -19,6 +19,39 @@ export default function SystemCheck() {
   const [checkingBilling, setCheckingBilling] = useState(false);
   const [billingResult, setBillingResult] = useState<string>('');
 
+  const getBestTestName = async () => {
+    const metadataName = (user?.user_metadata?.full_name as string | undefined)?.trim();
+    if (metadataName) return metadataName;
+
+    if (user?.id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('first_name, last_name, full_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const first = (profile?.first_name as string | null)?.trim() || '';
+      const last = (profile?.last_name as string | null)?.trim() || '';
+      const combined = `${first} ${last}`.trim();
+      if (combined) return combined;
+
+      const profileFull = (profile?.full_name as string | null)?.trim();
+      if (profileFull) return profileFull;
+    }
+
+    const emailPrefix = (user?.email || '').split('@')[0]?.trim();
+    if (emailPrefix) {
+      // Turn "marina.gurgel" or "marina_test" into "Marina gurgel"/"Marina test".
+      return emailPrefix
+        .replace(/[._-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/^./, (c) => c.toUpperCase());
+    }
+
+    return 'there';
+  };
+
   const sendTrialReminderTest = async () => {
     setTrialTestResult('');
     setSendingTrialTest(true);
@@ -28,10 +61,11 @@ export default function SystemCheck() {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       if (!token || !supabaseUrl) throw new Error('Missing session or Supabase URL');
 
+      const testName = await getBestTestName();
       const res = await fetch(`${supabaseUrl}/functions/v1/send-trial-reminders`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ testEmail: trialTestEmail, testDaysLeft: 5, testName: user?.user_metadata?.full_name || user?.email || 'there' }),
+        body: JSON.stringify({ testEmail: trialTestEmail, testDaysLeft: 5, testName }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);

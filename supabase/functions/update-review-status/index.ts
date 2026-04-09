@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Resend } from "https://esm.sh/resend@2.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,6 +10,9 @@ const corsHeaders = {
 // Rate limiting configuration
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const RATE_LIMIT_MAX_STATUS_CHANGES = 5; // 5 status changes per email per review per hour
+const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
+const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") || "").trim().replace(/\/$/, "");
 
 async function checkRateLimit(supabase: any, key: string, maxRequests: number): Promise<{ allowed: boolean; remaining: number }> {
   const windowStart = new Date(Math.floor(Date.now() / RATE_LIMIT_WINDOW_MS) * RATE_LIMIT_WINDOW_MS).toISOString();
@@ -102,7 +106,7 @@ serve(async (req) => {
     // Validate share token and get review request (need user_id, project_id for approval notification)
     const { data: request, error: requestError } = await supabase
       .from("review_requests")
-      .select("id, user_id, project_id")
+      .select("id, user_id, project_id, title")
       .eq("share_token", token)
       .single();
 
@@ -148,29 +152,54 @@ serve(async (req) => {
       });
     }
 
-    // In-app notification for the freelancer (request owner) when client approves or rejects
+    // Notification for the freelancer (request owner) when client approves or rejects
     if (request.user_id) {
+      const { data: ownerProfile } = await supabase
+        .from("profiles")
+        .select("email, full_name, notification_preferences")
+        .eq("user_id", request.user_id)
+        .maybeSingle();
+      const prefs = (ownerProfile?.notification_preferences || {}) as any;
+      const inAppEnabled = prefs?.reviews?.status?.inApp !== false;
+      const emailEnabled = prefs?.reviews?.status?.email !== false;
+      const ownerEmail = (ownerProfile?.email || "").trim();
+      const ownerName = (ownerProfile?.full_name || "there").trim() || "there";
+      const eventKey = `review_status:${request.id}:${status}:${commenter_email.trim().toLowerCase()}`;
+      let title = "";
+      let body = "";
+      let link = "/review-requests";
+
       if (status === "approved") {
-        const link = request.project_id
+        link = request.project_id
           ? `/invoices?project_id=${request.project_id}&from_review=1`
           : "/review-requests";
-        const body = request.project_id
+        body = request.project_id
           ? "Create an invoice for this project?"
           : "A client approved your review request.";
-        await supabase.from("notifications").insert({
+        title = "Review approved";
+      } else {
+        title = "Review rejected";
+        body = "A client rejected your review request.";
+      }
+
+      if (inAppEnabled) {
+        await supabase.from("notifications").upsert({
           user_id: request.user_id,
           type: "review",
-          title: "Review approved",
+          title,
           body,
           link,
-        });
-      } else {
-        await supabase.from("notifications").insert({
-          user_id: request.user_id,
-          type: "review",
-          title: "Review rejected",
-          body: "A client rejected your review request.",
-          link: "/review-requests",
+          event_key: eventKey,
+        }, { onConflict: "user_id,event_key", ignoreDuplicates: true });
+      }
+
+      if (emailEnabled && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
+        const reviewsUrl = `${APP_BASE_URL || "https://getlance.app"}${link.startsWith("/") ? link : "/reviews"}`;
+        await resend.emails.send({
+          from: `Lance <${RESEND_FROM_EMAIL}>`,
+          to: ownerEmail,
+          subject: title,
+          text: `Hi ${ownerName},\n\n${body || `${request.title || "Review request"} was ${status}.`}\n\nOpen: ${reviewsUrl}`,
         });
       }
     }

@@ -19,8 +19,6 @@ export interface NotificationPreferences {
   invoices?: {
     dueSoon?: ChannelPref;
     overdue?: ChannelPref;
-    sent?: ChannelPref;
-    paid?: ChannelPref;
     daysBefore?: number;
   };
   reviews?: {
@@ -30,7 +28,6 @@ export interface NotificationPreferences {
     overdue?: ChannelPref;
     daysBefore?: number;
   };
-  importExport?: ChannelPref;
   /** Marketing / product updates and tips. Default true at signup; user can unsubscribe in settings or via email link. */
   marketing?: { email?: boolean };
 }
@@ -45,8 +42,6 @@ export function getDefaultPreferences(): NotificationPreferences {
     invoices: {
       dueSoon: { inApp: true, email: true },
       overdue: { inApp: true, email: true },
-      sent: { inApp: true, email: true },
-      paid: { inApp: true, email: true },
       daysBefore: DEFAULT_DAYS,
     },
     reviews: {
@@ -56,7 +51,6 @@ export function getDefaultPreferences(): NotificationPreferences {
       overdue: { inApp: true, email: true },
       daysBefore: DEFAULT_DAYS,
     },
-    importExport: { inApp: true, email: false },
     marketing: { email: true },
   };
 }
@@ -69,7 +63,6 @@ export function mergeWithDefaults(prefs: NotificationPreferences | null | undefi
     tasks: { ...def.tasks, ...prefs.tasks },
     invoices: { ...def.invoices, ...prefs.invoices },
     reviews: { ...def.reviews, ...prefs.reviews },
-    importExport: { ...def.importExport, ...prefs.importExport },
     marketing: { ...def.marketing, ...prefs.marketing },
   };
   // Enforce policy in case legacy rows still have email=true.
@@ -77,7 +70,6 @@ export function mergeWithDefaults(prefs: NotificationPreferences | null | undefi
   if (merged.projects?.overdue) merged.projects.overdue.email = false;
   if (merged.tasks?.dueSoon) merged.tasks.dueSoon.email = false;
   if (merged.tasks?.overdue) merged.tasks.overdue.email = false;
-  if (merged.importExport) merged.importExport.email = false;
   // Marketing email: default true if not set (opted in at signup)
   if (merged.marketing?.email === undefined) merged.marketing = { ...merged.marketing, email: true };
   return merged;

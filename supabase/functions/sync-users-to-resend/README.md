@@ -1,6 +1,6 @@
 # sync-users-to-resend
 
-Syncs Supabase `profiles` to Resend contacts and segments for marketing. Contacts and segments appear in your Resend dashboard; use segments there to target broadcasts (e.g. Trial, Trial Ending Soon, Paid).
+Syncs Supabase `profiles` to Resend contacts and segments for marketing. Contacts and segments appear in your Resend dashboard; use segments there to target broadcasts (e.g. General, Trial, Paid).
 
 ## 1. Deploy and see contacts in Resend
 
@@ -102,11 +102,12 @@ To change the schedule (e.g. every 6 hours), edit the cron expression in that mi
 
 ## Segments
 
-The function uses **3 segments** (Resend plan limit). Resend’s default **General** segment is used as **All Users** so we only create **Trial** and **Paid** when missing. If **Paid** doesn’t appear, in Resend delete the extra **All Users** segment (keep **General**) so a slot is free; the next sync will create **Paid**.
+On Resend free plan, keep to 3 segments: **General** (default), **Trial**, **Paid**.  
+`General` is treated as your marketing-subscribed audience. Sync creates only `Trial` and `Paid` when missing.
 
 | Segment     | Who is included                              |
 |------------|-----------------------------------------------|
-| All Users  | Every profile (uses **General** if present)   |
+| General    | Marketing opt-in users (`notification_preferences.marketing.email != false`) |
 | Trial      | `subscription_status = 'trial'`               |
 | Paid       | Active subscription or plan pro/team          |
 
