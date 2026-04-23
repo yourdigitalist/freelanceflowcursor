@@ -23,6 +23,11 @@ import {
   ChevronRight,
   ZoomIn,
   ZoomOut,
+  XCircle,
+  Pencil,
+  Trash2,
+  X,
+  Check,
 } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { cn } from '@/lib/utils';
@@ -87,6 +92,10 @@ export default function ClientReview() {
   const [commenterName, setCommenterName] = useState('');
   const [commenterEmail, setCommenterEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentContent, setEditingCommentContent] = useState('');
+  const [savingCommentId, setSavingCommentId] = useState<string | null>(null);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   
   // Identity dialog
   const [identityDialogOpen, setIdentityDialogOpen] = useState(false);
@@ -255,6 +264,103 @@ export default function ClientReview() {
     }
   };
 
+  const isOwnComment = (comment: ReviewComment) => {
+    return (
+      comment.commenter_email?.trim().toLowerCase() ===
+      commenterEmail.trim().toLowerCase()
+    );
+  };
+
+  const startEditingComment = (comment: ReviewComment) => {
+    setEditingCommentId(comment.id);
+    setEditingCommentContent(comment.content);
+  };
+
+  const cancelEditingComment = () => {
+    setEditingCommentId(null);
+    setEditingCommentContent('');
+  };
+
+  const saveEditedComment = async (comment: ReviewComment) => {
+    const newContent = editingCommentContent.trim();
+    if (!newContent || !token || !commenterEmail.trim()) return;
+
+    const previousContent = comment.content;
+    setSavingCommentId(comment.id);
+    setComments((prev) =>
+      prev.map((c) => (c.id === comment.id ? { ...c, content: newContent } : c)),
+    );
+    cancelEditingComment();
+
+    try {
+      const { data, error: updateError } = await supabase.functions.invoke('update-review-comment', {
+        body: {
+          token,
+          comment_id: comment.id,
+          content: newContent,
+          commenter_email: commenterEmail,
+        },
+      });
+
+      if (updateError || data?.error) {
+        setComments((prev) =>
+          prev.map((c) => (c.id === comment.id ? { ...c, content: previousContent } : c)),
+        );
+        toast({ title: data?.error || 'Error updating comment', variant: 'destructive' });
+        setSavingCommentId(null);
+        return;
+      }
+
+      if (data?.comment) {
+        setComments((prev) => prev.map((c) => (c.id === comment.id ? data.comment : c)));
+      }
+      setSavingCommentId(null);
+    } catch (err) {
+      console.error('Error updating comment:', err);
+      setComments((prev) =>
+        prev.map((c) => (c.id === comment.id ? { ...c, content: previousContent } : c)),
+      );
+      toast({ title: 'Error updating comment', variant: 'destructive' });
+      setSavingCommentId(null);
+    }
+  };
+
+  const deleteComment = async (comment: ReviewComment) => {
+    if (!token || !commenterEmail.trim()) return;
+
+    const previousComments = comments;
+    setDeletingCommentId(comment.id);
+    setComments((prev) => prev.filter((c) => c.id !== comment.id));
+    if (editingCommentId === comment.id) {
+      cancelEditingComment();
+    }
+
+    try {
+      const { data, error: deleteError } = await supabase.functions.invoke('delete-review-comment', {
+        body: {
+          token,
+          comment_id: comment.id,
+          commenter_email: commenterEmail,
+        },
+      });
+
+      if (deleteError || data?.error) {
+        setComments(previousComments);
+        toast({ title: data?.error || 'Error deleting comment', variant: 'destructive' });
+        setDeletingCommentId(null);
+        return;
+      }
+
+      setDeletingCommentId(null);
+      toast({ title: 'Comment deleted' });
+    } catch (err) {
+      console.error('Error deleting comment:', err);
+      setComments(previousComments);
+      toast({ title: 'Error deleting comment', variant: 'destructive' });
+      setDeletingCommentId(null);
+    }
+  };
+
   const navigateFile = (direction: 'prev' | 'next') => {
     const newIndex = direction === 'prev' 
       ? Math.max(0, selectedFileIndex - 1)
@@ -265,6 +371,105 @@ export default function ClientReview() {
   };
 
   const fileComments = comments.filter(c => c.review_file_id === selectedFile?.id);
+
+  const renderCommentItem = (comment: ReviewComment, index: number) => {
+    const ownComment = isOwnComment(comment);
+    const isEditing = editingCommentId === comment.id;
+    const isSaving = savingCommentId === comment.id;
+    const isDeleting = deletingCommentId === comment.id;
+
+    return (
+      <div key={comment.id} className="flex gap-3">
+        <div className="flex-shrink-0">
+          {comment.x_position != null ? (
+            <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold">
+              {index + 1}
+            </div>
+          ) : (
+            <Avatar className="h-6 w-6">
+              <AvatarFallback className="text-xs">
+                {comment.commenter_name?.slice(0, 2).toUpperCase() || 'AN'}
+              </AvatarFallback>
+            </Avatar>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-medium text-sm truncate">
+                {comment.commenter_name || 'Anonymous'}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {format(new Date(comment.created_at), 'MMM d')}
+              </span>
+            </div>
+            {ownComment && (
+              <div className="flex items-center gap-1">
+                {isEditing ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => saveEditedComment(comment)}
+                      disabled={!editingCommentContent.trim() || isSaving}
+                      title="Save comment"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={cancelEditingComment}
+                      disabled={isSaving}
+                      title="Cancel editing"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => startEditingComment(comment)}
+                      disabled={isSaving || isDeleting}
+                      title="Edit comment"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-destructive hover:text-destructive"
+                      onClick={() => deleteComment(comment)}
+                      disabled={isDeleting || isSaving}
+                      title="Delete comment"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          {isEditing ? (
+            <Textarea
+              className="mt-2 min-h-[80px]"
+              value={editingCommentContent}
+              onChange={(e) => setEditingCommentContent(e.target.value)}
+              placeholder="Update your feedback..."
+              maxLength={2000}
+            />
+          ) : (
+            <p className="text-sm mt-1">{comment.content}</p>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -526,34 +731,7 @@ export default function ClientReview() {
                   No comments yet. Click on the image or PDF to add one.
                 </p>
               ) : files.length <= 1 ? (
-                fileComments.map((comment, i) => (
-                  <div key={comment.id} className="flex gap-3">
-                    <div className="flex-shrink-0">
-                      {comment.x_position != null ? (
-                        <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold">
-                          {i + 1}
-                        </div>
-                      ) : (
-                        <Avatar className="h-6 w-6">
-                          <AvatarFallback className="text-xs">
-                            {comment.commenter_name?.slice(0, 2).toUpperCase() || 'AN'}
-                          </AvatarFallback>
-                        </Avatar>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm truncate">
-                          {comment.commenter_name || 'Anonymous'}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {format(new Date(comment.created_at), 'MMM d')}
-                        </span>
-                      </div>
-                      <p className="text-sm mt-1">{comment.content}</p>
-                    </div>
-                  </div>
-                ))
+                fileComments.map((comment, i) => renderCommentItem(comment, i))
               ) : (
                 files.map((file) => {
                   const fileCommentsList = comments.filter((c) => c.review_file_id === file.id);
@@ -571,34 +749,7 @@ export default function ClientReview() {
                         <span className="truncate">{file.file_name}</span>
                       </div>
                       <div className="space-y-4 pl-1">
-                        {fileCommentsList.map((comment, i) => (
-                          <div key={comment.id} className="flex gap-3">
-                            <div className="flex-shrink-0">
-                              {comment.x_position != null ? (
-                                <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold">
-                                  {i + 1}
-                                </div>
-                              ) : (
-                                <Avatar className="h-6 w-6">
-                                  <AvatarFallback className="text-xs">
-                                    {comment.commenter_name?.slice(0, 2).toUpperCase() || 'AN'}
-                                  </AvatarFallback>
-                                </Avatar>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-sm truncate">
-                                  {comment.commenter_name || 'Anonymous'}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  {format(new Date(comment.created_at), 'MMM d')}
-                                </span>
-                              </div>
-                              <p className="text-sm mt-1">{comment.content}</p>
-                            </div>
-                          </div>
-                        ))}
+                        {fileCommentsList.map((comment, i) => renderCommentItem(comment, i))}
                       </div>
                     </div>
                   );

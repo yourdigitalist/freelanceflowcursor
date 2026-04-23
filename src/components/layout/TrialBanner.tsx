@@ -14,9 +14,10 @@ interface TrialBannerProps {
 export function TrialBanner({ onUpgrade, onDismiss }: TrialBannerProps) {
   const { user } = useAuth();
   const [trialInfo, setTrialInfo] = useState<{
-    isOnTrial: boolean;
+    show: boolean;
     daysLeft: number;
     isExpired: boolean;
+    status: string | null;
   } | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
@@ -42,9 +43,17 @@ export function TrialBanner({ onUpgrade, onDismiss }: TrialBannerProps) {
         const daysLeft = differenceInDays(trialEnd, now);
         
         setTrialInfo({
-          isOnTrial: true,
+          show: true,
           daysLeft: Math.max(0, daysLeft),
           isExpired: daysLeft < 0,
+          status: data.subscription_status,
+        });
+      } else if (data.subscription_status === 'past_due') {
+        setTrialInfo({
+          show: true,
+          daysLeft: 0,
+          isExpired: false,
+          status: data.subscription_status,
         });
       } else {
         setTrialInfo(null);
@@ -54,7 +63,7 @@ export function TrialBanner({ onUpgrade, onDismiss }: TrialBannerProps) {
     }
   };
 
-  if (!trialInfo?.isOnTrial || dismissed) return null;
+  if (!trialInfo?.show || dismissed) return null;
 
   const isUrgent = trialInfo.daysLeft <= 3;
 
@@ -68,8 +77,10 @@ export function TrialBanner({ onUpgrade, onDismiss }: TrialBannerProps) {
       <div className="flex items-center justify-center gap-3 flex-wrap">
         <SlotIcon slot="nav_billing" className="h-4 w-4 text-primary shrink-0" />
         <span className="text-foreground">
-          {trialInfo.isExpired ? (
-            <>Your free trial has ended. We couldn&apos;t charge your card. Update your payment method in Billing to keep access.</>
+          {trialInfo.status === 'past_due' ? (
+            <>Your payment is past due. We couldn&apos;t charge your card. Update your payment method in Billing to keep access.</>
+          ) : trialInfo.isExpired ? (
+            <>Your free trial has ended. Update your payment method in Billing to keep access.</>
           ) : trialInfo.daysLeft === 0 ? (
             <>Your trial ends today. We&apos;ll charge your card automatically to continue your plan. To update payment or cancel, open Billing.</>
           ) : (

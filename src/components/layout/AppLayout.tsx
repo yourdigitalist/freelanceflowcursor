@@ -31,6 +31,7 @@ interface Profile {
   email: string | null;
   avatar_url: string | null;
   subscription_status: string | null;
+  trial_end_date: string | null;
   is_admin: boolean | null;
 }
 const navigation = [
@@ -80,7 +81,7 @@ export function AppLayout({
       if (!user) return;
       const {
         data
-      } = await supabase.from('profiles').select('first_name, last_name, full_name, email, avatar_url, subscription_status, is_admin').eq('user_id', user.id).single();
+      } = await supabase.from('profiles').select('first_name, last_name, full_name, email, avatar_url, subscription_status, trial_end_date, is_admin').eq('user_id', user.id).single();
       setProfile(data);
     };
     if (user) {
@@ -113,7 +114,8 @@ export function AppLayout({
   const [clientsOpen, setClientsOpen] = useState(false);
   const [timeOpen, setTimeOpen] = useState(false);
   const isTimeActive = location.pathname.startsWith('/time');
-  const isOnTrial = profile?.subscription_status === 'trial';
+  const trialEndDate = profile?.trial_end_date ? new Date(profile.trial_end_date) : null;
+  const isOnTrial = profile?.subscription_status === 'trial' && !!trialEndDate && trialEndDate >= new Date();
   const isPro = profile?.subscription_status === 'active';
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(() => {
     try { return localStorage.getItem('trial_banner_dismissed') === 'true'; } catch { return false; }

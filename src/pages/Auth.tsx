@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { AppLogo } from '@/components/AppLogo';
-import { Loader2, Clock, Users, Receipt, BarChart3, Check } from '@/components/icons';
+import { Loader2 } from '@/components/icons';
+import { SlotIcon } from '@/components/SlotIcon';
 
 const SIGNUP_PENDING_KEY = 'signup_pending';
 const SIGNUP_EMAIL_KEY = 'signup_email';
@@ -176,56 +177,62 @@ export default function Auth() {
   };
 
   const features = [
-    { icon: Users, text: 'Client Management' },
-    { icon: BarChart3, text: 'Project Tracking' },
-    { icon: Clock, text: 'Time Tracking' },
-    { icon: Receipt, text: 'Professional Invoicing' },
+    { slot: 'sidebar_clients' as const, text: 'Client Management' },
+    { slot: 'sidebar_projects' as const, text: 'Project Tracking' },
+    { slot: 'sidebar_time' as const, text: 'Time Tracking' },
+    { slot: 'sidebar_reviews' as const, text: 'Client Approvals' },
+    { slot: 'sidebar_invoices' as const, text: 'Professional Invoicing' },
+    { slot: 'stat_money' as const, text: 'Payment Tracking' },
   ];
 
   return (
-    <div className="min-h-screen flex bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="auth-brand min-h-screen flex bg-[linear-gradient(170deg,#faf8ff_0%,#f0ebfc_50%,#fff_100%)]">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap');
+        .auth-brand { font-family: 'Plus Jakarta Sans', sans-serif; }
+      `}</style>
       {/* Left side - Features */}
-      <div className="hidden lg:flex lg:w-1/2 bg-primary/5 p-12 flex-col justify-between">
+      <div className="hidden lg:flex lg:w-1/2 bg-[linear-gradient(160deg,#f8f6ff_0%,#fff_100%)] p-12 flex-col justify-between border-r border-[#ede8fa]">
         <div>
           <Link to="/" className="flex items-center gap-2 mb-12">
             <AppLogo full height={32} className="text-gradient" />
           </Link>
           
           <div className="space-y-2 mb-12">
-            <h1 className="text-4xl font-bold text-foreground">
-              Manage your freelance business
+            <h1 className="text-4xl font-extrabold tracking-[-0.03em] text-[#1a1a2e]">
+              Run your freelance business like a pro.
             </h1>
-            <p className="text-xl text-muted-foreground">
-              All-in-one platform for clients, projects, time & invoices
+            <p className="text-xl text-[#64647a]">
+              Clients, projects, time tracking, approvals, and invoices in one clean workspace.
             </p>
           </div>
 
           <div className="space-y-4">
             {features.map((feature, index) => (
-              <div key={index} className="flex items-center gap-3 text-foreground">
-                <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-primary/10">
-                  <feature.icon className="h-5 w-5 text-primary" />
+              <div key={index} className="flex items-center gap-3 text-[#1a1a2e]">
+                <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-[#9b63e9]/10 border border-[#9b63e9]/20">
+                  <SlotIcon slot={feature.slot} className="h-5 w-5 text-[#9b63e9]" />
                 </div>
                 <span className="text-lg">{feature.text}</span>
               </div>
             ))}
           </div>
+
         </div>
 
-        <div className="bg-background/50 rounded-xl p-6 border border-border/50">
+        <div className="bg-white rounded-xl p-6 border border-[#ede8fa] shadow-[0_20px_56px_rgba(155,99,233,0.1)]">
           <div className="flex items-center gap-2 mb-3">
             <div className="flex -space-x-2">
-              <div className="h-8 w-8 rounded-full bg-primary/20 border-2 border-background flex items-center justify-center text-xs font-medium">JD</div>
-              <div className="h-8 w-8 rounded-full bg-accent/20 border-2 border-background flex items-center justify-center text-xs font-medium">SK</div>
-              <div className="h-8 w-8 rounded-full bg-secondary border-2 border-background flex items-center justify-center text-xs font-medium">+</div>
+              <div className="h-8 w-8 rounded-full bg-[#9b63e9]/20 border-2 border-white flex items-center justify-center text-xs font-medium">JD</div>
+              <div className="h-8 w-8 rounded-full bg-[#fe8e01]/20 border-2 border-white flex items-center justify-center text-xs font-medium">SK</div>
+              <div className="h-8 w-8 rounded-full bg-[#f8f6ff] border-2 border-white flex items-center justify-center text-xs font-medium">+</div>
             </div>
-            <span className="text-sm text-muted-foreground">Join 1000+ freelancers</span>
+            <span className="text-sm text-[#64647a]">2,400+ freelancers trust Lance</span>
           </div>
-          <div className="flex items-center gap-1">
-            {[...Array(5)].map((_, i) => (
-              <Check key={i} className="h-4 w-4 text-primary" />
-            ))}
-            <span className="text-sm text-muted-foreground ml-2">Trusted by professionals</span>
+          <p className="text-sm font-bold text-[#1a1a2e]">15-day free trial. Cancel anytime.</p>
+          <div className="mt-2 flex items-center gap-2 text-sm text-[#64647a]">
+            <img src="/stripe-logo.svg" alt="Stripe" className="h-3.5 w-auto" />
+            <span>Secure Payment Powered by Stripe.</span>
           </div>
         </div>
       </div>
@@ -237,7 +244,7 @@ export default function Auth() {
             <AppLogo full height={32} className="text-gradient" />
           </div>
 
-          <Card className="border-0 shadow-xl">
+          <Card className="border border-[#ede8fa] shadow-[0_24px_72px_rgba(155,99,233,0.18)]">
             {showConfirmEmailMessage && (
               <div className="mx-6 mt-8 mb-1 px-5 pt-10 pb-5 rounded-xl bg-primary/10 border border-primary/20 text-sm space-y-4">
                 <p className="text-center text-foreground leading-relaxed pt-0.5">
@@ -278,23 +285,23 @@ export default function Auth() {
               </div>
             )}
             <CardHeader className="text-center pb-4">
-              <CardTitle className="text-2xl">Welcome</CardTitle>
+              <CardTitle className="text-2xl tracking-[-0.02em] text-[#1a1a2e]">Welcome</CardTitle>
               <CardDescription>
                 Sign in to your account or create a new one
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Tabs value={authTab} onValueChange={setAuthTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-6 h-11 p-1 bg-muted">
+                <TabsList className="grid w-full grid-cols-2 mb-6 h-11 p-1 bg-[#f8f6ff] border border-[#ede8fa]">
                   <TabsTrigger
                     value="signin"
-                    className="rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground"
+                    className="rounded-md data-[state=active]:bg-[#9b63e9] data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=inactive]:text-[#64647a]"
                   >
                     Sign In
                   </TabsTrigger>
                   <TabsTrigger
                     value="signup"
-                    className="rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground"
+                    className="rounded-md data-[state=active]:bg-[#9b63e9] data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=inactive]:text-[#64647a]"
                   >
                     Sign Up
                   </TabsTrigger>
@@ -322,7 +329,7 @@ export default function Auth() {
                         required
                       />
                     </div>
-                    <Button type="submit" className="w-full" disabled={isLoading}>
+                    <Button type="submit" className="w-full bg-[#9b63e9] hover:bg-[#7a45cc]" disabled={isLoading}>
                       {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       Sign In
                     </Button>
@@ -419,7 +426,7 @@ export default function Auth() {
                         Minimum 6 characters
                       </p>
                     </div>
-                    <Button type="submit" className="w-full" disabled={isLoading}>
+                    <Button type="submit" className="w-full bg-[#9b63e9] hover:bg-[#7a45cc]" disabled={isLoading}>
                       {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       Create Account
                     </Button>

@@ -6,6 +6,12 @@ verify_jwt = false
 [functions.submit-review-comment]
 verify_jwt = false
 
+[functions.update-review-comment]
+verify_jwt = false
+
+[functions.delete-review-comment]
+verify_jwt = false
+
 [functions.update-review-status]
 verify_jwt = false
 

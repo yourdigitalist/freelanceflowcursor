@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -57,7 +57,9 @@ const queryClient = new QueryClient();
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
+  const [hasBillingAccess, setHasBillingAccess] = useState<boolean | null>(null);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+  const location = useLocation();
 
   useEffect(() => {
     const checkOnboarding = async () => {
@@ -68,11 +70,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       
       const { data } = await supabase
         .from('profiles')
-        .select('onboarding_completed')
+        .select('onboarding_completed, subscription_status, trial_end_date')
         .eq('user_id', user.id)
         .maybeSingle();
       
       setOnboardingCompleted(data?.onboarding_completed ?? false);
+      const status = data?.subscription_status ?? null;
+      const trialEndDate = data?.trial_end_date ? new Date(data.trial_end_date) : null;
+      const trialIsValid = status === 'trial' && !!trialEndDate && trialEndDate >= new Date();
+      setHasBillingAccess(status === 'active' || trialIsValid);
       setCheckingOnboarding(false);
     };
     
@@ -91,6 +97,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   
   if (onboardingCompleted === false) {
     return <Navigate to="/onboarding" replace />;
+  }
+
+  const isBillingRoute = location.pathname === '/settings/subscription';
+  if (onboardingCompleted === true && hasBillingAccess === false && !isBillingRoute) {
+    return <Navigate to="/settings/subscription" replace />;
   }
   
   return <>{children}</>;

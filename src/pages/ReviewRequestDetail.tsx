@@ -31,6 +31,9 @@ import {
   Calendar,
   User,
   FolderOpen,
+  Upload,
+  Loader2,
+  X,
 } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 
@@ -95,6 +98,8 @@ export default function ReviewRequestDetail() {
   const [folders, setFolders] = useState<ReviewFolder[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
   const [imageViewFile, setImageViewFile] = useState<ReviewFile | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
@@ -214,6 +219,78 @@ export default function ReviewRequestDetail() {
     }
   };
 
+  const handleAddFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!request?.id || !user) return;
+    const selectedFiles = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (selectedFiles.length === 0) return;
+
+    setUploadingFiles(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken || !import.meta.env.VITE_SUPABASE_URL) {
+        throw new Error('Session not available');
+      }
+
+      for (const file of selectedFiles) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('review_request_id', request.id);
+
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-review-file`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: formData,
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(json?.error || `Upload failed for ${file.name}`);
+        }
+      }
+
+      toast({ title: 'Files added', description: `${selectedFiles.length} file${selectedFiles.length === 1 ? '' : 's'} uploaded.` });
+      fetchData();
+    } catch (err: any) {
+      toast({
+        title: 'Failed to add files',
+        description: err?.message || 'Please try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
+  const handleDeleteFile = async (file: ReviewFile) => {
+    if (!request?.id) return;
+    setDeletingFileId(file.id);
+    try {
+      // Remove file comments first to avoid FK issues.
+      await supabase.from('review_comments').delete().eq('review_file_id', file.id);
+      const { error: deleteRowError } = await supabase.from('review_files').delete().eq('id', file.id);
+      if (deleteRowError) throw deleteRowError;
+
+      const pathMatch = file.file_url.match(/review-files\/(.+)$/);
+      if (pathMatch?.[1]) {
+        await supabase.storage.from('review-files').remove([pathMatch[1]]);
+      }
+
+      toast({ title: 'File removed' });
+      fetchData();
+    } catch (err: any) {
+      toast({
+        title: 'Failed to remove file',
+        description: err?.message || 'Please try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingFileId(null);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'approved':
@@ -300,7 +377,29 @@ export default function ReviewRequestDetail() {
             {/* Files */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Files ({files.length})</CardTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-lg">Files ({files.length})</CardTitle>
+                  <div>
+                    <input
+                      id="add-review-files"
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/gif,image/webp,.pdf,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      className="hidden"
+                      onChange={handleAddFiles}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => document.getElementById('add-review-files')?.click()}
+                      disabled={uploadingFiles}
+                    >
+                      {uploadingFiles ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                      Add files
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 {files.length === 0 ? (
@@ -311,38 +410,64 @@ export default function ReviewRequestDetail() {
                       {files.map(file => {
                         const isImage = file.file_type?.startsWith('image/');
                         return isImage ? (
-                          <button
+                          <div
                             key={file.id}
-                            type="button"
-                            onClick={() => setImageViewFile(file)}
                             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors text-left w-full"
                           >
-                            <div className="h-12 w-12 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0">
-                              <img src={file.file_url} alt={file.file_name} className="h-full w-full object-cover" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{file.file_name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                Click to view with comment locations
-                              </p>
-                            </div>
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => setImageViewFile(file)}
+                              className="flex items-center gap-3 text-left min-w-0 flex-1"
+                            >
+                              <div className="h-12 w-12 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                                <img src={file.file_url} alt={file.file_name} className="h-full w-full object-cover" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium truncate">{file.file_name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Click to view with comment locations
+                                </p>
+                              </div>
+                            </button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDeleteFile(file)}
+                              disabled={deletingFileId === file.id}
+                            >
+                              {deletingFileId === file.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                            </Button>
+                          </div>
                         ) : (
-                          <a
+                          <div
                             key={file.id}
-                            href={file.file_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
                             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
                           >
-                            <div className="h-12 w-12 rounded bg-muted flex items-center justify-center shrink-0">
-                              <SlotIcon slot="approval_documents" className="h-6 w-6 text-muted-foreground" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{file.file_name}</p>
-                              <p className="text-xs text-muted-foreground">Click to view</p>
-                            </div>
-                          </a>
+                            <a
+                              href={file.file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-3 min-w-0 flex-1"
+                            >
+                              <div className="h-12 w-12 rounded bg-muted flex items-center justify-center shrink-0">
+                                <SlotIcon slot="approval_documents" className="h-6 w-6 text-muted-foreground" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium truncate">{file.file_name}</p>
+                                <p className="text-xs text-muted-foreground">Click to view</p>
+                              </div>
+                            </a>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDeleteFile(file)}
+                              disabled={deletingFileId === file.id}
+                            >
+                              {deletingFileId === file.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                            </Button>
+                          </div>
                         );
                       })}
                     </div>
