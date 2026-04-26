@@ -249,16 +249,23 @@
     overflow: hidden;
     box-shadow: 0 40px 100px rgba(155,99,233,0.18), 0 8px 32px rgba(0,0,0,0.08);
     border: 1.5px solid rgba(155,99,233,0.12);
-    transform: perspective(1400px) rotateX(3deg);
+    transform: perspective(1400px) translateZ(0) rotateX(0deg);
     transition: transform 0.5s ease;
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
-    transform-style: preserve-3d;
-    -webkit-transform-style: preserve-3d;
+    transform-style: flat;
+    -webkit-transform-style: flat;
     will-change: transform;
   }
-  .hero-screenshot-wrapper:hover { transform: perspective(1400px) rotateX(0deg); }
-  .hero-screenshot img { width: 100%; display: block; }
+  .hero-screenshot-wrapper:hover { transform: perspective(1400px) translateZ(0) rotateX(3deg); }
+  .hero-screenshot img {
+    width: 100%;
+    display: block;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
 
   .hero-social-proof {
     display: flex;
