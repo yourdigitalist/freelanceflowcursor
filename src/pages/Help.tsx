@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import DOMPurify from 'dompurify';
+import { HelpCircle, Lightbulb, PlayCircle } from 'lucide-react';
 
 interface FeatureRequestRow {
   id: string;
@@ -74,7 +75,7 @@ const SIDEBAR_ITEMS: { key: HelpSection; label: string; slot: (typeof HELP_SLOTS
   { key: 'contact', label: 'Contact', slot: 'help_contact' },
 ];
 
-const CONTACT_EMAIL = 'marina@yourdigitalist.com';
+const CONTACT_EMAIL = 'hello@getlance.app';
 
 const BUILD_IN_FAQS: { id: string; title: string; body: string }[] = [
   {
@@ -159,6 +160,7 @@ export default function Help() {
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactMessage, setContactMessage] = useState('');
+  const [contactSubmitting, setContactSubmitting] = useState(false);
 
   useEffect(() => {
     if (searchParams.get('feedback') === 'open') {
@@ -193,6 +195,19 @@ export default function Help() {
         status: 'new',
       });
       if (error) throw error;
+
+      // Notify support inbox; feedback remains stored even if email delivery fails.
+      const { error: notifyError } = await supabase.functions.invoke('send-feedback-notification', {
+        body: {
+          message: feedbackMessage.trim(),
+          context: feedbackContext.trim() || null,
+          page: window.location.pathname || null,
+        },
+      });
+      if (notifyError) {
+        console.warn('Feedback email notification failed:', notifyError);
+      }
+
       toast({ title: 'Feedback sent. Thank you!' });
       setFeedbackOpen(false);
       setFeedbackMessage('');
@@ -327,14 +342,56 @@ export default function Help() {
     setSubmitting(false);
   };
 
-  const handleContactSubmit = (e: React.FormEvent) => {
+  const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const subject = encodeURIComponent(`Help Center contact from ${contactName || 'Someone'}`);
-    const body = encodeURIComponent(
-      `${contactMessage}\n\n---\nFrom: ${contactName || 'N/A'}\nEmail: ${contactEmail || 'N/A'}`
-    );
-    window.location.href = `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`;
-    toast({ title: 'Opening your email client...', description: `Message will be sent to ${CONTACT_EMAIL}` });
+    if (!contactMessage.trim()) {
+      toast({ title: 'Please enter a message', variant: 'destructive' });
+      return;
+    }
+
+    setContactSubmitting(true);
+    try {
+      const payload = {
+        name: contactName.trim() || null,
+        email: contactEmail.trim() || null,
+        message: contactMessage.trim(),
+        page: window.location.pathname || null,
+      };
+
+      const invokeResult = await supabase.functions.invoke('help-contact-submit', {
+        body: payload,
+      });
+
+      if (invokeResult.error) {
+        // Fallback for occasional SDK/network fetch edge-cases in local dev.
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        if (!supabaseUrl) throw new Error(invokeResult.error.message || 'Failed to send message');
+
+        const directRes = await fetch(`${supabaseUrl}/functions/v1/help-contact-submit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const directData = await directRes.json().catch(() => ({}));
+        if (!directRes.ok) {
+          throw new Error(
+            typeof directData?.error === 'string'
+              ? directData.error
+              : invokeResult.error.message || 'Failed to send message'
+          );
+        }
+      }
+
+      toast({ title: 'Message sent', description: `Your message was sent to ${CONTACT_EMAIL}` });
+      setContactName('');
+      setContactEmail('');
+      setContactMessage('');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send message';
+      toast({ title: 'Send failed', description: message, variant: 'destructive' });
+    } finally {
+      setContactSubmitting(false);
+    }
   };
 
   const faqItemsFromDb = helpContent.filter((r) => r.category === 'faq');
@@ -639,7 +696,10 @@ export default function Help() {
                         required
                       />
                     </div>
-                    <Button type="submit">Open email to send</Button>
+                    <Button type="submit" disabled={contactSubmitting}>
+                      {contactSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Send message
+                    </Button>
                   </form>
                 </CardContent>
               </Card>

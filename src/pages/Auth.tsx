@@ -16,6 +16,7 @@ const SIGNUP_EMAIL_KEY = 'signup_email';
 
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
+  const [acceptTermsAndPrivacy, setAcceptTermsAndPrivacy] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [resetEmailSent, setResetEmailSent] = useState(false);
@@ -72,6 +73,15 @@ export default function Auth() {
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!acceptTermsAndPrivacy) {
+      toast({
+        title: 'Acceptance required',
+        description: 'You must accept privacy policy and terms and conditions before creating an account.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsLoading(true);
     
     const formData = new FormData(e.currentTarget);
@@ -425,6 +435,24 @@ export default function Auth() {
                       <p className="text-xs text-muted-foreground">
                         Minimum 6 characters
                       </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <input
+                        id="accept-terms-and-privacy"
+                        name="acceptTermsAndPrivacy"
+                        type="checkbox"
+                        checked={acceptTermsAndPrivacy}
+                        onChange={(e) => setAcceptTermsAndPrivacy(e.target.checked)}
+                        required
+                        className="mt-1 h-4 w-4 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                      <Label htmlFor="accept-terms-and-privacy" className="text-sm font-normal leading-relaxed">
+                        accept privacy policy and terms and conditions (
+                        <Link to="/privacy" className="text-primary hover:underline">Privacy policy</Link>
+                        {' '}and{' '}
+                        <Link to="/terms" className="text-primary hover:underline">Terms and conditions</Link>
+                        )
+                      </Label>
                     </div>
                     <Button type="submit" className="w-full bg-[#9b63e9] hover:bg-[#7a45cc]" disabled={isLoading}>
                       {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

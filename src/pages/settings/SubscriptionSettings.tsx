@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -281,40 +282,63 @@ export default function SubscriptionSettings() {
       {/* Plans – always visible; show which one the user is on and allow switch / subscribe */}
       <div>
         <h3 className="text-lg font-semibold mb-4">Plans</h3>
-        <div className="grid gap-4 md:grid-cols-2 md:items-start">
+        <div className="grid gap-8 grid-cols-1 md:grid-cols-2 md:items-start">
           {plans.map((plan) => {
             const isCurrentPlan = (isActive || isOnTrial) && profile?.plan_type === plan.id;
             const hasBillingAccount = !!profile?.stripe_customer_id;
-            const showBestValue = plan.highlighted && !isCurrentPlan;
-            const showYourPlan = isCurrentPlan;
-            const topLabel = showYourPlan ? 'Your plan' : showBestValue ? 'Best Value' : null;
             return (
               <Card
                 key={plan.id}
-                className={`overflow-hidden border-2 ${isCurrentPlan ? 'border-primary' : plan.highlighted && !isCurrentPlan ? 'border-primary/50' : 'border-transparent'}`}
+                className={cn(
+                  'flex flex-col border-border',
+                  isCurrentPlan ? 'border-primary shadow-lg ring-1 ring-primary/30' : '',
+                  plan.highlighted && !isCurrentPlan ? 'border-primary shadow-lg' : ''
+                )}
               >
-                <div className={cn(
-                  'text-xs font-medium text-center py-2.5 rounded-t-lg',
-                  topLabel ? 'bg-primary text-primary-foreground' : 'bg-transparent'
-                )}>
-                  {topLabel || '\u00A0'}
-                </div>
                 <CardHeader>
-                  <CardTitle className="flex items-baseline gap-1">
-                    <span className="text-2xl font-bold">{plan.price}</span>
-                    <span className="text-muted-foreground text-sm">{plan.period}</span>
-                  </CardTitle>
-                  <CardDescription>{plan.description}</CardDescription>
+                  <div className="flex items-baseline justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wide">
+                      {plan.highlighted ? (
+                        <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-primary">
+                          Most popular
+                        </span>
+                      ) : (
+                        <span className="inline-block px-2 py-0.5 text-transparent">
+                          Most popular
+                        </span>
+                      )}
+                    </p>
+                    {isCurrentPlan ? (
+                      <span className="inline-flex items-center rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground">
+                        Your plan
+                      </span>
+                    ) : null}
+                  </div>
+                  <h4 className="mt-2 text-sm font-semibold text-primary">{plan.name}</h4>
+                  <p className="mt-2 text-3xl font-bold">
+                    {plan.price}
+                    <span className="text-sm font-normal text-muted-foreground">
+                      {plan.period}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {plan.id === 'pro_monthly' ? 'Billed monthly' : 'Billed yearly'}
+                  </p>
+                  <CardDescription className="mt-4 text-sm text-muted-foreground">
+                    {plan.description}
+                  </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="flex-1">
                   <ul className="space-y-2">
                     {plan.features.map((feature, i) => (
                       <li key={i} className="flex items-center gap-2 text-sm">
-                        <Check className="h-4 w-4 text-primary" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                         {feature}
                       </li>
                     ))}
                   </ul>
+                </CardContent>
+                <CardContent>
                   {isCurrentPlan ? (
                     <Button
                       className="w-full"
@@ -377,6 +401,11 @@ export default function SubscriptionSettings() {
           )}
         </CardContent>
       </Card>
+      <p className="text-sm text-muted-foreground text-center">
+        <Link to="/terms" className="text-primary hover:underline">Terms and conditions</Link>
+        {' · '}
+        <Link to="/privacy" className="text-primary hover:underline">Privacy policy</Link>
+      </p>
     </div>
   );
 }

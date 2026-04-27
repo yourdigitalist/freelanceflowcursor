@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Popover,
   PopoverContent,
@@ -560,6 +560,11 @@ export default function Onboarding() {
                 Continue to payment
               </Button>
             </div>
+            <p className="text-center text-sm text-muted-foreground">
+              <Link to="/terms" className="text-primary hover:underline">Terms and conditions</Link>
+              {' · '}
+              <Link to="/privacy" className="text-primary hover:underline">Privacy policy</Link>
+            </p>
           </div>
         )}
       </main>

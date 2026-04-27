@@ -51,6 +51,7 @@ import { BrandingApply } from "@/components/BrandingApply";
 import { RecoveryHashRedirect } from "@/components/RecoveryHashRedirect";
 import { TimerProvider } from "@/contexts/TimerContext";
 import { IconSlotProvider } from "@/contexts/IconSlotContext";
+import { CrispChat } from "@/components/CrispChat";
 
 const queryClient = new QueryClient();
 
@@ -219,6 +220,7 @@ const App = () => (
             <TimerProvider>
               <ErrorBoundary>
                 <RecoveryHashRedirect />
+                <CrispChat />
                 <AppRoutes />
               </ErrorBoundary>
             </TimerProvider>

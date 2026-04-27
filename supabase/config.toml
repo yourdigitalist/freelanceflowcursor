@@ -44,3 +44,12 @@ verify_jwt = false
 
 [functions.billing-health]
 verify_jwt = false
+
+[functions.send-feedback-notification]
+verify_jwt = false
+
+[functions.send-contact-message]
+verify_jwt = false
+
+[functions.help-contact-submit]
+verify_jwt = false
