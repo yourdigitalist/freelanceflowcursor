@@ -379,9 +379,20 @@ export function AppLayout({
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link to="/help" className="cursor-pointer">
+                <a
+                  href="https://get-lance.crisp.help/en/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="cursor-pointer"
+                >
                   <SlotIcon slot="help_book" className="mr-2 h-4 w-4" />
                   Help Center
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/feature-requests" className="cursor-pointer">
+                  <SlotIcon slot="help_book" className="mr-2 h-4 w-4" />
+                  Feature requests
                 </Link>
               </DropdownMenuItem>
               {profile?.is_admin === true && (

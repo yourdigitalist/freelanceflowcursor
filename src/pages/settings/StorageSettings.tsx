@@ -14,7 +14,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { HardDrive, Trash2, FileText, Image, Loader2, AlertTriangle } from '@/components/icons';
 
-const MAX_STORAGE_BYTES = 10 * 1024 * 1024; // 10MB per user
+const MAX_STORAGE_BYTES = 209_715_200; // 200MB per user
 
 interface StorageFile {
   id: string;

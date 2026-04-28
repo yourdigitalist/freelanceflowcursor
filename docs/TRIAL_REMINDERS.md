@@ -7,6 +7,10 @@ The `send-trial-reminders` Edge Function sends emails when a user's trial has **
   - `POST https://<your-project-ref>.supabase.co/functions/v1/send-trial-reminders`
   - Header: `Authorization: Bearer <TRIAL_REMINDERS_CRON_KEY>`
   - Header: `Content-Type: application/json`
+- **Supabase scheduler migration:** `supabase/migrations/20260428080500_send_trial_reminders_cron.sql`
+  - Vault secret names used by that migration:
+    - `trial_reminders_project_url`
+    - `trial_reminders_cron_key`
 
 In-app reminders (trial banner and sidebar) are always shown for trial users; no cron needed.
 

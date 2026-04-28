@@ -11,6 +11,7 @@ import {
   type NotificationPreferences,
   type ChannelPref,
 } from '@/lib/notification-preferences';
+import type { Json } from '@/integrations/supabase/types';
 
 function ChannelRow({
   label,
@@ -62,7 +63,7 @@ export default function NotificationSettings() {
       setSaving(true);
       const { error } = await supabase
         .from('profiles')
-        .update({ notification_preferences: next })
+        .update({ notification_preferences: next as unknown as Json })
         .eq('user_id', user.id);
       setSaving(false);
       if (error) {
@@ -141,49 +142,6 @@ export default function NotificationSettings() {
           <CardDescription>Configure in-app and email notifications per category. Email is only sent for invoices and reviews.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
-          {/* Projects */}
-          <div>
-            <h3 className="text-sm font-medium mb-3">Projects</h3>
-            <div className="space-y-0 pl-2 border-l border-muted">
-              <ChannelRow
-                label="Due soon – In-app"
-                checked={getChannel('projects', 'dueSoon', 'inApp')}
-                onCheckedChange={(v) => setChannel('projects', 'dueSoon', 'inApp', v)}
-              />
-              <ChannelRow
-                label="Due soon – Email"
-                checked={false}
-                onCheckedChange={() => {}}
-                disabled
-              />
-              <ChannelRow
-                label="Overdue – In-app"
-                checked={getChannel('projects', 'overdue', 'inApp')}
-                onCheckedChange={(v) => setChannel('projects', 'overdue', 'inApp', v)}
-              />
-              <ChannelRow label="Overdue – Email" checked={false} onCheckedChange={() => {}} disabled />
-            </div>
-          </div>
-
-          {/* Tasks */}
-          <div>
-            <h3 className="text-sm font-medium mb-3">Tasks</h3>
-            <div className="space-y-0 pl-2 border-l border-muted">
-              <ChannelRow
-                label="Due soon – In-app"
-                checked={getChannel('tasks', 'dueSoon', 'inApp')}
-                onCheckedChange={(v) => setChannel('tasks', 'dueSoon', 'inApp', v)}
-              />
-              <ChannelRow label="Due soon – Email" checked={false} onCheckedChange={() => {}} disabled />
-              <ChannelRow
-                label="Overdue – In-app"
-                checked={getChannel('tasks', 'overdue', 'inApp')}
-                onCheckedChange={(v) => setChannel('tasks', 'overdue', 'inApp', v)}
-              />
-              <ChannelRow label="Overdue – Email" checked={false} onCheckedChange={() => {}} disabled />
-            </div>
-          </div>
-
           {/* Invoices */}
           <div>
             <h3 className="text-sm font-medium mb-3">Invoices</h3>

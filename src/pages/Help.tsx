@@ -31,7 +31,7 @@ import { cn } from '@/lib/utils';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import DOMPurify from 'dompurify';
-import { HelpCircle, Lightbulb, PlayCircle } from 'lucide-react';
+import { HelpCircle, Lightbulb, MessageCircle, PlayCircle } from 'lucide-react';
 
 interface FeatureRequestRow {
   id: string;
@@ -64,10 +64,11 @@ const STATUS_STYLE: Record<string, string> = {
   completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200',
 };
 
-type HelpSection = 'faqs' | 'onboarding' | 'features' | 'feedback' | 'contact';
+type HelpSection = 'help_center' | 'faqs' | 'onboarding' | 'features' | 'feedback' | 'contact';
 
-const HELP_SLOTS = ['help_faqs', 'help_onboarding', 'help_feature_requests', 'help_feedback', 'help_contact'] as const;
+const HELP_SLOTS = ['help_book', 'help_faqs', 'help_onboarding', 'help_feature_requests', 'help_feedback', 'help_contact'] as const;
 const SIDEBAR_ITEMS: { key: HelpSection; label: string; slot: (typeof HELP_SLOTS)[number] }[] = [
+  { key: 'help_center', label: 'Help center', slot: 'help_book' },
   { key: 'faqs', label: 'FAQs', slot: 'help_faqs' },
   { key: 'onboarding', label: 'Onboarding', slot: 'help_onboarding' },
   { key: 'features', label: 'Feature requests', slot: 'help_feature_requests' },
@@ -76,6 +77,7 @@ const SIDEBAR_ITEMS: { key: HelpSection; label: string; slot: (typeof HELP_SLOTS
 ];
 
 const CONTACT_EMAIL = 'hello@getlance.app';
+const HELP_CENTER_URL = 'https://get-lance.crisp.help/en/';
 
 const BUILD_IN_FAQS: { id: string; title: string; body: string }[] = [
   {
@@ -136,7 +138,9 @@ export default function Help() {
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const sectionParam = searchParams.get('section') as HelpSection | null;
-  const [section, setSection] = useState<HelpSection>(sectionParam && SIDEBAR_ITEMS.some((i) => i.key === sectionParam) ? sectionParam : 'faqs');
+  const [section, setSection] = useState<HelpSection>(sectionParam && SIDEBAR_ITEMS.some((i) => i.key === sectionParam) ? sectionParam : 'help_center');
+  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [iframeTimedOut, setIframeTimedOut] = useState(false);
 
   const [helpContent, setHelpContent] = useState<HelpContentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,6 +179,16 @@ export default function Help() {
     const s = searchParams.get('section') as HelpSection | null;
     if (s && SIDEBAR_ITEMS.some((i) => i.key === s)) setSection(s);
   }, [searchParams]);
+
+  useEffect(() => {
+    if (section !== 'help_center') return;
+    setIframeLoaded(false);
+    setIframeTimedOut(false);
+    const timeout = window.setTimeout(() => {
+      setIframeTimedOut(true);
+    }, 12000);
+    return () => window.clearTimeout(timeout);
+  }, [section]);
 
   const setSectionAndUrl = (s: HelpSection) => {
     setSection(s);
@@ -394,6 +408,19 @@ export default function Help() {
     }
   };
 
+  const openCrispChat = () => {
+    if (typeof window === 'undefined' || !window.$crisp) {
+      toast({
+        title: 'Chat unavailable',
+        description: 'Please disable blockers and try again, or use the contact form.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    window.$crisp.push(['do', 'chat:show']);
+    window.$crisp.push(['do', 'chat:open']);
+  };
+
   const faqItemsFromDb = helpContent.filter((r) => r.category === 'faq');
   const faqItems = [...BUILD_IN_FAQS, ...faqItemsFromDb];
   const onboardingItems = helpContent.filter((r) => r.category === 'onboarding');
@@ -430,6 +457,49 @@ export default function Help() {
         </aside>
 
         <div className="flex-1 min-w-0">
+          {section === 'help_center' && (
+            <div className="space-y-4">
+              <h1 className="text-2xl font-bold">Help center</h1>
+              <p className="text-muted-foreground">
+                Browse guides and tutorials, or open it in a new tab.
+              </p>
+              <div className="rounded-xl border overflow-hidden bg-background">
+                {!iframeLoaded && !iframeTimedOut ? (
+                  <div className="flex h-[70vh] min-h-[420px] w-full items-center justify-center gap-2 text-sm text-muted-foreground sm:h-[75vh]">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading help center...
+                  </div>
+                ) : null}
+
+                {iframeTimedOut && !iframeLoaded ? (
+                  <div className="flex h-[70vh] min-h-[420px] w-full flex-col items-center justify-center gap-3 p-6 text-center sm:h-[75vh]">
+                    <p className="text-sm text-muted-foreground">
+                      The embedded help center is taking too long to load in this browser.
+                    </p>
+                    <a
+                      href={HELP_CENTER_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Open Help Center in a new tab
+                    </a>
+                  </div>
+                ) : null}
+
+                <iframe
+                  title="Get Lance Help Center"
+                  src={HELP_CENTER_URL}
+                  className={`h-[70vh] min-h-[420px] w-full border-0 sm:h-[75vh] ${iframeLoaded && !iframeTimedOut ? 'block' : 'hidden'}`}
+                  onLoad={() => {
+                    setIframeLoaded(true);
+                    setIframeTimedOut(false);
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           {section === 'faqs' && (
             <div className="space-y-4">
               <h1 className="text-2xl font-bold">FAQs</h1>
@@ -661,6 +731,22 @@ export default function Help() {
             <div className="space-y-4">
               <h1 className="text-2xl font-bold">Contact</h1>
               <p className="text-muted-foreground">Get in touch with us at {CONTACT_EMAIL}</p>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h2 className="text-base font-semibold">Prefer chat?</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Start a live chat instead of filling the contact form.
+                      </p>
+                    </div>
+                    <Button onClick={openCrispChat} className="gap-2">
+                      <MessageCircle className="h-4 w-4" />
+                      Open live chat
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
               <Card>
                 <CardContent className="p-6">
                   <form onSubmit={handleContactSubmit} className="space-y-4">

@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Lightbulb } from '@/components/icons';
 import { format } from 'date-fns';
@@ -23,6 +25,13 @@ export default function FeatureRequestSettings() {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [newTitle, setNewTitle] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
 
   const fetchProfile = async () => {
     if (!user) return;
@@ -73,6 +82,90 @@ export default function FeatureRequestSettings() {
     setUpdatingId(null);
   };
 
+  const startEdit = (req: FeatureRequestRow) => {
+    setEditingId(req.id);
+    setEditTitle(req.title);
+    setEditDescription(req.description ?? '');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditTitle('');
+    setEditDescription('');
+  };
+
+  const saveEdit = async (id: string) => {
+    const title = editTitle.trim();
+    if (!title) {
+      toast({ title: 'Title is required', variant: 'destructive' });
+      return;
+    }
+    setUpdatingId(id);
+    try {
+      const { error } = await supabase
+        .from('feature_requests')
+        .update({
+          title,
+          description: editDescription.trim() || null,
+        })
+        .eq('id', id);
+      if (error) throw error;
+      setList((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, title, description: editDescription.trim() || null } : r))
+      );
+      toast({ title: 'Feature request updated' });
+      cancelEdit();
+    } catch (e) {
+      toast({ title: 'Failed to update request', variant: 'destructive' });
+    }
+    setUpdatingId(null);
+  };
+
+  const createRequest = async () => {
+    if (!user) return;
+    const title = newTitle.trim();
+    if (!title) {
+      toast({ title: 'Title is required', variant: 'destructive' });
+      return;
+    }
+    setCreating(true);
+    try {
+      const { data, error } = await supabase
+        .from('feature_requests')
+        .insert({
+          user_id: user.id,
+          title,
+          description: newDescription.trim() || null,
+          status: 'open',
+        })
+        .select('*')
+        .single();
+      if (error) throw error;
+      if (data) {
+        setList((prev) => [data as FeatureRequestRow, ...prev]);
+      }
+      setNewTitle('');
+      setNewDescription('');
+      toast({ title: 'Feature request added' });
+    } catch (e) {
+      toast({ title: 'Failed to add request', variant: 'destructive' });
+    }
+    setCreating(false);
+  };
+
+  const deleteRequest = async (id: string) => {
+    setDeletingId(id);
+    try {
+      const { error } = await supabase.from('feature_requests').delete().eq('id', id);
+      if (error) throw error;
+      setList((prev) => prev.filter((r) => r.id !== id));
+      toast({ title: 'Feature request removed' });
+    } catch (e) {
+      toast({ title: 'Failed to remove request', variant: 'destructive' });
+    }
+    setDeletingId(null);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -99,6 +192,42 @@ export default function FeatureRequestSettings() {
         </CardDescription>
       </div>
 
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Add feature request</CardTitle>
+            <CardDescription>Create a request on behalf of the team.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="new-request-title">Title</Label>
+              <Input
+                id="new-request-title"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="e.g. Dark mode dashboard charts"
+                disabled={creating}
+              />
+            </div>
+            <div>
+              <Label htmlFor="new-request-description">Description</Label>
+              <textarea
+                id="new-request-description"
+                className="mt-1 flex min-h-[90px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                placeholder="Optional details..."
+                disabled={creating}
+              />
+            </div>
+            <Button onClick={createRequest} disabled={creating}>
+              {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Add request
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">All requests</CardTitle>
@@ -115,11 +244,31 @@ export default function FeatureRequestSettings() {
                   className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border p-4"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium">{req.title}</p>
-                    {req.description && (
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                        {req.description}
-                      </p>
+                    {editingId === req.id ? (
+                      <div className="space-y-2">
+                        <Input
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          placeholder="Title"
+                          disabled={updatingId === req.id}
+                        />
+                        <textarea
+                          className="flex min-h-[90px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          value={editDescription}
+                          onChange={(e) => setEditDescription(e.target.value)}
+                          placeholder="Description (optional)"
+                          disabled={updatingId === req.id}
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <p className="font-medium">{req.title}</p>
+                        {req.description && (
+                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                            {req.description}
+                          </p>
+                        )}
+                      </>
                     )}
                     <p className="text-xs text-muted-foreground mt-2">
                       {format(new Date(req.created_at), 'MMM d, yyyy')}
@@ -142,6 +291,42 @@ export default function FeatureRequestSettings() {
                       {updatingId === req.id && (
                         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       )}
+                      {editingId === req.id ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={cancelEdit}
+                            disabled={updatingId === req.id}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => saveEdit(req.id)}
+                            disabled={updatingId === req.id}
+                          >
+                            Save
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => startEdit(req)}
+                          disabled={deletingId === req.id}
+                        >
+                          Edit
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => deleteRequest(req.id)}
+                        disabled={deletingId === req.id || updatingId === req.id}
+                      >
+                        {deletingId === req.id ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete'}
+                      </Button>
                     </div>
                   )}
                   {!isAdmin && (

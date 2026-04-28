@@ -6,10 +6,20 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useSettingsDirty } from '@/contexts/SettingsDirtyContext';
 import { Loader2 } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
+import { useNavigate } from 'react-router-dom';
 
 interface UserProfile {
   first_name: string | null;
@@ -23,10 +33,14 @@ interface UserProfile {
 export default function UserSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const dirtyContext = useSettingsDirty();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -92,6 +106,37 @@ export default function UserSettings() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmationText !== 'DELETE' || deletingAccount) return;
+
+    setDeletingAccount(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-account', {
+        body: {},
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to delete account');
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to delete account');
+      }
+
+      await supabase.auth.signOut();
+      navigate('/auth', { replace: true });
+      toast({ title: 'Account deleted' });
+    } catch (error: any) {
+      toast({
+        title: 'Failed to delete account',
+        description: error.message ?? 'An unexpected error occurred.',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingAccount(false);
     }
   };
 
@@ -186,6 +231,74 @@ export default function UserSettings() {
           Save Changes
         </Button>
       </div>
+
+      <Card className="border-destructive/20 bg-destructive/5 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-destructive">Delete Account</CardTitle>
+          <CardDescription>
+            Permanently delete your account and all associated data. This cannot be undone.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => {
+              setDeleteConfirmationText('');
+              setDeleteDialogOpen(true);
+            }}
+          >
+            Delete Account
+          </Button>
+        </CardContent>
+      </Card>
+
+      <AlertDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!deletingAccount) {
+            setDeleteDialogOpen(open);
+            if (!open) setDeleteConfirmationText('');
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action permanently removes your account and data. Type DELETE to confirm.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="delete-account-confirmation">Type DELETE to confirm</Label>
+            <Input
+              id="delete-account-confirmation"
+              value={deleteConfirmationText}
+              onChange={(event) => setDeleteConfirmationText(event.target.value)}
+              placeholder="DELETE"
+              autoComplete="off"
+              disabled={deletingAccount}
+            />
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button" disabled={deletingAccount}>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteConfirmationText !== 'DELETE' || deletingAccount}
+              onClick={handleDeleteAccount}
+            >
+              {deletingAccount && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete Account
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <p className="mt-4 text-sm text-muted-foreground">
+        Lance currently supports single-user workspaces. Team collaboration is on the roadmap.
+      </p>
     </form>
   );
 }

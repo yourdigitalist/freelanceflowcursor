@@ -38,7 +38,7 @@ import LandingContentSettings from "./pages/admin/LandingContentSettings";
 import SystemCheck from "./pages/admin/SystemCheck";
 import Notifications from "./pages/Notifications";
 import SearchResults from "./pages/SearchResults";
-import Help from "./pages/Help";
+import FeatureRequests from "./pages/FeatureRequests";
 import Notes from "./pages/Notes";
 import ReviewRequests from "./pages/ReviewRequests";
 import ReviewRequestDetail from "./pages/ReviewRequestDetail";
@@ -179,7 +179,8 @@ function AppRoutes() {
       <Route path="/review/:token" element={<ClientReview />} />
         <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
       <Route path="/search" element={<ProtectedRoute><SearchResults /></ProtectedRoute>} />
-      <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
+      <Route path="/help" element={<ProtectedRoute><Navigate to="/feature-requests" replace /></ProtectedRoute>} />
+      <Route path="/feature-requests" element={<ProtectedRoute><FeatureRequests /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
         <Route index element={<Navigate to="overview" replace />} />
         <Route path="overview" element={<AdminOverview />} />

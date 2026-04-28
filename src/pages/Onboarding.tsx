@@ -386,6 +386,9 @@ export default function Onboarding() {
                 </Card>
               ))}
             </div>
+            <p className="text-center text-sm text-muted-foreground">
+              Lance is currently designed for individual freelancers and solo businesses. Team workspaces are coming soon.
+            </p>
             <div className="flex justify-end">
               <Button onClick={() => setStep('useFirst')} disabled={!selectedRole}>
                 Continue <ArrowRight className="ml-2 h-4 w-4" />

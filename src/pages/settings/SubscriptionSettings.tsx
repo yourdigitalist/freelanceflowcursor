@@ -324,6 +324,7 @@ export default function SubscriptionSettings() {
                   <p className="mt-1 text-xs text-muted-foreground">
                     {plan.id === 'pro_monthly' ? 'Billed monthly' : 'Billed yearly'}
                   </p>
+                  <p className="mt-1 text-xs text-muted-foreground">1 user seat included</p>
                   <CardDescription className="mt-4 text-sm text-muted-foreground">
                     {plan.description}
                   </CardDescription>

@@ -210,10 +210,10 @@ export default function Auth() {
           
           <div className="space-y-2 mb-12">
             <h1 className="text-4xl font-extrabold tracking-[-0.03em] text-[#1a1a2e]">
-              Run your freelance business like a pro.
+              One tool. Every client. No excuses.
             </h1>
             <p className="text-xl text-[#64647a]">
-              Clients, projects, time tracking, approvals, and invoices in one clean workspace.
+              Stop paying for five apps to run one business. Lance gives designers, developers, and freelancers a single workspace for clients, projects, time tracking, approvals, and invoices.
             </p>
           </div>
 
@@ -237,7 +237,7 @@ export default function Auth() {
               <div className="h-8 w-8 rounded-full bg-[#fe8e01]/20 border-2 border-white flex items-center justify-center text-xs font-medium">SK</div>
               <div className="h-8 w-8 rounded-full bg-[#f8f6ff] border-2 border-white flex items-center justify-center text-xs font-medium">+</div>
             </div>
-            <span className="text-sm text-[#64647a]">2,400+ freelancers trust Lance</span>
+            <span className="text-sm text-[#64647a]">Tested by real freelancers in beta.</span>
           </div>
           <p className="text-sm font-bold text-[#1a1a2e]">15-day free trial. Cancel anytime.</p>
           <div className="mt-2 flex items-center gap-2 text-sm text-[#64647a]">
@@ -429,11 +429,11 @@ export default function Auth() {
                         name="password"
                         type="password"
                         placeholder="••••••••"
-                        minLength={6}
+                        minLength={8}
                         required
                       />
                       <p className="text-xs text-muted-foreground">
-                        Minimum 6 characters
+                        Minimum 8 characters
                       </p>
                     </div>
                     <div className="flex items-start gap-2.5">

@@ -37,6 +37,22 @@ interface NoteResult {
   title: string;
 }
 
+interface TimeEntryResult {
+  id: string;
+  description: string | null;
+  start_time: string;
+  total_duration_seconds: number | null;
+  duration_minutes: number | null;
+  projects: { name: string } | null;
+}
+
+interface ReviewResult {
+  id: string;
+  title: string;
+  status: string | null;
+  clients: { name: string } | null;
+}
+
 export default function SearchResults() {
   const [searchParams] = useSearchParams();
   const q = searchParams.get('q')?.trim() || '';
@@ -46,6 +62,8 @@ export default function SearchResults() {
   const [invoices, setInvoices] = useState<InvoiceResult[]>([]);
   const [tasks, setTasks] = useState<TaskResult[]>([]);
   const [notes, setNotes] = useState<NoteResult[]>([]);
+  const [timeEntries, setTimeEntries] = useState<TimeEntryResult[]>([]);
+  const [reviews, setReviews] = useState<ReviewResult[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -56,6 +74,8 @@ export default function SearchResults() {
       setInvoices([]);
       setTasks([]);
       setNotes([]);
+      setTimeEntries([]);
+      setReviews([]);
       return;
     }
     const pattern = `%${q}%`;
@@ -110,17 +130,41 @@ export default function SearchResults() {
         (byContent.data || []).forEach((r) => byId.set(r.id, r as NoteResult));
         return Array.from(byId.values()).slice(0, 10);
       }),
-    ]).then(([p, c, i, t, n]) => {
+      supabase
+        .from('time_entries')
+        .select('id, description, start_time, total_duration_seconds, duration_minutes, projects(name)')
+        .eq('user_id', user.id)
+        .not('description', 'is', null)
+        .ilike('description', pattern)
+        .order('start_time', { ascending: false })
+        .limit(10),
+      supabase
+        .from('review_requests')
+        .select('id, title, status, clients(name)')
+        .eq('user_id', user.id)
+        .ilike('title', pattern)
+        .order('created_at', { ascending: false })
+        .limit(10),
+    ]).then(([p, c, i, t, n, te, r]) => {
       setProjects((p.data as ProjectResult[]) || []);
       setClients(Array.isArray(c) ? c : []);
       setInvoices((i.data as InvoiceResult[]) || []);
       setTasks(Array.isArray(t) ? t : []);
       setNotes(Array.isArray(n) ? n : []);
+      setTimeEntries((te.data as TimeEntryResult[]) || []);
+      setReviews((r.data as ReviewResult[]) || []);
       setLoading(false);
     });
   }, [user, q]);
 
-  const hasResults = projects.length > 0 || clients.length > 0 || invoices.length > 0 || tasks.length > 0 || notes.length > 0;
+  const hasResults =
+    projects.length > 0 ||
+    clients.length > 0 ||
+    invoices.length > 0 ||
+    tasks.length > 0 ||
+    notes.length > 0 ||
+    timeEntries.length > 0 ||
+    reviews.length > 0;
   const isEmpty = !loading && q && !hasResults;
 
   return (
@@ -290,6 +334,91 @@ export default function SearchResults() {
                           <div className="flex items-center gap-3">
                             <SlotIcon slot="sidebar_notes" className="h-4 w-4 text-muted-foreground" />
                             <span className="font-medium">{note.title || 'Untitled'}</span>
+                          </div>
+                          <span className="text-muted-foreground text-sm">View →</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
+
+            {timeEntries.length > 0 && (
+              <Card className="border-0 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-base font-semibold">Time Entries</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {timeEntries.map((entry) => {
+                      const totalHours = (() => {
+                        if (typeof entry.total_duration_seconds === 'number') {
+                          return entry.total_duration_seconds / 3600;
+                        }
+                        if (typeof entry.duration_minutes === 'number') {
+                          return entry.duration_minutes / 60;
+                        }
+                        return null;
+                      })();
+
+                      const dateText = (() => {
+                        const parsed = new Date(entry.start_time);
+                        if (Number.isNaN(parsed.getTime())) return '';
+                        return parsed.toLocaleDateString();
+                      })();
+
+                      return (
+                        <li key={entry.id}>
+                          <Link
+                            to="/time/logs"
+                            className="flex items-center justify-between rounded-lg p-3 hover:bg-muted/50 transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <SlotIcon slot="sidebar_time" className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium">{entry.description || 'Untitled entry'}</span>
+                              {entry.projects?.name && (
+                                <span className="text-xs text-muted-foreground">{entry.projects.name}</span>
+                              )}
+                              {dateText && (
+                                <span className="text-xs text-muted-foreground">{dateText}</span>
+                              )}
+                              {totalHours != null && (
+                                <span className="text-xs text-muted-foreground">{totalHours.toFixed(2)}h</span>
+                              )}
+                            </div>
+                            <span className="text-muted-foreground text-sm">View →</span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
+
+            {reviews.length > 0 && (
+              <Card className="border-0 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-base font-semibold">Reviews</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {reviews.map((review) => (
+                      <li key={review.id}>
+                        <Link
+                          to={`/reviews/${review.id}`}
+                          className="flex items-center justify-between rounded-lg p-3 hover:bg-muted/50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <SlotIcon slot="sidebar_reviews" className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">{review.title}</span>
+                            {review.clients?.name && (
+                              <span className="text-xs text-muted-foreground">{review.clients.name}</span>
+                            )}
+                            {review.status && (
+                              <span className="text-xs text-muted-foreground capitalize">{review.status}</span>
+                            )}
                           </div>
                           <span className="text-muted-foreground text-sm">View →</span>
                         </Link>

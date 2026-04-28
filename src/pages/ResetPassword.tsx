@@ -64,10 +64,10 @@ export default function ResetPassword() {
       return;
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       toast({
         title: 'Password too short',
-        description: 'Password must be at least 6 characters.',
+        description: 'Password must be at least 8 characters.',
         variant: 'destructive',
       });
       setIsLoading(false);
@@ -136,7 +136,7 @@ export default function ResetPassword() {
                     name="password"
                     type="password"
                     placeholder="••••••••"
-                    minLength={6}
+                    minLength={8}
                     required
                   />
                 </div>
@@ -147,11 +147,11 @@ export default function ResetPassword() {
                     name="confirmPassword"
                     type="password"
                     placeholder="••••••••"
-                    minLength={6}
+                    minLength={8}
                     required
                   />
                   <p className="text-xs text-muted-foreground">
-                    Minimum 6 characters
+                    Minimum 8 characters
                   </p>
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>

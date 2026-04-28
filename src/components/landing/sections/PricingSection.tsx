@@ -88,6 +88,7 @@ export default function PricingSection() {
               <p className="mt-1 text-xs text-muted-foreground">
                 {plan.period === "month" ? "Billed monthly" : "Billed yearly"}
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">1 user seat included</p>
               <p className="mt-4 text-sm text-muted-foreground">
                 {plan.description}
               </p>

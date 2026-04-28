@@ -333,6 +333,6 @@ export function SlotIcon({
   className?: string;
 }) {
   const { getIcon } = useIconSlots();
-  const Icon = getIcon(slot);
+  const Icon = getIcon(slot) ?? DEFAULT_ICONS[slot] ?? HelpCircle;
   return <Icon className={className} />;
 }
