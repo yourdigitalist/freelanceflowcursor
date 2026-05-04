@@ -111,7 +111,17 @@ export default function FeedbackSettings() {
                   className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 rounded-lg border p-4"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium whitespace-pre-wrap">{row.message}</p>
+                    <p className="text-sm font-medium whitespace-pre-wrap">
+                      {row.what_broke ?? row.message ?? '—'}
+                    </p>
+                    {(row.freelance_area || row.first_feature || row.wish_list != null || row.impression != null) && (
+                      <ul className="text-xs text-muted-foreground mt-2 space-y-0.5 list-disc list-inside">
+                        {row.freelance_area && <li>Area: {row.freelance_area}</li>}
+                        {row.first_feature && <li>First feature: {row.first_feature}</li>}
+                        {row.wish_list && <li>Wish: {row.wish_list}</li>}
+                        {row.impression != null && <li>Impression: {row.impression}/5</li>}
+                      </ul>
+                    )}
                     {row.context && (
                       <p className="text-xs text-muted-foreground mt-1">Context: {row.context}</p>
                     )}

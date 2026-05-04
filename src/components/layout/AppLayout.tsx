@@ -15,6 +15,7 @@ import { useTimer } from '@/contexts/TimerContext';
 import { TrialBanner } from './TrialBanner';
 import { TimerBar } from './TimerBar';
 import { StartGuide } from './StartGuide';
+import { FeedbackTab } from './FeedbackTab';
 interface AppLayoutProps {
   children: ReactNode;
 }
@@ -434,6 +435,7 @@ export function AppLayout({
 
         {/* Floating setup guide (corner panel) */}
         <StartGuide />
+        <FeedbackTab />
       </div>
 
       {/* Timer bar – fixed at bottom of viewport so always visible; left offset on lg so it doesn't cover sidebar */}

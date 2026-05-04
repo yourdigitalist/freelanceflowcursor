@@ -767,26 +767,41 @@ export type Database = {
         Row: {
           id: string
           user_id: string
-          message: string
+          message: string | null
           context: string | null
           status: string
           created_at: string
+          freelance_area: string | null
+          first_feature: string | null
+          what_broke: string | null
+          wish_list: string | null
+          impression: number | null
         }
         Insert: {
           id?: string
           user_id: string
-          message: string
+          message?: string | null
           context?: string | null
           status?: string
           created_at?: string
+          freelance_area?: string | null
+          first_feature?: string | null
+          what_broke?: string | null
+          wish_list?: string | null
+          impression?: number | null
         }
         Update: {
           id?: string
           user_id?: string
-          message?: string
+          message?: string | null
           context?: string | null
           status?: string
           created_at?: string
+          freelance_area?: string | null
+          first_feature?: string | null
+          what_broke?: string | null
+          wish_list?: string | null
+          impression?: number | null
         }
         Relationships: [
           {

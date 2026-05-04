@@ -198,27 +198,39 @@ export const DEFAULT_LANDING_CONTENT: LandingContent = {
     subtitle: 'Everything you need to run client work',
     items: [
       {
-        title: 'Projects',
+        title: 'Clients & Projects',
         content:
-          'Organize every client, project, and deliverable with clear statuses and due dates, all in one simple view.',
+          'Manage your full client pipeline in one place — from new lead to active project. Track contacts, set follow-ups, and log activity without digging through email threads.',
         imageUrl: '',
       },
       {
-        title: 'Invoices',
+        title: 'Time Tracking',
         content:
-          'Create clean, branded invoices from your projects and time logs, and see what’s paid or overdue at a glance.',
+          'Log billable hours with one click. Lance tracks time against projects and feeds it straight into your invoices.',
         imageUrl: '',
       },
       {
-        title: 'Time tracking',
+        title: 'Client Approvals',
         content:
-          'Track billable and non‑billable hours without friction, right where you already manage the work.',
+          'Share a link. Your client clicks, comments, approves — no account, no app, no "did you get my email?" Pin feedback directly on your files.',
         imageUrl: '',
       },
       {
-        title: 'Client feedback',
+        title: 'Invoicing',
         content:
-          'Keep feedback, approvals, and requests next to the work instead of buried in email threads and chat history.',
+          'Turn completed work into a polished invoice in seconds. Track payments and send reminders automatically.',
+        imageUrl: '',
+      },
+      {
+        title: 'Task Management',
+        content:
+          'A kanban board built for service teams. Priorities, due dates, statuses — exactly what you need, nothing more.',
+        imageUrl: '',
+      },
+      {
+        title: 'Notes',
+        content:
+          'A rich text workspace for briefs, meeting notes, and ideas. Link notes to clients and projects, and turn highlighted text into tasks in one click.',
         imageUrl: '',
       },
     ],

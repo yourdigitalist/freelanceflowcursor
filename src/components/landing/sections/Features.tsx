@@ -1,7 +1,16 @@
 import FeaturesHorizontal from "@/components/landing/features-horizontal";
 import Section from "@/components/landing/Section";
 import { useLandingContent } from "@/hooks/useLandingContent";
-import { Clock, FileText, FolderKanban, MessageSquare } from "lucide-react";
+
+const FEATURE_EMOJIS = ["🗂", "⏱", "✅", "🧾", "📋", "📝"] as const;
+
+function featureIcon(idx: number) {
+  return (
+    <span className="text-2xl leading-none" aria-hidden>
+      {FEATURE_EMOJIS[idx] ?? FEATURE_EMOJIS[0]}
+    </span>
+  );
+}
 
 export default function Features() {
   const { data: content } = useLandingContent();
@@ -10,56 +19,61 @@ export default function Features() {
 
   const data =
     features?.items?.length
-      ? features.items.map((item, idx) => {
-          const iconMap = [
-            <FolderKanban className="h-6 w-6 text-primary" />,
-            <FileText className="h-6 w-6 text-primary" />,
-            <Clock className="h-6 w-6 text-primary" />,
-            <MessageSquare className="h-6 w-6 text-primary" />,
-          ] as const;
-          const icon = iconMap[idx] ?? (
-            <FolderKanban className="h-6 w-6 text-primary" />
-          );
-          return {
-            id: idx + 1,
-            title: item.title,
-            content: item.content,
-            image: item.imageUrl || screenshot,
-            icon,
-          };
-        })
+      ? features.items.map((item, idx) => ({
+          id: idx + 1,
+          title: item.title,
+          content: item.content,
+          image: item.imageUrl || screenshot,
+          icon: featureIcon(idx),
+        }))
       : [
           {
             id: 1,
-            title: "Projects",
+            title: "Clients & Projects",
             content:
-              "Organize every client, project, and deliverable with clear statuses and due dates, all in one simple view.",
+              "Manage your full client pipeline in one place — from new lead to active project. Track contacts, set follow-ups, and log activity without digging through email threads.",
             image: screenshot,
-            icon: <FolderKanban className="h-6 w-6 text-primary" />,
+            icon: featureIcon(0),
           },
           {
             id: 2,
-            title: "Invoices",
+            title: "Time Tracking",
             content:
-              "Create clean, branded invoices from your projects and time logs, and see what’s paid or overdue at a glance.",
+              "Log billable hours with one click. Lance tracks time against projects and feeds it straight into your invoices.",
             image: screenshot,
-            icon: <FileText className="h-6 w-6 text-primary" />,
+            icon: featureIcon(1),
           },
           {
             id: 3,
-            title: "Time tracking",
+            title: "Client Approvals",
             content:
-              "Track billable and non‑billable hours without friction, right where you already manage the work.",
+              'Share a link. Your client clicks, comments, approves — no account, no app, no "did you get my email?" Pin feedback directly on your files.',
             image: screenshot,
-            icon: <Clock className="h-6 w-6 text-primary" />,
+            icon: featureIcon(2),
           },
           {
             id: 4,
-            title: "Client feedback",
+            title: "Invoicing",
             content:
-              "Keep feedback, approvals, and requests next to the work instead of buried in email threads and chat history.",
+              "Turn completed work into a polished invoice in seconds. Track payments and send reminders automatically.",
             image: screenshot,
-            icon: <MessageSquare className="h-6 w-6 text-primary" />,
+            icon: featureIcon(3),
+          },
+          {
+            id: 5,
+            title: "Task Management",
+            content:
+              "A kanban board built for service teams. Priorities, due dates, statuses — exactly what you need, nothing more.",
+            image: screenshot,
+            icon: featureIcon(4),
+          },
+          {
+            id: 6,
+            title: "Notes",
+            content:
+              "A rich text workspace for briefs, meeting notes, and ideas. Link notes to clients and projects, and turn highlighted text into tasks in one click.",
+            image: screenshot,
+            icon: featureIcon(5),
           },
         ];
 
