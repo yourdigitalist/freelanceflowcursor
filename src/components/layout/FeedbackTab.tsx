@@ -8,7 +8,10 @@ import { cn } from '@/lib/utils';
 import { X } from '@/components/icons';
 
 const AUTH_START_KEY = 'lance_feedback_tab_auth_started_at';
+const AUTO_OPEN_DONE_KEY = 'lance_feedback_three_min_auto_open_done';
 const THREE_MIN_MS = 3 * 60 * 1000;
+/** Clear Crisp’s bottom-right launcher (~56px) plus comfortable gap */
+const CRISP_BOTTOM_SAFE_CLASS = 'bottom-24';
 
 const FREELANCE_AREAS = ['Design', 'Web Development', 'Marketing', 'Other'] as const;
 const FIRST_FEATURES = ['Projects', 'File Approvals', 'Invoicing', 'CRM'] as const;
@@ -61,7 +64,6 @@ function PillGroup<T extends string>({
 
 export function FeedbackTab() {
   const { user } = useAuth();
-  const [eligible, setEligible] = useState(false);
   const [open, setOpen] = useState(false);
   const [freelanceArea, setFreelanceArea] = useState<(typeof FREELANCE_AREAS)[number] | null>(null);
   const [firstFeature, setFirstFeature] = useState<(typeof FIRST_FEATURES)[number] | null>(null);
@@ -106,6 +108,11 @@ export function FeedbackTab() {
   const closePanel = useCallback(() => {
     clearTimers();
     setOpen(false);
+  }, [clearTimers]);
+
+  const closePanelAndResetForm = useCallback(() => {
+    clearTimers();
+    setOpen(false);
     scheduleResetAfterClose();
   }, [clearTimers, scheduleResetAfterClose]);
 
@@ -117,10 +124,12 @@ export function FeedbackTab() {
     if (!user) {
       try {
         sessionStorage.removeItem(AUTH_START_KEY);
+        sessionStorage.removeItem(AUTO_OPEN_DONE_KEY);
       } catch {
         /* ignore */
       }
-      setEligible(false);
+      setOpen(false);
+      clearTimers();
       return;
     }
 
@@ -137,13 +146,23 @@ export function FeedbackTab() {
 
     const elapsed = Date.now() - Number(start);
     if (elapsed >= THREE_MIN_MS) {
-      setEligible(true);
       return;
     }
 
-    const t = window.setTimeout(() => setEligible(true), THREE_MIN_MS - elapsed);
+    const t = window.setTimeout(() => {
+      let already = false;
+      try {
+        already = sessionStorage.getItem(AUTO_OPEN_DONE_KEY) === '1';
+        if (!already) sessionStorage.setItem(AUTO_OPEN_DONE_KEY, '1');
+      } catch {
+        /* ignore */
+      }
+      if (!already) {
+        setOpen(true);
+      }
+    }, THREE_MIN_MS - elapsed);
     return () => window.clearTimeout(t);
-  }, [user]);
+  }, [user, clearTimers]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -172,15 +191,19 @@ export function FeedbackTab() {
     setSuccess(true);
     successCloseTimer.current = window.setTimeout(() => {
       successCloseTimer.current = null;
-      setOpen(false);
-      scheduleResetAfterClose();
+      closePanelAndResetForm();
     }, 3000);
   };
 
-  if (!user || !eligible) return null;
+  if (!user) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 z-[65] flex flex-row-reverse items-stretch pointer-events-none">
+    <div
+      className={cn(
+        'fixed top-0 right-0 z-[65] flex flex-row-reverse items-stretch pointer-events-none',
+        CRISP_BOTTOM_SAFE_CLASS,
+      )}
+    >
       <button
         type="button"
         onClick={() => {
@@ -188,13 +211,14 @@ export function FeedbackTab() {
             closePanel();
           } else {
             clearTimers();
-            resetForm();
             setOpen(true);
           }
         }}
         className={cn(
-          'pointer-events-auto my-auto shrink-0 rounded-l-xl border border-r-0 border-border bg-card px-2.5 py-6 text-sm font-semibold text-foreground shadow-md transition-colors hover:bg-accent',
+          'pointer-events-auto my-auto shrink-0 border-y border-l border-r-0 border-border bg-card pl-2.5 pr-2 py-7 text-sm font-semibold tracking-wide text-foreground shadow-md transition-all hover:bg-accent hover:shadow-lg',
+          'rounded-l-2xl',
           '[writing-mode:vertical-rl] [text-orientation:mixed]',
+          open && 'border-primary/40 bg-primary/5 shadow-lg',
         )}
         aria-expanded={open}
         aria-controls="lance-feedback-panel"
@@ -205,7 +229,7 @@ export function FeedbackTab() {
       <aside
         id="lance-feedback-panel"
         className={cn(
-          'pointer-events-auto flex h-full max-h-screen w-[min(100vw-2.75rem,400px)] flex-col border-l border-border bg-card shadow-lg transition-transform duration-300 ease-out',
+          'pointer-events-auto flex h-full max-h-full w-[min(100vw-2.75rem,400px)] flex-col border-l border-border bg-card shadow-lg transition-transform duration-300 ease-out',
           open ? 'translate-x-0' : 'translate-x-full',
         )}
       >
