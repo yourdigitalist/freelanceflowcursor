@@ -1,20 +1,36 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { X } from '@/components/icons';
 
-const AUTH_START_KEY = 'lance_feedback_tab_auth_started_at';
-const AUTO_OPEN_DONE_KEY = 'lance_feedback_three_min_auto_open_done';
-const THREE_MIN_MS = 3 * 60 * 1000;
-/** Clear Crisp’s bottom-right launcher (~56px) plus comfortable gap */
-const CRISP_BOTTOM_SAFE_CLASS = 'bottom-24';
-
 const FREELANCE_AREAS = ['Design', 'Web Development', 'Marketing', 'Other'] as const;
-const FIRST_FEATURES = ['Projects', 'File Approvals', 'Invoicing', 'CRM'] as const;
+const FIRST_FEATURES = [
+  'CRM / Clients',
+  'Projects',
+  'Time Tracking',
+  'Notes',
+  'Invoicing',
+  'File Approvals',
+] as const;
+const PRICING_FEEL = ['Too expensive', 'Fair', 'Great value', 'Not sure yet'] as const;
+const TOOL_OPTIONS = [
+  'Notion',
+  'Monday.com',
+  'Trello',
+  'Asana',
+  'Excel or Google Sheets',
+  'FreshBooks or Wave',
+  'Toggl or Clockify',
+  'Google Drive or Dropbox',
+  'Nothing yet',
+  'Other',
+] as const;
 
 const IMPRESSIONS = [
   { value: 1, emoji: '😬' },
@@ -62,6 +78,47 @@ function PillGroup<T extends string>({
   );
 }
 
+function PillGroupMulti({
+  label,
+  options,
+  values,
+  onToggle,
+}: {
+  label: string;
+  options: readonly string[];
+  values: readonly string[];
+  onToggle: (opt: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm font-medium text-foreground">{label}</Label>
+      <div className="flex flex-wrap gap-2">
+        {options.map((opt) => {
+          const selected = values.includes(opt);
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onToggle(opt)}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                selected
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+              )}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Above app chrome; high enough to sit above third-party widgets (e.g. chat) while this modal is open */
+const FEEDBACK_MODAL_Z = 'z-[100000]';
+
 export function FeedbackTab() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -70,6 +127,9 @@ export function FeedbackTab() {
   const [whatBroke, setWhatBroke] = useState('');
   const [wishList, setWishList] = useState('');
   const [impression, setImpression] = useState<number | null>(null);
+  const [pricingFeel, setPricingFeel] = useState<(typeof PRICING_FEEL)[number] | null>(null);
+  const [toolsSelected, setToolsSelected] = useState<string[]>([]);
+  const [toolsOther, setToolsOther] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -93,6 +153,9 @@ export function FeedbackTab() {
     setWhatBroke('');
     setWishList('');
     setImpression(null);
+    setPricingFeel(null);
+    setToolsSelected([]);
+    setToolsOther('');
     setSubmitError(null);
     setSuccess(false);
   }, []);
@@ -105,16 +168,20 @@ export function FeedbackTab() {
     }, 320);
   }, [resetForm]);
 
-  const closePanel = useCallback(() => {
-    clearTimers();
-    setOpen(false);
-  }, [clearTimers]);
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      clearTimers();
+      setOpen(next);
+      if (!next) {
+        scheduleResetAfterClose();
+      }
+    },
+    [clearTimers, scheduleResetAfterClose],
+  );
 
-  const closePanelAndResetForm = useCallback(() => {
-    clearTimers();
-    setOpen(false);
-    scheduleResetAfterClose();
-  }, [clearTimers, scheduleResetAfterClose]);
+  const toggleTool = useCallback((opt: string) => {
+    setToolsSelected((prev) => (prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]));
+  }, []);
 
   useEffect(() => {
     return () => clearTimers();
@@ -122,47 +189,11 @@ export function FeedbackTab() {
 
   useEffect(() => {
     if (!user) {
-      try {
-        sessionStorage.removeItem(AUTH_START_KEY);
-        sessionStorage.removeItem(AUTO_OPEN_DONE_KEY);
-      } catch {
-        /* ignore */
-      }
-      setOpen(false);
       clearTimers();
-      return;
+      setOpen(false);
+      resetForm();
     }
-
-    let start: string | null = null;
-    try {
-      start = sessionStorage.getItem(AUTH_START_KEY);
-      if (!start) {
-        start = String(Date.now());
-        sessionStorage.setItem(AUTH_START_KEY, start);
-      }
-    } catch {
-      start = String(Date.now());
-    }
-
-    const elapsed = Date.now() - Number(start);
-    if (elapsed >= THREE_MIN_MS) {
-      return;
-    }
-
-    const t = window.setTimeout(() => {
-      let already = false;
-      try {
-        already = sessionStorage.getItem(AUTO_OPEN_DONE_KEY) === '1';
-        if (!already) sessionStorage.setItem(AUTO_OPEN_DONE_KEY, '1');
-      } catch {
-        /* ignore */
-      }
-      if (!already) {
-        setOpen(true);
-      }
-    }, THREE_MIN_MS - elapsed);
-    return () => window.clearTimeout(t);
-  }, [user, clearTimers]);
+  }, [user, clearTimers, resetForm]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -174,6 +205,12 @@ export function FeedbackTab() {
     }
     setSubmitting(true);
     setSubmitError(null);
+
+    const hasTools = toolsSelected.length > 0 || toolsOther.trim().length > 0;
+    const current_tools = hasTools
+      ? { selected: [...toolsSelected], other: toolsOther.trim() || null }
+      : null;
+
     const { error } = await supabase.from('feedback').insert({
       user_id: user.id,
       freelance_area: freelanceArea,
@@ -181,6 +218,8 @@ export function FeedbackTab() {
       what_broke: trimmed,
       wish_list: wishList.trim() || null,
       impression,
+      pricing_feel: pricingFeel,
+      current_tools,
       status: 'new',
     });
     setSubmitting(false);
@@ -191,142 +230,170 @@ export function FeedbackTab() {
     setSuccess(true);
     successCloseTimer.current = window.setTimeout(() => {
       successCloseTimer.current = null;
-      closePanelAndResetForm();
+      handleOpenChange(false);
     }, 3000);
   };
 
   if (!user) return null;
 
+  const showToolsOther = toolsSelected.includes('Other');
+
   return (
-    <div
-      className={cn(
-        'fixed top-0 right-0 z-[65] flex flex-row-reverse items-stretch pointer-events-none',
-        CRISP_BOTTOM_SAFE_CLASS,
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => {
-          if (open) {
-            closePanel();
-          } else {
-            clearTimers();
-            setOpen(true);
-          }
-        }}
-        className={cn(
-          'pointer-events-auto my-auto shrink-0 border-y border-l border-r-0 border-border bg-card pl-2.5 pr-2 py-7 text-sm font-semibold tracking-wide text-foreground shadow-md transition-all hover:bg-accent hover:shadow-lg',
-          'rounded-l-2xl',
-          '[writing-mode:vertical-rl] [text-orientation:mixed]',
-          open && 'border-primary/40 bg-primary/5 shadow-lg',
-        )}
-        aria-expanded={open}
-        aria-controls="lance-feedback-panel"
-      >
-        Feedback
-      </button>
+    <>
+      <div className="pointer-events-none fixed inset-y-0 right-0 z-[65] flex items-center justify-end">
+        <button
+          type="button"
+          onClick={() => handleOpenChange(true)}
+          className={cn(
+            'pointer-events-auto flex w-7 shrink-0 flex-col items-center justify-center gap-0 border-y border-l border-r-0 border-border bg-card py-3 shadow-md transition-colors hover:bg-accent',
+            'rounded-l-lg border-border',
+            '[writing-mode:vertical-rl] [text-orientation:mixed] text-[11px] font-semibold tracking-wide text-foreground leading-tight',
+          )}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+        >
+          Feedback
+        </button>
+      </div>
 
-      <aside
-        id="lance-feedback-panel"
-        className={cn(
-          'pointer-events-auto flex h-full max-h-full w-[min(100vw-2.75rem,400px)] flex-col border-l border-border bg-card shadow-lg transition-transform duration-300 ease-out',
-          open ? 'translate-x-0' : 'translate-x-full',
-        )}
-      >
-        <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4 shrink-0">
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight">Help us improve Lance</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">Takes 2 minutes. Seriously.</p>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="shrink-0 h-8 w-8"
-            onClick={closePanel}
-            aria-label="Close feedback"
+      <DialogPrimitive.Root open={open} onOpenChange={handleOpenChange}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay
+            className={cn(
+              'fixed inset-0 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+              FEEDBACK_MODAL_Z,
+            )}
+          />
+          <DialogPrimitive.Content
+            className={cn(
+              'fixed inset-0 flex flex-col border-0 bg-background p-0 shadow-lg outline-none',
+              'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+              FEEDBACK_MODAL_Z,
+            )}
           >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-4 sm:px-8">
+              <div>
+                <DialogPrimitive.Title className="text-lg font-semibold tracking-tight">
+                  Help us improve Lance
+                </DialogPrimitive.Title>
+                <DialogPrimitive.Description className="mt-0.5 text-sm text-muted-foreground">
+                  Takes 2 minutes. Seriously.
+                </DialogPrimitive.Description>
+              </div>
+              <DialogPrimitive.Close asChild>
+                <Button type="button" variant="ghost" size="icon" className="shrink-0" aria-label="Close feedback">
+                  <X className="h-5 w-5" />
+                </Button>
+              </DialogPrimitive.Close>
+            </div>
 
-        {success ? (
-          <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
-            <p className="text-base font-medium text-foreground">You&apos;re a legend. Thank you! 🙏</p>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="flex flex-1 flex-col min-h-0">
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
-              <PillGroup
-                label="What's your main freelance area?"
-                options={FREELANCE_AREAS}
-                value={freelanceArea}
-                onChange={setFreelanceArea}
-              />
-              <PillGroup
-                label="Which feature did you try first?"
-                options={FIRST_FEATURES}
-                value={firstFeature}
-                onChange={setFirstFeature}
-              />
-              <div className="space-y-2">
-                <Label htmlFor="feedback-what-broke" className="text-sm font-medium">
-                  Did anything confuse you or feel broken? <span className="text-destructive">*</span>
-                </Label>
-                <Textarea
-                  id="feedback-what-broke"
-                  value={whatBroke}
-                  onChange={(e) => setWhatBroke(e.target.value)}
-                  placeholder="Be brutal, we can take it"
-                  rows={4}
-                  className="resize-none min-h-[100px]"
-                />
+            {success ? (
+              <div className="flex flex-1 flex-col items-center justify-center px-6 py-16 text-center">
+                <p className="text-base font-medium text-foreground">You&apos;re a legend. Thank you! 🙏</p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="feedback-wish" className="text-sm font-medium">
-                  What&apos;s one thing you wish Lance could do?
-                </Label>
-                <Textarea
-                  id="feedback-wish"
-                  value={wishList}
-                  onChange={(e) => setWishList(e.target.value)}
-                  placeholder="Dream big"
-                  rows={3}
-                  className="resize-none min-h-[80px]"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Overall first impression</Label>
-                <div className="flex flex-wrap gap-1" role="group" aria-label="First impression, 1 to 5">
-                  {IMPRESSIONS.map(({ value, emoji }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setImpression(impression === value ? null : value)}
-                      className={cn(
-                        'flex h-11 w-11 items-center justify-center rounded-lg border text-xl transition-colors',
-                        impression === value
-                          ? 'border-primary bg-primary/10 ring-2 ring-primary ring-offset-2 ring-offset-background'
-                          : 'border-transparent bg-muted/50 hover:bg-muted',
-                      )}
-                      aria-pressed={impression === value}
-                      title={`${value} of 5`}
-                    >
-                      <span aria-hidden>{emoji}</span>
-                    </button>
-                  ))}
+            ) : (
+              <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+                <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-6 sm:px-8">
+                  <PillGroup
+                    label="What's your main freelance area?"
+                    options={FREELANCE_AREAS}
+                    value={freelanceArea}
+                    onChange={setFreelanceArea}
+                  />
+                  <PillGroup
+                    label="Which feature did you try first?"
+                    options={FIRST_FEATURES}
+                    value={firstFeature}
+                    onChange={setFirstFeature}
+                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="feedback-what-broke" className="text-sm font-medium">
+                      Did anything confuse you or feel broken? <span className="text-destructive">*</span>
+                    </Label>
+                    <Textarea
+                      id="feedback-what-broke"
+                      value={whatBroke}
+                      onChange={(e) => setWhatBroke(e.target.value)}
+                      placeholder="Be brutal, we can take it"
+                      rows={4}
+                      className="min-h-[100px] resize-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="feedback-wish" className="text-sm font-medium">
+                      What&apos;s one thing you wish Lance could do?
+                    </Label>
+                    <Textarea
+                      id="feedback-wish"
+                      value={wishList}
+                      onChange={(e) => setWishList(e.target.value)}
+                      placeholder="Dream big"
+                      rows={3}
+                      className="min-h-[80px] resize-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Overall first impression</Label>
+                    <div className="flex flex-wrap gap-1" role="group" aria-label="First impression, 1 to 5">
+                      {IMPRESSIONS.map(({ value, emoji }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setImpression(impression === value ? null : value)}
+                          className={cn(
+                            'flex h-11 w-11 items-center justify-center rounded-lg border text-xl transition-colors',
+                            impression === value
+                              ? 'border-primary bg-primary/10 ring-2 ring-primary ring-offset-2 ring-offset-background'
+                              : 'border-transparent bg-muted/50 hover:bg-muted',
+                          )}
+                          aria-pressed={impression === value}
+                          title={`${value} of 5`}
+                        >
+                          <span aria-hidden>{emoji}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <PillGroup
+                    label="How does our pricing feel? It's $29 per month or $290 anually."
+                    options={PRICING_FEEL}
+                    value={pricingFeel}
+                    onChange={setPricingFeel}
+                  />
+                  <div className="space-y-2">
+                    <PillGroupMulti
+                      label="What tools are you currently using for these? (select all that apply)"
+                      options={TOOL_OPTIONS}
+                      values={toolsSelected}
+                      onToggle={toggleTool}
+                    />
+                    {showToolsOther && (
+                      <div className="pt-1">
+                        <Label htmlFor="feedback-tools-other" className="sr-only">
+                          Other tools
+                        </Label>
+                        <Input
+                          id="feedback-tools-other"
+                          value={toolsOther}
+                          onChange={(e) => setToolsOther(e.target.value)}
+                          placeholder="List other tools…"
+                          autoComplete="off"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {submitError && <p className="text-sm text-destructive">{submitError}</p>}
                 </div>
-              </div>
-              {submitError && <p className="text-sm text-destructive">{submitError}</p>}
-            </div>
-            <div className="shrink-0 border-t border-border p-4">
-              <Button type="submit" className="w-full" disabled={submitting}>
-                {submitting ? 'Sending…' : 'Send feedback'}
-              </Button>
-            </div>
-          </form>
-        )}
-      </aside>
-    </div>
+                <div className="shrink-0 border-t border-border p-4 sm:px-8">
+                  <Button type="submit" className="w-full sm:max-w-md" disabled={submitting}>
+                    {submitting ? 'Sending…' : 'Send feedback'}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
+    </>
   );
 }

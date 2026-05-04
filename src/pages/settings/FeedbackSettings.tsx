@@ -114,12 +114,34 @@ export default function FeedbackSettings() {
                     <p className="text-sm font-medium whitespace-pre-wrap">
                       {row.what_broke ?? row.message ?? '—'}
                     </p>
-                    {(row.freelance_area || row.first_feature || row.wish_list != null || row.impression != null) && (
+                    {(row.freelance_area ||
+                      row.first_feature ||
+                      row.wish_list != null ||
+                      row.impression != null ||
+                      row.pricing_feel ||
+                      row.current_tools) && (
                       <ul className="text-xs text-muted-foreground mt-2 space-y-0.5 list-disc list-inside">
                         {row.freelance_area && <li>Area: {row.freelance_area}</li>}
                         {row.first_feature && <li>First feature: {row.first_feature}</li>}
                         {row.wish_list && <li>Wish: {row.wish_list}</li>}
                         {row.impression != null && <li>Impression: {row.impression}/5</li>}
+                        {row.pricing_feel && <li>Pricing: {row.pricing_feel}</li>}
+                        {row.current_tools &&
+                          typeof row.current_tools === 'object' &&
+                          row.current_tools !== null &&
+                          'selected' in row.current_tools && (
+                            <li>
+                              Tools:{' '}
+                              {[
+                                ...(((row.current_tools as { selected?: string[] }).selected ?? []) as string[]),
+                                (row.current_tools as { other?: string | null }).other
+                                  ? `Other: ${(row.current_tools as { other: string }).other}`
+                                  : '',
+                              ]
+                                .filter(Boolean)
+                                .join(', ')}
+                            </li>
+                          )}
                       </ul>
                     )}
                     {row.context && (

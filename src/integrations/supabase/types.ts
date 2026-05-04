@@ -776,6 +776,8 @@ export type Database = {
           what_broke: string | null
           wish_list: string | null
           impression: number | null
+          pricing_feel: string | null
+          current_tools: Record<string, unknown> | null
         }
         Insert: {
           id?: string
@@ -789,6 +791,8 @@ export type Database = {
           what_broke?: string | null
           wish_list?: string | null
           impression?: number | null
+          pricing_feel?: string | null
+          current_tools?: Record<string, unknown> | null
         }
         Update: {
           id?: string
@@ -802,6 +806,8 @@ export type Database = {
           what_broke?: string | null
           wish_list?: string | null
           impression?: number | null
+          pricing_feel?: string | null
+          current_tools?: Record<string, unknown> | null
         }
         Relationships: [
           {
