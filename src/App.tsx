@@ -47,6 +47,7 @@ import NotFound from "./pages/NotFound";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import LpTest from "./pages/LpTest";
+import BrandGuidelines from "./pages/BrandGuidelines";
 import { BrandingApply } from "@/components/BrandingApply";
 import { RecoveryHashRedirect } from "@/components/RecoveryHashRedirect";
 import { TimerProvider } from "@/contexts/TimerContext";
@@ -159,6 +160,7 @@ function AppRoutes() {
       <Route path="/auth" element={user ? <Navigate to="/dashboard" replace /> : <Auth />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />
+      <Route path="/brand-guidelines" element={<BrandGuidelines />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/lptest" element={<LpTest />} />
       <Route path="/onboarding" element={<OnboardingRoute><Onboarding /></OnboardingRoute>} />
