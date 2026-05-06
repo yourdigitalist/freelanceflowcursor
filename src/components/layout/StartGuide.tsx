@@ -74,7 +74,9 @@ export function StartGuide() {
       const [{ data: profile }, { count: projectCount }, { count: invoiceCount }] = await Promise.all([
         supabase
           .from('profiles')
-          .select('business_name, business_logo, invoice_footer, invoice_notes_default, invoice_email_subject_default')
+          .select(
+            'business_name, business_logo, business_email, business_phone, business_address, business_website, invoice_footer, invoice_notes_default, invoice_email_subject_default'
+          )
           .eq('user_id', user.id)
           .maybeSingle(),
         supabase
@@ -87,7 +89,14 @@ export function StartGuide() {
           .eq('user_id', user.id),
       ]);
 
-      const hasCompanyProfile = !!(profile?.business_name || '').trim();
+      const hasBusinessName = !!(profile?.business_name || '').trim();
+      const hasBusinessDetail = !!(
+        (profile?.business_email || '').trim() ||
+        (profile?.business_phone || '').trim() ||
+        (profile?.business_address || '').trim() ||
+        (profile?.business_website || '').trim()
+      );
+      const hasCompanyProfile = hasBusinessName && hasBusinessDetail;
       const hasLogo = !!(profile?.business_logo || '').trim();
       const hasInvoiceCustomization = !!(
         (profile?.invoice_footer || '').trim() ||

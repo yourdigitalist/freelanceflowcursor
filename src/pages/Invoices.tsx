@@ -921,7 +921,6 @@ export default function Invoices() {
           <CardContent className="p-0">
             {filteredInvoices.length === 0 ? (
               <div className="text-center py-12">
-                <SlotIcon slot="invoice_empty" className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
                 <h3 className="text-lg font-semibold mb-1">No invoices yet</h3>
                 <p className="text-sm text-muted-foreground mb-4">
                   Create your first invoice to get started

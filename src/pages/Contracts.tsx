@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, FileText } from "@/components/icons";
+import { Plus, Trash2 } from "@/components/icons";
 import { SlotIcon } from "@/contexts/IconSlotContext";
 import { DEFAULT_CONTRACT_TEMPLATE_CONTENT } from "@/lib/contractTemplate";
 
@@ -486,7 +486,6 @@ export default function Contracts() {
                   <div className="py-10 text-center text-sm text-muted-foreground">Loading templates...</div>
                 ) : templateRows.length === 0 ? (
                   <div className="py-14 text-center">
-                    <FileText className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
                     <h3 className="text-lg font-semibold">No templates yet</h3>
                     <p className="text-sm text-muted-foreground">Create your first reusable contract template.</p>
                   </div>

@@ -45,14 +45,18 @@ import { PhoneInput } from '@/components/ui/phone-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   DndContext,
+  DragOverlay,
+  DragStartEvent,
   DragEndEvent,
   PointerSensor,
   useSensor,
   useSensors,
-  useDraggable,
   useDroppable,
   closestCenter,
+  pointerWithin,
 } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Client {
   id: string;
@@ -121,20 +125,29 @@ function DraggableClientCard({
   onOpen,
   onEdit,
   onDelete,
+  isOverlay = false,
 }: {
   client: Client;
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  isOverlay?: boolean;
 }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: client.id,
     data: { clientId: client.id, currentStatus: client.status || 'active' },
   });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
   return (
     <Card
       ref={setNodeRef}
-      className={`border shadow-sm hover:shadow transition-shadow flex-shrink-0 relative ${isDragging ? 'opacity-60 shadow-lg' : ''}`}
+      style={style}
+      className={`border shadow-sm hover:shadow-md transition-shadow relative ${
+        isDragging || isOverlay ? 'opacity-70 shadow-lg' : ''
+      }`}
       onClick={onOpen}
     >
       {/* Drag handle - grab here to move card between columns */}
@@ -221,6 +234,7 @@ export default function Clients() {
   const [newActivityBody, setNewActivityBody] = useState('');
   const [importing, setImporting] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [activeDragClient, setActiveDragClient] = useState<Client | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -470,8 +484,23 @@ export default function Clients() {
     return 'border-l-muted-foreground/50';
   };
 
+  const getStageHeaderClass = (status: string) => {
+    if (['active', 'won'].includes(status)) return 'bg-success/15 text-success';
+    if (['lead_new', 'lead_contacted', 'lead_qualified', 'proposal_sent', 'negotiation', 'onboarding'].includes(status)) {
+      return 'bg-warning/15 text-warning';
+    }
+    return 'bg-muted text-muted-foreground';
+  };
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const handleDragStart = (event: DragStartEvent) => {
+    const clientId = event.active.id as string;
+    const dragged = clients.find((c) => c.id === clientId) || null;
+    setActiveDragClient(dragged);
+  };
+
   const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveDragClient(null);
     const { active, over } = event;
     if (!over || over.id === active.id) return;
     const clientId = active.data.current?.clientId as string | undefined;
@@ -1086,7 +1115,6 @@ export default function Clients() {
         ) : filteredClients.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-12">
-              <SlotIcon slot="empty_clients" className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <h3 className="text-lg font-semibold mb-1">No clients yet</h3>
               <p className="text-sm text-muted-foreground mb-4">
                 Get started by adding your first client
@@ -1100,18 +1128,28 @@ export default function Clients() {
         ) : (
           <>
             {viewMode === 'board' ? (
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={(args) => {
+                  const pointer = pointerWithin(args);
+                  return pointer.length > 0 ? pointer : closestCenter(args);
+                }}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDragCancel={() => setActiveDragClient(null)}
+              >
                 <div className="overflow-x-auto pb-4 -mx-1">
-                  <div className="flex gap-4 min-w-max">
+                  <div className="flex gap-4 min-w-max px-1">
                     {CRM_STAGES.map((stage) => {
                       const columnClients = sortedClients.filter((c) => (c.status || 'active') === stage.value);
                       return (
                         <div
                           key={stage.value}
-                          className="flex flex-col w-[280px] shrink-0 rounded-lg border bg-background shadow-sm"
+                          className="flex flex-col w-[300px] shrink-0"
                         >
-                          <div className="p-3 border-b flex items-center justify-between">
-                            <span className="font-medium text-sm">{stage.label}</span>
+                          <div className={`rounded-t-lg px-4 py-3 ${getStageHeaderClass(stage.value)}`}>
+                            <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-sm">{stage.label}</span>
                             <div className="flex items-center gap-1">
                               <Badge variant="secondary" className="text-xs">
                                 {columnClients.length}
@@ -1130,30 +1168,14 @@ export default function Clients() {
                                 <Plus className="h-4 w-4" />
                               </Button>
                             </div>
+                            </div>
                           </div>
                           <DroppableColumn
                             id={stage.value}
-                            className="p-2 flex flex-col gap-2 overflow-y-auto max-h-[60vh]"
+                            className="p-3 flex flex-col gap-3 overflow-y-auto max-h-[60vh] bg-card border border-t-0 rounded-b-lg min-h-[420px] transition-colors"
                           >
-                            {columnClients.length === 0 ? (
-                              <div className="flex flex-col items-center gap-2 py-4">
-                                <p className="text-xs text-muted-foreground">No clients</p>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-xs"
-                                  onClick={() => {
-                                    setAddWithStatus(stage.value);
-                                    setEditingClient(null);
-                                    setIsDialogOpen(true);
-                                  }}
-                                >
-                                  <Plus className="h-3 w-3 mr-1" />
-                                  Add client
-                                </Button>
-                              </div>
-                            ) : (
-                              columnClients.map((client) => (
+                            <SortableContext items={columnClients.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                              {columnClients.map((client) => (
                                 <DraggableClientCard
                                   key={client.id}
                                   client={client}
@@ -1161,14 +1183,43 @@ export default function Clients() {
                                   onEdit={() => openEditDialog(client)}
                                   onDelete={() => handleDelete(client.id)}
                                 />
-                              ))
+                              ))}
+                            </SortableContext>
+                            {columnClients.length === 0 && (
+                              <div className="text-center py-8 text-muted-foreground text-sm">No clients</div>
                             )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full justify-start text-muted-foreground hover:text-primary-foreground border border-dashed"
+                              onClick={() => {
+                                setAddWithStatus(stage.value);
+                                setEditingClient(null);
+                                setIsDialogOpen(true);
+                              }}
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add client
+                            </Button>
                           </DroppableColumn>
                         </div>
                       );
                     })}
                   </div>
                 </div>
+                <DragOverlay>
+                  {activeDragClient ? (
+                    <div className="w-[300px]">
+                      <DraggableClientCard
+                        client={activeDragClient}
+                        onOpen={() => {}}
+                        onEdit={() => {}}
+                        onDelete={() => {}}
+                        isOverlay
+                      />
+                    </div>
+                  ) : null}
+                </DragOverlay>
               </DndContext>
             ) : (
             <div className={viewMode === 'grid' ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3" : "space-y-3"}>

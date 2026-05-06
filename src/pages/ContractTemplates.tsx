@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { FileText, Plus, Star, Trash2, Copy } from "@/components/icons";
+import { Plus, Star, Trash2, Copy } from "@/components/icons";
 import { DEFAULT_CONTRACT_TEMPLATE_CONTENT } from "@/lib/contractTemplate";
 
 type ContractTemplateRow = {
@@ -116,7 +116,6 @@ export default function ContractTemplates() {
               <div className="py-10 text-center text-sm text-muted-foreground">Loading templates...</div>
             ) : templates.length === 0 ? (
               <div className="py-14 text-center">
-                <FileText className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
                 <h3 className="text-lg font-semibold">No contract templates yet</h3>
                 <p className="text-sm text-muted-foreground">Create your first reusable template to speed up contract creation.</p>
               </div>

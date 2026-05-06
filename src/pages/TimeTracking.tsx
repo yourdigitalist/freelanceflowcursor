@@ -1328,7 +1328,6 @@ export default function TimeTracking() {
           <CardContent>
             {filteredEntries.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <SlotIcon slot="empty_time" className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No time entries found</p>
                 <p className="text-sm">Start the timer or log time manually</p>
               </div>

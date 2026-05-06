@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DocumentEditor } from '@/components/notes/DocumentEditor';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, FileText, Trash2, Download, Pencil } from '@/components/icons';
+import { Plus, Trash2, Download, Pencil } from '@/components/icons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -612,7 +612,6 @@ export default function Notes() {
               </>
             ) : (
               <div className="flex flex-col items-center justify-center py-24 text-center">
-                <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
                 <h3 className="text-lg font-semibold mb-1">No note selected</h3>
                 <p className="text-sm text-muted-foreground mb-4">
                   Create a note or select one from the sidebar

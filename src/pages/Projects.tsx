@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Table, MoreVertical, Trash2, LayoutGrid, List, Download, Upload } from '@/components/icons';
+import { Plus, Search, MoreVertical, Trash2, LayoutGrid, List, Download, Upload } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import {
   DropdownMenu,
@@ -675,7 +675,6 @@ export default function Projects() {
         ) : filteredProjects.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-12">
-              <Table className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <h3 className="text-lg font-semibold mb-1">No projects yet</h3>
               <p className="text-sm text-muted-foreground mb-4">
                 Create your first project to get started

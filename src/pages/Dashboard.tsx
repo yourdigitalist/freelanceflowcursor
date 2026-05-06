@@ -548,7 +548,6 @@ export default function Dashboard() {
             <CardContent>
               {recentProjects.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  <SlotIcon slot="empty_projects" className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No active projects</p>
                   <Button asChild className="mt-4" variant="outline">
                     <Link to="/projects?new=1">Create your first project</Link>

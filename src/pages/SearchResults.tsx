@@ -188,7 +188,6 @@ export default function SearchResults() {
         {isEmpty && (
           <Card className="border-0 shadow-sm">
             <CardContent className="py-12 text-center text-muted-foreground">
-              <SlotIcon slot="empty_projects" className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No results found for "{q}".</p>
               <p className="text-sm mt-2">Try a different term or check spelling.</p>
             </CardContent>
