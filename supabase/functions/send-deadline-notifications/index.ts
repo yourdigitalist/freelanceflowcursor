@@ -119,13 +119,17 @@ serve(async (req) => {
   today.setUTCHours(0, 0, 0, 0);
   const todayYmd = dateYmd(today);
 
-  const [{ data: profiles }, { data: projects }, { data: tasks }, { data: invoices }, { data: reviews }, { data: contracts }] = await Promise.all([
+  const [{ data: profiles }, { data: projects }, { data: tasks }, { data: invoices }, { data: reviews }, { data: contracts }, { data: clientFollowUps }] = await Promise.all([
     supabase.from("profiles").select("user_id, email, full_name, notification_preferences"),
     supabase.from("projects").select("id, user_id, name, due_date, status").not("due_date", "is", null),
     supabase.from("tasks").select("id, user_id, title, due_date, status").not("due_date", "is", null),
     supabase.from("invoices").select("id, user_id, invoice_number, due_date, status").not("due_date", "is", null),
     supabase.from("review_requests").select("id, user_id, title, due_date, status").not("due_date", "is", null),
     supabase.from("contracts").select("id, user_id, identifier, timeline_days, sent_at, created_at, status, reminder_near_end").eq("reminder_near_end", true),
+    supabase
+      .from("client_follow_ups")
+      .select("id, user_id, client_id, title, due_at, remind_at, completed_at, clients(name)")
+      .is("completed_at", null),
   ]);
 
   const notifications: Array<{ user_id: string; type: string; title: string; body: string | null; link: string | null; event_key: string }> = [];
@@ -332,6 +336,33 @@ serve(async (req) => {
             text: `Hi ${userName},\n\n${contractLabel} is overdue.\n\nOpen contracts: ${(Deno.env.get("APP_BASE_URL") || "").replace(/\/$/, "")}/contracts`,
           });
         }
+      }
+    }
+
+    for (const row of (clientFollowUps || []).filter((x: any) => x.user_id === userId)) {
+      const label = row.clients?.name ? `${row.clients.name}: ${row.title}` : row.title;
+      const remindDate = row.remind_at ? dateYmd(new Date(String(row.remind_at))) : null;
+      const dueDate = row.due_at ? dateYmd(new Date(String(row.due_at))) : null;
+      const notifyDate = remindDate || dueDate;
+      if (notifyDate === todayYmd) {
+        notifications.push({
+          user_id: userId,
+          type: "crm",
+          title: "Client follow-up reminder",
+          body: label,
+          link: `/clients?open=${row.client_id}`,
+          event_key: `crm_followup_due:${row.id}:${todayYmd}`,
+        });
+      }
+      if (dueDate && dueDate < todayYmd) {
+        notifications.push({
+          user_id: userId,
+          type: "crm",
+          title: "Client follow-up overdue",
+          body: label,
+          link: `/clients?open=${row.client_id}`,
+          event_key: `crm_followup_overdue:${row.id}:${todayYmd}`,
+        });
       }
     }
   }

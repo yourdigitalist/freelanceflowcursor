@@ -6,16 +6,18 @@ import { GripVertical } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { Task, ProjectStatus, PRIORITY_OPTIONS } from './types';
 import { format } from 'date-fns';
+import { formatDuration } from '@/lib/time';
 
 interface TaskCardProps {
   task: Task;
   status: ProjectStatus;
   commentCount?: number;
+  trackedSeconds?: number;
   onClick: () => void;
   isDragging?: boolean;
 }
 
-export function TaskCard({ task, status, commentCount = 0, onClick, isDragging }: TaskCardProps) {
+export function TaskCard({ task, status, commentCount = 0, trackedSeconds = 0, onClick, isDragging }: TaskCardProps) {
   const {
     attributes,
     listeners,
@@ -73,6 +75,12 @@ export function TaskCard({ task, status, commentCount = 0, onClick, isDragging }
             <span className="text-xs text-muted-foreground flex items-center gap-1">
               <SlotIcon slot="task_clock" className="h-3 w-3" />
               {task.estimated_hours}h
+            </span>
+          )}
+          {trackedSeconds > 0 && (
+            <span className="text-xs text-primary flex items-center gap-1">
+              <SlotIcon slot="task_clock" className="h-3 w-3" />
+              {formatDuration(trackedSeconds, true)}
             </span>
           )}
 

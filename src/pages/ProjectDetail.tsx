@@ -20,6 +20,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import {
   DndContext,
   closestCenter,
@@ -43,6 +52,28 @@ import { TaskKanbanView } from '@/components/tasks/TaskKanbanView';
 import { TaskListView } from '@/components/tasks/TaskListView';
 import { TaskEditSheet } from '@/components/tasks/TaskEditSheet';
 import { StatusManagementModal } from '@/components/tasks/StatusManagementModal';
+import { formatDuration } from '@/lib/time';
+import { format, parseISO } from 'date-fns';
+
+interface ProjectTimeEntry {
+  id: string;
+  description: string | null;
+  start_time: string;
+  end_time: string | null;
+  total_duration_seconds: number | null;
+  duration_minutes: number | null;
+  billable: boolean | null;
+  billing_status: string | null;
+  task_id: string | null;
+  tasks: { title: string } | null;
+}
+
+interface EntrySegment {
+  id: string;
+  start_time: string;
+  end_time: string;
+  duration_seconds: number;
+}
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -56,7 +87,12 @@ export default function ProjectDetail() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [statuses, setStatuses] = useState<ProjectStatus[]>([]);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const [trackedSecondsByTask, setTrackedSecondsByTask] = useState<Record<string, number>>({});
   const [totalHours, setTotalHours] = useState(0);
+  const [projectTimeEntries, setProjectTimeEntries] = useState<ProjectTimeEntry[]>([]);
+  const [selectedEntry, setSelectedEntry] = useState<ProjectTimeEntry | null>(null);
+  const [selectedEntrySegments, setSelectedEntrySegments] = useState<EntrySegment[]>([]);
+  const [loadingEntrySegments, setLoadingEntrySegments] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // UI state
@@ -207,6 +243,49 @@ export default function ProjectDetail() {
     }
   }, [id]);
 
+  const fetchProjectTimeEntries = useCallback(async () => {
+    if (!id) return;
+    try {
+      const { data, error } = await supabase
+        .from('time_entries')
+        .select('id, description, start_time, end_time, total_duration_seconds, duration_minutes, billable, billing_status, task_id, tasks(title)')
+        .eq('project_id', id)
+        .order('start_time', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      const rows = (data || []) as ProjectTimeEntry[];
+      setProjectTimeEntries(rows);
+      const taskSeconds = rows.reduce<Record<string, number>>((acc, row) => {
+        if (!row.task_id) return acc;
+        const secs = row.total_duration_seconds ?? (row.duration_minutes || 0) * 60;
+        acc[row.task_id] = (acc[row.task_id] || 0) + Math.max(0, secs);
+        return acc;
+      }, {});
+      setTrackedSecondsByTask(taskSeconds);
+    } catch (error) {
+      console.error('Error fetching project time entries:', error);
+    }
+  }, [id]);
+
+  const openEntryDetails = async (entry: ProjectTimeEntry) => {
+    setSelectedEntry(entry);
+    setLoadingEntrySegments(true);
+    try {
+      const { data, error } = await supabase
+        .from('time_entry_segments')
+        .select('id, start_time, end_time, duration_seconds')
+        .eq('time_entry_id', entry.id)
+        .order('start_time', { ascending: true });
+      if (error) throw error;
+      setSelectedEntrySegments((data || []) as EntrySegment[]);
+    } catch (error) {
+      console.error('Error fetching time entry segments:', error);
+      setSelectedEntrySegments([]);
+    } finally {
+      setLoadingEntrySegments(false);
+    }
+  };
+
   useEffect(() => {
     if (user && id) {
       fetchProject();
@@ -214,8 +293,9 @@ export default function ProjectDetail() {
       fetchTasks();
       fetchCommentCounts();
       fetchTotalHours();
+      fetchProjectTimeEntries();
     }
-  }, [user, id, fetchProject, fetchStatuses, fetchTasks, fetchCommentCounts, fetchTotalHours]);
+  }, [user, id, fetchProject, fetchStatuses, fetchTasks, fetchCommentCounts, fetchTotalHours, fetchProjectTimeEntries]);
 
   // Task operations
   const handleSaveTask = async (taskData: Partial<Task>) => {
@@ -767,6 +847,7 @@ export default function ProjectDetail() {
                 tasks={filteredTasks}
                 statuses={statuses}
                 commentCounts={commentCounts}
+                trackedSecondsByTask={trackedSecondsByTask}
                 onTaskClick={(task) => {
                   setEditingTask(task);
                   setIsSheetOpen(true);
@@ -778,6 +859,7 @@ export default function ProjectDetail() {
                 tasks={filteredTasks}
                 statuses={statuses}
                 commentCounts={commentCounts}
+                trackedSecondsByTask={trackedSecondsByTask}
                 onTaskClick={(task) => {
                   setEditingTask(task);
                   setIsSheetOpen(true);
@@ -795,6 +877,43 @@ export default function ProjectDetail() {
             )}
           </DndContext>
         </div>
+
+        <Card className="border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle>Time Tracking Entries</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {projectTimeEntries.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No entries yet for this project.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Task</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Duration</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {projectTimeEntries.map((entry) => {
+                    const secs = entry.total_duration_seconds ?? (entry.duration_minutes || 0) * 60;
+                    return (
+                      <TableRow key={entry.id} className="cursor-pointer" onClick={() => openEntryDetails(entry)}>
+                        <TableCell>{format(parseISO(entry.start_time), 'MMM d, yyyy')}</TableCell>
+                        <TableCell>{entry.tasks?.title || <span className="text-muted-foreground">—</span>}</TableCell>
+                        <TableCell>{entry.description || <span className="text-muted-foreground">No description</span>}</TableCell>
+                        <TableCell>{formatDuration(secs, true)}</TableCell>
+                        <TableCell>{entry.billable ? (entry.billing_status || 'unbilled') : 'not_billable'}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
 
         <TaskEditSheet
           task={editingTask}
@@ -843,6 +962,41 @@ export default function ProjectDetail() {
                 {importingTasks ? 'Importing…' : 'Choose CSV file'}
               </Button>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!selectedEntry} onOpenChange={(open) => !open && setSelectedEntry(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Time Entry Breakdown</DialogTitle>
+              <DialogDescription>
+                {selectedEntry?.tasks?.title ? `Task: ${selectedEntry.tasks.title}` : 'No task attached'}
+              </DialogDescription>
+            </DialogHeader>
+            {selectedEntry && (
+              <div className="space-y-3 text-sm">
+                <p><span className="text-muted-foreground">Description:</span> {selectedEntry.description || '—'}</p>
+                <p>
+                  <span className="text-muted-foreground">Total:</span>{' '}
+                  {formatDuration(selectedEntry.total_duration_seconds ?? (selectedEntry.duration_minutes || 0) * 60, true)}
+                </p>
+                <div className="space-y-2">
+                  <p className="font-medium">Segments</p>
+                  {loadingEntrySegments ? (
+                    <p className="text-muted-foreground">Loading…</p>
+                  ) : selectedEntrySegments.length === 0 ? (
+                    <p className="text-muted-foreground">No segment breakdown found.</p>
+                  ) : (
+                    selectedEntrySegments.map((segment, idx) => (
+                      <div key={segment.id} className="flex items-center justify-between rounded border p-2">
+                        <span>{idx + 1}. {format(parseISO(segment.start_time), 'MMM d, yyyy HH:mm:ss')} - {format(parseISO(segment.end_time), 'MMM d, yyyy HH:mm:ss')}</span>
+                        <span className="font-mono">{formatDuration(segment.duration_seconds, true)}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>

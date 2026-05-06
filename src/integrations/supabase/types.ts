@@ -195,6 +195,53 @@ export type Database = {
           },
         ]
       }
+      client_follow_ups: {
+        Row: {
+          client_id: string
+          completed_at: string | null
+          created_at: string
+          details: string | null
+          due_at: string | null
+          id: string
+          remind_at: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          completed_at?: string | null
+          created_at?: string
+          details?: string | null
+          due_at?: string | null
+          id?: string
+          remind_at?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          completed_at?: string | null
+          created_at?: string
+          details?: string | null
+          due_at?: string | null
+          id?: string
+          remind_at?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_follow_ups_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           address: string | null
@@ -844,6 +891,52 @@ export type Database = {
             columns: ["invoice_id"]
             isOneToOne: false
             referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_time_entry_links: {
+        Row: {
+          created_at: string
+          id: string
+          invoice_id: string
+          invoice_item_id: string | null
+          time_entry_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invoice_id: string
+          invoice_item_id?: string | null
+          time_entry_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          invoice_item_id?: string | null
+          time_entry_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_time_entry_links_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_time_entry_links_invoice_item_id_fkey"
+            columns: ["invoice_item_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_time_entry_links_time_entry_id_fkey"
+            columns: ["time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "time_entries"
             referencedColumns: ["id"]
           },
         ]
@@ -2109,6 +2202,7 @@ export type Database = {
     Functions: {
       get_admin_stats: { Args: never; Returns: Json }
       get_announcement_recipient_count: { Args: never; Returns: number }
+      next_invoice_number: { Args: { p_user_id: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never

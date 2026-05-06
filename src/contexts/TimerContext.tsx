@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { formatDuration } from '@/lib/time';
+import { resolveEffectiveHourlyRate } from '@/lib/billing';
 
 const STORAGE_KEY = 'lance_timer_draft';
 export const TIMER_ENTRY_SAVED_EVENT = 'timer-entry-saved';
@@ -57,11 +58,11 @@ function saveStored(data: StoredDraft) {
 }
 
 export function formatElapsed(totalSeconds: number): string {
-  return formatDuration(totalSeconds);
+  return formatDuration(totalSeconds, true);
 }
 
 export function formatDurationFromSeconds(totalSeconds: number): string {
-  return formatDuration(totalSeconds);
+  return formatDuration(totalSeconds, true);
 }
 
 interface TimerContextValue {
@@ -137,6 +138,10 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   const startTimer = useCallback(async () => {
     if (!user) return;
     const now = Date.now();
+    const effectiveHourlyRate = await resolveEffectiveHourlyRate({
+      userId: user.id,
+      projectId: timerProject || null,
+    });
     let entryId = activeEntryId;
     if (!entryId) {
       const { data: entryRow, error: entryError } = await supabase
@@ -147,6 +152,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
           task_id: timerTask || null,
           billable: timerBillable,
           billing_status: timerBillable ? 'unbilled' : 'not_billable',
+          hourly_rate: effectiveHourlyRate,
           user_id: user.id,
           start_time: new Date(now).toISOString(),
           started_at: new Date(now).toISOString(),
@@ -173,6 +179,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
           task_id: timerTask || null,
           billable: timerBillable,
           billing_status: timerBillable ? 'unbilled' : 'not_billable',
+          hourly_rate: effectiveHourlyRate,
         })
         .eq('id', entryId);
     }
@@ -207,6 +214,10 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         duration_seconds: durationSeconds,
       });
       if (!error) {
+        const effectiveHourlyRate = await resolveEffectiveHourlyRate({
+          userId: user.id,
+          projectId: timerProject || null,
+        });
         await supabase
           .from('time_entries')
           .update({
@@ -215,6 +226,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
             task_id: timerTask || null,
             billable: timerBillable,
             billing_status: timerBillable ? 'unbilled' : 'not_billable',
+            hourly_rate: effectiveHourlyRate,
             end_time: null,
           })
           .eq('id', activeEntryId);
@@ -224,7 +236,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       title: 'Timer paused',
       description: 'Use the bar at the bottom to resume, or open the Timer page to save your entry.',
     });
-  }, [activeEntryId, timerDescription, timerProject, timerTask, timerBillable, toast]);
+  }, [activeEntryId, timerDescription, timerProject, timerTask, timerBillable, toast, user]);
 
   const getDraftTotalSeconds = useCallback(() => {
     return draftSegments.reduce((sum, seg) => {
@@ -264,6 +276,10 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         .sort()
         .at(-1) ?? new Date(now).toISOString();
       const totalSec = (segments || []).reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
+      const effectiveHourlyRate = await resolveEffectiveHourlyRate({
+        userId: user.id,
+        projectId: timerProject || null,
+      });
       await supabase
         .from('time_entries')
         .update({
@@ -272,6 +288,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
           task_id: timerTask || null,
           billable: timerBillable,
           billing_status: timerBillable ? 'unbilled' : 'not_billable',
+          hourly_rate: effectiveHourlyRate,
           end_time: latestEnd,
         })
         .eq('id', activeEntryId);
@@ -310,6 +327,12 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   }, [activeEntryId]);
 
   const resumeEntry = useCallback(async (entryId: string) => {
+    if (draftSegments.length > 0 && activeEntryId && activeEntryId !== entryId) {
+      const shouldReplace = window.confirm(
+        'You already have a timer draft in progress. Resume this entry instead and replace the current draft?'
+      );
+      if (!shouldReplace) return;
+    }
     const { data: entry, error } = await supabase
       .from('time_entries')
       .select('id, description, project_id, task_id, billable')
@@ -336,7 +359,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     setDraftSegments(
       (segments || []).map((s) => ({
         startMs: new Date(s.start_time).getTime(),
-        endMs: new Date(s.end_time).getTime(),
+        endMs: s.end_time ? new Date(s.end_time).getTime() : null,
       })),
     );
     setDraftSegments((prev) => [...prev, { startMs: Date.now(), endMs: null }]);
@@ -344,7 +367,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       title: 'Timer resumed',
       description: 'Continue tracking and save when done.',
     });
-  }, [toast]);
+  }, [activeEntryId, draftSegments.length, toast]);
 
   const value: TimerContextValue = {
     activeEntryId,

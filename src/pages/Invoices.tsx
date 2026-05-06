@@ -253,33 +253,9 @@ export default function Invoices() {
   };
 
   const getNextInvoiceNumber = async (): Promise<string> => {
-    const { data: profile, error: fetchError } = await supabase
-      .from('profiles')
-      .select('invoice_prefix, invoice_include_year, invoice_number_start, invoice_number_padding, invoice_number_reset_yearly, invoice_number_next, invoice_number_last_year')
-      .eq('user_id', user!.id)
-      .single();
-    if (fetchError || !profile) return `INV-${new Date().getFullYear()}${String(Date.now()).slice(-6)}`;
-    const currentYear = new Date().getFullYear();
-    const start = Math.max(1, Number(profile.invoice_number_start) || 1);
-    const padding = Math.min(6, Math.max(1, Number(profile.invoice_number_padding) || 4));
-    const resetYearly = profile.invoice_number_reset_yearly !== false;
-    const lastYear = profile.invoice_number_last_year ?? null;
-    let next = Number(profile.invoice_number_next);
-    let lastYearToSave = profile.invoice_number_last_year ?? currentYear;
-    if (resetYearly && (lastYear === null || lastYear < currentYear)) {
-      next = start;
-      lastYearToSave = currentYear;
-    } else if (!Number.isInteger(next) || next < start) {
-      next = start;
-    }
-    const prefix = (profile.invoice_prefix ?? 'INV').trim();
-    const includeYear = profile.invoice_include_year !== false;
-    const formatted = prefix + (includeYear ? String(currentYear) : '') + String(next).padStart(padding, '0');
-    await supabase
-      .from('profiles')
-      .update({ invoice_number_next: next + 1, invoice_number_last_year: lastYearToSave })
-      .eq('user_id', user!.id);
-    return formatted;
+    const { data, error } = await supabase.rpc('next_invoice_number', { p_user_id: user!.id });
+    if (!error && typeof data === 'string' && data.trim()) return data;
+    return `INV-${new Date().getFullYear()}${String(Date.now()).slice(-6)}`;
   };
 
   const projectsForCreateClient = createClientId
@@ -353,11 +329,24 @@ export default function Invoices() {
 
   const handleStatusChange = async (id: string, status: string) => {
     try {
+      const currentStatus = invoices.find((inv) => inv.id === id)?.status;
       const { error } = await supabase
         .from('invoices')
         .update({ status })
         .eq('id', id);
       if (error) throw error;
+      if (status === 'paid') {
+        await supabase
+          .from('time_entries')
+          .update({ billing_status: 'paid' })
+          .eq('invoice_id', id);
+      } else if (currentStatus === 'paid') {
+        await supabase
+          .from('time_entries')
+          .update({ billing_status: 'billed' })
+          .eq('invoice_id', id)
+          .eq('billing_status', 'paid');
+      }
       toast({ title: `Invoice marked as ${status}` });
       fetchInvoices();
     } catch (error: any) {
@@ -373,6 +362,11 @@ export default function Invoices() {
     if (!confirm('Delete this invoice?')) return;
     
     try {
+      await supabase
+        .from('time_entries')
+        .update({ billing_status: 'unbilled', invoice_id: null })
+        .eq('invoice_id', id)
+        .in('billing_status', ['billed', 'paid']);
       const { error } = await supabase
         .from('invoices')
         .delete()

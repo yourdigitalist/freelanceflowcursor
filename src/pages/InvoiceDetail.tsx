@@ -64,6 +64,10 @@ interface InvoiceItem {
   time_entry_id?: string;
 }
 
+interface InvoiceTimeEntryLink {
+  time_entry_id: string;
+}
+
 interface Invoice {
   id: string;
   invoice_number: string;
@@ -455,6 +459,7 @@ export default function InvoiceDetail() {
   };
 
   const importSelectedEntries = async () => {
+    const selectedIds = Array.from(selectedEntries);
     const entriesToImport = unbilledEntries.filter(e => selectedEntries.has(e.id));
     
     if (entriesToImport.length === 0) {
@@ -467,50 +472,98 @@ export default function InvoiceDetail() {
     }
 
     try {
-      // Group by project
-      const groupedByProject = entriesToImport.reduce((acc, entry) => {
-        if (!acc[entry.project_name]) {
-          acc[entry.project_name] = [];
-        }
-        acc[entry.project_name].push(entry);
-        return acc;
-      }, {} as Record<string, UnbilledEntry[]>);
+      const { data: existingLinks } = await supabase
+        .from('invoice_time_entry_links')
+        .select('time_entry_id')
+        .eq('invoice_id', id)
+        .in('time_entry_id', selectedIds);
 
-      // Create invoice items
-      const newItems: any[] = [];
-      for (const [projectName, entries] of Object.entries(groupedByProject)) {
-        for (const entry of entries) {
-          const hours = (entry.total_duration_seconds != null ? entry.total_duration_seconds / 3600 : entry.duration_minutes / 60);
-          const rate = entry.hourly_rate || defaultHourlyRate;
-          newItems.push({
-            invoice_id: id,
-            description: `${projectName}: ${entry.description || 'Time entry from ' + format(new Date(entry.start_time), 'MMM d')}`,
-            quantity: parseFloat(hours.toFixed(2)),
-            unit_price: rate,
-            amount: parseFloat((hours * rate).toFixed(2)),
-          });
-        }
+      const linkedIds = new Set((existingLinks as InvoiceTimeEntryLink[] | null)?.map((row) => row.time_entry_id) ?? []);
+      const dedupedEntries = entriesToImport.filter((entry) => !linkedIds.has(entry.id));
+      if (dedupedEntries.length === 0) {
+        toast({
+          title: 'No new entries to import',
+          description: 'Selected entries are already linked to this invoice.',
+        });
+        return;
       }
 
-      const { data: insertedItems, error: insertError } = await supabase
+      const { data: freshEligibleEntries, error: eligibilityError } = await supabase
+        .from('time_entries')
+        .select('id, billing_status, invoice_id')
+        .in('id', dedupedEntries.map((entry) => entry.id))
+        .eq('billable', true);
+      if (eligibilityError) throw eligibilityError;
+
+      const eligibleIds = new Set(
+        (freshEligibleEntries ?? [])
+          .filter((entry) => entry.billing_status === 'unbilled' && entry.invoice_id == null)
+          .map((entry) => entry.id),
+      );
+      const finalEntries = dedupedEntries.filter((entry) => eligibleIds.has(entry.id));
+      const skippedCount = dedupedEntries.length - finalEntries.length;
+      if (finalEntries.length === 0) {
+        toast({
+          title: 'No eligible entries',
+          description: 'The selected entries were already billed or linked to another invoice.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const newItems: Array<{
+        invoice_id: string | undefined;
+        description: string;
+        quantity: number;
+        unit_price: number;
+        amount: number;
+      }> = [];
+      let missingRateCount = 0;
+      for (const entry of finalEntries) {
+        const hours =
+          entry.total_duration_seconds != null ? entry.total_duration_seconds / 3600 : entry.duration_minutes / 60;
+        const rate = entry.hourly_rate ?? 0;
+        if (entry.hourly_rate == null) missingRateCount += 1;
+        newItems.push({
+          invoice_id: id,
+          description: `${entry.project_name}: ${entry.description || 'Time entry from ' + format(new Date(entry.start_time), 'MMM d')}`,
+          quantity: parseFloat(hours.toFixed(2)),
+          unit_price: rate,
+          amount: parseFloat((hours * rate).toFixed(2)),
+        });
+      }
+
+      const { error: insertError } = await supabase
         .from('invoice_items')
         .insert(newItems)
-        .select();
+        .select('id');
 
       if (insertError) throw insertError;
 
-      // Update time entries to mark as billed
       const { error: updateError } = await supabase
         .from('time_entries')
         .update({ 
           billing_status: 'billed',
           invoice_id: id 
         })
-        .in('id', Array.from(selectedEntries));
+        .in('id', finalEntries.map((entry) => entry.id))
+        .eq('billing_status', 'unbilled')
+        .is('invoice_id', null);
 
       if (updateError) throw updateError;
 
-      toast({ title: `Imported ${entriesToImport.length} time entries` });
+      const { error: linkError } = await supabase.from('invoice_time_entry_links').insert(
+        finalEntries.map((entry) => ({
+          invoice_id: id,
+          invoice_item_id: null,
+          time_entry_id: entry.id,
+        })),
+      );
+      if (linkError) throw linkError;
+
+      const suffix = missingRateCount > 0 ? ` (${missingRateCount} missing rates imported at 0)` : '';
+      const skipSuffix = skippedCount > 0 ? `, ${skippedCount} skipped` : '';
+      toast({ title: `Imported ${finalEntries.length} time entries${skipSuffix}${suffix}` });
       setIsImportModalOpen(false);
       fetchItems();
     } catch (error: any) {
@@ -1047,6 +1100,11 @@ export default function InvoiceDetail() {
                   onClick={async () => {
                     if (!window.confirm('Delete this invoice? This cannot be undone.')) return;
                     try {
+                      await supabase
+                        .from('time_entries')
+                        .update({ billing_status: 'unbilled', invoice_id: null })
+                        .eq('invoice_id', id)
+                        .in('billing_status', ['billed', 'paid']);
                       const { error } = await supabase.from('invoices').delete().eq('id', id);
                       if (error) throw error;
                       toast({ title: 'Invoice deleted' });

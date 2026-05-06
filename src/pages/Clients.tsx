@@ -96,6 +96,17 @@ interface ClientActivity {
   created_at: string;
 }
 
+interface ClientFollowUp {
+  id: string;
+  client_id: string;
+  title: string;
+  details: string | null;
+  due_at: string | null;
+  remind_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
 const AVATAR_COLORS = [
   '#10B981', // Green
   '#3B82F6', // Blue
@@ -119,6 +130,42 @@ const CRM_STAGES: Array<{ value: string; label: string }> = [
   { value: 'inactive', label: 'Inactive' },
   { value: 'closed_lost', label: 'Closed lost' },
 ];
+
+function getClientInitials(client: Client) {
+  return client.name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function getClientStatusColor(status: string) {
+  switch (status) {
+    case 'active':
+    case 'won':
+      return 'bg-success/10 text-success';
+    case 'onboarding':
+      return 'bg-primary/10 text-primary';
+    case 'proposal_sent':
+    case 'negotiation':
+    case 'lead_new':
+    case 'lead_contacted':
+    case 'lead_qualified':
+      return 'bg-warning/10 text-warning';
+    case 'inactive':
+    case 'closed_lost':
+    case 'paused':
+      return 'bg-muted text-muted-foreground';
+    default:
+      return 'bg-muted text-muted-foreground';
+  }
+}
+
+function getClientStageLabel(value: string | null) {
+  const v = value || 'active';
+  return CRM_STAGES.find((s) => s.value === v)?.label || v;
+}
 
 function DraggableClientCard({
   client,
@@ -145,51 +192,89 @@ function DraggableClientCard({
     <Card
       ref={setNodeRef}
       style={style}
-      className={`border shadow-sm hover:shadow-md transition-shadow relative ${
+      className={`border border-border/70 bg-background shadow-sm hover:shadow-md transition-all ${
         isDragging || isOverlay ? 'opacity-70 shadow-lg' : ''
       }`}
       onClick={onOpen}
     >
-      {/* Drag handle - grab here to move card between columns */}
-      <div
-        className="absolute left-1.5 top-1/2 -translate-y-1/2 z-10 touch-none cursor-grab active:cursor-grabbing rounded p-0.5 hover:bg-muted/80"
-        onClick={(e) => e.stopPropagation()}
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7">
-              <MoreVertical className="h-3 w-3" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onEdit}>
-              <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onDelete} className="text-destructive">
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      <CardContent className="p-3 space-y-1 pl-8 pr-9">
-        <p className="font-medium text-sm truncate">{client.name}</p>
-        {client.company && <p className="text-xs text-muted-foreground truncate">{client.company}</p>}
-        {client.next_follow_up_at && (
-          <p className="text-xs text-muted-foreground">Follow-up {client.next_follow_up_at.slice(0, 10)}</p>
-        )}
-        {client.next_action && (
-          <p className="text-xs text-muted-foreground truncate" title={client.next_action}>
-            Next: {client.next_action}
-          </p>
-        )}
-        <p className="text-xs text-muted-foreground pt-1">{client.project_count || 0} projects</p>
+      <CardContent className="p-3 space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div
+              className="touch-none cursor-grab active:cursor-grabbing rounded-md p-1.5 hover:bg-muted/80 shrink-0"
+              onClick={(e) => e.stopPropagation()}
+              {...attributes}
+              {...listeners}
+            >
+              <GripVertical className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-xs shrink-0"
+              style={{ backgroundColor: client.avatar_color || '#8B5CF6' }}
+            >
+              {getClientInitials(client)}
+            </div>
+            <div className="min-w-0">
+              <p className="font-medium text-sm truncate leading-tight">{client.name}</p>
+              {client.company && <p className="text-xs text-muted-foreground truncate mt-0.5">{client.company}</p>}
+            </div>
+          </div>
+          <div onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7">
+                  <MoreVertical className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onEdit}>
+                  <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onDelete} className="text-destructive">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        <div className="space-y-1.5 text-xs text-muted-foreground">
+          {client.email && (
+            <p className="truncate flex items-center gap-1.5">
+              <SlotIcon slot="client_email" className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{client.email}</span>
+            </p>
+          )}
+          {client.phone && (
+            <p className="truncate flex items-center gap-1.5">
+              <SlotIcon slot="client_phone" className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{client.phone}</span>
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-1.5 text-xs text-muted-foreground">
+          {client.next_follow_up_at && (
+            <p className="truncate flex items-center gap-1.5">
+              <SlotIcon slot="task_calendar" className="h-3.5 w-3.5 shrink-0" />
+              <span>Follow-up {client.next_follow_up_at.slice(0, 10)}</span>
+            </p>
+          )}
+          {client.next_action && (
+            <p className="truncate" title={client.next_action}>
+              Next: {client.next_action}
+            </p>
+          )}
+        </div>
+
+        <div className="pt-1 flex items-center justify-between border-t border-border/60">
+          <Badge className={getClientStatusColor(client.status || 'active')}>
+            {getClientStageLabel(client.status || 'active')}
+          </Badge>
+          <p className="text-xs text-muted-foreground">{client.project_count || 0} projects</p>
+        </div>
       </CardContent>
     </Card>
   );
@@ -230,6 +315,13 @@ export default function Clients() {
   const [viewingClient, setViewingClient] = useState<Client | null>(null);
   const [activities, setActivities] = useState<ClientActivity[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [followUps, setFollowUps] = useState<ClientFollowUp[]>([]);
+  const [followUpsLoading, setFollowUpsLoading] = useState(false);
+  const [newFollowUpTitle, setNewFollowUpTitle] = useState('');
+  const [newFollowUpDueAt, setNewFollowUpDueAt] = useState('');
+  const [editingFollowUpId, setEditingFollowUpId] = useState<string | null>(null);
+  const [editingFollowUpTitle, setEditingFollowUpTitle] = useState('');
+  const [editingFollowUpDueAt, setEditingFollowUpDueAt] = useState('');
   const [newActivityType, setNewActivityType] = useState<ClientActivity['type']>('note');
   const [newActivityBody, setNewActivityBody] = useState('');
   const [importing, setImporting] = useState(false);
@@ -246,6 +338,7 @@ export default function Clients() {
   useEffect(() => {
     if (!viewingClient?.id) return;
     fetchActivities(viewingClient.id);
+    fetchFollowUps(viewingClient.id);
   }, [viewingClient?.id]);
 
   useEffect(() => {
@@ -492,7 +585,7 @@ export default function Clients() {
     return 'bg-muted text-muted-foreground';
   };
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const handleDragStart = (event: DragStartEvent) => {
     const clientId = event.active.id as string;
     const dragged = clients.find((c) => c.id === clientId) || null;
@@ -674,6 +767,132 @@ export default function Clients() {
       console.error('Error fetching activities:', error);
     } finally {
       setActivitiesLoading(false);
+    }
+  };
+
+  const fetchFollowUps = async (clientId: string) => {
+    setFollowUpsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('client_follow_ups')
+        .select('id, client_id, title, details, due_at, remind_at, completed_at, created_at')
+        .eq('client_id', clientId)
+        .order('completed_at', { ascending: true, nullsFirst: true })
+        .order('due_at', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setFollowUps((data as ClientFollowUp[]) || []);
+    } catch (error) {
+      console.error('Error fetching follow-ups:', error);
+    } finally {
+      setFollowUpsLoading(false);
+    }
+  };
+
+  const addFollowUp = async () => {
+    if (!user || !viewingClient) return;
+    const title = newFollowUpTitle.trim();
+    if (!title) return;
+    const dueAt = newFollowUpDueAt ? new Date(newFollowUpDueAt).toISOString() : null;
+    try {
+      const { error } = await supabase.from('client_follow_ups').insert({
+        user_id: user.id,
+        client_id: viewingClient.id,
+        title,
+        due_at: dueAt,
+        remind_at: dueAt,
+      });
+      if (error) throw error;
+      setNewFollowUpTitle('');
+      setNewFollowUpDueAt('');
+      await fetchFollowUps(viewingClient.id);
+      toast({ title: 'Follow-up added' });
+    } catch (error: any) {
+      toast({
+        title: 'Error adding follow-up',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const setFollowUpCompleted = async (followUp: ClientFollowUp, done: boolean) => {
+    if (!viewingClient) return;
+    try {
+      const { error } = await supabase
+        .from('client_follow_ups')
+        .update({ completed_at: done ? new Date().toISOString() : null })
+        .eq('id', followUp.id);
+      if (error) throw error;
+      await fetchFollowUps(viewingClient.id);
+      toast({ title: done ? 'Follow-up completed' : 'Follow-up reopened' });
+    } catch (error: any) {
+      toast({
+        title: 'Error updating follow-up',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const startEditingFollowUp = (followUp: ClientFollowUp) => {
+    setEditingFollowUpId(followUp.id);
+    setEditingFollowUpTitle(followUp.title);
+    setEditingFollowUpDueAt(followUp.due_at ? followUp.due_at.slice(0, 10) : '');
+  };
+
+  const cancelEditingFollowUp = () => {
+    setEditingFollowUpId(null);
+    setEditingFollowUpTitle('');
+    setEditingFollowUpDueAt('');
+  };
+
+  const saveFollowUpEdit = async () => {
+    if (!viewingClient || !editingFollowUpId) return;
+    const title = editingFollowUpTitle.trim();
+    if (!title) {
+      toast({ title: 'Title is required', variant: 'destructive' });
+      return;
+    }
+    const dueAt = editingFollowUpDueAt ? new Date(editingFollowUpDueAt).toISOString() : null;
+    try {
+      const { error } = await supabase
+        .from('client_follow_ups')
+        .update({
+          title,
+          due_at: dueAt,
+          remind_at: dueAt,
+        })
+        .eq('id', editingFollowUpId);
+      if (error) throw error;
+      cancelEditingFollowUp();
+      await fetchFollowUps(viewingClient.id);
+      toast({ title: 'Follow-up updated' });
+    } catch (error: any) {
+      toast({
+        title: 'Error updating follow-up',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const deleteFollowUp = async (followUpId: string) => {
+    if (!viewingClient) return;
+    try {
+      const { error } = await supabase
+        .from('client_follow_ups')
+        .delete()
+        .eq('id', followUpId);
+      if (error) throw error;
+      await fetchFollowUps(viewingClient.id);
+      toast({ title: 'Follow-up deleted' });
+    } catch (error: any) {
+      toast({
+        title: 'Error deleting follow-up',
+        description: error.message,
+        variant: 'destructive',
+      });
     }
   };
 
@@ -1145,9 +1364,9 @@ export default function Clients() {
                       return (
                         <div
                           key={stage.value}
-                          className="flex flex-col w-[300px] shrink-0"
+                          className="flex flex-col w-[320px] shrink-0"
                         >
-                          <div className={`rounded-t-lg px-4 py-3 ${getStageHeaderClass(stage.value)}`}>
+                          <div className={`rounded-t-xl px-4 py-3 border border-b-0 ${getStageHeaderClass(stage.value)}`}>
                             <div className="flex items-center justify-between gap-2">
                             <span className="font-semibold text-sm">{stage.label}</span>
                             <div className="flex items-center gap-1">
@@ -1172,7 +1391,7 @@ export default function Clients() {
                           </div>
                           <DroppableColumn
                             id={stage.value}
-                            className="p-3 flex flex-col gap-3 overflow-y-auto max-h-[60vh] bg-card border border-t-0 rounded-b-lg min-h-[420px] transition-colors"
+                            className="p-3 flex flex-col gap-3 overflow-y-auto max-h-[60vh] bg-card/80 backdrop-blur-[1px] border border-t-0 rounded-b-xl min-h-[420px] transition-colors"
                           >
                             <SortableContext items={columnClients.map((c) => c.id)} strategy={verticalListSortingStrategy}>
                               {columnClients.map((client) => (
@@ -1191,7 +1410,7 @@ export default function Clients() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="w-full justify-start text-muted-foreground hover:text-primary-foreground border border-dashed"
+                              className="w-full justify-start text-muted-foreground hover:text-primary-foreground border border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10"
                               onClick={() => {
                                 setAddWithStatus(stage.value);
                                 setEditingClient(null);
@@ -1375,33 +1594,99 @@ export default function Clients() {
                         <p className="text-sm">{viewingClient.lead_source || '—'}</p>
                       </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Next action</p>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm">{viewingClient.next_action || '—'}</p>
-                        {viewingClient.next_action && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-xs"
-                            onClick={async () => {
-                              if (!viewingClient) return;
-                              try {
-                                const { error } = await supabase
-                                  .from('clients')
-                                  .update({ next_action: null })
-                                  .eq('id', viewingClient.id);
-                                if (error) throw error;
-                                setViewingClient({ ...viewingClient, next_action: null });
-                                fetchClients();
-                                toast({ title: 'Next action cleared' });
-                              } catch (err: any) {
-                                toast({ title: 'Error', description: err.message, variant: 'destructive' });
-                              }
-                            }}
-                          >
-                            Mark done
+                    <div className="pt-2 border-t">
+                      <p className="text-sm font-semibold mb-2">Follow-up tasks</p>
+                      <div className="space-y-2">
+                        <Input
+                          value={newFollowUpTitle}
+                          onChange={(e) => setNewFollowUpTitle(e.target.value)}
+                          placeholder="New follow-up action"
+                        />
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Due date</Label>
+                          <Input
+                            type="date"
+                            value={newFollowUpDueAt}
+                            onChange={(e) => setNewFollowUpDueAt(e.target.value)}
+                          />
+                        </div>
+                        <div className="flex justify-end">
+                          <Button size="sm" onClick={addFollowUp} disabled={!newFollowUpTitle.trim()}>
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add follow-up
                           </Button>
+                        </div>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {followUpsLoading ? (
+                          <p className="text-xs text-muted-foreground">Loading follow-ups…</p>
+                        ) : followUps.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No follow-up tasks yet.</p>
+                        ) : (
+                          followUps.map((f) => (
+                            <div key={f.id} className="rounded-md border p-2">
+                              {editingFollowUpId === f.id ? (
+                                <div className="space-y-2">
+                                  <Input
+                                    value={editingFollowUpTitle}
+                                    onChange={(e) => setEditingFollowUpTitle(e.target.value)}
+                                    placeholder="Follow-up title"
+                                  />
+                                  <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground">Due date</Label>
+                                    <Input
+                                      type="date"
+                                      value={editingFollowUpDueAt}
+                                      onChange={(e) => setEditingFollowUpDueAt(e.target.value)}
+                                    />
+                                  </div>
+                                  <div className="flex justify-end gap-2">
+                                    <Button variant="outline" size="sm" onClick={cancelEditingFollowUp}>
+                                      Cancel
+                                    </Button>
+                                    <Button size="sm" onClick={saveFollowUpEdit}>
+                                      Save
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className={`text-sm ${f.completed_at ? 'line-through text-muted-foreground' : ''}`}>{f.title}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {f.due_at ? `Due ${f.due_at.slice(0, 10)}` : 'No due date'}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-xs"
+                                      onClick={() => startEditingFollowUp(f)}
+                                    >
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-xs"
+                                      onClick={() => setFollowUpCompleted(f, !f.completed_at)}
+                                    >
+                                      {f.completed_at ? 'Reopen' : 'Done'}
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                      onClick={() => deleteFollowUp(f.id)}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))
                         )}
                       </div>
                     </div>

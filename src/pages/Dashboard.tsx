@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, ArrowRight, Bell, Search } from '@/components/icons';
 import { Input } from '@/components/ui/input';
 import { SlotIcon } from '@/contexts/IconSlotContext';
-import { canAccessContracts } from '@/lib/features';
+import { getContractsAccessMode } from '@/lib/features';
 
 interface DashboardStats {
   totalClients: number;
@@ -52,9 +52,10 @@ interface RecentInvoice {
 
 interface FollowUpClient {
   id: string;
-  name: string;
-  next_action: string | null;
-  next_follow_up_at: string | null;
+  client_id: string;
+  title: string;
+  due_at: string | null;
+  clients: { name: string } | null;
 }
 
 interface NotificationItem {
@@ -272,13 +273,13 @@ export default function Dashboard() {
         approved: reviewApproved ?? 0,
       });
 
-      // Clients with next action or follow-up date
+      // CRM follow-up todos
       const { data: followUpClients } = await supabase
-        .from('clients')
-        .select('id, name, next_action, next_follow_up_at')
+        .from('client_follow_ups')
+        .select('id, client_id, title, due_at, clients(name)')
         .eq('user_id', user!.id)
-        .or('next_action.not.is.null,next_follow_up_at.not.is.null')
-        .order('next_follow_up_at', { ascending: true, nullsFirst: false })
+        .is('completed_at', null)
+        .order('due_at', { ascending: true, nullsFirst: false })
         .limit(10);
       setFollowUps((followUpClients as FollowUpClient[]) || []);
     } catch (error) {
@@ -329,7 +330,7 @@ export default function Dashboard() {
 
   const firstName = profile.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
   const unreadNotifications = notifications.filter((n) => !n.read_at);
-  const showContracts = canAccessContracts({ isAdmin });
+  const showContracts = getContractsAccessMode() === 'on';
 
   const statCards = [
     {
@@ -707,25 +708,23 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
                 {followUps.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No follow-ups or next actions</p>
+                  <p className="text-sm text-muted-foreground">No follow-up tasks</p>
                 ) : (
                   <ul className="space-y-3">
                     {followUps.slice(0, 4).map((c) => (
                     <li key={c.id}>
                       <Link
-                        to={`/clients?open=${c.id}`}
+                        to={`/clients?open=${c.client_id}`}
                         className="block text-sm font-medium text-primary hover:underline"
                       >
-                        {c.name}
+                        {c.clients?.name || 'Client'}
                       </Link>
-                      {c.next_follow_up_at && (
-                        <p className="text-xs text-muted-foreground">
-                          Follow-up {new Date(c.next_follow_up_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
-                      )}
-                      {c.next_action && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        {c.title}
+                      </p>
+                      {c.due_at && (
                         <p className="text-xs text-muted-foreground truncate">
-                          Next: {c.next_action}
+                          Due {new Date(c.due_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </p>
                       )}
                     </li>

@@ -32,6 +32,7 @@ import { format } from 'date-fns';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { cn } from '@/lib/utils';
 import { QuickAddTask } from './QuickAddTask';
+import { formatDuration } from '@/lib/time';
 
 export type TaskListSortKey = 'title' | 'status' | 'priority' | 'estimated_hours' | 'due_date';
 
@@ -39,6 +40,7 @@ interface TaskListViewProps {
   tasks: Task[];
   statuses: ProjectStatus[];
   commentCounts: Record<string, number>;
+  trackedSecondsByTask: Record<string, number>;
   onTaskClick: (task: Task) => void;
   onStatusChange: (taskId: string, statusId: string) => void;
   onPriorityChange: (taskId: string, priority: string) => void;
@@ -55,6 +57,7 @@ interface SortableRowProps {
   task: Task;
   statuses: ProjectStatus[];
   commentCount: number;
+  trackedSeconds: number;
   onTaskClick: () => void;
   onStatusChange: (statusId: string) => void;
   onPriorityChange: (priority: string) => void;
@@ -69,6 +72,7 @@ function SortableRow({
   task,
   statuses,
   commentCount,
+  trackedSeconds,
   onTaskClick,
   onStatusChange,
   onPriorityChange,
@@ -252,6 +256,13 @@ function SortableRow({
         )}
       </TableCell>
       <TableCell>
+        {trackedSeconds > 0 ? (
+          <span className="text-primary font-medium">{formatDuration(trackedSeconds, true)}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </TableCell>
+      <TableCell>
         <Popover>
           <PopoverTrigger asChild>
             <Button
@@ -337,6 +348,7 @@ export function TaskListView({
   tasks,
   statuses,
   commentCounts,
+  trackedSecondsByTask,
   onTaskClick,
   onStatusChange,
   onPriorityChange,
@@ -417,6 +429,7 @@ export function TaskListView({
             <SortableHead label="Status" sortKey="status" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="w-[180px]" />
             <SortableHead label="Priority" sortKey="priority" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="w-[120px]" />
             <SortableHead label="Est. Hours" sortKey="estimated_hours" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="w-[100px] whitespace-nowrap min-w-[100px]" />
+            <TableHead className="w-[120px]">Tracked</TableHead>
             <SortableHead label="Due Date" sortKey="due_date" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="w-[140px]" />
             <TableHead className="w-[100px]">Actions</TableHead>
           </TableRow>
@@ -429,6 +442,7 @@ export function TaskListView({
                 task={task}
                 statuses={statuses}
                 commentCount={commentCounts[task.id] || 0}
+                trackedSeconds={trackedSecondsByTask[task.id] || 0}
                 onTaskClick={() => onTaskClick(task)}
                 onStatusChange={(statusId) => onStatusChange(task.id, statusId)}
                 onPriorityChange={(priority) => onPriorityChange(task.id, priority)}
@@ -442,7 +456,7 @@ export function TaskListView({
           </SortableContext>
           {sortedTasks.length === 0 && !showQuickAdd && (
             <TableRow>
-              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                 No tasks yet. Add your first task to get started.
               </TableCell>
             </TableRow>

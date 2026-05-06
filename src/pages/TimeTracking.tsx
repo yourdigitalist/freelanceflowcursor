@@ -48,6 +48,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/time';
+import { resolveEffectiveHourlyRate } from '@/lib/billing';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
@@ -61,6 +62,7 @@ interface Project {
   id: string;
   name: string;
   client_id: string | null;
+  hourly_rate?: number | null;
 }
 
 interface Task {
@@ -89,6 +91,13 @@ interface TimeEntry {
   billing_status: string | null;
   projects: { name: string; client_id: string | null } | null;
   tasks: { title: string } | null;
+}
+
+interface TimeEntrySegment {
+  id: string;
+  start_time: string;
+  end_time: string;
+  duration_seconds: number;
 }
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : 'Something went wrong');
@@ -172,6 +181,9 @@ export default function TimeTracking() {
   const importFileInputRef = useRef<HTMLInputElement>(null);
   const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedLogEntry, setSelectedLogEntry] = useState<TimeEntry | null>(null);
+  const [selectedLogSegments, setSelectedLogSegments] = useState<TimeEntrySegment[]>([]);
+  const [loadingSelectedLogSegments, setLoadingSelectedLogSegments] = useState(false);
   const location = useLocation();
   const isTimerView = location.pathname === '/time/timer';
 
@@ -235,7 +247,7 @@ export default function TimeTracking() {
     try {
       const { data, error } = await supabase
         .from('projects')
-        .select('id, name, client_id')
+        .select('id, name, client_id, hourly_rate')
         .order('name');
 
       if (error) throw error;
@@ -459,6 +471,10 @@ export default function TimeTracking() {
     const firstStart = segmentsToSave[0].startTime;
 
     try {
+      const effectiveHourlyRate = await resolveEffectiveHourlyRate({
+        userId: user!.id,
+        projectId: dialogProject || null,
+      });
       if (editingEntry) {
         await supabase
           .from('time_entries')
@@ -468,6 +484,7 @@ export default function TimeTracking() {
             task_id: dialogTask || null,
             billable: dialogBillable,
             billing_status: dialogBillable ? 'unbilled' : 'not_billable',
+            hourly_rate: effectiveHourlyRate,
           })
           .eq('id', editingEntry.id);
         await supabase.from('time_entry_segments').delete().eq('time_entry_id', editingEntry.id);
@@ -489,6 +506,7 @@ export default function TimeTracking() {
             task_id: dialogTask || null,
             billable: dialogBillable,
             billing_status: dialogBillable ? 'unbilled' : 'not_billable',
+            hourly_rate: effectiveHourlyRate,
             user_id: user!.id,
             start_time: firstStart.toISOString(),
             end_time: firstStart.toISOString(),
@@ -626,6 +644,25 @@ export default function TimeTracking() {
       fetchEntries();
     } catch (error: unknown) {
       toast({ title: 'Error deleting entries', description: getErrorMessage(error), variant: 'destructive' });
+    }
+  };
+
+  const openLogDetails = async (entry: TimeEntry) => {
+    setSelectedLogEntry(entry);
+    setLoadingSelectedLogSegments(true);
+    try {
+      const { data, error } = await supabase
+        .from('time_entry_segments')
+        .select('id, start_time, end_time, duration_seconds')
+        .eq('time_entry_id', entry.id)
+        .order('start_time', { ascending: true });
+      if (error) throw error;
+      setSelectedLogSegments((data || []) as TimeEntrySegment[]);
+    } catch (error) {
+      console.error('Error fetching entry segments:', error);
+      setSelectedLogSegments([]);
+    } finally {
+      setLoadingSelectedLogSegments(false);
     }
   };
 
@@ -986,7 +1023,7 @@ export default function TimeTracking() {
                     </Button>
                     {dialogStartEndRanges.length > 0 && (
                       <p className="text-sm text-muted-foreground">
-                        Total: {formatDuration(getDialogRangesTotalSeconds())}
+                        Total: {formatDuration(getDialogRangesTotalSeconds(), true)}
                       </p>
                     )}
                   </div>
@@ -1096,6 +1133,19 @@ export default function TimeTracking() {
                       </Command>
                     </PopoverContent>
                   </Popover>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-muted-foreground"
+                    onClick={async () => {
+                      const name = window.prompt('New project name');
+                      if (!name) return;
+                      await createProjectInline(name, false);
+                    }}
+                  >
+                    + Create project
+                  </Button>
                 </div>
                 <div className="flex-1 min-w-[140px] space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Task</Label>
@@ -1135,6 +1185,20 @@ export default function TimeTracking() {
                       </Command>
                     </PopoverContent>
                   </Popover>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-muted-foreground"
+                    disabled={!timerProject}
+                    onClick={async () => {
+                      const title = window.prompt('New task title');
+                      if (!title || !timerProject) return;
+                      await createTaskInline(title, timerProject, false);
+                    }}
+                  >
+                    + Create task
+                  </Button>
                 </div>
                 <div className="flex items-center gap-2 pt-6">
                   <Switch id="timer-billable" checked={timerBillable} onCheckedChange={setTimerBillable} />
@@ -1225,7 +1289,7 @@ export default function TimeTracking() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total Hours</p>
-                  <p className="text-2xl font-bold">{formatDuration(Math.round(totalHours * 3600))}</p>
+                  <p className="text-2xl font-bold">{formatDuration(Math.round(totalHours * 3600), true)}</p>
                 </div>
               </div>
             </CardContent>
@@ -1238,7 +1302,7 @@ export default function TimeTracking() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Billable Hours</p>
-                  <p className="text-2xl font-bold">{formatDuration(Math.round(billableHours * 3600))}</p>
+                  <p className="text-2xl font-bold">{formatDuration(Math.round(billableHours * 3600), true)}</p>
                 </div>
               </div>
             </CardContent>
@@ -1372,7 +1436,7 @@ export default function TimeTracking() {
                 </TableHeader>
                 <TableBody>
                   {filteredEntries.map((entry) => (
-                    <TableRow key={entry.id}>
+                    <TableRow key={entry.id} className="cursor-pointer" onClick={() => openLogDetails(entry)}>
                       {selectionMode && (
                         <TableCell className="w-10">
                           <Checkbox
@@ -1395,23 +1459,21 @@ export default function TimeTracking() {
                         {entry.description || <span className="text-muted-foreground italic">No description</span>}
                       </TableCell>
                       <TableCell>
-                        {getEntrySeconds(entry) > 0 ? formatDuration(getEntrySeconds(entry)) : '—'}
+                        {getEntrySeconds(entry) > 0 ? formatDuration(getEntrySeconds(entry), true) : '—'}
                       </TableCell>
                       <TableCell>
                         {getStatusBadge(entry)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1">
-                          {entry.end_time == null && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 px-2"
-                              onClick={() => resumeEntry(entry.id)}
-                            >
-                              Resume
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={() => resumeEntry(entry.id)}
+                          >
+                            Resume
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -1438,6 +1500,37 @@ export default function TimeTracking() {
             )}
           </CardContent>
         </Card>
+        <Dialog open={!!selectedLogEntry} onOpenChange={(open) => !open && setSelectedLogEntry(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Time Entry Details</DialogTitle>
+              <DialogDescription>
+                {selectedLogEntry?.projects?.name || 'No project'}{selectedLogEntry?.tasks?.title ? ` • ${selectedLogEntry.tasks.title}` : ''}
+              </DialogDescription>
+            </DialogHeader>
+            {selectedLogEntry && (
+              <div className="space-y-3 text-sm">
+                <p><span className="text-muted-foreground">Description:</span> {selectedLogEntry.description || '—'}</p>
+                <p><span className="text-muted-foreground">Total:</span> {formatDuration(getEntrySeconds(selectedLogEntry), true)}</p>
+                <div className="space-y-2">
+                  <p className="font-medium">Breakdown</p>
+                  {loadingSelectedLogSegments ? (
+                    <p className="text-muted-foreground">Loading…</p>
+                  ) : selectedLogSegments.length === 0 ? (
+                    <p className="text-muted-foreground">No segment breakdown found.</p>
+                  ) : (
+                    selectedLogSegments.map((segment, index) => (
+                      <div key={segment.id} className="flex items-center justify-between rounded border p-2">
+                        <span>{index + 1}. {format(parseISO(segment.start_time), 'MMM d, yyyy HH:mm:ss')} - {format(parseISO(segment.end_time), 'MMM d, yyyy HH:mm:ss')}</span>
+                        <span className="font-mono">{formatDuration(segment.duration_seconds, true)}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
           </div>
         )}
       </div>

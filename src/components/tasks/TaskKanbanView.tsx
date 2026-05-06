@@ -15,6 +15,7 @@ interface TaskKanbanViewProps {
   tasks: Task[];
   statuses: ProjectStatus[];
   commentCounts: Record<string, number>;
+  trackedSecondsByTask: Record<string, number>;
   onTaskClick: (task: Task) => void;
   onQuickAdd: (title: string, statusId: string) => void;
 }
@@ -23,11 +24,12 @@ interface KanbanColumnProps {
   status: ProjectStatus;
   tasks: Task[];
   commentCounts: Record<string, number>;
+  trackedSecondsByTask: Record<string, number>;
   onTaskClick: (task: Task) => void;
   onQuickAdd: (title: string) => void;
 }
 
-function KanbanColumn({ status, tasks, commentCounts, onTaskClick, onQuickAdd }: KanbanColumnProps) {
+function KanbanColumn({ status, tasks, commentCounts, trackedSecondsByTask, onTaskClick, onQuickAdd }: KanbanColumnProps) {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const { setNodeRef, isOver } = useDroppable({ id: status.id });
 
@@ -60,6 +62,7 @@ function KanbanColumn({ status, tasks, commentCounts, onTaskClick, onQuickAdd }:
               task={task}
               status={status}
               commentCount={commentCounts[task.id] || 0}
+              trackedSeconds={trackedSecondsByTask[task.id] || 0}
               onClick={() => onTaskClick(task)}
             />
           ))}
@@ -99,6 +102,7 @@ export function TaskKanbanView({
   tasks,
   statuses,
   commentCounts,
+  trackedSecondsByTask,
   onTaskClick,
   onQuickAdd,
 }: TaskKanbanViewProps) {
@@ -112,6 +116,7 @@ export function TaskKanbanView({
             status={status}
             tasks={statusTasks}
             commentCounts={commentCounts}
+            trackedSecondsByTask={trackedSecondsByTask}
             onTaskClick={onTaskClick}
             onQuickAdd={(title) => onQuickAdd(title, status.id)}
           />

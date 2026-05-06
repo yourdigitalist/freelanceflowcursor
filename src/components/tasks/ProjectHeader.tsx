@@ -122,7 +122,7 @@ export function ProjectHeader({
             </DropdownMenu>
           )}
           <Button variant="outline" size="sm" asChild>
-            <Link to={`/invoices/new?project=${project.id}`}>Create Invoice</Link>
+            <Link to={`/invoices?project_id=${project.id}&from_review=1`}>Create Invoice</Link>
           </Button>
           <Button size="sm" asChild>
             <Link to={`/time/logs?project=${project.id}`}>Log Time</Link>
