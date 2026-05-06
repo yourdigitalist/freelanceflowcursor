@@ -16,13 +16,20 @@ import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import TimeTracking from "./pages/TimeTracking";
 import Invoices from "./pages/Invoices";
+import Services from "./pages/Services";
+import Proposals from "./pages/Proposals";
+import Contracts from "./pages/Contracts";
 import InvoiceDetail from "./pages/InvoiceDetail";
+import ProposalDetail from "./pages/ProposalDetail";
+import ContractDetail from "./pages/ContractDetail";
+import ContractTemplateDetail from "./pages/ContractTemplateDetail";
 import SettingsLayout from "./pages/SettingsLayout";
 import AdminLayout from "./pages/AdminLayout";
 import UserSettings from "./pages/settings/UserSettings";
 import BusinessSettings from "./pages/settings/BusinessSettings";
 import LocaleSettings from "./pages/settings/LocaleSettings";
 import InvoiceSettings from "./pages/settings/InvoiceSettings";
+import ProposalSettings from "./pages/settings/ProposalSettings";
 import SubscriptionSettings from "./pages/settings/SubscriptionSettings";
 import StorageSettings from "./pages/settings/StorageSettings";
 import NotificationSettings from "./pages/settings/NotificationSettings";
@@ -43,6 +50,8 @@ import Notes from "./pages/Notes";
 import ReviewRequests from "./pages/ReviewRequests";
 import ReviewRequestDetail from "./pages/ReviewRequestDetail";
 import ClientReview from "./pages/ClientReview";
+import PublicProposal from "./pages/PublicProposal";
+import PublicContract from "./pages/PublicContract";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
@@ -53,6 +62,7 @@ import { RecoveryHashRedirect } from "@/components/RecoveryHashRedirect";
 import { TimerProvider } from "@/contexts/TimerContext";
 import { IconSlotProvider } from "@/contexts/IconSlotContext";
 import { CrispChat } from "@/components/CrispChat";
+import { canAccessContracts, getContractsAccessMode } from "@/lib/features";
 
 const queryClient = new QueryClient();
 
@@ -106,6 +116,43 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/settings/subscription" replace />;
   }
   
+  return <>{children}</>;
+}
+
+function ContractsRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+    supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("user_id", user.id)
+      .single()
+      .then(({ data }) => setIsAdmin(data?.is_admin ?? false));
+  }, [user]);
+
+  if (loading || isAdmin === null) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
+
+  if (!user) return <Navigate to="/auth" replace />;
+
+  if (!canAccessContracts({ isAdmin })) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function PublicContractsRoute({ children }: { children: React.ReactNode }) {
+  if (getContractsAccessMode() !== "on") {
+    return <NotFound />;
+  }
   return <>{children}</>;
 }
 
@@ -175,10 +222,18 @@ function AppRoutes() {
       <Route path="/time/logs" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
       <Route path="/notes" element={<ProtectedRoute><Notes /></ProtectedRoute>} />
       <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
+      <Route path="/services" element={<ProtectedRoute><Services /></ProtectedRoute>} />
+      <Route path="/proposals" element={<ProtectedRoute><Proposals /></ProtectedRoute>} />
+      <Route path="/proposals/:id" element={<ProtectedRoute><ProposalDetail /></ProtectedRoute>} />
+      <Route path="/contracts" element={<ContractsRoute><Contracts /></ContractsRoute>} />
+      <Route path="/contracts/:id" element={<ContractsRoute><ContractDetail /></ContractsRoute>} />
+      <Route path="/contracts/templates/:id" element={<ContractsRoute><ContractTemplateDetail /></ContractsRoute>} />
       <Route path="/invoices/:id" element={<ProtectedRoute><InvoiceDetail /></ProtectedRoute>} />
       <Route path="/reviews" element={<ProtectedRoute><ReviewRequests /></ProtectedRoute>} />
       <Route path="/reviews/:id" element={<ProtectedRoute><ReviewRequestDetail /></ProtectedRoute>} />
       <Route path="/review/:token" element={<ClientReview />} />
+      <Route path="/proposal/:token" element={<PublicProposal />} />
+      <Route path="/contract/:token" element={<PublicContractsRoute><PublicContract /></PublicContractsRoute>} />
         <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
       <Route path="/search" element={<ProtectedRoute><SearchResults /></ProtectedRoute>} />
       <Route path="/help" element={<ProtectedRoute><Navigate to="/feature-requests" replace /></ProtectedRoute>} />
@@ -201,6 +256,7 @@ function AppRoutes() {
         <Route path="profile" element={<UserSettings />} />
         <Route path="business" element={<BusinessSettings />} />
         <Route path="invoices" element={<InvoiceSettings />} />
+        <Route path="proposals" element={<ProposalSettings />} />
         <Route path="locale" element={<LocaleSettings />} />
         <Route path="notifications" element={<NotificationSettings />} />
         <Route path="subscription" element={<SubscriptionSettings />} />

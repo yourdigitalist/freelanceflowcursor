@@ -300,9 +300,14 @@ export default function Invoices() {
       return;
     }
 
+    const normalizeOptionalId = (value: string | null | undefined): string | null => {
+      const trimmed = value?.trim();
+      if (!trimmed || trimmed.toLowerCase() === 'none') return null;
+      return trimmed;
+    };
     const selectedTax = taxes.find(t => t.id === selectedTaxId);
-    const clientId = createClientId || (formData.get('client_id') as string) || null;
-    const projectId = createProjectId || (formData.get('project_id') as string) || null;
+    const clientId = normalizeOptionalId(createClientId || (formData.get('client_id') as string) || null);
+    const projectId = normalizeOptionalId(createProjectId || (formData.get('project_id') as string) || null);
     let invoiceNumber: string;
     try {
       invoiceNumber = await getNextInvoiceNumber();
@@ -311,8 +316,8 @@ export default function Invoices() {
     }
     const invoiceData = {
       invoice_number: invoiceNumber,
-      client_id: clientId || null,
-      project_id: projectId || null,
+      client_id: clientId,
+      project_id: projectId,
       issue_date: issueDate,
       due_date: dueDate,
       status: 'draft',

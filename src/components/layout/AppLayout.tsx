@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Menu, ChevronDown, ChevronLeft, ArrowRight, ChevronUp, ShieldCheck, Briefcase } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
+import { canAccessContracts } from '@/lib/features';
 import { cn } from '@/lib/utils';
 import { useBranding } from '@/hooks/useBranding';
 import { useTimer } from '@/contexts/TimerContext';
@@ -128,6 +129,7 @@ export function AppLayout({
   };
   const timer = useTimer();
   const showTimerBar = timer.draftSegments.length > 0;
+  const showContracts = canAccessContracts({ isAdmin: profile?.is_admin === true });
   return <div className="min-h-screen bg-background flex flex-col">
       {/* Trial Banner – when dismissed, sidebar lifts to top (no blank space) */}
       {showTrialBanner && <TrialBanner onUpgrade={() => navigate('/settings/subscription')} onDismiss={handleTrialBannerDismiss} />}
@@ -298,6 +300,39 @@ export function AppLayout({
             <Link to="/invoices" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/invoices' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
               <SlotIcon slot="sidebar_invoices" className={cn("h-4 w-4 shrink-0", location.pathname === '/invoices' && "text-primary")} />
               {!sidebarCollapsed && 'Invoices'}
+            </Link>
+          </span>
+          <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>
+            {location.pathname.startsWith('/proposals') && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
+            <Link to="/proposals" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname.startsWith('/proposals') ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+              <SlotIcon slot="sidebar_proposals" className={cn("h-4 w-4 shrink-0", location.pathname.startsWith('/proposals') && "text-primary")} />
+              {!sidebarCollapsed && (
+                <>
+                  Proposals
+                  <Badge className="bg-purple-600 hover:bg-purple-600 text-white text-[10px] px-1.5 py-0 font-medium shrink-0">Beta</Badge>
+                </>
+              )}
+            </Link>
+          </span>
+          {showContracts ? (
+            <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>
+              {location.pathname.startsWith('/contracts') && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
+              <Link to="/contracts" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname.startsWith('/contracts') ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+                <SlotIcon slot="sidebar_contracts" className={cn("h-4 w-4 shrink-0", location.pathname.startsWith('/contracts') && "text-primary")} />
+                {!sidebarCollapsed && (
+                  <>
+                    Contracts
+                    <Badge className="bg-purple-600 hover:bg-purple-600 text-white text-[10px] px-1.5 py-0 font-medium shrink-0">Beta</Badge>
+                  </>
+                )}
+              </Link>
+            </span>
+          ) : null}
+          <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>
+            {location.pathname === '/services' && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
+            <Link to="/services" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/services' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+              <SlotIcon slot="sidebar_services" className={cn("h-4 w-4 shrink-0", location.pathname === '/services' && "text-primary")} />
+              {!sidebarCollapsed && 'Services'}
             </Link>
           </span>
           <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>

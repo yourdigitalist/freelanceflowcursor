@@ -241,6 +241,12 @@ export default function InvoiceDetail() {
     }
   }, [user, id]);
 
+  useEffect(() => {
+    if (!invoice || taxes.length === 0) return;
+    const matchingTax = taxes.find((tax) => Number(tax.rate) === Number(invoice.tax_rate));
+    setSelectedTaxId(matchingTax?.id ?? '');
+  }, [invoice?.id, invoice?.tax_rate, taxes]);
+
   // When invoice is sent or paid, switch to read-only (user must click "Edit Invoice" to change)
   useEffect(() => {
     if (invoice && (invoice.status === 'sent' || invoice.status === 'paid')) {
@@ -703,7 +709,7 @@ export default function InvoiceDetail() {
           tax_rate: taxRate,
           tax_amount: taxAmount,
           total,
-          notes,
+          notes: notes.trim() || null,
           invoice_footer: invoiceFooter.trim() || null,
           bank_details: bankDetails.trim() || null,
         })

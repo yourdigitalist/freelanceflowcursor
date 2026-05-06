@@ -41,6 +41,7 @@ export default function UserSettings() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -140,6 +141,65 @@ export default function UserSettings() {
     }
   };
 
+  const MAX_AVATAR_BYTES = 500 * 1024; // 500KB
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Please select an image file', variant: 'destructive' });
+      e.target.value = '';
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      toast({
+        title: 'File too large',
+        description: `Max size is 500 KB. Your file is ${(file.size / 1024).toFixed(1)} KB.`,
+        variant: 'destructive',
+      });
+      e.target.value = '';
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const ext = file.name.split('.').pop() || 'png';
+      const path = `${user.id}/avatar-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('business-logos')
+        .upload(path, file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('business-logos').getPublicUrl(path);
+      const avatarUrl = urlData.publicUrl;
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: avatarUrl })
+        .eq('user_id', user.id);
+      if (updateError) throw updateError;
+
+      setProfile((prev) => (prev ? { ...prev, avatar_url: avatarUrl } : prev));
+      toast({ title: 'Profile photo updated' });
+      dirtyContext?.setDirty(false);
+    } catch (error: any) {
+      const msg = error.message ?? '';
+      const isRls = msg.includes('row-level security') || msg.includes('violates');
+      toast({
+        title: 'Upload failed',
+        description: isRls
+          ? 'Storage access was denied. Ensure the "business-logos" bucket has policies allowing your user folder.'
+          : msg.includes('Bucket not found')
+            ? 'Create a storage bucket named "business-logos" in Supabase Storage and set it to public.'
+            : msg || 'Could not upload profile photo',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+      e.target.value = '';
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -173,9 +233,23 @@ export default function UserSettings() {
                 {initials}
               </AvatarFallback>
             </Avatar>
-            <Button type="button" variant="outline" size="sm">
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={handleAvatarUpload}
+              disabled={saving}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={saving}
+            >
               <SlotIcon slot="profile_camera" className="mr-2 h-4 w-4" />
-              Upload Photo
+              {saving ? 'Uploading…' : 'Upload Photo'}
             </Button>
           </div>
         </CardContent>

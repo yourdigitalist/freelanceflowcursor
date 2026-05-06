@@ -125,7 +125,7 @@ export function StartGuide() {
     () => [
       { id: 'companyProfile' as const, label: 'Complete your company profile', link: '/settings/business' },
       { id: 'uploadLogo' as const, label: 'Upload your logo', link: '/settings/business' },
-      { id: 'customizeInvoices' as const, label: 'Customize your invoices', link: '/settings/invoice' },
+      { id: 'customizeInvoices' as const, label: 'Customize your invoices', link: '/settings/invoices' },
       { id: 'firstInvoice' as const, label: 'Create your first invoice', link: '/invoices' },
       { id: 'firstProject' as const, label: 'Create your first project', link: '/projects' },
     ],

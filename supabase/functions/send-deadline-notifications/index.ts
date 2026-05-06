@@ -21,6 +21,7 @@ type NotificationPreferences = {
   tasks?: { dueSoon?: ChannelPref; overdue?: ChannelPref; daysBefore?: number };
   invoices?: { dueSoon?: ChannelPref; overdue?: ChannelPref; sent?: ChannelPref; paid?: ChannelPref; daysBefore?: number };
   reviews?: { comment?: ChannelPref; status?: ChannelPref; dueSoon?: ChannelPref; overdue?: ChannelPref; daysBefore?: number };
+  contracts?: { dueSoon?: ChannelPref; overdue?: ChannelPref; daysBefore?: number };
 };
 
 const DEFAULT_DAYS = 7;
@@ -56,6 +57,11 @@ function prefsWithDefaults(p: NotificationPreferences | null | undefined): Notif
       dueSoon: { inApp: boolOrDefault(x.reviews?.dueSoon?.inApp, true), email: boolOrDefault(x.reviews?.dueSoon?.email, true) },
       overdue: { inApp: boolOrDefault(x.reviews?.overdue?.inApp, true), email: boolOrDefault(x.reviews?.overdue?.email, true) },
       daysBefore: getDaysBefore(x.reviews?.daysBefore),
+    },
+    contracts: {
+      dueSoon: { inApp: boolOrDefault(x.contracts?.dueSoon?.inApp, true), email: boolOrDefault(x.contracts?.dueSoon?.email, true) },
+      overdue: { inApp: boolOrDefault(x.contracts?.overdue?.inApp, true), email: boolOrDefault(x.contracts?.overdue?.email, true) },
+      daysBefore: getDaysBefore(x.contracts?.daysBefore ?? 3),
     },
   };
 }
@@ -113,12 +119,13 @@ serve(async (req) => {
   today.setUTCHours(0, 0, 0, 0);
   const todayYmd = dateYmd(today);
 
-  const [{ data: profiles }, { data: projects }, { data: tasks }, { data: invoices }, { data: reviews }] = await Promise.all([
+  const [{ data: profiles }, { data: projects }, { data: tasks }, { data: invoices }, { data: reviews }, { data: contracts }] = await Promise.all([
     supabase.from("profiles").select("user_id, email, full_name, notification_preferences"),
     supabase.from("projects").select("id, user_id, name, due_date, status").not("due_date", "is", null),
     supabase.from("tasks").select("id, user_id, title, due_date, status").not("due_date", "is", null),
     supabase.from("invoices").select("id, user_id, invoice_number, due_date, status").not("due_date", "is", null),
     supabase.from("review_requests").select("id, user_id, title, due_date, status").not("due_date", "is", null),
+    supabase.from("contracts").select("id, user_id, identifier, timeline_days, sent_at, created_at, status, reminder_near_end").eq("reminder_near_end", true),
   ]);
 
   const notifications: Array<{ user_id: string; type: string; title: string; body: string | null; link: string | null; event_key: string }> = [];
@@ -134,11 +141,13 @@ serve(async (req) => {
     const tDays = getDaysBefore(prefs.tasks?.daysBefore);
     const iDays = getDaysBefore(prefs.invoices?.daysBefore);
     const rDays = getDaysBefore(prefs.reviews?.daysBefore);
+    const cDays = getDaysBefore(prefs.contracts?.daysBefore);
 
     const projectDueSoon = dateYmd(addDays(today, pDays));
     const taskDueSoon = dateYmd(addDays(today, tDays));
     const invoiceDueSoon = dateYmd(addDays(today, iDays));
     const reviewDueSoon = dateYmd(addDays(today, rDays));
+    const contractDueSoon = dateYmd(addDays(today, cDays));
 
     for (const row of (projects || []).filter((x: any) => x.user_id === userId)) {
       const status = String(row.status || "");
@@ -276,6 +285,51 @@ serve(async (req) => {
             to: userEmail,
             subject: "Review request overdue",
             text: `Hi ${userName},\n\n${row.title || "Review request"} is overdue.\n\nOpen approvals: ${(Deno.env.get("APP_BASE_URL") || "").replace(/\/$/, "")}/reviews`,
+          });
+        }
+      }
+    }
+
+    for (const row of (contracts || []).filter((x: any) => x.user_id === userId)) {
+      if (!row.timeline_days || !["pending_signatures", "signed"].includes(String(row.status || ""))) continue;
+      const baseDate = new Date(String(row.sent_at || row.created_at || todayYmd));
+      const dueDate = dateYmd(addDays(baseDate, Number(row.timeline_days || 0)));
+      const contractLabel = row.identifier ? `Contract ${row.identifier}` : "Contract";
+      if (dueDate === contractDueSoon) {
+        if (prefs.contracts?.dueSoon?.inApp) {
+          notifications.push({
+            user_id: userId,
+            type: "contract",
+            title: "Contract due soon",
+            body: `${contractLabel} is due in ${cDays} day${cDays === 1 ? "" : "s"}.`,
+            link: "/contracts",
+            event_key: `contract_dueSoon:${row.id}:${todayYmd}`,
+          });
+        }
+        if (prefs.contracts?.dueSoon?.email && userEmail) {
+          emailQueue.push({
+            to: userEmail,
+            subject: "Contract due soon",
+            text: `Hi ${userName},\n\n${contractLabel} is due in ${cDays} day${cDays === 1 ? "" : "s"}.\n\nOpen contracts: ${(Deno.env.get("APP_BASE_URL") || "").replace(/\/$/, "")}/contracts`,
+          });
+        }
+      }
+      if (dueDate < todayYmd) {
+        if (prefs.contracts?.overdue?.inApp) {
+          notifications.push({
+            user_id: userId,
+            type: "contract",
+            title: "Contract overdue",
+            body: `${contractLabel} is overdue.`,
+            link: "/contracts",
+            event_key: `contract_overdue:${row.id}:${todayYmd}`,
+          });
+        }
+        if (prefs.contracts?.overdue?.email && userEmail) {
+          emailQueue.push({
+            to: userEmail,
+            subject: "Contract overdue",
+            text: `Hi ${userName},\n\n${contractLabel} is overdue.\n\nOpen contracts: ${(Deno.env.get("APP_BASE_URL") || "").replace(/\/$/, "")}/contracts`,
           });
         }
       }

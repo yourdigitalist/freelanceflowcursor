@@ -12,6 +12,7 @@ import { ArrowLeft, MoreVertical, Trash2, Download, Upload } from '@/components/
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { Project, Task, ProjectStatus } from './types';
 import { format } from 'date-fns';
+import { formatDuration } from '@/lib/time';
 
 interface ProjectHeaderProps {
   project: Project;
@@ -124,7 +125,7 @@ export function ProjectHeader({
             <Link to={`/invoices/new?project=${project.id}`}>Create Invoice</Link>
           </Button>
           <Button size="sm" asChild>
-            <Link to={`/time?project=${project.id}`}>Log Time</Link>
+            <Link to={`/time/logs?project=${project.id}`}>Log Time</Link>
           </Button>
           {(onEdit || onDelete) && (
             <DropdownMenu>
@@ -162,7 +163,7 @@ export function ProjectHeader({
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Hours</p>
-                <p className="text-xl font-semibold">{totalHours.toFixed(1)}h</p>
+                <p className="text-xl font-semibold">{formatDuration(Math.round(totalHours * 3600))}</p>
               </div>
             </div>
           </CardContent>

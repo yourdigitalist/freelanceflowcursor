@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
-import { useTimer, formatElapsed, formatDurationFromSeconds, TIMER_ENTRY_SAVED_EVENT } from '@/contexts/TimerContext';
+import { useTimer, formatElapsed, TIMER_ENTRY_SAVED_EVENT } from '@/contexts/TimerContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { notifyStartGuideRefresh } from '@/components/layout/StartGuide';
 import { Button } from '@/components/ui/button';
@@ -29,7 +29,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Play, Square, Trash2, Filter, Download, Upload, List } from '@/components/icons';
+import { Plus, Play, Square, Trash2, Filter, Download, Upload, List, Check } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { format, differenceInMinutes, differenceInSeconds, parseISO, startOfWeek, endOfWeek, subDays, startOfMonth, endOfMonth } from 'date-fns';
 import {
@@ -47,6 +47,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { formatDuration } from '@/lib/time';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
   downloadCsv,
   parseCsv,
@@ -88,6 +91,8 @@ interface TimeEntry {
   tasks: { title: string } | null;
 }
 
+const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : 'Something went wrong');
+
 /** Draft timer segment: start and optional end (null = currently running). */
 interface DraftSegment {
   startMs: number;
@@ -114,6 +119,7 @@ export default function TimeTracking() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
   const {
+    activeEntryId,
     draftSegments,
     timerDescription,
     setTimerDescription,
@@ -129,7 +135,19 @@ export default function TimeTracking() {
     discardTimerSegment,
     getDraftTotalSeconds,
     isLocalTimerRunning,
+    resumeEntry,
   } = useTimer();
+  const [searchParams] = useSearchParams();
+  const prefilledProjectId = searchParams.get('project') || '';
+  const lockPrefilledProject = Boolean(prefilledProjectId);
+  const [projectQuery, setProjectQuery] = useState('');
+  const [taskQuery, setTaskQuery] = useState('');
+  const [dialogProjectQuery, setDialogProjectQuery] = useState('');
+  const [dialogTaskQuery, setDialogTaskQuery] = useState('');
+  const [projectPopoverOpen, setProjectPopoverOpen] = useState(false);
+  const [taskPopoverOpen, setTaskPopoverOpen] = useState(false);
+  const [dialogProjectPopoverOpen, setDialogProjectPopoverOpen] = useState(false);
+  const [dialogTaskPopoverOpen, setDialogTaskPopoverOpen] = useState(false);
 
   // Filters
   const [timeframeFilter, setTimeframeFilter] = useState<TimeframeFilter>('all');
@@ -178,6 +196,12 @@ export default function TimeTracking() {
       fetchTasksForProject(timerProject);
     }
   }, [timerProject]);
+
+  useEffect(() => {
+    if (prefilledProjectId && isDialogOpen && !editingEntry) {
+      setDialogProject(prefilledProjectId);
+    }
+  }, [prefilledProjectId, isDialogOpen, editingEntry]);
 
   useEffect(() => {
     const onSaved = () => fetchEntries();
@@ -250,6 +274,70 @@ export default function TimeTracking() {
     }
   };
 
+  const selectedTimerProject = projects.find((p) => p.id === timerProject);
+  const selectedTimerTask = tasks.find((t) => t.id === timerTask);
+  const selectedDialogProject = projects.find((p) => p.id === dialogProject);
+  const selectedDialogTask = tasks.find((t) => t.id === dialogTask);
+
+  const createProjectInline = async (name: string, forDialog: boolean) => {
+    if (!user) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const existing = projects.find((p) => p.name.toLowerCase() === trimmed.toLowerCase());
+    if (existing) {
+      if (forDialog) setDialogProject(existing.id);
+      else setTimerProject(existing.id);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('projects')
+      .insert({ name: trimmed, user_id: user.id, status: 'active' })
+      .select('id, name, client_id')
+      .single();
+    if (error || !data) {
+      toast({ title: 'Error creating project', description: error?.message, variant: 'destructive' });
+      return;
+    }
+    setProjects((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+    if (forDialog) {
+      setDialogProject(data.id);
+      setDialogTask('');
+    } else {
+      setTimerProject(data.id);
+      setTimerTask('');
+    }
+  };
+
+  const createTaskInline = async (title: string, projectId: string, forDialog: boolean) => {
+    if (!user || !projectId) return;
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const existing = tasks.find((t) => t.project_id === projectId && t.title.toLowerCase() === trimmed.toLowerCase());
+    if (existing) {
+      if (forDialog) setDialogTask(existing.id);
+      else setTimerTask(existing.id);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert({
+        title: trimmed,
+        project_id: projectId,
+        user_id: user.id,
+        status: 'todo',
+        priority: 'medium',
+      })
+      .select('id, title, project_id')
+      .single();
+    if (error || !data) {
+      toast({ title: 'Error creating task', description: error?.message, variant: 'destructive' });
+      return;
+    }
+    setTasks((prev) => [...prev, data].sort((a, b) => a.title.localeCompare(b.title)));
+    if (forDialog) setDialogTask(data.id);
+    else setTimerTask(data.id);
+  };
+
   const openLogDialog = (entry?: TimeEntry) => {
     if (entry) {
       setEditingEntry(entry);
@@ -275,7 +363,7 @@ export default function TimeTracking() {
       }
     } else {
       setEditingEntry(null);
-      setDialogProject('');
+      setDialogProject(prefilledProjectId || '');
       setDialogTask('');
       setDialogTimeMode('manual');
       setDialogStartTime('09:00');
@@ -424,10 +512,10 @@ export default function TimeTracking() {
       setIsDialogOpen(false);
       setEditingEntry(null);
       fetchEntries();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error saving entry',
-        description: error.message,
+        description: getErrorMessage(error),
         variant: 'destructive',
       });
     }
@@ -445,10 +533,10 @@ export default function TimeTracking() {
       setSelectedEntryIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
       toast({ title: 'Entry deleted' });
       fetchEntries();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error deleting entry',
-        description: error.message,
+        description: getErrorMessage(error),
         variant: 'destructive',
       });
     }
@@ -536,8 +624,8 @@ export default function TimeTracking() {
       setSelectedEntryIds(new Set());
       toast({ title: `${ids.length} entr${ids.length === 1 ? 'y' : 'ies'} deleted` });
       fetchEntries();
-    } catch (error: any) {
-      toast({ title: 'Error deleting entries', description: error.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Error deleting entries', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -553,8 +641,8 @@ export default function TimeTracking() {
       setSelectedEntryIds(new Set());
       toast({ title: `${ids.length} entr${ids.length === 1 ? 'y' : 'ies'} deleted` });
       fetchEntries();
-    } catch (error: any) {
-      toast({ title: 'Error deleting entries', description: error.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Error deleting entries', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -659,8 +747,8 @@ export default function TimeTracking() {
       toast({ title: `Imported ${created} time entries` });
       if (created > 0) notifyStartGuideRefresh();
       fetchEntries();
-    } catch (err: any) {
-      toast({ title: 'Import failed', description: err?.message, variant: 'destructive' });
+    } catch (err: unknown) {
+      toast({ title: 'Import failed', description: getErrorMessage(err), variant: 'destructive' });
     } finally {
       setImporting(false);
     }
@@ -741,30 +829,77 @@ export default function TimeTracking() {
               <form onSubmit={handleLogEntry} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="dialog_project">Project *</Label>
-                  <Select value={dialogProject} onValueChange={setDialogProject}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {projects.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={dialogProjectPopoverOpen} onOpenChange={setDialogProjectPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start" disabled={lockPrefilledProject && !editingEntry}>
+                        {selectedDialogProject?.name || 'Select project'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]">
+                      <Command>
+                        <CommandInput placeholder="Find project..." value={dialogProjectQuery} onValueChange={setDialogProjectQuery} />
+                        <CommandList>
+                          {projects.map((p) => (
+                            <CommandItem key={p.id} value={p.name} onSelect={() => { setDialogProject(p.id); setDialogTask(''); setDialogProjectPopoverOpen(false); }}>
+                              <Check className={cn('mr-2 h-4 w-4', dialogProject === p.id ? 'opacity-100' : 'opacity-0')} />
+                              {p.name}
+                            </CommandItem>
+                          ))}
+                          {dialogProjectQuery.trim() && !projects.some((p) => p.name.toLowerCase() === dialogProjectQuery.trim().toLowerCase()) && (
+                            <CommandItem
+                              value={`create-${dialogProjectQuery}`}
+                              onSelect={async () => {
+                                await createProjectInline(dialogProjectQuery, true);
+                                setDialogProjectQuery('');
+                                setDialogProjectPopoverOpen(false);
+                              }}
+                            >
+                              + Create "{dialogProjectQuery.trim()}"
+                            </CommandItem>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="dialog_task">Task (optional)</Label>
-                  <Select value={dialogTask || "none"} onValueChange={(v) => setDialogTask(v === "none" ? "" : v)} disabled={!dialogProject}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={dialogProject ? "Select task" : "Select a project first"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No task</SelectItem>
-                      {tasks.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={dialogTaskPopoverOpen} onOpenChange={setDialogTaskPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start" disabled={!dialogProject}>
+                        {selectedDialogTask?.title || (dialogProject ? 'No task' : 'Select a project first')}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]">
+                      <Command>
+                        <CommandInput placeholder="Find task..." value={dialogTaskQuery} onValueChange={setDialogTaskQuery} />
+                        <CommandList>
+                          <CommandItem value="none" onSelect={() => { setDialogTask(''); setDialogTaskPopoverOpen(false); }}>
+                            <Check className={cn('mr-2 h-4 w-4', !dialogTask ? 'opacity-100' : 'opacity-0')} />
+                            No task
+                          </CommandItem>
+                          {tasks.map((t) => (
+                            <CommandItem key={t.id} value={t.title} onSelect={() => { setDialogTask(t.id); setDialogTaskPopoverOpen(false); }}>
+                              <Check className={cn('mr-2 h-4 w-4', dialogTask === t.id ? 'opacity-100' : 'opacity-0')} />
+                              {t.title}
+                            </CommandItem>
+                          ))}
+                          {dialogTaskQuery.trim() && dialogProject && !tasks.some((t) => t.title.toLowerCase() === dialogTaskQuery.trim().toLowerCase()) && (
+                            <CommandItem
+                              value={`create-task-${dialogTaskQuery}`}
+                              onSelect={async () => {
+                                await createTaskInline(dialogTaskQuery, dialogProject, true);
+                                setDialogTaskQuery('');
+                                setDialogTaskPopoverOpen(false);
+                              }}
+                            >
+                              + Create "{dialogTaskQuery.trim()}"
+                            </CommandItem>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="dialog_description">Description</Label>
@@ -851,7 +986,7 @@ export default function TimeTracking() {
                     </Button>
                     {dialogStartEndRanges.length > 0 && (
                       <p className="text-sm text-muted-foreground">
-                        Total: {formatDurationFromSeconds(getDialogRangesTotalSeconds())}
+                        Total: {formatDuration(getDialogRangesTotalSeconds())}
                       </p>
                     )}
                   </div>
@@ -925,31 +1060,81 @@ export default function TimeTracking() {
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex-1 min-w-[140px] space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Project</Label>
-                  <Select value={timerProject || 'none'} onValueChange={(v) => setTimerProject(v === 'none' ? '' : v)}>
-                    <SelectTrigger className="border-0 bg-muted/50">
-                      <SelectValue placeholder="No project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No project</SelectItem>
-                      {projects.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={projectPopoverOpen} onOpenChange={setProjectPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start border-0 bg-muted/50">
+                        {selectedTimerProject?.name || 'No project'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]">
+                      <Command>
+                        <CommandInput placeholder="Find project..." value={projectQuery} onValueChange={setProjectQuery} />
+                        <CommandList>
+                          <CommandItem value="none" onSelect={() => { setTimerProject(''); setTimerTask(''); setProjectPopoverOpen(false); }}>
+                            <Check className={cn('mr-2 h-4 w-4', !timerProject ? 'opacity-100' : 'opacity-0')} />
+                            No project
+                          </CommandItem>
+                          {projects.map((p) => (
+                            <CommandItem key={p.id} value={p.name} onSelect={() => { setTimerProject(p.id); setTimerTask(''); setProjectPopoverOpen(false); }}>
+                              <Check className={cn('mr-2 h-4 w-4', timerProject === p.id ? 'opacity-100' : 'opacity-0')} />
+                              {p.name}
+                            </CommandItem>
+                          ))}
+                          {projectQuery.trim() && !projects.some((p) => p.name.toLowerCase() === projectQuery.trim().toLowerCase()) && (
+                            <CommandItem
+                              value={`create-${projectQuery}`}
+                              onSelect={async () => {
+                                await createProjectInline(projectQuery, false);
+                                setProjectQuery('');
+                                setProjectPopoverOpen(false);
+                              }}
+                            >
+                              + Create "{projectQuery.trim()}"
+                            </CommandItem>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="flex-1 min-w-[140px] space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Task</Label>
-                  <Select value={timerTask || 'none'} onValueChange={(v) => setTimerTask(v === 'none' ? '' : v)} disabled={!timerProject}>
-                    <SelectTrigger className="border-0 bg-muted/50">
-                      <SelectValue placeholder={timerProject ? 'No task' : 'Select project first'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No task</SelectItem>
-                      {tasks.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={taskPopoverOpen} onOpenChange={setTaskPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start border-0 bg-muted/50" disabled={!timerProject}>
+                        {selectedTimerTask?.title || (timerProject ? 'No task' : 'Select project first')}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]">
+                      <Command>
+                        <CommandInput placeholder="Find task..." value={taskQuery} onValueChange={setTaskQuery} />
+                        <CommandList>
+                          <CommandItem value="none" onSelect={() => { setTimerTask(''); setTaskPopoverOpen(false); }}>
+                            <Check className={cn('mr-2 h-4 w-4', !timerTask ? 'opacity-100' : 'opacity-0')} />
+                            No task
+                          </CommandItem>
+                          {tasks.map((t) => (
+                            <CommandItem key={t.id} value={t.title} onSelect={() => { setTimerTask(t.id); setTaskPopoverOpen(false); }}>
+                              <Check className={cn('mr-2 h-4 w-4', timerTask === t.id ? 'opacity-100' : 'opacity-0')} />
+                              {t.title}
+                            </CommandItem>
+                          ))}
+                          {taskQuery.trim() && timerProject && !tasks.some((t) => t.title.toLowerCase() === taskQuery.trim().toLowerCase()) && (
+                            <CommandItem
+                              value={`create-task-${taskQuery}`}
+                              onSelect={async () => {
+                                await createTaskInline(taskQuery, timerProject, false);
+                                setTaskQuery('');
+                                setTaskPopoverOpen(false);
+                              }}
+                            >
+                              + Create "{taskQuery.trim()}"
+                            </CommandItem>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="flex items-center gap-2 pt-6">
                   <Switch id="timer-billable" checked={timerBillable} onCheckedChange={setTimerBillable} />
@@ -964,7 +1149,7 @@ export default function TimeTracking() {
                 {draftSegments.length > 0 && isLocalTimerRunning ? 'Running' : draftSegments.length > 0 ? 'Paused' : 'Ready'}
               </p>
               <div className="text-5xl sm:text-6xl font-mono font-bold text-foreground tabular-nums">
-                {draftSegments.length > 0 ? formatElapsed(getDraftTotalSeconds()) : '00:00:00'}
+                {draftSegments.length > 0 ? formatElapsed(getDraftTotalSeconds()) : '0:00'}
               </div>
               <div className="flex flex-wrap gap-3 justify-center mt-8">
                 {isLocalTimerRunning ? (
@@ -1040,7 +1225,7 @@ export default function TimeTracking() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total Hours</p>
-                  <p className="text-2xl font-bold">{totalHours.toFixed(1)}h</p>
+                  <p className="text-2xl font-bold">{formatDuration(Math.round(totalHours * 3600))}</p>
                 </div>
               </div>
             </CardContent>
@@ -1053,7 +1238,7 @@ export default function TimeTracking() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Billable Hours</p>
-                  <p className="text-2xl font-bold">{billableHours.toFixed(1)}h</p>
+                  <p className="text-2xl font-bold">{formatDuration(Math.round(billableHours * 3600))}</p>
                 </div>
               </div>
             </CardContent>
@@ -1181,7 +1366,7 @@ export default function TimeTracking() {
                     <TableHead>Project</TableHead>
                     <TableHead>Task</TableHead>
                     <TableHead>Description</TableHead>
-                    <TableHead>Hours</TableHead>
+                    <TableHead>Duration</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="w-20"></TableHead>
                   </TableRow>
@@ -1211,13 +1396,23 @@ export default function TimeTracking() {
                         {entry.description || <span className="text-muted-foreground italic">No description</span>}
                       </TableCell>
                       <TableCell>
-                        {getEntrySeconds(entry) > 0 ? formatDurationFromSeconds(getEntrySeconds(entry)) : '—'}
+                        {getEntrySeconds(entry) > 0 ? formatDuration(getEntrySeconds(entry)) : '—'}
                       </TableCell>
                       <TableCell>
                         {getStatusBadge(entry)}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
+                          {entry.end_time == null && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2"
+                              onClick={() => resumeEntry(entry.id)}
+                            >
+                              Resume
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"

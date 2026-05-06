@@ -26,6 +26,8 @@ export default function AdminIcons() {
   const [pickerSlot, setPickerSlot] = useState<IconSlotKey | null>(null);
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
+  const publicUrl = getAppIconPublicUrl;
+  const displayName = displayNameForIconPath;
 
   const { data: bucketPaths = [], isLoading: loadingPaths } = useQuery({
     queryKey: ['app_icons_bucket_list'] as const,
@@ -41,9 +43,6 @@ export default function AdminIcons() {
       return name.toLowerCase().includes(q) || path.toLowerCase().includes(q);
     });
   }, [bucketPaths, search]);
-
-  const publicUrl = getAppIconPublicUrl;
-  const displayName = displayNameForIconPath;
 
   const handleAssign = async (slotKey: string, storagePath: string | null) => {
     setSaving(true);

@@ -20,6 +20,7 @@ export function TimerBar() {
     startTimer,
     stopTimer,
     logTimeFromTimer,
+    discardTimerSegment,
   } = useTimer();
 
   if (!user || draftSegments.length === 0) return null;
@@ -67,6 +68,18 @@ export function TimerBar() {
           )}
           <Button variant="outline" size="sm" onClick={handleSave} className="gap-1.5">
             Save
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (confirm('Discard this timer entry? This removes all tracked segments and closes the timer bar.')) {
+                discardTimerSegment();
+              }
+            }}
+            className="gap-1.5 text-destructive hover:text-destructive"
+          >
+            Discard
           </Button>
           <Button variant="ghost" size="sm" asChild className="gap-1.5">
             <Link to="/time/timer">

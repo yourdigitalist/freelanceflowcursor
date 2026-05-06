@@ -53,3 +53,24 @@ verify_jwt = false
 
 [functions.help-contact-submit]
 verify_jwt = false
+
+[functions.view-proposal]
+verify_jwt = false
+
+[functions.accept-proposal]
+verify_jwt = false
+
+[functions.send-proposal]
+verify_jwt = false
+
+[functions.get-contract]
+verify_jwt = false
+
+[functions.update-contract-client-details]
+verify_jwt = false
+
+[functions.send-contract-otp]
+verify_jwt = false
+
+[functions.verify-contract-otp]
+verify_jwt = false

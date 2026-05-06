@@ -11,11 +11,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, ArrowRight, Bell, Search } from '@/components/icons';
 import { Input } from '@/components/ui/input';
 import { SlotIcon } from '@/contexts/IconSlotContext';
+import { canAccessContracts } from '@/lib/features';
 
 interface DashboardStats {
   totalClients: number;
   activeProjects: number;
   pendingInvoices: number;
+  pendingProposals: number;
+  pendingContracts: number;
   pendingAmount: number;
   hoursThisMonth: number;
   unbilledHours: number;
@@ -66,10 +69,13 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { formatCurrency: fmt } = useProfileCurrency();
+  const [isAdmin, setIsAdmin] = useState(false);
   const [stats, setStats] = useState<DashboardStats>({
     totalClients: 0,
     activeProjects: 0,
     pendingInvoices: 0,
+    pendingProposals: 0,
+    pendingContracts: 0,
     pendingAmount: 0,
     hoursThisMonth: 0,
     unbilledHours: 0,
@@ -94,10 +100,13 @@ export default function Dashboard() {
   const fetchProfile = async () => {
     const { data } = await supabase
       .from('profiles')
-      .select('full_name')
+      .select('full_name, is_admin')
       .eq('user_id', user!.id)
       .single();
-    if (data) setProfile(data);
+    if (data) {
+      setProfile({ full_name: data.full_name ?? null });
+      setIsAdmin(data.is_admin ?? false);
+    }
   };
 
   const fetchDashboardData = async () => {
@@ -120,6 +129,14 @@ export default function Dashboard() {
         .eq('status', 'sent');
 
       const pendingAmount = sentInvoices?.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0) || 0;
+      const { count: pendingProposalsCount } = await supabase
+        .from("proposals")
+        .select("*", { count: "exact", head: true })
+        .in("status", ["sent", "read"]);
+      const { count: pendingContractsCount } = await supabase
+        .from("contracts")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_signatures");
 
       // Fetch time entries for this month
       const startOfMonth = new Date();
@@ -154,7 +171,7 @@ export default function Dashboard() {
 
       // Get task counts for each project
       const projectsWithTasks = await Promise.all(
-        (projects || []).map(async (p: any) => {
+        (projects || []).map(async (p) => {
           const { count } = await supabase
             .from('tasks')
             .select('*', { count: 'exact', head: true })
@@ -197,8 +214,8 @@ export default function Dashboard() {
         .order('created_at', { ascending: false })
         .limit(5);
 
-      const entryHours = (e: any) => e.total_duration_seconds != null ? e.total_duration_seconds / 3600 : (e.duration_minutes || 0) / 60;
-      const activities = (recentTimeEntries || []).map((entry: any) => ({
+      const entryHours = (e: { total_duration_seconds?: number | null; duration_minutes?: number | null }) => e.total_duration_seconds != null ? e.total_duration_seconds / 3600 : (e.duration_minutes || 0) / 60;
+      const activities = (recentTimeEntries || []).map((entry) => ({
         id: entry.id,
         description: `${entryHours(entry).toFixed(1)}h logged on ${entry.projects?.name || 'Unknown Project'}`,
         project_name: entry.projects?.name || 'Unknown',
@@ -225,6 +242,8 @@ export default function Dashboard() {
         totalClients: clientsCount || 0,
         activeProjects: projectsCount || 0,
         pendingInvoices: pendingInvoicesCount ?? 0,
+        pendingProposals: pendingProposalsCount ?? 0,
+        pendingContracts: pendingContractsCount ?? 0,
         pendingAmount,
         hoursThisMonth,
         unbilledHours,
@@ -310,6 +329,7 @@ export default function Dashboard() {
 
   const firstName = profile.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
   const unreadNotifications = notifications.filter((n) => !n.read_at);
+  const showContracts = canAccessContracts({ isAdmin });
 
   const statCards = [
     {
@@ -336,6 +356,22 @@ export default function Dashboard() {
       subtitle: `${stats.pendingInvoices} invoices`,
       slot: 'stat_money' as const,
     },
+    {
+      title: 'Pending Proposals',
+      value: stats.pendingProposals,
+      subtitle: 'sent + read',
+      slot: 'sidebar_proposals' as const,
+    },
+    ...(showContracts
+      ? [
+          {
+            title: 'Pending Signatures',
+            value: stats.pendingContracts,
+            subtitle: 'contracts waiting signature',
+            slot: 'sidebar_contracts' as const,
+          },
+        ]
+      : []),
   ];
 
   if (loading) {
@@ -471,7 +507,14 @@ export default function Dashboard() {
         {/* Stats Grid */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {statCards.map((stat) => (
-            <Card key={stat.title} className="border-0 shadow-sm">
+            <Card
+              key={stat.title}
+              className="border-0 shadow-sm"
+              onClick={() => {
+                if (stat.title === "Pending Proposals") navigate("/proposals");
+                if (stat.title === "Pending Signatures") navigate("/contracts");
+              }}
+            >
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
                   <div>
