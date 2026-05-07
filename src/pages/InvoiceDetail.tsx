@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Plus, Trash2, Send, Loader2, ListTodo, Wallet, Download } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
-import { format } from 'date-fns';
+import { endOfMonth, endOfWeek, format, startOfMonth, startOfWeek, subMonths } from 'date-fns';
 import { formatCurrency, currencies } from '@/lib/locale-data';
 import {
   Dialog,
@@ -184,14 +184,19 @@ interface Tax {
   is_default: boolean;
 }
 
-interface UnbilledEntry {
+interface ImportTimeEntry {
   id: string;
   description: string | null;
   duration_minutes: number;
   total_duration_seconds: number | null;
   hourly_rate: number | null;
+  billable: boolean;
+  billing_status: string | null;
+  invoice_id?: string | null;
   project_id: string;
   project_name: string;
+  task_id?: string | null;
+  task_name?: string | null;
   start_time: string;
 }
 
@@ -229,11 +234,22 @@ export default function InvoiceDetail() {
   // Edit mode: draft starts editable; after save or when sent/paid, read-only until "Edit Invoice" is clicked
   const [isEditMode, setIsEditMode] = useState(true);
   
-  // Import unbilled time entries modal
+  // Import time entries modal
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [unbilledEntries, setUnbilledEntries] = useState<UnbilledEntry[]>([]);
+  const [importEntries, setImportEntries] = useState<ImportTimeEntry[]>([]);
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [defaultHourlyRate, setDefaultHourlyRate] = useState(75);
+  const [importStatusFilter, setImportStatusFilter] = useState<'unbilled' | 'billed' | 'paid' | 'all'>('unbilled');
+  const [importBillableFilter, setImportBillableFilter] = useState<'billable' | 'non_billable' | 'all'>('billable');
+  const [importProjectFilter, setImportProjectFilter] = useState<string>('all');
+  const [importSearch, setImportSearch] = useState('');
+  const [importFromDate, setImportFromDate] = useState<string>(() => format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [importToDate, setImportToDate] = useState<string>(() => format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [importGrouping, setImportGrouping] = useState<'grouped' | 'detailed'>('grouped');
+  const [importIncludeNotes, setImportIncludeNotes] = useState(false);
+  const [importIncludeLineDate, setImportIncludeLineDate] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const [clientProjectsForImport, setClientProjectsForImport] = useState<Array<{ id: string; name: string }>>([]);
   const preloadedDefaultsRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -399,7 +415,28 @@ export default function InvoiceDetail() {
     }
   };
 
-  const fetchUnbilledEntries = async () => {
+  const applyImportPreset = (preset: 'this_week' | 'this_month' | 'last_month' | 'all_time') => {
+    if (preset === 'all_time') {
+      setImportFromDate('');
+      setImportToDate('');
+      return;
+    }
+    if (preset === 'this_week') {
+      setImportFromDate(format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'));
+      setImportToDate(format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'));
+      return;
+    }
+    if (preset === 'last_month') {
+      const base = subMonths(new Date(), 1);
+      setImportFromDate(format(startOfMonth(base), 'yyyy-MM-dd'));
+      setImportToDate(format(endOfMonth(base), 'yyyy-MM-dd'));
+      return;
+    }
+    setImportFromDate(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+    setImportToDate(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+  };
+
+  const fetchImportEntries = async () => {
     if (!invoice?.client_id) {
       toast({
         title: 'No client selected',
@@ -410,6 +447,7 @@ export default function InvoiceDetail() {
     }
 
     try {
+      setImportLoading(true);
       // Get projects for this client
       const { data: clientProjects, error: projectsError } = await supabase
         .from('projects')
@@ -427,27 +465,49 @@ export default function InvoiceDetail() {
       }
 
       const projectIds = clientProjects.map(p => p.id);
+      setClientProjectsForImport(clientProjects);
       const projectMap = Object.fromEntries(clientProjects.map(p => [p.id, p.name]));
+      const scopedProjectIds = importProjectFilter === 'all' ? projectIds : projectIds.filter((id) => id === importProjectFilter);
+      if (scopedProjectIds.length === 0) {
+        setImportEntries([]);
+        setSelectedEntries(new Set());
+        setIsImportModalOpen(true);
+        return;
+      }
 
-      // Get unbilled time entries for these projects
+      // Fetch time entries for import and filter in memory for flexible UX.
       const { data: entries, error: entriesError } = await supabase
         .from('time_entries')
-        .select('id, description, duration_minutes, total_duration_seconds, hourly_rate, project_id, start_time')
-        .in('project_id', projectIds)
-        .eq('billing_status', 'unbilled')
-        .eq('billable', true)
+        .select('id, description, duration_minutes, total_duration_seconds, hourly_rate, billable, billing_status, invoice_id, project_id, task_id, start_time, tasks(title)')
+        .in('project_id', scopedProjectIds)
         .order('project_id')
         .order('start_time');
 
       if (entriesError) throw entriesError;
 
-      const entriesWithProjects = (entries || []).map(e => ({
+      const entriesWithProjects = ((entries || []) as Array<ImportTimeEntry & { tasks?: { title: string } | null }>).map(e => ({
         ...e,
-        project_name: projectMap[e.project_id!] || 'Unknown'
+        project_name: projectMap[e.project_id!] || 'Unknown',
+        task_name: e.tasks?.title || null,
       }));
+      const filtered = entriesWithProjects.filter((entry) => {
+        const date = format(new Date(entry.start_time), 'yyyy-MM-dd');
+        if (importFromDate && date < importFromDate) return false;
+        if (importToDate && date > importToDate) return false;
+        if (importStatusFilter !== 'all' && (entry.billing_status || 'unbilled') !== importStatusFilter) return false;
+        if (importBillableFilter === 'billable' && !entry.billable) return false;
+        if (importBillableFilter === 'non_billable' && entry.billable) return false;
+        if (importSearch.trim()) {
+          const q = importSearch.toLowerCase();
+          const hay = `${entry.project_name} ${entry.task_name || ''} ${entry.description || ''}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
 
-      setUnbilledEntries(entriesWithProjects);
-      setSelectedEntries(new Set(entriesWithProjects.map(e => e.id)));
+      setImportEntries(filtered);
+      const eligible = filtered.filter((e) => e.billable && (e.billing_status || 'unbilled') === 'unbilled' && !e.invoice_id);
+      setSelectedEntries(new Set(eligible.map((e) => e.id)));
       setIsImportModalOpen(true);
     } catch (error: any) {
       toast({
@@ -455,12 +515,14 @@ export default function InvoiceDetail() {
         description: error.message,
         variant: 'destructive',
       });
+    } finally {
+      setImportLoading(false);
     }
   };
 
   const importSelectedEntries = async () => {
     const selectedIds = Array.from(selectedEntries);
-    const entriesToImport = unbilledEntries.filter(e => selectedEntries.has(e.id));
+    const entriesToImport = importEntries.filter(e => selectedEntries.has(e.id));
     
     if (entriesToImport.length === 0) {
       toast({
@@ -514,22 +576,86 @@ export default function InvoiceDetail() {
       const newItems: Array<{
         invoice_id: string | undefined;
         description: string;
+        line_description?: string;
+        line_date?: string;
         quantity: number;
         unit_price: number;
         amount: number;
       }> = [];
       let missingRateCount = 0;
-      for (const entry of finalEntries) {
-        const hours =
-          entry.total_duration_seconds != null ? entry.total_duration_seconds / 3600 : entry.duration_minutes / 60;
-        const rate = entry.hourly_rate ?? 0;
-        if (entry.hourly_rate == null) missingRateCount += 1;
-        newItems.push({
-          invoice_id: id,
-          description: `${entry.project_name}: ${entry.description || 'Time entry from ' + format(new Date(entry.start_time), 'MMM d')}`,
-          quantity: parseFloat(hours.toFixed(2)),
-          unit_price: rate,
-          amount: parseFloat((hours * rate).toFixed(2)),
+      if (importGrouping === 'detailed') {
+        for (const entry of finalEntries) {
+          const hours = entry.total_duration_seconds != null ? entry.total_duration_seconds / 3600 : entry.duration_minutes / 60;
+          const rate = entry.hourly_rate ?? defaultHourlyRate;
+          if (entry.hourly_rate == null) missingRateCount += 1;
+          const itemTitle = `${entry.project_name}${entry.task_name ? ` • ${entry.task_name}` : ''}`;
+          newItems.push({
+            invoice_id: id,
+            description: itemTitle,
+            line_description: importIncludeNotes ? (entry.description || '') : '',
+            line_date: importIncludeLineDate ? format(new Date(entry.start_time), 'yyyy-MM-dd') : undefined,
+            quantity: parseFloat(hours.toFixed(2)),
+            unit_price: rate,
+            amount: parseFloat((hours * rate).toFixed(2)),
+          });
+        }
+      } else {
+        const grouped = new Map<
+          string,
+          {
+            projectName: string;
+            taskName: string | null;
+            rate: number;
+            hours: number;
+            notes: string[];
+            minDate: string;
+            maxDate: string;
+          }
+        >();
+        for (const entry of finalEntries) {
+          const hours = entry.total_duration_seconds != null ? entry.total_duration_seconds / 3600 : entry.duration_minutes / 60;
+          const rate = entry.hourly_rate ?? defaultHourlyRate;
+          if (entry.hourly_rate == null) missingRateCount += 1;
+          const key = `${entry.project_id}__${entry.task_id || 'none'}__${rate}`;
+          const date = format(new Date(entry.start_time), 'yyyy-MM-dd');
+          const current = grouped.get(key);
+          const notes = entry.description?.trim() ? [entry.description.trim()] : [];
+          if (!current) {
+            grouped.set(key, {
+              projectName: entry.project_name,
+              taskName: entry.task_name || null,
+              rate,
+              hours,
+              notes,
+              minDate: date,
+              maxDate: date,
+            });
+          } else {
+            current.hours += hours;
+            current.minDate = current.minDate < date ? current.minDate : date;
+            current.maxDate = current.maxDate > date ? current.maxDate : date;
+            if (notes.length) current.notes.push(...notes);
+          }
+        }
+        grouped.forEach((group) => {
+          const uniqueNotes = Array.from(new Set(group.notes));
+          const notesSummary =
+            uniqueNotes.length === 0
+              ? ''
+              : uniqueNotes.length === 1
+                ? uniqueNotes[0]
+                : `${uniqueNotes[0]}${uniqueNotes.length > 1 ? ` (+${uniqueNotes.length - 1} more notes)` : ''}`;
+          newItems.push({
+            invoice_id: id,
+            description: `${group.projectName}${group.taskName ? ` • ${group.taskName}` : ''}`,
+            line_description: importIncludeNotes ? notesSummary : '',
+            line_date: importIncludeLineDate
+              ? (group.minDate === group.maxDate ? group.minDate : group.maxDate)
+              : undefined,
+            quantity: parseFloat(group.hours.toFixed(2)),
+            unit_price: group.rate,
+            amount: parseFloat((group.hours * group.rate).toFixed(2)),
+          });
         });
       }
 
@@ -561,7 +687,7 @@ export default function InvoiceDetail() {
       );
       if (linkError) throw linkError;
 
-      const suffix = missingRateCount > 0 ? ` (${missingRateCount} missing rates imported at 0)` : '';
+      const suffix = missingRateCount > 0 ? ` (${missingRateCount} entries used default rate)` : '';
       const skipSuffix = skippedCount > 0 ? `, ${skippedCount} skipped` : '';
       toast({ title: `Imported ${finalEntries.length} time entries${skipSuffix}${suffix}` });
       setIsImportModalOpen(false);
@@ -1293,7 +1419,7 @@ export default function InvoiceDetail() {
             {isEditMode && (
               <div className="flex flex-wrap gap-2">
                 {invoice.client_id && (
-                  <Button variant="outline" size="sm" onClick={fetchUnbilledEntries}>
+                  <Button variant="outline" size="sm" onClick={fetchImportEntries}>
                     <SlotIcon slot="invoice_stat_pending" className="mr-2 h-4 w-4" />
                     Import Time
                   </Button>
@@ -1345,7 +1471,7 @@ export default function InvoiceDetail() {
                       <TableHead className="min-w-[160px]">Item</TableHead>
                       <TableHead className="min-w-[140px]">
                         <div className="flex items-center gap-2">
-                          Description
+                          Notes
                           {isEditMode && (
                             <Switch
                               checked={showLineDescription}
@@ -1418,7 +1544,7 @@ export default function InvoiceDetail() {
                             <Input
                               value={item.line_description ?? ''}
                               onChange={(e) => updateItem(item.id, 'line_description', e.target.value)}
-                              placeholder="Optional"
+                              placeholder="Optional notes"
                               className="h-8 text-sm"
                             />
                           ) : (
@@ -1726,36 +1852,101 @@ export default function InvoiceDetail() {
 
       {/* Import Time Entries Modal */}
       <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh]">
+        <DialogContent className="max-w-3xl max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle>Import Unbilled Time Entries</DialogTitle>
+            <DialogTitle>Import Time Entries</DialogTitle>
             <DialogDescription>
-              Select time entries to add to this invoice
+              Filter entries by billing status, date, and project. Import as grouped task totals or detailed lines.
             </DialogDescription>
           </DialogHeader>
+          <div className="grid gap-3 md:grid-cols-3">
+            <Select value={importStatusFilter} onValueChange={(v) => setImportStatusFilter(v as typeof importStatusFilter)}>
+              <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unbilled">Unbilled</SelectItem>
+                <SelectItem value="billed">Billed</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value="all">All statuses</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={importBillableFilter} onValueChange={(v) => setImportBillableFilter(v as typeof importBillableFilter)}>
+              <SelectTrigger><SelectValue placeholder="Billable" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="billable">Billable</SelectItem>
+                <SelectItem value="non_billable">Non-billable</SelectItem>
+                <SelectItem value="all">All</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={importProjectFilter} onValueChange={setImportProjectFilter}>
+              <SelectTrigger><SelectValue placeholder="Project" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All client projects</SelectItem>
+                {clientProjectsForImport.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-3 md:grid-cols-5">
+            <Input value={importFromDate} onChange={(e) => setImportFromDate(e.target.value)} type="date" />
+            <Input value={importToDate} onChange={(e) => setImportToDate(e.target.value)} type="date" />
+            <Select value={importGrouping} onValueChange={(v) => setImportGrouping(v as typeof importGrouping)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="grouped">Grouped by project/task</SelectItem>
+                <SelectItem value="detailed">Detailed by entry</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              value={importSearch}
+              onChange={(e) => setImportSearch(e.target.value)}
+              placeholder="Search notes/task/project"
+            />
+            <Button variant="outline" onClick={fetchImportEntries} disabled={importLoading}>
+              {importLoading ? 'Loading…' : 'Apply filters'}
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Button type="button" variant="ghost" size="sm" onClick={() => applyImportPreset('this_week')}>This week</Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => applyImportPreset('this_month')}>This month</Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => applyImportPreset('last_month')}>Last month</Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => applyImportPreset('all_time')}>All time</Button>
+            <div className="ml-auto flex items-center gap-4">
+              <label className="flex items-center gap-2">
+                <Checkbox checked={importIncludeNotes} onCheckedChange={(v) => setImportIncludeNotes(v === true)} />
+                Include notes in line description
+              </label>
+              <label className="flex items-center gap-2">
+                <Checkbox checked={importIncludeLineDate} onCheckedChange={(v) => setImportIncludeLineDate(v === true)} />
+                Include line date
+              </label>
+            </div>
+          </div>
           <ScrollArea className="max-h-[calc(90vh-200px)]">
-            {unbilledEntries.length === 0 ? (
+            {importEntries.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                No unbilled time entries found for this client's projects
+                No entries match current filters
               </div>
             ) : (
               <div className="space-y-2">
                 {Object.entries(
-                  unbilledEntries.reduce((acc, entry) => {
+                  importEntries.reduce((acc, entry) => {
                     if (!acc[entry.project_name]) acc[entry.project_name] = [];
                     acc[entry.project_name].push(entry);
                     return acc;
-                  }, {} as Record<string, UnbilledEntry[]>)
+                  }, {} as Record<string, ImportTimeEntry[]>)
                 ).map(([projectName, entries]) => (
                   <div key={projectName} className="border rounded-lg p-3">
                     <h4 className="font-medium mb-2">{projectName}</h4>
                     {entries.map((entry) => {
                       const hours = (entry.total_duration_seconds != null ? entry.total_duration_seconds / 3600 : entry.duration_minutes / 60);
                       const rate = entry.hourly_rate || defaultHourlyRate;
+                      const eligible = entry.billable && (entry.billing_status || 'unbilled') === 'unbilled' && !entry.invoice_id;
                       return (
                         <div key={entry.id} className="flex items-center gap-3 py-2 border-b last:border-0">
                           <Checkbox
                             checked={selectedEntries.has(entry.id)}
+                            disabled={!eligible}
                             onCheckedChange={(checked) => {
                               const newSet = new Set(selectedEntries);
                               if (checked) {
@@ -1767,9 +1958,13 @@ export default function InvoiceDetail() {
                             }}
                           />
                           <div className="flex-1">
-                            <p className="text-sm">{entry.description || 'No description'}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {format(new Date(entry.start_time), 'MMM d, yyyy')}
+                            <p className="text-sm font-medium">
+                              {entry.task_name ? `${entry.task_name}` : 'No task'}
+                              {!eligible ? <span className="ml-2 text-xs text-muted-foreground">(not importable)</span> : null}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{entry.description || 'No notes'} • {format(new Date(entry.start_time), 'MMM d, yyyy')}</p>
+                            <p className="text-xs text-muted-foreground capitalize">
+                              {(entry.billing_status || 'unbilled').replace('_', ' ')} • {entry.billable ? 'billable' : 'non-billable'}
                             </p>
                           </div>
                           <div className="text-right text-sm">
@@ -1786,7 +1981,7 @@ export default function InvoiceDetail() {
           </ScrollArea>
           <div className="flex justify-between items-center pt-4 border-t">
             <p className="text-sm text-muted-foreground">
-              {selectedEntries.size} entries selected
+              {selectedEntries.size} entries selected ({importGrouping === 'grouped' ? 'grouped import' : 'detailed import'})
             </p>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setIsImportModalOpen(false)}>

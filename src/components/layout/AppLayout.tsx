@@ -256,11 +256,11 @@ export function AppLayout({
             </Collapsible>
           )}
 
-          {/* Time with sub-items: Timer, Logs */}
+          {/* Time with sub-items: Timesheet, Timer, History */}
           {sidebarCollapsed ? (
             <span className="relative block mr-1">
               {isTimeActive && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-              <Link to="/time/timer" onClick={() => setSidebarOpen(false)} className={cn("flex items-center justify-center px-2 py-2.5 rounded-xl text-sm font-medium transition-colors", isTimeActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+              <Link to="/time" onClick={() => setSidebarOpen(false)} className={cn("flex items-center justify-center px-2 py-2.5 rounded-xl text-sm font-medium transition-colors", isTimeActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
                 <SlotIcon slot="sidebar_time" className={cn("h-4 w-4 shrink-0", isTimeActive && "text-primary")} />
               </Link>
             </span>
@@ -279,11 +279,14 @@ export function AppLayout({
                 </span>
               </CollapsibleTrigger>
               <CollapsibleContent className="pl-8 space-y-1 mt-1">
+                <Link to="/time" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/time' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
+                  Timesheet
+                </Link>
                 <Link to="/time/timer" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/time/timer' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
                   Timer
                 </Link>
-                <Link to="/time/logs" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/time/logs' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
-                  Logs
+                <Link to="/time/history" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/time/history' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
+                  All logs
                 </Link>
               </CollapsibleContent>
             </Collapsible>

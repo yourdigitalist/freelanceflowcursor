@@ -370,7 +370,7 @@ export default function SearchResults() {
                       return (
                         <li key={entry.id}>
                           <Link
-                            to="/time/logs"
+                            to="/time/history"
                             className="flex items-center justify-between rounded-lg p-3 hover:bg-muted/50 transition-colors"
                           >
                             <div className="flex items-center gap-3">

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useLocation, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -31,7 +31,21 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Play, Square, Trash2, Filter, Download, Upload, List, Check } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
-import { format, differenceInMinutes, differenceInSeconds, parseISO, startOfWeek, endOfWeek, subDays, startOfMonth, endOfMonth } from 'date-fns';
+import {
+  format,
+  differenceInMinutes,
+  differenceInSeconds,
+  parseISO,
+  startOfWeek,
+  endOfWeek,
+  subDays,
+  startOfMonth,
+  endOfMonth,
+  addWeeks,
+  subWeeks,
+  eachDayOfInterval,
+  isSameDay,
+} from 'date-fns';
 import {
   Table,
   TableBody,
@@ -88,6 +102,7 @@ interface TimeEntry {
   hourly_rate: number | null;
   project_id: string | null;
   task_id: string | null;
+  invoice_id?: string | null;
   billing_status: string | null;
   projects: { name: string; client_id: string | null } | null;
   tasks: { title: string } | null;
@@ -146,7 +161,7 @@ export default function TimeTracking() {
     isLocalTimerRunning,
     resumeEntry,
   } = useTimer();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const prefilledProjectId = searchParams.get('project') || '';
   const lockPrefilledProject = Boolean(prefilledProjectId);
   const [projectQuery, setProjectQuery] = useState('');
@@ -185,15 +200,34 @@ export default function TimeTracking() {
   const [selectedLogSegments, setSelectedLogSegments] = useState<TimeEntrySegment[]>([]);
   const [loadingSelectedLogSegments, setLoadingSelectedLogSegments] = useState(false);
   const location = useLocation();
+  const isTimesheetView = location.pathname === '/time';
   const isTimerView = location.pathname === '/time/timer';
+  const isHistoryView = location.pathname === '/time/history';
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [timesheetView, setTimesheetView] = useState<'day' | 'week' | 'month'>(() => {
+    const view = searchParams.get('view');
+    return view === 'week' || view === 'month' ? view : 'day';
+  });
+  const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [selectedDay, setSelectedDay] = useState<Date>(new Date());
+  const [extraRows, setExtraRows] = useState<Array<{ key: string; projectId: string; taskId: string }>>([]);
+  const [editingCell, setEditingCell] = useState<{ rowKey: string; dayKey: string; value: string } | null>(null);
 
   useEffect(() => {
     if (user) {
       fetchEntries();
       fetchProjects();
       fetchClients();
+      fetchAllTasks();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (!isTimesheetView) return;
+    const view = searchParams.get('view');
+    const next: 'day' | 'week' | 'month' = view === 'week' || view === 'month' ? view : 'day';
+    setTimesheetView(next);
+  }, [searchParams, isTimesheetView]);
 
   useEffect(() => {
     if (dialogProject) {
@@ -281,6 +315,19 @@ export default function TimeTracking() {
 
       if (error) throw error;
       setTasks(data || []);
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+    }
+  };
+
+  const fetchAllTasks = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('id, title, project_id')
+        .order('title');
+      if (error) throw error;
+      setAllTasks(data || []);
     } catch (error) {
       console.error('Error fetching tasks:', error);
     }
@@ -693,6 +740,444 @@ export default function TimeTracking() {
   const totalHours = filteredEntries.reduce((sum, e) => sum + getEntrySeconds(e), 0) / 3600;
   const billableHours = filteredEntries.filter(e => e.billable).reduce((sum, e) => sum + getEntrySeconds(e), 0) / 3600;
 
+  const formatHm = (seconds: number) => {
+    const totalMinutes = Math.round(Math.max(0, seconds) / 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours}:${String(minutes).padStart(2, '0')}`;
+  };
+
+  const parseHm = (value: string): number | null => {
+    const input = value.trim();
+    if (!input) return 0;
+    if (/^\d+:\d{1,2}$/.test(input)) {
+      const [h, m] = input.split(':').map(Number);
+      if (Number.isNaN(h) || Number.isNaN(m) || m < 0 || m > 59) return null;
+      return h * 3600 + m * 60;
+    }
+    if (/^\d+(\.\d+)?$/.test(input)) {
+      const hours = Number(input);
+      if (Number.isNaN(hours) || hours < 0) return null;
+      return Math.round(hours * 3600);
+    }
+    return null;
+  };
+
+  const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+  const weekDays = useMemo(
+    () => eachDayOfInterval({ start: weekStart, end: weekEnd }),
+    [weekStart, weekEnd]
+  );
+  const monthStart = useMemo(() => startOfMonth(selectedDay), [selectedDay]);
+  const monthEnd = useMemo(() => endOfMonth(selectedDay), [selectedDay]);
+  const monthDays = useMemo(
+    () => eachDayOfInterval({ start: monthStart, end: monthEnd }),
+    [monthStart, monthEnd]
+  );
+  const monthGridStart = useMemo(() => startOfWeek(monthStart, { weekStartsOn: 1 }), [monthStart]);
+  const monthGridEnd = useMemo(() => endOfWeek(monthEnd, { weekStartsOn: 1 }), [monthEnd]);
+  const monthGridDays = useMemo(
+    () => eachDayOfInterval({ start: monthGridStart, end: monthGridEnd }),
+    [monthGridStart, monthGridEnd]
+  );
+  const weekDayTotals = useMemo(() => {
+    return weekDays.reduce<Record<string, number>>((acc, day) => {
+      const key = format(day, 'yyyy-MM-dd');
+      acc[key] = entries.reduce((sum, e) => {
+        const d = parseISO(e.started_at || e.start_time);
+        if (!isSameDay(d, day)) return sum;
+        return sum + getEntrySeconds(e);
+      }, 0);
+      return acc;
+    }, {});
+  }, [entries, weekDays]);
+  const monthDayTotals = useMemo(() => {
+    return monthDays.reduce<Record<string, number>>((acc, day) => {
+      const key = format(day, 'yyyy-MM-dd');
+      acc[key] = entries.reduce((sum, e) => {
+        const d = parseISO(e.started_at || e.start_time);
+        if (!isSameDay(d, day)) return sum;
+        return sum + getEntrySeconds(e);
+      }, 0);
+      return acc;
+    }, {});
+  }, [entries, monthDays]);
+
+  const groupedRows = useMemo(() => {
+    const rows = new Map<string, { key: string; projectId: string; taskId: string; byDay: Record<string, number> }>();
+    entries.forEach((entry) => {
+      const d = parseISO(entry.started_at || entry.start_time);
+      if (d < weekStart || d > weekEnd) return;
+      const projectId = entry.project_id || '';
+      const taskId = entry.task_id || '';
+      const key = `${projectId}__${taskId}`;
+      const dayKey = format(d, 'yyyy-MM-dd');
+      if (!rows.has(key)) {
+        rows.set(key, { key, projectId, taskId, byDay: {} });
+      }
+      const row = rows.get(key)!;
+      row.byDay[dayKey] = (row.byDay[dayKey] || 0) + getEntrySeconds(entry);
+    });
+    return rows;
+  }, [entries, weekStart, weekEnd]);
+
+  const timesheetRows = useMemo(() => {
+    const rows = Array.from(groupedRows.values());
+    extraRows.forEach((r) => {
+      if (!groupedRows.has(r.key)) {
+        rows.push({ key: r.key, projectId: r.projectId, taskId: r.taskId, byDay: {} });
+      }
+    });
+    return rows.sort((a, b) => {
+      const pa = projects.find((p) => p.id === a.projectId)?.name || '';
+      const pb = projects.find((p) => p.id === b.projectId)?.name || '';
+      return pa.localeCompare(pb);
+    });
+  }, [groupedRows, extraRows, projects]);
+
+  const dayEntries = useMemo(() => {
+    return entries
+      .filter((entry) => isSameDay(parseISO(entry.started_at || entry.start_time), selectedDay))
+      .sort((a, b) => parseISO(b.started_at || b.start_time).getTime() - parseISO(a.started_at || a.start_time).getTime());
+  }, [entries, selectedDay]);
+
+  const commitCellEdit = async (rowKey: string, dayKey: string, rawValue: string) => {
+    if (!user) return;
+    const seconds = parseHm(rawValue);
+    if (seconds == null) {
+      toast({ title: 'Invalid time format', description: 'Use H:mm or decimal hours (e.g. 1:30 or 1.5).', variant: 'destructive' });
+      return;
+    }
+    const [projectIdRaw, taskIdRaw] = rowKey.split('__');
+    const projectId = projectIdRaw || null;
+    const taskId = taskIdRaw || null;
+    if (rowKey.startsWith('new_') && !projectId) {
+      toast({ title: 'Select a project first', variant: 'destructive' });
+      return;
+    }
+    const targetDate = new Date(`${dayKey}T09:00:00`);
+    const sameCellEntries = entries.filter((entry) => {
+      const d = parseISO(entry.started_at || entry.start_time);
+      const entryProject = entry.project_id || null;
+      const entryTask = entry.task_id || null;
+      return isSameDay(d, targetDate) && entryProject === projectId && entryTask === taskId;
+    });
+    const editableEntries = sameCellEntries.filter((e) => !e.invoice_id && e.billing_status !== 'paid');
+
+    try {
+      if (seconds === 0) {
+        if (editableEntries.length > 0) {
+          for (const e of editableEntries) {
+            await supabase.from('time_entries').delete().eq('id', e.id);
+          }
+        }
+      } else if (editableEntries.length > 0) {
+        const first = editableEntries[0];
+        await supabase
+          .from('time_entries')
+          .update({
+            total_duration_seconds: seconds,
+            duration_minutes: Math.max(1, Math.round(seconds / 60)),
+            start_time: targetDate.toISOString(),
+            end_time: new Date(targetDate.getTime() + seconds * 1000).toISOString(),
+            started_at: targetDate.toISOString(),
+          })
+          .eq('id', first.id);
+        if (editableEntries.length > 1) {
+          for (const e of editableEntries.slice(1)) {
+            await supabase.from('time_entries').delete().eq('id', e.id);
+          }
+        }
+      } else {
+        const effectiveHourlyRate = await resolveEffectiveHourlyRate({
+          userId: user.id,
+          projectId: projectId,
+        });
+        await supabase.from('time_entries').insert({
+          description: null,
+          project_id: projectId,
+          task_id: taskId,
+          billable: true,
+          billing_status: 'unbilled',
+          hourly_rate: effectiveHourlyRate,
+          user_id: user.id,
+          start_time: targetDate.toISOString(),
+          started_at: targetDate.toISOString(),
+          end_time: new Date(targetDate.getTime() + seconds * 1000).toISOString(),
+          duration_minutes: Math.max(1, Math.round(seconds / 60)),
+          total_duration_seconds: seconds,
+        });
+      }
+      await fetchEntries();
+    } catch (error: unknown) {
+      toast({ title: 'Could not save time', description: getErrorMessage(error), variant: 'destructive' });
+    }
+  };
+
+  const shiftPeriod = (direction: 'prev' | 'next') => {
+    const factor = direction === 'prev' ? -1 : 1;
+    if (timesheetView === 'month') {
+      const next = new Date(selectedDay.getFullYear(), selectedDay.getMonth() + factor, 1);
+      setSelectedDay(next);
+      setWeekStart(startOfWeek(next, { weekStartsOn: 1 }));
+      return;
+    }
+    setWeekStart((prev) => (direction === 'prev' ? subWeeks(prev, 1) : addWeeks(prev, 1)));
+    setSelectedDay((prev) => (direction === 'prev' ? subWeeks(prev, 1) : addWeeks(prev, 1)));
+  };
+
+  const addEmptyTimesheetRow = () => {
+    const key = `new_${Date.now()}`;
+    setExtraRows((prev) => [...prev, { key, projectId: '', taskId: '' }]);
+  };
+
+  const setTimesheetMode = (mode: 'day' | 'week' | 'month') => {
+    setTimesheetView(mode);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('view', mode);
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  if (isTimesheetView) {
+    return (
+      <AppLayout>
+        <div className="space-y-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Timesheet</h1>
+              <p className="text-muted-foreground">Track time by day or fill your week at a glance.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" asChild>
+                <Link to="/time/history">All logs</Link>
+              </Button>
+              <div className="flex rounded-lg border bg-muted/50 p-0.5">
+                <Button variant={timesheetView === 'day' ? 'default' : 'ghost'} size="sm" onClick={() => setTimesheetMode('day')}>Day</Button>
+                <Button variant={timesheetView === 'week' ? 'default' : 'ghost'} size="sm" onClick={() => setTimesheetMode('week')}>Week</Button>
+                <Button variant={timesheetView === 'month' ? 'default' : 'ghost'} size="sm" onClick={() => setTimesheetMode('month')}>Month</Button>
+              </div>
+              <Button asChild className="bg-green-600 hover:bg-green-700 text-white">
+                <Link to="/time/timer">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Track time
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => shiftPeriod('prev')}>←</Button>
+              <Button variant="outline" size="sm" onClick={() => { setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 })); setSelectedDay(new Date()); }}>
+                {timesheetView === 'month'
+                  ? `This month ${format(monthStart, 'MMM yyyy')}`
+                  : `This week ${format(weekStart, 'dd')} - ${format(weekEnd, 'dd MMM yyyy')}`}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => shiftPeriod('next')}>→</Button>
+            </div>
+          </div>
+
+          {timesheetView === 'day' ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-7 gap-2">
+                {weekDays.map((d) => {
+                  const key = format(d, 'yyyy-MM-dd');
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setSelectedDay(d)}
+                      className={cn(
+                        'rounded-md border px-2 py-2 text-left',
+                        isSameDay(d, selectedDay) ? 'border-primary bg-primary/5' : 'border-border'
+                      )}
+                    >
+                      <p className="text-xs text-muted-foreground">{format(d, 'EEE')}</p>
+                      <p className="text-sm font-medium">{format(d, 'dd MMM')}</p>
+                      <p className="text-xs font-mono">{formatHm(weekDayTotals[key] || 0)}</p>
+                    </button>
+                  );
+                })}
+              </div>
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-0">
+                  {dayEntries.length === 0 ? (
+                    <div className="p-8 text-center text-muted-foreground">No entries for this day. Use Track time to add one.</div>
+                  ) : (
+                    <div className="divide-y">
+                      {dayEntries.map((entry) => (
+                        <div key={entry.id} className="flex items-center justify-between p-4">
+                          <div>
+                            <p className="font-medium">{entry.projects?.name || 'No project'} {entry.tasks?.title ? `• ${entry.tasks.title}` : ''}</p>
+                            <p className="text-sm text-muted-foreground">{entry.description || 'No notes'}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-sm min-w-[3rem] text-right">{formatHm(getEntrySeconds(entry))}</span>
+                            <Button size="sm" variant="outline" onClick={() => resumeEntry(entry.id)}>Start</Button>
+                            <Button size="sm" variant="ghost" onClick={() => openLogDialog(entry)}>Edit</Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          ) : timesheetView === 'week' ? (
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-0 overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[260px]">Project / Task</TableHead>
+                      {weekDays.map((d) => {
+                        const key = format(d, 'yyyy-MM-dd');
+                        return (
+                          <TableHead key={key} className={cn('text-center', isSameDay(d, new Date()) ? 'bg-orange-50' : '')}>
+                            {format(d, 'EEE dd')}
+                          </TableHead>
+                        );
+                      })}
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {timesheetRows.map((row) => {
+                      const project = projects.find((p) => p.id === row.projectId);
+                      const rowTasks = allTasks.filter((t) => t.project_id === row.projectId);
+                      const task = allTasks.find((t) => t.id === row.taskId);
+                      const rowTotal = weekDays.reduce((sum, d) => sum + (row.byDay[format(d, 'yyyy-MM-dd')] || 0), 0);
+                      return (
+                        <TableRow key={row.key}>
+                          <TableCell>
+                            {row.key.startsWith('new_') ? (
+                              <div className="grid grid-cols-2 gap-2">
+                                <Select
+                                  value={row.projectId || 'none'}
+                                  onValueChange={(v) =>
+                                    setExtraRows((prev) => prev.map((r) => (r.key === row.key ? { ...r, projectId: v === 'none' ? '' : v, taskId: '' } : r)))
+                                  }
+                                >
+                                  <SelectTrigger><SelectValue placeholder="Project" /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">No project</SelectItem>
+                                    {projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                                <Select
+                                  value={row.taskId || 'none'}
+                                  onValueChange={(v) =>
+                                    setExtraRows((prev) => prev.map((r) => (r.key === row.key ? { ...r, taskId: v === 'none' ? '' : v } : r)))
+                                  }
+                                >
+                                  <SelectTrigger><SelectValue placeholder="Task" /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">No task</SelectItem>
+                                    {rowTasks.map((t) => <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            ) : (
+                              <div>
+                                <p className="font-medium">{project?.name || 'No project'}</p>
+                                <p className="text-xs text-muted-foreground">{task?.title || 'No task'}</p>
+                              </div>
+                            )}
+                          </TableCell>
+                          {weekDays.map((d) => {
+                            const dayKey = format(d, 'yyyy-MM-dd');
+                            const valueSeconds = row.byDay[dayKey] || 0;
+                            const isEditing = editingCell?.rowKey === row.key && editingCell.dayKey === dayKey;
+                            return (
+                              <TableCell key={dayKey} className={cn('text-center', isSameDay(d, new Date()) ? 'bg-orange-50' : '')}>
+                                {isEditing ? (
+                                  <Input
+                                    autoFocus
+                                    value={editingCell.value}
+                                    onChange={(e) => setEditingCell({ ...(editingCell as { rowKey: string; dayKey: string; value: string }), value: e.target.value })}
+                                    onBlur={async () => {
+                                      await commitCellEdit(row.key, dayKey, editingCell.value);
+                                      setEditingCell(null);
+                                    }}
+                                    onKeyDown={async (e) => {
+                                      if (e.key === 'Enter') {
+                                        await commitCellEdit(row.key, dayKey, editingCell.value);
+                                        setEditingCell(null);
+                                      }
+                                      if (e.key === 'Escape') setEditingCell(null);
+                                    }}
+                                    className="h-8 text-center font-mono"
+                                  />
+                                ) : (
+                                  <button
+                                    className="font-mono text-sm px-2 py-1 rounded hover:bg-muted"
+                                    onClick={() => setEditingCell({ rowKey: row.key, dayKey, value: valueSeconds ? formatHm(valueSeconds) : '' })}
+                                  >
+                                    {valueSeconds ? formatHm(valueSeconds) : '0:00'}
+                                  </button>
+                                )}
+                              </TableCell>
+                            );
+                          })}
+                          <TableCell className="text-right font-mono">{formatHm(rowTotal)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    <TableRow>
+                      <TableCell>
+                        <Button size="sm" variant="outline" onClick={addEmptyTimesheetRow}>
+                          + Add row
+                        </Button>
+                      </TableCell>
+                      {weekDays.map((d) => {
+                        const key = format(d, 'yyyy-MM-dd');
+                        return <TableCell key={key} className="text-center font-mono font-semibold">{formatHm(weekDayTotals[key] || 0)}</TableCell>;
+                      })}
+                      <TableCell className="text-right font-mono font-semibold">
+                        {formatHm(Object.values(weekDayTotals).reduce((sum, s) => sum + s, 0))}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-7 gap-2">
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label) => (
+                  <div key={label} className="px-2 py-1 text-xs font-medium text-muted-foreground">{label}</div>
+                ))}
+                {monthGridDays.map((d) => {
+                  const key = format(d, 'yyyy-MM-dd');
+                  const inMonth = d >= monthStart && d <= monthEnd;
+                  const total = monthDayTotals[key] || 0;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        setSelectedDay(d);
+                        setTimesheetMode('day');
+                        setWeekStart(startOfWeek(d, { weekStartsOn: 1 }));
+                      }}
+                      className={cn(
+                        'rounded-md border min-h-[88px] p-2 text-left',
+                        inMonth ? 'bg-card' : 'bg-muted/30 text-muted-foreground',
+                        isSameDay(d, new Date()) && 'border-orange-300 bg-orange-50'
+                      )}
+                    >
+                      <p className="text-xs">{format(d, 'd')}</p>
+                      <p className="text-xs font-mono mt-2">{total ? formatHm(total) : '0:00'}</p>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">Click a day to open Day view and edit entries.</p>
+            </div>
+          )}
+        </div>
+      </AppLayout>
+    );
+  }
+
   const handleDownloadTimeTemplate = () => {
     downloadCsv('time_entries_template.csv', getTimeEntriesTemplateRows());
     toast({ title: 'Template downloaded' });
@@ -805,8 +1290,17 @@ export default function TimeTracking() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* In-page tabs: Timer | Logs (for mobile and quick switch) */}
+            {/* In-page tabs: Timesheet | Timer | All logs */}
             <div className="flex rounded-lg border bg-muted/50 p-0.5 mr-2">
+              <Link
+                to="/time"
+                className={cn(
+                  'px-4 py-2 rounded-md text-sm font-medium transition-colors',
+                  isTimesheetView ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Timesheet
+              </Link>
               <Link
                 to="/time/timer"
                 className={cn(
@@ -817,13 +1311,13 @@ export default function TimeTracking() {
                 Timer
               </Link>
               <Link
-                to="/time/logs"
+                to="/time/history"
                 className={cn(
                   'px-4 py-2 rounded-md text-sm font-medium transition-colors',
-                  !isTimerView ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  isHistoryView ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                Logs
+                All logs
               </Link>
             </div>
             {!isTimerView && (
@@ -939,12 +1433,12 @@ export default function TimeTracking() {
                   </Popover>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="dialog_description">Description</Label>
+                  <Label htmlFor="dialog_description">Notes</Label>
                   <Textarea
                     id="dialog_description"
                     value={dialogDescription}
                     onChange={(e) => setDialogDescription(e.target.value)}
-                    placeholder="What did you work on?"
+                    placeholder="Optional notes for this task"
                     rows={3}
                   />
                 </div>
@@ -1083,17 +1577,8 @@ export default function TimeTracking() {
         {isTimerView ? (
           /* Timer view: centered, spacious layout */
           <div className="max-w-2xl mx-auto space-y-8">
-            {/* Context: description & project above timer */}
+            {/* Context: project/task first, notes optional */}
             <div className="rounded-xl border bg-card p-5 space-y-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</Label>
-                <Input
-                  placeholder="What are you working on?"
-                  value={timerDescription}
-                  onChange={(e) => setTimerDescription(e.target.value)}
-                  className="text-base border-0 bg-muted/50 focus-visible:ring-2"
-                />
-              </div>
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex-1 min-w-[140px] space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Project</Label>
@@ -1205,6 +1690,15 @@ export default function TimeTracking() {
                   <Label htmlFor="timer-billable" className="text-sm text-muted-foreground">Billable</Label>
                 </div>
               </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Notes</Label>
+                <Input
+                  placeholder="Optional notes"
+                  value={timerDescription}
+                  onChange={(e) => setTimerDescription(e.target.value)}
+                  className="text-base border-0 bg-muted/50 focus-visible:ring-2"
+                />
+              </div>
             </div>
 
             {/* Big timer display */}
@@ -1258,13 +1752,15 @@ export default function TimeTracking() {
                       const endMs = seg.endMs ?? Date.now();
                       const secs = Math.max(0, Math.round((endMs - seg.startMs) / 1000));
                       const isRunning = seg.endMs == null;
+                      const startLabel = format(new Date(seg.startMs), 'MMM d, HH:mm');
+                      const endLabel = isRunning ? 'now' : format(new Date(endMs), 'MMM d, HH:mm');
                       return (
                         <li
                           key={i}
                           className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50 text-sm"
                         >
                           <span className="font-medium">
-                            {i + 1}. {isRunning ? 'Current' : formatElapsed(secs)}
+                            {i + 1}. {startLabel} - {endLabel}
                           </span>
                           <span className={isRunning ? 'text-primary font-mono' : 'text-muted-foreground font-mono'}>
                             {formatElapsed(secs)}
@@ -1428,7 +1924,7 @@ export default function TimeTracking() {
                     <TableHead>Date</TableHead>
                     <TableHead>Project</TableHead>
                     <TableHead>Task</TableHead>
-                    <TableHead>Description</TableHead>
+                    <TableHead>Notes</TableHead>
                     <TableHead>Duration</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="w-20"></TableHead>
@@ -1456,7 +1952,7 @@ export default function TimeTracking() {
                         {entry.tasks?.title || <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate">
-                        {entry.description || <span className="text-muted-foreground italic">No description</span>}
+                        {entry.description || <span className="text-muted-foreground italic">No notes</span>}
                       </TableCell>
                       <TableCell>
                         {getEntrySeconds(entry) > 0 ? formatDuration(getEntrySeconds(entry), true) : '—'}
@@ -1510,7 +2006,7 @@ export default function TimeTracking() {
             </DialogHeader>
             {selectedLogEntry && (
               <div className="space-y-3 text-sm">
-                <p><span className="text-muted-foreground">Description:</span> {selectedLogEntry.description || '—'}</p>
+                <p><span className="text-muted-foreground">Notes:</span> {selectedLogEntry.description || '—'}</p>
                 <p><span className="text-muted-foreground">Total:</span> {formatDuration(getEntrySeconds(selectedLogEntry), true)}</p>
                 <div className="space-y-2">
                   <p className="font-medium">Breakdown</p>

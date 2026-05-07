@@ -125,7 +125,7 @@ export function ProjectHeader({
             <Link to={`/invoices?project_id=${project.id}&from_review=1`}>Create Invoice</Link>
           </Button>
           <Button size="sm" asChild>
-            <Link to={`/time/logs?project=${project.id}`}>Log Time</Link>
+            <Link to={`/time?view=day&project=${project.id}`}>Log Time</Link>
           </Button>
           {(onEdit || onDelete) && (
             <DropdownMenu>

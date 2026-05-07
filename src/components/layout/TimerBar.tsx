@@ -51,7 +51,7 @@ export function TimerBar() {
         <Input
           value={timerDescription}
           onChange={(e) => setTimerDescription(e.target.value)}
-          placeholder="What are you working on?"
+          placeholder="Optional notes"
           className="h-8 flex-1 min-w-[120px] max-w-md text-sm"
         />
         <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end sm:justify-start">

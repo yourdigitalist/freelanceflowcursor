@@ -217,9 +217,10 @@ function AppRoutes() {
       <Route path="/clients/active" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
       <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
       <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
-      <Route path="/time" element={<Navigate to="/time/timer" replace />} />
+      <Route path="/time" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
       <Route path="/time/timer" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
-      <Route path="/time/logs" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
+      <Route path="/time/history" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
+      <Route path="/time/logs" element={<Navigate to="/time/history" replace />} />
       <Route path="/notes" element={<ProtectedRoute><Notes /></ProtectedRoute>} />
       <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
       <Route path="/services" element={<ProtectedRoute><Services /></ProtectedRoute>} />
