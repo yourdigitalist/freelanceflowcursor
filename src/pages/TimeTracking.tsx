@@ -29,7 +29,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Play, Square, Trash2, Filter, Download, Upload, List, Check } from '@/components/icons';
+import { Plus, Play, Trash2, Filter, Download, Upload, List, Check } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import {
   format,
@@ -46,6 +46,7 @@ import {
   eachDayOfInterval,
   isSameDay,
 } from 'date-fns';
+import { Pause } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -163,6 +164,7 @@ export default function TimeTracking() {
   } = useTimer();
   const [searchParams, setSearchParams] = useSearchParams();
   const prefilledProjectId = searchParams.get('project') || '';
+  const prefilledTaskId = searchParams.get('task') || '';
   const lockPrefilledProject = Boolean(prefilledProjectId);
   const [projectQuery, setProjectQuery] = useState('');
   const [taskQuery, setTaskQuery] = useState('');
@@ -212,6 +214,11 @@ export default function TimeTracking() {
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
   const [extraRows, setExtraRows] = useState<Array<{ key: string; projectId: string; taskId: string }>>([]);
   const [editingCell, setEditingCell] = useState<{ rowKey: string; dayKey: string; value: string } | null>(null);
+  const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
+  const [createTaskDialogOpen, setCreateTaskDialogOpen] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [dateFormatPreference, setDateFormatPreference] = useState('MM/DD/YYYY');
 
   useEffect(() => {
     if (user) {
@@ -219,8 +226,18 @@ export default function TimeTracking() {
       fetchProjects();
       fetchClients();
       fetchAllTasks();
+      void fetchLocalePreference();
     }
   }, [user]);
+
+  const toDateFnsPattern = (pattern: string) =>
+    pattern.replace(/YYYY/g, 'yyyy').replace(/DD/g, 'dd').replace(/\bD\b/g, 'd');
+
+  const formatUserDate = (value: Date | string) => {
+    const d = typeof value === 'string' ? parseISO(value) : value;
+    if (Number.isNaN(d.getTime())) return '—';
+    return format(d, toDateFnsPattern(dateFormatPreference));
+  };
 
   useEffect(() => {
     if (!isTimesheetView) return;
@@ -248,6 +265,16 @@ export default function TimeTracking() {
       setDialogProject(prefilledProjectId);
     }
   }, [prefilledProjectId, isDialogOpen, editingEntry]);
+
+  useEffect(() => {
+    if (!isTimerView) return;
+    if (prefilledProjectId) setTimerProject(prefilledProjectId);
+    if (!prefilledProjectId && prefilledTaskId) {
+      const taskMatch = allTasks.find((t) => t.id === prefilledTaskId);
+      if (taskMatch?.project_id) setTimerProject(taskMatch.project_id);
+    }
+    if (prefilledTaskId) setTimerTask(prefilledTaskId);
+  }, [isTimerView, prefilledProjectId, prefilledTaskId, allTasks, setTimerProject, setTimerTask]);
 
   useEffect(() => {
     const onSaved = () => fetchEntries();
@@ -303,6 +330,12 @@ export default function TimeTracking() {
     } catch (error) {
       console.error('Error fetching clients:', error);
     }
+  };
+
+  const fetchLocalePreference = async () => {
+    if (!user) return;
+    const { data } = await supabase.from('profiles').select('date_format').eq('user_id', user.id).maybeSingle();
+    setDateFormatPreference((data as { date_format?: string | null } | null)?.date_format || 'MM/DD/YYYY');
   };
 
   const fetchTasksForProject = async (projectId: string) => {
@@ -938,14 +971,29 @@ export default function TimeTracking() {
     setSearchParams(nextParams, { replace: true });
   };
 
+  const handleCreateProjectFromTimer = async () => {
+    const trimmed = newProjectName.trim();
+    if (!trimmed) return;
+    await createProjectInline(trimmed, false);
+    setNewProjectName('');
+    setCreateProjectDialogOpen(false);
+  };
+
+  const handleCreateTaskFromTimer = async () => {
+    const trimmed = newTaskTitle.trim();
+    if (!trimmed || !timerProject) return;
+    await createTaskInline(trimmed, timerProject, false);
+    setNewTaskTitle('');
+    setCreateTaskDialogOpen(false);
+  };
+
   if (isTimesheetView) {
     return (
       <AppLayout>
         <div className="space-y-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Timesheet</h1>
-              <p className="text-muted-foreground">Track time by day or fill your week at a glance.</p>
+              <h1 className="text-2xl font-bold tracking-tight">Timesheet</h1>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" asChild>
@@ -956,6 +1004,9 @@ export default function TimeTracking() {
                 <Button variant={timesheetView === 'week' ? 'default' : 'ghost'} size="sm" onClick={() => setTimesheetMode('week')}>Week</Button>
                 <Button variant={timesheetView === 'month' ? 'default' : 'ghost'} size="sm" onClick={() => setTimesheetMode('month')}>Month</Button>
               </div>
+              <Button variant="outline" asChild>
+                <Link to="/time/history">Manual Log</Link>
+              </Button>
               <Button asChild className="bg-green-600 hover:bg-green-700 text-white">
                 <Link to="/time/timer">
                   <Plus className="mr-2 h-4 w-4" />
@@ -971,9 +1022,20 @@ export default function TimeTracking() {
               <Button variant="outline" size="sm" onClick={() => { setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 })); setSelectedDay(new Date()); }}>
                 {timesheetView === 'month'
                   ? `This month ${format(monthStart, 'MMM yyyy')}`
-                  : `This week ${format(weekStart, 'dd')} - ${format(weekEnd, 'dd MMM yyyy')}`}
+                  : `This week ${formatUserDate(weekStart)} - ${formatUserDate(weekEnd)}`}
               </Button>
               <Button variant="outline" size="sm" onClick={() => shiftPeriod('next')}>→</Button>
+              <Input
+                type="date"
+                className="h-8 w-[170px]"
+                value={format(selectedDay, 'yyyy-MM-dd')}
+                onChange={(e) => {
+                  const picked = new Date(`${e.target.value}T12:00:00`);
+                  if (Number.isNaN(picked.getTime())) return;
+                  setSelectedDay(picked);
+                  setWeekStart(startOfWeek(picked, { weekStartsOn: 1 }));
+                }}
+              />
             </div>
           </div>
 
@@ -998,6 +1060,11 @@ export default function TimeTracking() {
                   );
                 })}
               </div>
+              <div className="flex justify-end">
+                <p className="text-sm font-medium">
+                  Week total: <span className="font-mono">{formatHm(weekDays.reduce((sum, d) => sum + (weekDayTotals[format(d, 'yyyy-MM-dd')] || 0), 0))}</span>
+                </p>
+              </div>
               <Card className="border-0 shadow-sm">
                 <CardContent className="p-0">
                   {dayEntries.length === 0 ? (
@@ -1013,10 +1080,17 @@ export default function TimeTracking() {
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-sm min-w-[3rem] text-right">{formatHm(getEntrySeconds(entry))}</span>
                             <Button size="sm" variant="outline" onClick={() => resumeEntry(entry.id)}>Start</Button>
-                            <Button size="sm" variant="ghost" onClick={() => openLogDialog(entry)}>Edit</Button>
+                            <Button size="sm" variant="ghost" asChild>
+                              <Link to="/time/history">Edit</Link>
+                            </Button>
                           </div>
                         </div>
                       ))}
+                      <div className="flex items-center justify-end bg-muted/20 px-4 py-3">
+                        <p className="text-sm font-medium">
+                          Total: <span className="font-mono">{formatHm(weekDayTotals[format(selectedDay, 'yyyy-MM-dd')] || 0)}</span>
+                        </p>
+                      </div>
                     </div>
                   )}
                 </CardContent>
@@ -1105,7 +1179,7 @@ export default function TimeTracking() {
                                       }
                                       if (e.key === 'Escape') setEditingCell(null);
                                     }}
-                                    className="h-8 text-center font-mono"
+                                    className="mx-auto h-8 w-[84px] text-center font-mono"
                                   />
                                 ) : (
                                   <button
@@ -1280,47 +1354,12 @@ export default function TimeTracking() {
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{isTimerView ? 'Timer' : 'Time logs'}</h1>
-            <p className="text-muted-foreground">
-              {isTimerView
-                ? 'Track time and save entries. Your timer keeps running when you switch pages—use the bar at the bottom to pause or save.'
-                : 'Log and manage your billable hours'}
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">{isTimerView ? 'Timer' : 'All logs'}</h1>
           </div>
-          <div className="flex items-center gap-2">
-            {/* In-page tabs: Timesheet | Timer | All logs */}
-            <div className="flex rounded-lg border bg-muted/50 p-0.5 mr-2">
-              <Link
-                to="/time"
-                className={cn(
-                  'px-4 py-2 rounded-md text-sm font-medium transition-colors',
-                  isTimesheetView ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                Timesheet
-              </Link>
-              <Link
-                to="/time/timer"
-                className={cn(
-                  'px-4 py-2 rounded-md text-sm font-medium transition-colors',
-                  isTimerView ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                Timer
-              </Link>
-              <Link
-                to="/time/history"
-                className={cn(
-                  'px-4 py-2 rounded-md text-sm font-medium transition-colors',
-                  isHistoryView ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                All logs
-              </Link>
-            </div>
-            {!isTimerView && (
+          <div className="flex flex-wrap items-center gap-2">
+            {isHistoryView && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" title="Template, export, or import CSV">
@@ -1345,7 +1384,7 @@ export default function TimeTracking() {
             )}
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={() => openLogDialog()}>
+              <Button variant="outline" onClick={() => openLogDialog()}>
                 <Plus className="mr-2 h-4 w-4" />
                 Manual Log
               </Button>
@@ -1554,6 +1593,12 @@ export default function TimeTracking() {
               </form>
             </DialogContent>
           </Dialog>
+          <Button className="bg-green-600 hover:bg-green-700 text-white" asChild>
+            <Link to="/time/timer">
+              <Plus className="mr-2 h-4 w-4" />
+              Track time
+            </Link>
+          </Button>
           </div>
         </div>
 
@@ -1570,6 +1615,46 @@ export default function TimeTracking() {
               <Button variant="outline" className="w-full" disabled={importing} onClick={() => importFileInputRef.current?.click()}>
                 {importing ? 'Importing…' : 'Choose CSV file'}
               </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={createProjectDialogOpen} onOpenChange={setCreateProjectDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create project</DialogTitle>
+              <DialogDescription>Add a new project and assign it to this timer.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Input
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                placeholder="Project name"
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setCreateProjectDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleCreateProjectFromTimer} disabled={!newProjectName.trim()}>Create</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={createTaskDialogOpen} onOpenChange={setCreateTaskDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create task</DialogTitle>
+              <DialogDescription>Create a task in the selected project and assign it to this timer.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Input
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                placeholder="Task title"
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setCreateTaskDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleCreateTaskFromTimer} disabled={!newTaskTitle.trim() || !timerProject}>Create</Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
@@ -1623,11 +1708,7 @@ export default function TimeTracking() {
                     variant="ghost"
                     size="sm"
                     className="h-7 px-2 text-xs text-muted-foreground"
-                    onClick={async () => {
-                      const name = window.prompt('New project name');
-                      if (!name) return;
-                      await createProjectInline(name, false);
-                    }}
+                    onClick={() => setCreateProjectDialogOpen(true)}
                   >
                     + Create project
                   </Button>
@@ -1676,11 +1757,7 @@ export default function TimeTracking() {
                     size="sm"
                     className="h-7 px-2 text-xs text-muted-foreground"
                     disabled={!timerProject}
-                    onClick={async () => {
-                      const title = window.prompt('New task title');
-                      if (!title || !timerProject) return;
-                      await createTaskInline(title, timerProject, false);
-                    }}
+                    onClick={() => setCreateTaskDialogOpen(true)}
                   >
                     + Create task
                   </Button>
@@ -1712,7 +1789,7 @@ export default function TimeTracking() {
               <div className="flex flex-wrap gap-3 justify-center mt-8">
                 {isLocalTimerRunning ? (
                   <Button size="lg" variant="destructive" onClick={stopTimer} className="rounded-full px-8">
-                    <Square className="mr-2 h-5 w-5" />
+                    <Pause className="mr-2 h-5 w-5" />
                     Pause
                   </Button>
                 ) : (
@@ -1943,7 +2020,7 @@ export default function TimeTracking() {
                         </TableCell>
                       )}
                       <TableCell>
-                        {format(parseISO(entry.started_at || entry.start_time), 'MMM d, yyyy')}
+                        {formatUserDate(entry.started_at || entry.start_time)}
                       </TableCell>
                       <TableCell className="font-medium">
                         {entry.projects?.name || <span className="text-muted-foreground">—</span>}

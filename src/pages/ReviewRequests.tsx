@@ -579,10 +579,9 @@ export default function ReviewRequests() {
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Approvals</h1>
-            <p className="text-muted-foreground">Send work for client approval and track status</p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Approvals</h1>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => { resetFolderForm(); setFolderDialogOpen(true); }}>
@@ -1196,7 +1195,7 @@ export default function ReviewRequests() {
                           <div className="flex flex-wrap gap-2">
                             {requestFiles.map((file, i) =>
                               file.type.startsWith('image/') ? (
-                                <div key={i} className="flex items-center gap-2 p-2 bg-muted rounded-lg">
+                                <div key={i} className="flex items-center gap-2 rounded-lg border bg-background p-2">
                                   <div className="h-8 w-8 rounded overflow-hidden bg-background shrink-0">
                                     <FileThumbnail file={file} />
                                   </div>
@@ -1216,7 +1215,7 @@ export default function ReviewRequests() {
                           <div className="space-y-1">
                             {requestFiles.map((file, i) =>
                               file.type === 'application/pdf' ? (
-                                <div key={i} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                                <div key={i} className="flex items-center justify-between rounded-lg border bg-background p-2">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <SlotIcon slot="approval_documents" className="h-4 w-4 shrink-0 text-muted-foreground" />
                                     <span className="text-sm truncate">{file.name}</span>
@@ -1236,7 +1235,7 @@ export default function ReviewRequests() {
                           <div className="space-y-1">
                             {requestFiles.map((file, i) =>
                               WORD_TYPES.includes(file.type) ? (
-                                <div key={i} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                                <div key={i} className="flex items-center justify-between rounded-lg border bg-background p-2">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <SlotIcon slot="approval_documents" className="h-4 w-4 shrink-0 text-muted-foreground" />
                                     <span className="text-sm truncate">{file.name}</span>
@@ -1284,7 +1283,7 @@ export default function ReviewRequests() {
                     </Button>
                   </div>
                   {requestRecipients.map((email, i) => (
-                    <div key={i} className="flex items-center justify-between p-2 bg-muted rounded">
+                    <div key={i} className="flex items-center justify-between rounded-md border bg-background p-2">
                       <span className="text-sm">{email}</span>
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRequestRecipients(prev => prev.filter((_, j) => j !== i))}>
                         <X className="h-3 w-3" />

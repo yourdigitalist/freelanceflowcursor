@@ -56,6 +56,7 @@ interface Client {
   id: string;
   name: string;
   company?: string | null;
+  currency?: string | null;
 }
 
 interface Project {
@@ -83,7 +84,7 @@ interface Invoice {
   total: number;
   client_id: string | null;
   project_id: string | null;
-  clients: { name: string; company?: string | null } | null;
+  clients: { name: string; company?: string | null; currency?: string | null } | null;
   projects: { name: string } | null;
   notes?: string | null;
   created_at: string;
@@ -119,16 +120,22 @@ export default function Invoices() {
   const [profileCurrency, setProfileCurrency] = useState<string | null>(null);
   const [profileCurrencyDisplay, setProfileCurrencyDisplay] = useState<string | null>(null);
   const [invoiceSetupMissing, setInvoiceSetupMissing] = useState<string[] | null>(null);
+  const [invoiceCreateDefaults, setInvoiceCreateDefaults] = useState<{
+    invoice_notes_default: string | null;
+    invoice_footer: string | null;
+    invoice_bank_details_default: string | null;
+  } | null>(null);
 
   useEffect(() => {
     if (!isDialogOpen || !user) {
       setInvoiceSetupMissing(null);
+      setInvoiceCreateDefaults(null);
       return;
     }
     (async () => {
       const { data } = await supabase
         .from('profiles')
-        .select('business_name, business_email, business_phone, business_street, business_city, business_country, business_address, bank_name, bank_routing_number, bank_account_number, tax_id')
+        .select('business_name, business_email, business_phone, business_street, business_city, business_country, business_address, tax_id, invoice_notes_default, invoice_footer, invoice_bank_details_default')
         .eq('user_id', user.id)
         .maybeSingle();
       const missing: string[] = [];
@@ -136,9 +143,12 @@ export default function Invoices() {
       if (!(data?.business_email ?? '').trim()) missing.push('Business email');
       const hasAddress = !!((data?.business_address ?? '').trim()) || (!!((data?.business_street ?? '').trim()) && !!((data?.business_city ?? '').trim()) && !!((data?.business_country ?? '').trim()));
       if (!hasAddress) missing.push('Business address');
-      if (!(data?.bank_name ?? '').trim()) missing.push('Bank name');
-      if (!(data?.bank_routing_number ?? '').trim()) missing.push('Routing number');
-      if (!(data?.bank_account_number ?? '').trim()) missing.push('Account number');
+      if (!(data?.invoice_bank_details_default ?? '').trim()) missing.push('Default bank/payment details (Invoice Settings)');
+      setInvoiceCreateDefaults({
+        invoice_notes_default: data?.invoice_notes_default ?? null,
+        invoice_footer: data?.invoice_footer ?? null,
+        invoice_bank_details_default: data?.invoice_bank_details_default ?? null,
+      });
       setInvoiceSetupMissing(missing);
     })();
   }, [isDialogOpen, user]);
@@ -147,10 +157,12 @@ export default function Invoices() {
     switch (status) {
       case 'paid':
         return 'bg-success/10 text-success border-success/20';
+      case 'overdue':
+        return 'bg-destructive/10 text-destructive border-destructive/20';
       case 'sent':
-        return 'bg-muted text-muted-foreground border-muted';
-      case 'draft':
         return 'bg-warning/10 text-warning border-warning/20';
+      case 'draft':
+        return 'bg-muted text-muted-foreground border-muted';
       default:
         return 'bg-muted text-muted-foreground border-muted';
     }
@@ -176,16 +188,29 @@ export default function Invoices() {
   useEffect(() => {
     const projectId = searchParams.get('project_id');
     const fromReview = searchParams.get('from_review') === '1';
-    if (!projectId || !fromReview || projects.length === 0 || !user) return;
-    const project = projects.find((p) => p.id === projectId);
-    if (!project) return;
-    setCreateClientId(project.client_id || '');
-    setCreateProjectId(projectId);
-    setIsDialogOpen(true);
-    setSearchParams({}, { replace: true });
-  }, [searchParams, projects, user]);
+    const clientId = searchParams.get('client');
+    if (projectId && fromReview && projects.length > 0 && user) {
+      const project = projects.find((p) => p.id === projectId);
+      if (!project) return;
+      setCreateClientId(project.client_id || '');
+      setCreateProjectId(projectId);
+      setIsDialogOpen(true);
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    if (clientId && clients.length > 0) {
+      const exists = clients.some((c) => c.id === clientId);
+      if (!exists) return;
+      setCreateClientId(clientId);
+      setCreateProjectId('');
+      setIsDialogOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, projects, clients, user, setSearchParams]);
 
   const fmt = (amount: number) => formatCurrency(amount, profileCurrency, profileCurrencyDisplay);
+  const fmtForClient = (amount: number, clientCurrency?: string | null) =>
+    formatCurrency(amount, clientCurrency || profileCurrency, profileCurrencyDisplay);
 
   const fetchInvoices = async () => {
     try {
@@ -193,7 +218,7 @@ export default function Invoices() {
         .from('invoices')
         .select(`
           *,
-          clients(name, company),
+          clients(name, company, currency),
           projects(name)
         `)
         .order('created_at', { ascending: false });
@@ -211,7 +236,7 @@ export default function Invoices() {
     try {
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name, company')
+        .select('id, name, company, currency')
         .order('name');
       if (error) throw error;
       setClients(data || []);
@@ -297,6 +322,9 @@ export default function Invoices() {
       issue_date: issueDate,
       due_date: dueDate,
       status: 'draft',
+      notes: invoiceCreateDefaults?.invoice_notes_default?.trim() || null,
+      invoice_footer: invoiceCreateDefaults?.invoice_footer?.trim() || null,
+      bank_details: invoiceCreateDefaults?.invoice_bank_details_default?.trim() || null,
       subtotal: 0,
       tax_rate: selectedTax?.rate || 0,
       tax_amount: 0,
@@ -578,12 +606,9 @@ export default function Invoices() {
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Invoices</h1>
-            <p className="text-muted-foreground">
-              Create and manage invoices
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">Invoices</h1>
           </div>
           <div className="flex items-center gap-2">
             <DropdownMenu>
@@ -633,8 +658,6 @@ export default function Invoices() {
                       ))}
                     </ul>
                     <span className="block text-sm">
-                      <Link to="/settings/business" className="font-medium underline hover:no-underline" onClick={() => setIsDialogOpen(false)}>Company Settings</Link>
-                      {' · '}
                       <Link to="/settings/invoices" className="font-medium underline hover:no-underline" onClick={() => setIsDialogOpen(false)}>Invoice Settings</Link>
                     </span>
                   </AlertDescription>
@@ -957,7 +980,7 @@ export default function Invoices() {
                         {invoice.due_date ? format(new Date(invoice.due_date), 'MMM d, yyyy') : '—'}
                       </TableCell>
                       <TableCell className="font-medium">
-                        {fmt(Number(invoice.total))}
+                        {fmtForClient(Number(invoice.total), invoice.clients?.currency)}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={getInvoiceStatusBadgeStyle(invoice.status || 'draft')}>

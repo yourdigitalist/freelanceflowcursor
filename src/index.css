@@ -142,6 +142,15 @@
   .upgrade-gradient {
     background: linear-gradient(135deg, #F8EDFF 0%, #CFDEF7 100%);
   }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Magic UI landing-only styles (layout, spacing, animations) */

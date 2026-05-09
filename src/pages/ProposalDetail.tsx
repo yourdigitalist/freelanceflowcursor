@@ -39,9 +39,10 @@ export default function ProposalDetail() {
   const [items, setItems] = useState<any[]>([]);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [services, setServices] = useState<any[]>([]);
-  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  const [clients, setClients] = useState<{ id: string; name: string; company: string | null; currency?: string | null }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string; client_id: string | null }[]>([]);
   const [projectNameInput, setProjectNameInput] = useState("");
+  const [showCreateProjectInput, setShowCreateProjectInput] = useState(false);
   const [businessName, setBusinessName] = useState<string | null>(null);
   const [businessLogo, setBusinessLogo] = useState<string | null>(null);
   const [businessEmail, setBusinessEmail] = useState<string | null>(null);
@@ -56,11 +57,11 @@ export default function ProposalDetail() {
   const load = async () => {
     if (!id) return;
     const [{ data: p }, { data: s }, { data: svc }, { data: profile }, { data: allClients }, { data: allProjects }] = await Promise.all([
-      supabase.from("proposals").select("*, clients(name, company), projects(name)").eq("id", id).single(),
+      supabase.from("proposals").select("*, clients(name, company, currency), projects(name)").eq("id", id).single(),
       supabase.from("proposal_services").select("*").eq("proposal_id", id).order("position"),
       supabase.from("services").select("*").order("name"),
       user ? supabase.from("profiles").select("business_name, business_logo, business_email, business_phone").eq("user_id", user.id).maybeSingle() : Promise.resolve({ data: null } as any),
-      supabase.from("clients").select("id, name").order("name"),
+      supabase.from("clients").select("id, name, company, currency").order("name"),
       supabase.from("projects").select("id, name, client_id").order("name"),
     ]);
     const paymentMethods = Array.isArray(p?.payment_methods) ? p.payment_methods : [];
@@ -92,6 +93,13 @@ export default function ProposalDetail() {
   }, [id, user?.id]);
 
   const subtotal = useMemo(() => items.reduce((sum, i) => sum + (Number(i.price) || 0) * (Number(i.quantity) || 0), 0), [items]);
+  const selectedClientCurrency = useMemo(
+    () => clients.find((client) => client.id === proposal?.client_id)?.currency || null,
+    [clients, proposal?.client_id],
+  );
+  const resolvedCurrency = selectedClientCurrency || currency || "USD";
+  const formatMoney = (amount: number) =>
+    new Intl.NumberFormat(undefined, { style: "currency", currency: resolvedCurrency }).format(amount || 0);
   const discount = useMemo(() => {
     if (!proposal) return 0;
     return proposal.discount_type === "percent" ? subtotal * ((Number(proposal.discount_value) || 0) / 100) : Number(proposal.discount_value || 0);
@@ -162,7 +170,7 @@ export default function ProposalDetail() {
           name,
           description: item.description || null,
           price: Number(item.price || 0),
-          currency: item.currency || currency || "USD",
+          currency: resolvedCurrency,
           is_recurring: !!item.is_recurring,
           recurrence_period: item.recurrence_period || "monthly",
           quantity: Number(item.quantity || 1),
@@ -344,8 +352,8 @@ export default function ProposalDetail() {
   };
 
   const discountDisplayText = proposal?.discount_type === "percent"
-    ? `$${discount.toFixed(2)} (${Number(proposal.discount_value || 0)}%)`
-    : `$${discount.toFixed(2)}`;
+    ? `${formatMoney(discount)} (${Number(proposal.discount_value || 0)}%)`
+    : formatMoney(discount);
   const tabCompletion = {
     data: hasRequiredData,
     services: hasRequiredService,
@@ -365,7 +373,7 @@ export default function ProposalDetail() {
       case "read":
         return "bg-blue-50 text-blue-700 border-blue-200";
       case "sent":
-        return "bg-purple-50 text-purple-700 border-purple-200";
+        return "bg-warning/10 text-warning border-warning/20";
       case "draft":
       default:
         return "bg-warning/10 text-warning border-warning/20";
@@ -375,13 +383,15 @@ export default function ProposalDetail() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
           <div>
             <Link to="/proposals" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="mr-2 h-4 w-4" />Back</Link>
-            <h1 className="mt-2 text-2xl font-bold">{proposal.identifier}</h1>
-            <Badge variant="outline" className={statusBadgeClass(proposal.status)}>
-              {formatStatus(proposal.status)}
-            </Badge>
+            <div className="mt-2 flex items-center gap-2">
+              <h1 className="text-2xl font-bold">{proposal.identifier}</h1>
+              <Badge variant="outline" className={statusBadgeClass(proposal.status)}>
+                {formatStatus(proposal.status)}
+              </Badge>
+            </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {saveStatus === "saving" && "Saving..."}
               {saveStatus === "saved" && "Saved"}
@@ -448,7 +458,7 @@ export default function ProposalDetail() {
                     <SelectContent>
                       {clients.map((client) => (
                         <SelectItem key={client.id} value={client.id}>
-                          {client.name}
+                          {client.company ? `${client.name} — ${client.company}` : `${client.name} — Individual`}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -462,6 +472,7 @@ export default function ProposalDetail() {
                       const nextProjectId = value === "none" ? null : value;
                       const selectedProject = filteredProjects.find((project) => project.id === nextProjectId);
                       setProjectNameInput(selectedProject?.name || "");
+                      setShowCreateProjectInput(false);
                       updateProposal({ project_id: nextProjectId });
                     }}
                   >
@@ -477,15 +488,32 @@ export default function ProposalDetail() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">Pick an existing project, or type a new name below and it will be created for this client when you save.</p>
-                  <Input
-                    value={projectNameInput}
-                    onChange={(e) => {
-                      setProjectNameInput(e.target.value);
-                      updateProposal({ project_id: null });
-                    }}
-                    placeholder="Type a new project name"
-                  />
+                  <div className="space-y-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setShowCreateProjectInput((prev) => !prev);
+                        updateProposal({ project_id: null });
+                      }}
+                    >
+                      + Add project
+                    </Button>
+                    {showCreateProjectInput ? (
+                      <>
+                        <p className="text-xs text-muted-foreground">Type a new project name and it will be created for this client when you save.</p>
+                        <Input
+                          value={projectNameInput}
+                          onChange={(e) => {
+                            setProjectNameInput(e.target.value);
+                            updateProposal({ project_id: null });
+                          }}
+                          placeholder="Project name"
+                        />
+                      </>
+                    ) : null}
+                  </div>
                 </div>
               </div>
               <div className="space-y-1">
@@ -531,18 +559,33 @@ export default function ProposalDetail() {
               <div className="border-b" />
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setCatalogOpen(true)}>Add from Service Catalog</Button>
-                <Button variant="outline" onClick={() => setItems((prev) => [...prev, { id: createTempItemId(), name: "", description: "", price: 0, quantity: 1, line_total: 0, currency: currency || "USD", recurrence_period: "monthly", is_recurring: false }])}><Plus className="mr-2 h-4 w-4" />Add manually</Button>
+                <Button variant="outline" onClick={() => setItems((prev) => [...prev, { id: createTempItemId(), name: "", description: "", price: 0, quantity: 1, line_total: 0, currency: resolvedCurrency, recurrence_period: "monthly", is_recurring: false }])}><Plus className="mr-2 h-4 w-4" />Add manually</Button>
               </div>
               <div className="space-y-3">
                 {items.map((item, idx) => (
                   <div key={item.id || `${item.service_id || "service"}-${idx}`} className="grid gap-2 rounded-lg border p-3 md:grid-cols-12">
-                    <Input className="md:col-span-3" value={item.name} onChange={(e) => setItems((prev) => prev.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))} placeholder="Service name" />
-                    <Input className="md:col-span-3" value={item.description || ""} onChange={(e) => setItems((prev) => prev.map((x, i) => i === idx ? { ...x, description: e.target.value } : x))} placeholder="Description" />
-                    <Input className="md:col-span-2" type="number" value={item.price} onChange={(e) => setItems((prev) => prev.map((x, i) => i === idx ? { ...x, price: Number(e.target.value || 0) } : x))} placeholder="Price" />
-                    <Input className="md:col-span-2" type="number" value={item.quantity} onChange={(e) => setItems((prev) => prev.map((x, i) => i === idx ? { ...x, quantity: Number(e.target.value || 1) } : x))} placeholder="Qty" />
-                    <div className="md:col-span-2 flex items-center justify-between">
-                      <span className="text-sm font-medium">${(Number(item.price || 0) * Number(item.quantity || 0)).toFixed(2)}</span>
-                      <Button size="icon" variant="ghost" onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    <div className="md:col-span-3 space-y-1">
+                      <Label className="text-xs text-muted-foreground">Item</Label>
+                      <Input value={item.name} onChange={(e) => setItems((prev) => prev.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))} placeholder="Service name" />
+                    </div>
+                    <div className="md:col-span-3 space-y-1">
+                      <Label className="text-xs text-muted-foreground">Notes</Label>
+                      <Input value={item.description || ""} onChange={(e) => setItems((prev) => prev.map((x, i) => i === idx ? { ...x, description: e.target.value } : x))} placeholder="Description" />
+                    </div>
+                    <div className="md:col-span-2 space-y-1">
+                      <Label className="text-xs text-muted-foreground">Unit price</Label>
+                      <Input type="number" value={item.price} onChange={(e) => setItems((prev) => prev.map((x, i) => i === idx ? { ...x, price: Number(e.target.value || 0) } : x))} placeholder="0.00" />
+                    </div>
+                    <div className="md:col-span-2 space-y-1">
+                      <Label className="text-xs text-muted-foreground">Quantity</Label>
+                      <Input type="number" value={item.quantity} onChange={(e) => setItems((prev) => prev.map((x, i) => i === idx ? { ...x, quantity: Number(e.target.value || 1) } : x))} placeholder="1" />
+                    </div>
+                    <div className="md:col-span-2 space-y-1">
+                      <Label className="text-xs text-muted-foreground">Total</Label>
+                      <div className="flex items-center justify-between pt-2">
+                        <span className="text-sm font-medium">{formatMoney(Number(item.price || 0) * Number(item.quantity || 0))}</span>
+                        <Button size="icon" variant="ghost" onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -551,9 +594,9 @@ export default function ProposalDetail() {
                 <div><Label>Discount type</Label><RadioGroup value={proposal.discount_type || "amount"} onValueChange={(value) => updateProposal({ discount_type: value })} className="flex gap-4 pt-2"><div className="flex items-center gap-2"><RadioGroupItem id="disc-amount" value="amount" /><Label htmlFor="disc-amount">Amount</Label></div><div className="flex items-center gap-2"><RadioGroupItem id="disc-percent" value="percent" /><Label htmlFor="disc-percent">Percent</Label></div></RadioGroup></div>
                 <div><Label>Discount value</Label><Input type="number" value={proposal.discount_value || 0} onChange={(e) => updateProposal({ discount_value: Number(e.target.value || 0) })} /></div>
                 <div className="space-y-1">
-                  <p className="text-sm">Subtotal: ${subtotal.toFixed(2)}</p>
+                  <p className="text-sm">Subtotal: {formatMoney(subtotal)}</p>
                   <p className="text-sm text-emerald-600">Discount: {discountDisplayText}</p>
-                  <p className="font-semibold">Total: ${total.toFixed(2)}</p>
+                  <p className="font-semibold">Total: {formatMoney(total)}</p>
                 </div>
               </div>
             </CardContent></Card>
@@ -651,7 +694,7 @@ export default function ProposalDetail() {
                         price: Number(s.price || 0),
                         quantity: 1,
                         line_total: Number(s.price || 0),
-                        currency: s.currency || currency || "USD",
+                        currency: resolvedCurrency,
                         is_recurring: !!s.is_recurring,
                         recurrence_period: s.recurrence_period || "monthly",
                       },

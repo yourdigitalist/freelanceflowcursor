@@ -199,8 +199,11 @@ const mapTemplateValues = (data: ContractTemplateData): Record<string, string> =
 
 export function renderTemplate(templateContent: string, data: ContractTemplateData): string {
   const values = mapTemplateValues(data);
-  const replaced = templateContent.replace(TOKEN_REGEX, (_full, token: string) => values[token] ?? "");
-  return replaced.replace(TOKEN_REGEX, "");
+  return templateContent.replace(TOKEN_REGEX, (full, token: string) => {
+    const value = values[token];
+    const display = typeof value === "string" && value.trim() ? value : full;
+    return `<span class="contract-token">${display}</span>`;
+  });
 }
 
 export type ContractSection = {

@@ -52,7 +52,7 @@ serve(async (req) => {
 
     const { data: business } = await supabase
       .from("profiles")
-      .select("business_name, business_email, business_phone, business_logo, email")
+      .select("business_name, business_email, business_phone, business_logo, email, notification_preferences")
       .eq("user_id", proposal.user_id)
       .maybeSingle();
     const normalizedBusiness = business
@@ -71,14 +71,20 @@ serve(async (req) => {
       proposal.status = "read";
       if (normalizedBusiness?.business_email && Deno.env.get("RESEND_API_KEY")) {
         await resend.emails.send({
-          from: `${normalizedBusiness.business_name || "Lance"} <${RESEND_FROM_EMAIL}>`,
+          from: `Lance <${RESEND_FROM_EMAIL}>`,
           to: [normalizedBusiness.business_email],
           subject: `Proposal viewed: ${proposal.identifier}`,
           html: `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
-            <div style="padding:18px 20px;background:#9B63E9;color:white;"><strong>${escapeHtml(normalizedBusiness.business_name || "Your Business")}</strong></div>
+            <div style="padding:18px 20px;background:#9B63E9;color:white;display:flex;align-items:center;gap:8px;">
+              <img src="https://getlance.app/favicon.ico" alt="Lance" width="18" height="18" style="display:inline-block;border-radius:4px;" />
+              <strong>Lance</strong>
+            </div>
             <div style="padding:20px;">
               <h2 style="color:#9B63E9;margin-top:0;">Proposal viewed by client</h2>
               <p style="color:#333;">Your proposal <strong>${escapeHtml(proposal.identifier)}</strong> has just been viewed.</p>
+            </div>
+            <div style="padding: 14px 20px; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb;">
+              Sent by <span style="color: #9B63E9; font-weight: 600;">Lance</span>
             </div>
           </div>`,
         });

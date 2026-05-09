@@ -454,13 +454,41 @@ export default function InvoiceSettings() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
               <Label htmlFor="invoice_email_subject_default">Default Invoice Email Subject</Label>
-              <Input
-                id="invoice_email_subject_default"
-                name="invoice_email_subject_default"
-                defaultValue={profile?.invoice_email_subject_default ?? appCommsDefaults?.invoice_email_subject_default ?? 'Invoice {{invoice_number}} from {{business_name}}'}
-                placeholder={appCommsDefaults?.invoice_email_subject_default ?? 'Invoice {{invoice_number}} from {{business_name}}'}
-              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" size="sm" className="h-8">
+                    Insert placeholder <ChevronDown className="ml-1 h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {MERGE_TAGS.map(({ tag, label }) => (
+                    <DropdownMenuItem
+                      key={tag}
+                      onSelect={() => {
+                        const input = document.getElementById('invoice_email_subject_default') as HTMLInputElement;
+                        if (input) {
+                          const start = input.selectionStart ?? input.value.length;
+                          const end = input.selectionEnd ?? input.value.length;
+                          const v = input.value;
+                          input.value = v.slice(0, start) + tag + v.slice(end);
+                          input.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                      }}
+                    >
+                      {label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <Input
+              id="invoice_email_subject_default"
+              name="invoice_email_subject_default"
+              defaultValue={profile?.invoice_email_subject_default ?? appCommsDefaults?.invoice_email_subject_default ?? 'Invoice {{invoice_number}} from {{business_name}}'}
+              placeholder={appCommsDefaults?.invoice_email_subject_default ?? 'Invoice {{invoice_number}} from {{business_name}}'}
+            />
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
@@ -501,7 +529,35 @@ export default function InvoiceSettings() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="reminder_subject_default">Default Reminder Email Subject</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="reminder_subject_default">Default Reminder Email Subject</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" className="h-8">
+                      Insert placeholder <ChevronDown className="ml-1 h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {MERGE_TAGS.map(({ tag, label }) => (
+                      <DropdownMenuItem
+                        key={tag}
+                        onSelect={() => {
+                          const input = document.getElementById('reminder_subject_default') as HTMLInputElement;
+                          if (input) {
+                            const start = input.selectionStart ?? input.value.length;
+                            const end = input.selectionEnd ?? input.value.length;
+                            const v = input.value;
+                            input.value = v.slice(0, start) + tag + v.slice(end);
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                          }
+                        }}
+                      >
+                        {label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
               <Input
                 id="reminder_subject_default"
                 name="reminder_subject_default"

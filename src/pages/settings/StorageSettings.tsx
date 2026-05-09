@@ -124,7 +124,7 @@ export default function StorageSettings() {
   return (
     <div className="space-y-6 max-w-3xl">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Storage</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Storage</h1>
           <p className="text-muted-foreground">
             Manage your uploaded files. Max {maxMB}MB per user.
           </p>

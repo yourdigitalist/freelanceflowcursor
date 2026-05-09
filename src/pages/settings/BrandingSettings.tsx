@@ -199,7 +199,7 @@ export default function BrandingSettings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Branding</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Branding</h1>
         <p className="text-muted-foreground">
           App logo, sidebar icon, favicon, and optional primary color. Shown to all users.
         </p>

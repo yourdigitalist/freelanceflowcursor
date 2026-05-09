@@ -26,7 +26,7 @@ type ContractRow = {
   total: number;
   client_id: string | null;
   project_id: string | null;
-  clients: { name: string } | null;
+  clients: { name: string; currency?: string | null } | null;
   projects: { name: string } | null;
 };
 
@@ -49,7 +49,7 @@ export default function Contracts() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [rows, setRows] = useState<ContractRow[]>([]);
-  const [clients, setClients] = useState<{ id: string; name: string; company: string | null; email: string | null; phone: string | null; address: string | null; city: string | null; state: string | null; postal_code: string | null; country: string | null; tax_id: string | null }[]>([]);
+  const [clients, setClients] = useState<{ id: string; name: string; company: string | null; email: string | null; phone: string | null; address: string | null; city: string | null; state: string | null; postal_code: string | null; country: string | null; tax_id: string | null; currency?: string | null }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string; client_id: string | null }[]>([]);
   const [proposalCandidates, setProposalCandidates] = useState<ProposalCandidate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,9 +71,9 @@ export default function Contracts() {
     const [{ data: contracts }, { data: allClients }, { data: allProjects }, { data: allTemplates }] = await Promise.all([
       supabase
         .from("contracts")
-        .select("id, identifier, status, total, client_id, project_id, clients(name), projects(name)")
+        .select("id, identifier, status, total, client_id, project_id, clients(name, currency), projects(name)")
         .order("created_at", { ascending: false }),
-      supabase.from("clients").select("id, name, company, email, phone, address, city, state, postal_code, country, tax_id").order("name"),
+      supabase.from("clients").select("id, name, company, email, phone, address, city, state, postal_code, country, tax_id, currency").order("name"),
       supabase.from("projects").select("id, name, client_id").order("name"),
       supabase.from("contract_templates").select("id, name, description, content, is_default").order("created_at"),
     ]);
@@ -121,6 +121,15 @@ export default function Contracts() {
   }, [searchParams]);
 
   useEffect(() => {
+    const client = searchParams.get("client");
+    const shouldOpen = searchParams.get("new") === "1" || !!client;
+    if (!shouldOpen || clients.length === 0) return;
+    if (client && clients.some((c) => c.id === client)) setClientId(client);
+    setCreateOpen(true);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, clients, setSearchParams]);
+
+  useEffect(() => {
     const loadCandidates = async () => {
       if (projectId === "none") {
         setProposalCandidates([]);
@@ -161,6 +170,9 @@ export default function Contracts() {
       return matchesStatus && matchesQuery;
     });
   }, [rows, searchQuery, statusFilter]);
+
+  const formatMoney = (amount: number, currencyCode?: string | null) =>
+    new Intl.NumberFormat(undefined, { style: "currency", currency: currencyCode || "USD" }).format(amount || 0);
 
   const statusBadgeClass = (status: string) => {
     switch (status) {
@@ -357,10 +369,9 @@ export default function Contracts() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Contracts</h1>
-            <p className="text-muted-foreground">Create and sign professional contracts with clients.</p>
+            <h1 className="text-2xl font-bold tracking-tight">Contracts</h1>
           </div>
           {activeTab === "contracts" ? (
             <Button onClick={() => setCreateOpen(true)}>
@@ -454,11 +465,7 @@ export default function Contracts() {
                           {formatStatus(row.status)}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        {new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(
-                          row.total || 0,
-                        )}
-                      </TableCell>
+                      <TableCell>{formatMoney(row.total || 0, row.clients?.currency)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button size="icon" variant="ghost" asChild onClick={(event) => event.stopPropagation()} aria-label="Edit contract">
@@ -535,7 +542,20 @@ export default function Contracts() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Client</Label>
+              <div className="flex items-center justify-between">
+                <Label>Client</Label>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto p-0 text-sm"
+                  onClick={() => {
+                    setCreateOpen(false);
+                    navigate("/clients");
+                  }}
+                >
+                  Create new client
+                </Button>
+              </div>
               <Select value={clientId} onValueChange={setClientId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select client" />
@@ -543,14 +563,27 @@ export default function Contracts() {
                 <SelectContent>
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id}>
-                      {client.name}
+                      {client.company ? `${client.name} — ${client.company}` : `${client.name} — Individual`}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Project (optional)</Label>
+              <div className="flex items-center justify-between">
+                <Label>Project (optional)</Label>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto p-0 text-sm"
+                  onClick={() => {
+                    setCreateOpen(false);
+                    navigate("/projects");
+                  }}
+                >
+                  Create new project
+                </Button>
+              </div>
               <Select value={projectId} onValueChange={setProjectId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select project" />
@@ -587,12 +620,21 @@ export default function Contracts() {
                 </div>
               </div>
             ) : null}
-            <div className="space-y-1">
-              <Label>Identifier</Label>
-              <Input value="Generated on create" readOnly />
-            </div>
             <div className="space-y-2">
-              <Label>Contract Template</Label>
+              <div className="flex items-center justify-between">
+                <Label>Contract Template</Label>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto p-0 text-sm"
+                  onClick={() => {
+                    setCreateOpen(false);
+                    void openCreateTemplate();
+                  }}
+                >
+                  Add new template
+                </Button>
+              </div>
               <Select value={templateId} onValueChange={setTemplateId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select template" />

@@ -35,6 +35,33 @@ function replaceTokens(template: string, tokens: Record<string, string>): string
   }, template);
 }
 
+const EMAIL_COMMS_CONFIG_PREFIX = "LANCE_EMAIL_CONFIG::";
+function parseEmailCommsConfig(raw: string | null | undefined): { logoLight: string; logoDark: string; logoVariant: "light" | "dark" } {
+  const fallback = { logoLight: "", logoDark: "", logoVariant: "light" as const };
+  const text = (raw || "").trim();
+  if (!text.startsWith(EMAIL_COMMS_CONFIG_PREFIX)) return fallback;
+  try {
+    const parsed = JSON.parse(text.slice(EMAIL_COMMS_CONFIG_PREFIX.length));
+    const logoLight = typeof parsed?.logoDefault === "string"
+      ? parsed.logoDefault
+      : typeof parsed?.logoLight === "string"
+        ? parsed.logoLight
+        : "";
+    const logoDark = typeof parsed?.logoSecondary === "string"
+      ? parsed.logoSecondary
+      : typeof parsed?.logoDark === "string"
+        ? parsed.logoDark
+        : "";
+    return {
+      logoLight,
+      logoDark,
+      logoVariant: parsed?.logoVariant === "dark" ? "dark" : "light",
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 function getDefaultClientHeader(logoUrl: string, businessName: string, primaryColor: string): string {
   return `<div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
   <div style="padding: 18px 20px; background: ${primaryColor}; color: white;">
@@ -43,10 +70,26 @@ function getDefaultClientHeader(logoUrl: string, businessName: string, primaryCo
   <div style="padding: 20px;">`;
 }
 
-function getDefaultClientFooter(primaryColor: string): string {
+function getDefaultClientFooter(primaryColor: string, businessName: string, businessEmail: string): string {
+  const safeName = escapeHtml(businessName || "Your Business");
+  const safeEmail = escapeHtml(businessEmail || "");
   return `</div><div style="padding: 14px 20px; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb;">
-  Sent by <span style="color: ${primaryColor}; font-weight: 600;">Lance</span>
+  Sent by <span style="color: ${primaryColor}; font-weight: 600;">${safeName}</span>${safeEmail ? ` · <span>${safeEmail}</span>` : ""}
 </div></div>`;
+}
+
+function getLanceSignature(primaryColor: string): string {
+  return `<div style="text-align:center; margin: 0 auto; padding-top: 16px; font-family: Arial, sans-serif; font-size: 13px; color: #9ca3af;">
+  <div>
+    This email was sent with
+    <a href="https://getlance.app" target="_blank" rel="noopener noreferrer" style="color: ${primaryColor}; text-decoration: none; font-weight: 600;">Lance</a>
+  </div>
+  <div style="margin-top: 8px;">
+    <a href="https://getlance.app" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+      <img src="https://getlance.app/favicon.ico" alt="Lance" width="20" height="20" style="display:inline-block; border-radius: 4px;" />
+    </a>
+  </div>
+</div>`;
 }
 
 interface InvoiceItem {
@@ -218,7 +261,8 @@ serve(async (req) => {
       .from("invoices")
       .select(`
         *,
-        clients(name, email, phone, company, tax_id, address, street, street2, city, state, postal_code, country)
+        clients(name, email, phone, company, tax_id, address, street, street2, city, state, postal_code, country),
+        projects(name)
       `)
       .eq("id", invoiceId)
       .eq("user_id", user.id)
@@ -378,14 +422,27 @@ serve(async (req) => {
     console.log(`Sending email to ${recipientEmail}`);
 
     // Send email with PDF attachment - all user inputs are escaped to prevent XSS
-    const safeInvoiceNumber = escapeHtml(invoice.invoice_number);
-    const safeMessage = escapeHtml(message);
+    const rawInvoiceNumber = String(invoice.invoice_number ?? "");
+    const rawDueDate = invoice?.due_date ? String(invoice.due_date).slice(0, 10) : "";
+    const rawTotal = formatCurrency(Number(invoice.total || 0), profile?.currency, profile?.currency_display, profile?.number_format);
+    const mergeTokens = {
+      client_name: String(invoice?.clients?.name ?? ""),
+      invoice_number: rawInvoiceNumber,
+      due_date: rawDueDate,
+      total: rawTotal,
+      business_name: String(profile?.business_name || senderName || profile?.full_name || "Your Business"),
+      project_name: String(invoice?.projects?.name ?? ""),
+    };
+    const resolvedMessage = replaceTokens(String(message || ""), mergeTokens);
+    const resolvedCustomSubject = replaceTokens(String(customSubject || ""), mergeTokens).trim();
+
+    const safeInvoiceNumber = escapeHtml(rawInvoiceNumber);
+    const safeMessage = escapeHtml(resolvedMessage);
 
     const isReceipt = receipt === true;
     const fromDisplayName = (profile?.business_name || senderName || profile?.full_name || "Your Business").trim();
     const replyToEmail = (profile?.business_email || senderEmail || profile?.email || "").trim();
     const primaryColor = (profile?.client_email_primary_color || "#9B63E9").trim();
-    const headerTpl = (profile?.client_email_header_html || "").trim();
     const footerTpl = (profile?.client_email_footer_html || "").trim();
     const coreHtml = isReceipt
       ? `
@@ -403,16 +460,18 @@ serve(async (req) => {
       body_html: coreHtml,
       invoice_number: safeInvoiceNumber,
     };
-    const header = headerTpl
-      ? replaceTokens(headerTpl, tokens)
-      : getDefaultClientHeader(profile?.business_logo || "", fromDisplayName, primaryColor);
+    const commsConfig = parseEmailCommsConfig(profile?.client_email_header_html);
+    const selectedLogo = commsConfig.logoVariant === "dark"
+      ? (commsConfig.logoDark || profile?.business_logo || commsConfig.logoLight || "")
+      : (profile?.business_logo || commsConfig.logoLight || commsConfig.logoDark || "");
+    const header = getDefaultClientHeader(selectedLogo, fromDisplayName, primaryColor);
     const footer = footerTpl
       ? replaceTokens(footerTpl, tokens)
-      : getDefaultClientFooter(primaryColor);
-    const emailHtml = `${header}${coreHtml}${footer}`;
+      : getDefaultClientFooter(primaryColor, fromDisplayName, replyToEmail);
+    const emailHtml = `${header}${coreHtml}${footer}${getLanceSignature(primaryColor)}`;
 
-    const emailSubject = customSubject && String(customSubject).trim()
-      ? customSubject
+    const emailSubject = resolvedCustomSubject
+      ? resolvedCustomSubject
       : isReceipt
         ? `Receipt from ${fromDisplayName} for Invoice ${invoice.invoice_number}`
         : `Invoice ${invoice.invoice_number} from ${fromDisplayName} - ${formatCurrency(Number(invoice.total || 0), profile?.currency, profile?.currency_display, profile?.number_format)}`;

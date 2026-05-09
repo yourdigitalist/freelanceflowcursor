@@ -89,12 +89,9 @@ export default function Notifications() {
   return (
     <AppLayout>
       <div className="space-y-6 max-w-3xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Notifications</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
-            </p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" asChild>

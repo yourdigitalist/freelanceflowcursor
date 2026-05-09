@@ -41,7 +41,7 @@ export interface Project {
   hourly_rate: number | null;
   icon_emoji: string | null;
   icon_color: string | null;
-  clients: { name: string } | null;
+  clients: { id: string; name: string } | null;
 }
 
 export const DEFAULT_STATUSES: Omit<ProjectStatus, 'id' | 'project_id' | 'user_id'>[] = [

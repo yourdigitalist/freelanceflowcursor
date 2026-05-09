@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Sheet,
   SheetContent,
@@ -24,6 +25,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { formatDuration } from '@/lib/time';
 
 interface TaskEditSheetProps {
   task: Task | null;
@@ -33,6 +35,7 @@ interface TaskEditSheetProps {
   onSave: (task: Partial<Task>) => void;
   onDuplicate?: (task: Task) => void;
   onDelete?: (taskId: string) => void;
+  trackedSeconds?: number;
 }
 
 export function TaskEditSheet({
@@ -43,6 +46,7 @@ export function TaskEditSheet({
   onSave,
   onDuplicate,
   onDelete,
+  trackedSeconds = 0,
 }: TaskEditSheetProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -240,6 +244,24 @@ export function TaskEditSheet({
             </div>
           </div>
 
+          {task && (
+            <div className="rounded-lg border bg-background p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Logged time</p>
+                  <p className="text-sm text-muted-foreground">
+                    {trackedSeconds > 0 ? formatDuration(trackedSeconds, true) : 'No tracked time yet'}
+                  </p>
+                </div>
+                <Button type="button" size="sm" asChild>
+                  <Link to={`/time/timer?project=${task.project_id}&task=${task.id}`}>
+                    Log time
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="due_date">Due Date</Label>
@@ -272,7 +294,7 @@ export function TaskEditSheet({
 
               <div className="space-y-2 max-h-[200px] overflow-y-auto">
                 {comments.map((comment) => (
-                  <div key={comment.id} className="p-2 bg-muted rounded-lg text-sm">
+                  <div key={comment.id} className="rounded-lg border bg-background p-2 text-sm">
                     <p>{comment.content}</p>
                     <span className="text-xs text-muted-foreground">
                       {format(new Date(comment.created_at), 'MMM d, h:mm a')}

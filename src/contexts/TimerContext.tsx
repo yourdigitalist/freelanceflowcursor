@@ -247,14 +247,6 @@ export function TimerProvider({ children }: { children: ReactNode }) {
 
   const logTimeFromTimer = useCallback(async () => {
     if (!activeEntryId || draftSegments.length === 0 || !user) return;
-    if (!timerDescription?.trim()) {
-      toast({
-        title: 'Description required',
-        description: 'Enter what you worked on before saving.',
-        variant: 'destructive',
-      });
-      return;
-    }
     try {
       const now = Date.now();
       const runningSegment = draftSegments[draftSegments.length - 1];

@@ -69,7 +69,7 @@ export function ProjectHeader({
   return (
     <div className="space-y-6">
       {/* Top Header */}
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-4 border-b pb-4">
         <Button variant="ghost" size="icon" asChild className="shrink-0">
           <Link to="/projects" aria-label="Back to projects">
             <ArrowLeft className="h-4 w-4" />
@@ -91,41 +91,35 @@ export function ProjectHeader({
                 {getStatusLabel(project.status || 'active')}
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground">
-              {project.clients?.name || 'No client'}
-            </p>
+            <div className="mt-1 text-sm text-muted-foreground">
+              {project.clients?.id ? (
+                <Link className="underline-offset-2 hover:underline" to={`/clients/${project.clients.id}`}>
+                  {project.clients.name}
+                </Link>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span>No client</span>
+                  {onEdit ? (
+                    <button
+                      type="button"
+                      className="text-xs underline-offset-2 hover:underline"
+                      onClick={onEdit}
+                    >
+                      + Add client
+                    </button>
+                  ) : null}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {(onDownloadTaskTemplate || onExportTasksCsv || onOpenImportTasks) && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" title="Template, export, or import CSV">
-                  <Download className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={onDownloadTaskTemplate}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Template
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onExportTasksCsv}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onOpenImportTasks}>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Import
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
           <Button variant="outline" size="sm" asChild>
             <Link to={`/invoices?project_id=${project.id}&from_review=1`}>Create Invoice</Link>
           </Button>
           <Button size="sm" asChild>
-            <Link to={`/time?view=day&project=${project.id}`}>Log Time</Link>
+            <Link to={`/time/timer?project=${project.id}`}>Log Time</Link>
           </Button>
           {(onEdit || onDelete) && (
             <DropdownMenu>
@@ -145,6 +139,24 @@ export function ProjectHeader({
                   <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete
+                  </DropdownMenuItem>
+                )}
+                {onDownloadTaskTemplate && (
+                  <DropdownMenuItem onClick={onDownloadTaskTemplate}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Template
+                  </DropdownMenuItem>
+                )}
+                {onExportTasksCsv && (
+                  <DropdownMenuItem onClick={onExportTasksCsv}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </DropdownMenuItem>
+                )}
+                {onOpenImportTasks && (
+                  <DropdownMenuItem onClick={onOpenImportTasks}>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Import
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>

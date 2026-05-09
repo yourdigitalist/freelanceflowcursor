@@ -69,16 +69,8 @@ export function AppLayout({
       return next;
     });
   };
-  const [projectsOpen, setProjectsOpen] = useState(false);
-  const [projects, setProjects] = useState<Project[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   useEffect(() => {
-    const fetchProjects = async () => {
-      const {
-        data
-      } = await supabase.from('projects').select('id, name, icon_emoji, icon_color').eq('status', 'active').order('name');
-      setProjects(data || []);
-    };
     const fetchProfile = async () => {
       if (!user) return;
       const {
@@ -87,13 +79,9 @@ export function AppLayout({
       setProfile(data);
     };
     if (user) {
-      fetchProjects();
       fetchProfile();
     }
   }, [user]);
-  useEffect(() => {
-    if (location.pathname.startsWith('/projects')) setProjectsOpen(true);
-  }, [location.pathname]);
   useEffect(() => {
     if (location.pathname.startsWith('/clients')) setClientsOpen(true);
   }, [location.pathname]);
@@ -209,52 +197,27 @@ export function AppLayout({
                 </span>
               </CollapsibleTrigger>
               <CollapsibleContent className="pl-8 space-y-1 mt-1">
-                <Link to="/clients" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", (location.pathname === '/clients' || location.pathname === '/clients/board') ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
-                  CRM (Board)
-                </Link>
                 <Link to="/clients/list" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/clients/list' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
-                  All clients (List)
+                  All clients
                 </Link>
                 <Link to="/clients/active" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/clients/active' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
                   Active clients
+                </Link>
+                <Link to="/clients" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", (location.pathname === '/clients' || location.pathname === '/clients/board') ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
+                  CRM
                 </Link>
               </CollapsibleContent>
             </Collapsible>
           )}
 
-          {/* Projects: when collapsed = single link (same size as others); when expanded = dropdown */}
-          {sidebarCollapsed ? (
-            <span className="relative block mr-1">
-              {isProjectsActive && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-              <Link to="/projects" onClick={() => setSidebarOpen(false)} className={cn("flex items-center justify-center px-2 py-2.5 rounded-xl text-sm font-medium transition-colors", isProjectsActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-                <SlotIcon slot="sidebar_projects" className={cn("h-4 w-4 shrink-0", isProjectsActive && "text-primary")} />
-              </Link>
-            </span>
-          ) : (
-            <Collapsible open={projectsOpen} onOpenChange={setProjectsOpen}>
-              <CollapsibleTrigger asChild>
-                <span className="relative block mr-1">
-                  {isProjectsActive && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-                  <button className={cn("flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", isProjectsActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-                    <div className="flex items-center gap-3">
-                      <SlotIcon slot="sidebar_projects" className={cn("h-4 w-4 shrink-0", isProjectsActive && "text-primary")} />
-                      Projects
-                    </div>
-                    <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", projectsOpen && "rotate-180")} />
-                  </button>
-                </span>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="pl-8 space-y-1 mt-1">
-                <Link to="/projects" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/projects' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
-                  All Projects
-                </Link>
-                {projects.slice(0, 5).map(project => <Link key={project.id} to={`/projects/${project.id}`} onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors truncate", location.pathname === `/projects/${project.id}` ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
-                  <span>{project.icon_emoji || '📁'}</span>
-                  <span className="truncate">{project.name}</span>
-                </Link>)}
-              </CollapsibleContent>
-            </Collapsible>
-          )}
+          {/* Projects */}
+          <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>
+            {isProjectsActive && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
+            <Link to="/projects" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", isProjectsActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+              <SlotIcon slot="sidebar_projects" className={cn("h-4 w-4 shrink-0", isProjectsActive && "text-primary")} />
+              {!sidebarCollapsed && 'Projects'}
+            </Link>
+          </span>
 
           {/* Time with sub-items: Timesheet, Timer, History */}
           {sidebarCollapsed ? (

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -24,7 +24,7 @@ type ProposalRow = {
   expires_at: string | null;
   client_id: string;
   project_id: string | null;
-  clients: { name: string } | null;
+  clients: { name: string; currency?: string | null } | null;
   projects: { name: string } | null;
 };
 
@@ -42,8 +42,9 @@ export default function Proposals() {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [rows, setRows] = useState<ProposalRow[]>([]);
-  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  const [clients, setClients] = useState<{ id: string; name: string; currency?: string | null }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string; client_id: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -64,7 +65,7 @@ export default function Proposals() {
       case "read":
         return "bg-blue-50 text-blue-700 border-blue-200";
       case "sent":
-        return "bg-purple-50 text-purple-700 border-purple-200";
+        return "bg-warning/10 text-warning border-warning/20";
       case "draft":
       default:
         return "bg-warning/10 text-warning border-warning/20";
@@ -75,9 +76,9 @@ export default function Proposals() {
     const [{ data: proposals }, { data: allClients }, { data: allProjects }, { data: profileDefaults }] = await Promise.all([
       supabase
         .from("proposals")
-        .select("id, identifier, status, total, expires_at, client_id, project_id, clients(name), projects(name)")
+        .select("id, identifier, status, total, expires_at, client_id, project_id, clients(name, currency), projects(name)")
         .order("created_at", { ascending: false }),
-      supabase.from("clients").select("id, name").order("name"),
+      supabase.from("clients").select("id, name, currency").order("name"),
       supabase.from("projects").select("id, name, client_id").order("name"),
       user
         ? supabase
@@ -100,6 +101,16 @@ export default function Proposals() {
     void load();
   }, [user?.id]);
 
+  useEffect(() => {
+    const client = searchParams.get("client");
+    if (!client || clients.length === 0) return;
+    if (!clients.some((c) => c.id === client)) return;
+    setClientId(client);
+    setProjectId("none");
+    setCreateOpen(true);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, clients, setSearchParams]);
+
   const filteredProjects = useMemo(
     () => projects.filter((p) => !clientId || p.client_id === clientId),
     [projects, clientId]
@@ -109,6 +120,9 @@ export default function Proposals() {
     const by = (s: string) => rows.filter((r) => r.status === s).length;
     return { draft: by("draft"), sent: by("sent"), read: by("read"), accepted: by("accepted") };
   }, [rows]);
+
+  const formatMoney = (amount: number, currencyCode?: string | null) =>
+    new Intl.NumberFormat(undefined, { style: "currency", currency: currencyCode || "USD" }).format(amount || 0);
 
   const filteredRows = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -202,10 +216,9 @@ export default function Proposals() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Proposals</h1>
-            <p className="text-muted-foreground">Create and send polished proposals.</p>
+            <h1 className="text-2xl font-bold tracking-tight">Proposals</h1>
           </div>
           <Button onClick={() => setCreateOpen(true)}><Plus className="mr-2 h-4 w-4" />Create Proposal</Button>
         </div>
@@ -266,7 +279,7 @@ export default function Proposals() {
                           {formatStatus(row.status)}
                         </Badge>
                       </TableCell>
-                      <TableCell>{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(row.total || 0)}</TableCell>
+                      <TableCell>{formatMoney(row.total || 0, row.clients?.currency)}</TableCell>
                       <TableCell>{row.expires_at ? new Date(row.expires_at).toLocaleDateString() : "—"}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">

@@ -30,6 +30,33 @@ function replaceTokens(template: string, tokens: Record<string, string>): string
   }, template);
 }
 
+const EMAIL_COMMS_CONFIG_PREFIX = "LANCE_EMAIL_CONFIG::";
+function parseEmailCommsConfig(raw: string | null | undefined): { logoLight: string; logoDark: string; logoVariant: "light" | "dark" } {
+  const fallback = { logoLight: "", logoDark: "", logoVariant: "light" as const };
+  const text = (raw || "").trim();
+  if (!text.startsWith(EMAIL_COMMS_CONFIG_PREFIX)) return fallback;
+  try {
+    const parsed = JSON.parse(text.slice(EMAIL_COMMS_CONFIG_PREFIX.length));
+    const logoLight = typeof parsed?.logoDefault === "string"
+      ? parsed.logoDefault
+      : typeof parsed?.logoLight === "string"
+        ? parsed.logoLight
+        : "";
+    const logoDark = typeof parsed?.logoSecondary === "string"
+      ? parsed.logoSecondary
+      : typeof parsed?.logoDark === "string"
+        ? parsed.logoDark
+        : "";
+    return {
+      logoLight,
+      logoDark,
+      logoVariant: parsed?.logoVariant === "dark" ? "dark" : "light",
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 function getDefaultClientHeader(logoUrl: string, businessName: string, primaryColor: string): string {
   return `<div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
   <div style="padding: 18px 20px; background: ${primaryColor}; color: white;">
@@ -38,10 +65,26 @@ function getDefaultClientHeader(logoUrl: string, businessName: string, primaryCo
   <div style="padding: 20px;">`;
 }
 
-function getDefaultClientFooter(primaryColor: string): string {
+function getDefaultClientFooter(primaryColor: string, businessName: string, businessEmail: string): string {
+  const safeName = escapeHtml(businessName || "Your Business");
+  const safeEmail = escapeHtml(businessEmail || "");
   return `</div><div style="padding: 14px 20px; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb;">
-  Sent by <span style="color: ${primaryColor}; font-weight: 600;">Lance</span>
+  Sent by <span style="color: ${primaryColor}; font-weight: 600;">${safeName}</span>${safeEmail ? ` · <span>${safeEmail}</span>` : ""}
 </div></div>`;
+}
+
+function getLanceSignature(primaryColor: string): string {
+  return `<div style="text-align:center; margin: 0 auto; padding-top: 16px; font-family: Arial, sans-serif; font-size: 13px; color: #9ca3af;">
+  <div>
+    This email was sent with
+    <a href="https://getlance.app" target="_blank" rel="noopener noreferrer" style="color: ${primaryColor}; text-decoration: none; font-weight: 600;">Lance</a>
+  </div>
+  <div style="margin-top: 8px;">
+    <a href="https://getlance.app" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+      <img src="https://getlance.app/favicon.ico" alt="Lance" width="20" height="20" style="display:inline-block; border-radius: 4px;" />
+    </a>
+  </div>
+</div>`;
 }
 
 serve(async (req) => {
@@ -156,13 +199,20 @@ serve(async (req) => {
       proposal_id: escapeHtml(proposal.identifier),
       proposal_url: escapeHtml(proposalUrl),
     };
-    const header = (profile?.client_email_header_html || "").trim()
-      ? replaceTokens(profile.client_email_header_html, tokens)
-      : getDefaultClientHeader(logoUrl, fromDisplayName, primaryColor);
+    const commsConfig = parseEmailCommsConfig(profile?.client_email_header_html);
+    const selectedRawLogo = commsConfig.logoVariant === "dark"
+      ? (commsConfig.logoDark || profile?.business_logo || commsConfig.logoLight || "")
+      : (profile?.business_logo || commsConfig.logoLight || commsConfig.logoDark || "");
+    const selectedLogoUrl = selectedRawLogo
+      ? selectedRawLogo.startsWith("http://") || selectedRawLogo.startsWith("https://")
+        ? selectedRawLogo
+        : `${(Deno.env.get("SUPABASE_URL") || "").replace(/\/$/, "")}${selectedRawLogo.startsWith("/") ? selectedRawLogo : `/${selectedRawLogo}`}`
+      : "";
+    const header = getDefaultClientHeader(selectedLogoUrl || logoUrl, fromDisplayName, primaryColor);
     const footer = (profile?.client_email_footer_html || "").trim()
       ? replaceTokens(profile.client_email_footer_html, tokens)
-      : getDefaultClientFooter(primaryColor);
-    const emailHtml = `${header}${coreHtml}${footer}`;
+      : getDefaultClientFooter(primaryColor, fromDisplayName, replyToEmail);
+    const emailHtml = `${header}${coreHtml}${footer}${getLanceSignature(primaryColor)}`;
 
     const { data: emailData, error: emailError } = await resend.emails.send({
       from: `${fromDisplayName} <${RESEND_FROM_EMAIL}>`,

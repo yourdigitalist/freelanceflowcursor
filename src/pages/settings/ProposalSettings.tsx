@@ -30,6 +30,7 @@ type ProposalSettingsProfile = {
   proposal_default_payment_methods: string[] | null;
   proposal_default_conditions_notes: string | null;
   proposal_default_installment_description: string | null;
+  notification_preferences: any;
 };
 
 const MAX_COVER_SIZE = 10 * 1024 * 1024;
@@ -50,6 +51,7 @@ export default function ProposalSettings() {
     proposal_default_payment_methods: [],
     proposal_default_conditions_notes: "",
     proposal_default_installment_description: "",
+    notification_preferences: {},
   });
   const [coverSignedUrl, setCoverSignedUrl] = useState<string | null>(null);
   const [paymentOther, setPaymentOther] = useState("");
@@ -60,7 +62,7 @@ export default function ProposalSettings() {
     const { data } = await supabase
       .from("profiles")
       .select(
-        "proposal_default_cover_image_url, proposal_default_validity_days, proposal_default_immediate_availability, proposal_default_payment_structure, proposal_default_payment_methods, proposal_default_conditions_notes, proposal_default_installment_description"
+        "proposal_default_cover_image_url, proposal_default_validity_days, proposal_default_immediate_availability, proposal_default_payment_structure, proposal_default_payment_methods, proposal_default_conditions_notes, proposal_default_installment_description, notification_preferences"
       )
       .eq("user_id", user.id)
       .maybeSingle();
@@ -79,6 +81,7 @@ export default function ProposalSettings() {
         : methods,
       proposal_default_conditions_notes: data?.proposal_default_conditions_notes ?? "",
       proposal_default_installment_description: data?.proposal_default_installment_description ?? "",
+      notification_preferences: (data?.notification_preferences as Record<string, unknown> | null) || {},
     });
     setPaymentOther(otherMethod ? otherMethod.replace(/^other:\s*/i, "") : "");
     if (data?.proposal_default_cover_image_url) {
@@ -119,6 +122,10 @@ export default function ProposalSettings() {
             profile.proposal_default_payment_structure === "installments"
               ? (profile.proposal_default_installment_description || null)
               : null,
+          notification_preferences: {
+            ...(profile.notification_preferences || {}),
+            proposal_main_color: (profile.notification_preferences?.proposal_main_color as string) || "#9b63e9",
+          },
         })
         .eq("user_id", user.id);
       if (error) throw error;
@@ -181,9 +188,9 @@ export default function ProposalSettings() {
 
       <Card className="border-0 shadow-sm">
         <CardHeader>
-          <CardTitle>Cover image</CardTitle>
+          <CardTitle>Design Options</CardTitle>
           <CardDescription>
-            Choose a default cover image for all new proposals. Recommended size: 1500 x 500px (3:1 ratio).
+            Choose your default cover image and main proposal color. Recommended cover size: 1500 x 500px (3:1 ratio).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -224,6 +231,39 @@ export default function ProposalSettings() {
                 Remove
               </Button>
             ) : null}
+          </div>
+          <div className="space-y-2 pt-2">
+            <Label>Proposal main color</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="color"
+                value={(profile.notification_preferences?.proposal_main_color as string) || "#9b63e9"}
+                onChange={(e) =>
+                  setProfile((prev) => ({
+                    ...prev,
+                    notification_preferences: {
+                      ...(prev.notification_preferences || {}),
+                      proposal_main_color: e.target.value,
+                    },
+                  }))
+                }
+                className="h-10 w-16 p-1"
+              />
+              <Input
+                value={(profile.notification_preferences?.proposal_main_color as string) || "#9b63e9"}
+                onChange={(e) =>
+                  setProfile((prev) => ({
+                    ...prev,
+                    notification_preferences: {
+                      ...(prev.notification_preferences || {}),
+                      proposal_main_color: e.target.value,
+                    },
+                  }))
+                }
+                placeholder="#9b63e9"
+                className="max-w-[140px]"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

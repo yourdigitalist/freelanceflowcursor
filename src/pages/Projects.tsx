@@ -87,6 +87,7 @@ export default function Projects() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [dialogClientId, setDialogClientId] = useState<string>('none');
   const [selectedEmoji, setSelectedEmoji] = useState('📁');
   const [selectedColor, setSelectedColor] = useState('#9B63E9');
   const [importProjectsDialogOpen, setImportProjectsDialogOpen] = useState(false);
@@ -105,6 +106,7 @@ export default function Projects() {
     if (searchParams.get('new') === '1') {
       setIsDialogOpen(true);
       setEditingProject(null);
+      setDialogClientId(searchParams.get('client') || 'none');
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
@@ -116,6 +118,7 @@ export default function Projects() {
     const projectToEdit = projects.find((p) => p.id === editId);
     if (projectToEdit) {
       setEditingProject(projectToEdit);
+      setDialogClientId(projectToEdit.client_id || 'none');
       setSelectedEmoji(projectToEdit.icon_emoji || '📁');
       setSelectedColor(projectToEdit.icon_color || '#9B63E9');
       setIsDialogOpen(true);
@@ -279,6 +282,7 @@ export default function Projects() {
 
   const openEditDialog = (project: Project) => {
     setEditingProject(project);
+    setDialogClientId(project.client_id || 'none');
     setSelectedEmoji(project.icon_emoji || '📁');
     setSelectedColor(project.icon_color || '#9B63E9');
     setIsDialogOpen(true);
@@ -383,12 +387,9 @@ export default function Projects() {
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
-            <p className="text-muted-foreground">
-              Manage your active and completed projects
-            </p>
           </div>
           <div className="flex items-center gap-2">
             <input
@@ -454,6 +455,7 @@ export default function Projects() {
             setIsDialogOpen(open);
             if (!open) {
               setEditingProject(null);
+                setDialogClientId('none');
               setSelectedEmoji('📁');
               setSelectedColor('#9B63E9');
             }
@@ -516,7 +518,7 @@ export default function Projects() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="client_id">Client</Label>
-                  <Select name="client_id" defaultValue={editingProject?.client_id || 'none'}>
+                  <Select name="client_id" value={dialogClientId} onValueChange={setDialogClientId}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a client" />
                     </SelectTrigger>
@@ -734,9 +736,36 @@ export default function Projects() {
                     </div>
                   </div>
                   <h3 className="font-semibold text-primary mb-1">{project.name}</h3>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    {project.clients?.name || 'No client'}
-                  </p>
+                  <div className="mb-3">
+                    {project.clients ? (
+                      <button
+                        type="button"
+                        className="text-sm text-muted-foreground underline-offset-2 hover:underline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/clients/${project.clients?.id}`);
+                        }}
+                      >
+                        {project.clients.name}
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">No client</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditDialog(project);
+                          }}
+                        >
+                          + Add client
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <div className="flex items-center gap-3">
                       {project.due_date && (
@@ -773,9 +802,34 @@ export default function Projects() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-primary truncate">{project.name}</h3>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {project.clients?.name || 'No client'}
-                    </p>
+                    {project.clients ? (
+                      <button
+                        type="button"
+                        className="text-sm text-muted-foreground underline-offset-2 hover:underline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/clients/${project.clients?.id}`);
+                        }}
+                      >
+                        {project.clients.name}
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">No client</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditDialog(project);
+                          }}
+                        >
+                          + Add client
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     {project.due_date && (

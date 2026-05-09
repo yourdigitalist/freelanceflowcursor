@@ -39,11 +39,12 @@ export default function ContractDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [contract, setContract] = useState<(Contract & { clients?: { name: string; company?: string | null } | null; projects?: { name: string } | null }) | null>(null);
+  const [contract, setContract] = useState<(Contract & { clients?: { name: string; company?: string | null; currency?: string | null } | null; projects?: { name: string } | null }) | null>(null);
   const [items, setItems] = useState<ContractService[]>([]);
   const [activeTab, setActiveTab] = useState("data");
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [allProjects, setAllProjects] = useState<Array<{ id: string; name: string; client_id: string | null }>>([]);
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string; content: string; is_default?: boolean }>>([]);
   const [services, setServices] = useState<Array<{ id: string; name: string; description: string | null; price: number | null }>>([]);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [lastSaveError, setLastSaveError] = useState<string | null>(null);
@@ -59,6 +60,9 @@ export default function ContractDetail() {
   const [templateName, setTemplateName] = useState("Default template");
   const [templateContent, setTemplateContent] = useState(DEFAULT_CONTRACT_TEMPLATE_CONTENT);
   const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [showCreateProject, setShowCreateProject] = useState(false);
   const saveInFlightRef = useRef(false);
   const pdfOpenInFlightRef = useRef(false);
   const clientViewOpenInFlightRef = useRef(false);
@@ -72,8 +76,8 @@ export default function ContractDetail() {
 
   const load = async () => {
     if (!id) return;
-    const [{ data: c }, { data: lineItems }, { data: catalog }, { data: projects }, { data: profile }] = await Promise.all([
-      supabase.from("contracts").select("*, clients(name, company), projects(name)").eq("id", id).single(),
+    const [{ data: c }, { data: lineItems }, { data: catalog }, { data: projects }, { data: profile }, { data: contractTemplates }] = await Promise.all([
+      supabase.from("contracts").select("*, clients(name, company, currency), projects(name)").eq("id", id).single(),
       supabase.from("contract_services").select("*").eq("contract_id", id).order("sort_order"),
       supabase.from("services").select("*").order("name"),
       supabase.from("projects").select("id, name, client_id").order("name"),
@@ -84,7 +88,11 @@ export default function ContractDetail() {
             .eq("user_id", user.id)
             .maybeSingle()
         : Promise.resolve({ data: null }),
+      user
+        ? supabase.from("contract_templates").select("id, name, content, is_default").eq("user_id", user.id).order("created_at")
+        : Promise.resolve({ data: [] }),
     ]);
+    const templatesData = (contractTemplates || []) as Array<{ id: string; name: string; content: string; is_default?: boolean }>;
     const mergedContract = c
       ? {
           ...c,
@@ -100,20 +108,30 @@ export default function ContractDetail() {
           freelancer_zip: c.freelancer_zip || profile?.business_postal_code || null,
           freelancer_country: c.freelancer_country || profile?.business_country || null,
           freelancer_tax_id: c.freelancer_tax_id || profile?.tax_id || null,
+          payment_structure: c.payment_structure || "upfront",
         }
       : null;
     setContract(mergedContract);
     if (c?.template_id) {
-      const { data: template } = await supabase.from("contract_templates").select("name, content").eq("id", c.template_id).maybeSingle();
-      setTemplateName(template?.name || "Contract template");
-      setTemplateContent(template?.content || DEFAULT_CONTRACT_TEMPLATE_CONTENT);
+      const selected = templatesData.find((t) => t.id === c.template_id);
+      setTemplateName(selected?.name || "Contract template");
+      setTemplateContent(selected?.content || DEFAULT_CONTRACT_TEMPLATE_CONTENT);
     } else {
-      setTemplateName("Default template");
-      setTemplateContent(DEFAULT_CONTRACT_TEMPLATE_CONTENT);
+      const serviceAgreement = templatesData.find((t) => t.name?.trim().toLowerCase() === "service agreement");
+      const defaultTemplate = serviceAgreement || templatesData.find((t) => t.is_default) || templatesData[0];
+      if (defaultTemplate && mergedContract) {
+        setContract((prev) => (prev ? { ...prev, template_id: defaultTemplate.id } : prev));
+        setTemplateName(defaultTemplate.name || "Contract template");
+        setTemplateContent(defaultTemplate.content || DEFAULT_CONTRACT_TEMPLATE_CONTENT);
+      } else {
+        setTemplateName("Default template");
+        setTemplateContent(DEFAULT_CONTRACT_TEMPLATE_CONTENT);
+      }
     }
     setItems((lineItems || []).map((item) => ({ ...item, price: Number(item.price || 0), quantity: Number(item.quantity || 1) })));
     setServices(catalog || []);
     setAllProjects((projects || []) as Array<{ id: string; name: string; client_id: string | null }>);
+    setTemplates(templatesData);
   };
 
   useEffect(() => {
@@ -134,6 +152,9 @@ export default function ContractDetail() {
     if (contract.discount_type === "percent") return subtotal * (Number(contract.discount || 0) / 100);
     return Number(contract.discount || 0);
   }, [contract, subtotal]);
+  const resolvedCurrency = contract?.clients?.currency || "USD";
+  const formatMoney = (amount: number) =>
+    new Intl.NumberFormat(undefined, { style: "currency", currency: resolvedCurrency }).format(amount || 0);
   const total = Math.max(0, subtotal - discountAmount);
   const renderedTemplate = useMemo(() => {
     if (!contract) return "";
@@ -264,6 +285,7 @@ export default function ContractDetail() {
         payment_methods: paymentMethodsForSave,
         payment_link: contract.payment_link || null,
         additional_clause: contract.additional_clause || null,
+        template_id: contract.template_id || null,
         subtotal,
         discount: contract.discount || 0,
         discount_type: contract.discount_type || "fixed",
@@ -466,14 +488,19 @@ export default function ContractDetail() {
 
   const sendContract = async () => {
     if (!contract || !id) return;
-    await navigator.clipboard.writeText(`${window.location.origin}/contract/${contract.public_token}`);
-    await supabase
+    const publicUrl = `${window.location.origin}/contract/${contract.public_token}`;
+    const { error } = await supabase
       .from("contracts")
       .update({
         status: contract.status === "draft" ? "pending_signatures" : contract.status,
         sent_at: contract.sent_at || new Date().toISOString(),
       } as never)
       .eq("id", id);
+    if (error) {
+      toast({ title: "Could not send contract", description: error.message, variant: "destructive" });
+      return;
+    }
+    await navigator.clipboard.writeText(publicUrl);
     setSignedCopy(true);
     toast({ title: "Link copied. Share it with your client." });
     await load();
@@ -561,7 +588,8 @@ export default function ContractDetail() {
   const openClientView = () => {
     if (!contract || clientViewOpenInFlightRef.current) return;
     clientViewOpenInFlightRef.current = true;
-    window.open(`/contract/${contract.public_token}?preview=1`, "contract_client_preview", "noopener,noreferrer");
+    const usePreview = contract.status === "draft";
+    window.open(`/contract/${contract.public_token}${usePreview ? "?preview=1" : ""}`, "contract_client_preview", "noopener,noreferrer");
     window.setTimeout(() => {
       clientViewOpenInFlightRef.current = false;
     }, 2000);
@@ -583,6 +611,31 @@ export default function ContractDetail() {
   const formatStatus = (status: string) =>
     status === "pending_signatures" ? "Pending signatures" : status.charAt(0).toUpperCase() + status.slice(1);
 
+  const hasRequiredClientData = Boolean(
+    contract?.client_name &&
+      contract?.client_email &&
+      contract?.client_phone &&
+      contract?.client_tax_id &&
+      contract?.client_street &&
+      contract?.client_city &&
+      contract?.client_state &&
+      contract?.client_zip &&
+      contract?.client_country,
+  );
+
+  const hasRequiredFreelancerData = Boolean(
+    contract?.freelancer_name &&
+      contract?.freelancer_company &&
+      contract?.freelancer_email &&
+      contract?.freelancer_phone &&
+      contract?.freelancer_tax_id &&
+      contract?.freelancer_street &&
+      contract?.freelancer_city &&
+      contract?.freelancer_state &&
+      contract?.freelancer_zip &&
+      contract?.freelancer_country,
+  );
+
   const hasRequiredConditions = Boolean(
     contract?.timeline_days &&
       contract?.payment_structure &&
@@ -591,28 +644,60 @@ export default function ContractDetail() {
       (!(contract?.payment_methods || []).includes("other") || Boolean(String(contract?.payment_other || "").trim()))
   );
 
-  const hasRequiredData = Boolean(
-    contract?.identifier &&
-      contract?.client_name &&
-      contract?.client_email &&
-      contract?.client_tax_id &&
-      contract?.freelancer_name &&
-      contract?.freelancer_email &&
-      contract?.freelancer_tax_id,
-  );
+  const hasRequiredData = Boolean(contract?.identifier && hasRequiredClientData && hasRequiredFreelancerData);
   const hasRequiredServices = items.some((item) => Boolean(String(item.name || "").trim()) && Number(item.quantity || 0) > 0);
   const tabCompletion = {
     data: hasRequiredData,
     services: hasRequiredServices,
     conditions: hasRequiredConditions,
-    preview: Boolean(contract?.identifier),
-    signatures: Boolean(contract?.freelancer_signed_at || contract?.client_signed_at),
+    preview: hasRequiredData && hasRequiredServices && hasRequiredConditions,
+    signatures: Boolean(contract?.freelancer_signed_at && contract?.client_signed_at),
   };
   const missingRequiredSections: string[] = [];
   if (!hasRequiredData) missingRequiredSections.push("Details");
   if (!hasRequiredServices) missingRequiredSections.push("Services");
   if (!hasRequiredConditions) missingRequiredSections.push("Conditions");
   const canSendContract = missingRequiredSections.length === 0;
+  const topStatusMessage = isLocked
+    ? "This contract has been sent and can no longer be edited."
+    : !canSendContract
+      ? `Complete all required fields in ${missingRequiredSections.join(", ")} before sending this contract.`
+      : contract.status === "draft"
+        ? "Fill in all contract details, sign it, and send to your client — they won't have access until you do."
+        : null;
+
+  const createProjectInline = async () => {
+    if (!user || !newProjectName.trim()) return;
+    setCreatingProject(true);
+    try {
+      const projectData = {
+        name: newProjectName.trim(),
+        description: null,
+        status: "active",
+        budget: null,
+        hourly_rate: null,
+        start_date: null,
+        due_date: null,
+        client_id: contract.client_id || null,
+        icon_emoji: "📁",
+        icon_color: "#9B63E9",
+        user_id: user.id,
+      };
+      const { data, error } = await supabase.from("projects").insert(projectData).select("id, name, client_id").single();
+      if (error) throw error;
+      if (data) {
+        setAllProjects((prev) => [...prev, data as { id: string; name: string; client_id: string | null }]);
+        updateContract({ project_id: data.id });
+      }
+      setNewProjectName("");
+      setShowCreateProject(false);
+      toast({ title: "Project created" });
+    } catch (error: any) {
+      toast({ title: "Failed to create project", description: error.message, variant: "destructive" });
+    } finally {
+      setCreatingProject(false);
+    }
+  };
 
   if (!contract) {
     return (
@@ -625,32 +710,24 @@ export default function ContractDetail() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
           <div>
             <Link to="/contracts" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Contracts
             </Link>
-            <h1 className="mt-2 text-2xl font-bold">{contract.identifier}</h1>
-            <Badge variant="outline" className={statusBadgeClass(contract.status)}>
-              {formatStatus(contract.status)}
-            </Badge>
+            <div className="mt-2 flex items-center gap-2">
+              <h1 className="text-2xl font-bold">{contract.identifier}</h1>
+              <Badge variant="outline" className={statusBadgeClass(contract.status)}>
+                {formatStatus(contract.status)}
+              </Badge>
+            </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {saveStatus === "saving" && "Saving..."}
               {saveStatus === "saved" && "Saved"}
               {saveStatus === "failed" && "Save failed"}
             </p>
             {lastSaveError ? <p className="text-xs text-destructive">{lastSaveError}</p> : null}
-            {contract.status === "draft" ? (
-              <p className="mt-2 rounded-md border border-amber-400/50 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                Fill in all contract details, sign it, and send to your client — they won't have access until you do.
-              </p>
-            ) : null}
-            {isLocked ? (
-              <p className="mt-2 rounded-md border border-blue-300/50 bg-blue-50 px-3 py-2 text-sm text-blue-800">
-                This contract has been sent and can no longer be edited.
-              </p>
-            ) : null}
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => void save()} disabled={isLocked}>
@@ -661,9 +738,13 @@ export default function ContractDetail() {
             </Button>
           </div>
         </div>
-        {!canSendContract ? (
-          <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            Complete all required fields in {missingRequiredSections.join(", ")} before sending this contract.
+        {topStatusMessage ? (
+          <p className={`rounded-md px-3 py-2 text-sm ${
+            isLocked
+              ? "border border-blue-300/50 bg-blue-50 text-blue-800"
+              : "border border-amber-300 bg-amber-50 text-amber-800"
+          }`}>
+            {topStatusMessage}
           </p>
         ) : null}
 
@@ -738,14 +819,6 @@ export default function ContractDetail() {
             <Card className="mt-4">
               <CardContent className="grid gap-4 p-6 md:grid-cols-2">
                 <div className="space-y-1">
-                  <Label>Contract identifier</Label>
-                  <Input
-                    value={contract.identifier || ""}
-                    onChange={(e) => updateContract({ identifier: e.target.value })}
-                    disabled={isLocked}
-                  />
-                </div>
-                <div className="space-y-1">
                   <Label>Linked project</Label>
                   <Select
                     value={contract.project_id || "none"}
@@ -764,10 +837,66 @@ export default function ContractDetail() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {!isLocked ? (
+                    <div className="mt-2 space-y-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowCreateProject((prev) => !prev)}
+                      >
+                        + Add project
+                      </Button>
+                      {showCreateProject ? (
+                        <div className="flex gap-2">
+                          <Input
+                            value={newProjectName}
+                            onChange={(e) => setNewProjectName(e.target.value)}
+                            placeholder="Project name"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => void createProjectInline()}
+                            disabled={creatingProject || !newProjectName.trim()}
+                          >
+                            Create
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="space-y-1">
+                  <Label>Contract identifier</Label>
+                  <Input
+                    value={contract.identifier || ""}
+                    onChange={(e) => updateContract({ identifier: e.target.value })}
+                    disabled={isLocked}
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label>Template</Label>
-                  <Input value={templateName} readOnly />
+                  <Select
+                    value={contract.template_id || "default"}
+                    onValueChange={(value) => {
+                      const selected = value === "default" ? null : templates.find((t) => t.id === value) || null;
+                      updateContract({ template_id: selected?.id || null });
+                      setTemplateName(selected?.name || "Default template");
+                      setTemplateContent(selected?.content || DEFAULT_CONTRACT_TEMPLATE_CONTENT);
+                    }}
+                    disabled={isLocked}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">Default template</SelectItem>
+                      {templates.map((template) => (
+                        <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
             </Card>
@@ -797,11 +926,11 @@ export default function ContractDetail() {
                 {items.map((item, idx) => (
                   <div key={item.id || idx} className="grid gap-2 rounded-lg border p-3 md:grid-cols-12">
                     <Input className="md:col-span-3" value={item.name || ""} onChange={(e) => setItems((prev) => prev.map((row, i) => (i === idx ? { ...row, name: e.target.value } : row)))} placeholder="Service name" disabled={isLocked} />
-                    <Input className="md:col-span-3" value={item.description || ""} onChange={(e) => setItems((prev) => prev.map((row, i) => (i === idx ? { ...row, description: e.target.value } : row)))} placeholder="Description" disabled={isLocked} />
+                    <Input className="md:col-span-3" value={item.description || ""} onChange={(e) => setItems((prev) => prev.map((row, i) => (i === idx ? { ...row, description: e.target.value } : row)))} placeholder="Description (Optional - not required for checkmark)" disabled={isLocked} />
                     <Input className="md:col-span-2" type="number" value={item.price || 0} onChange={(e) => setItems((prev) => prev.map((row, i) => (i === idx ? { ...row, price: Number(e.target.value || 0) } : row)))} disabled={isLocked} />
                     <Input className="md:col-span-2" type="number" value={item.quantity || 1} onChange={(e) => setItems((prev) => prev.map((row, i) => (i === idx ? { ...row, quantity: Number(e.target.value || 1) } : row)))} disabled={isLocked} />
                     <div className="md:col-span-2 flex items-center justify-between">
-                      <span className="text-sm font-medium">${(Number(item.price || 0) * Number(item.quantity || 0)).toFixed(2)}</span>
+                      <span className="text-sm font-medium">{formatMoney(Number(item.price || 0) * Number(item.quantity || 0))}</span>
                       <Button size="icon" variant="ghost" onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))} disabled={isLocked}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -824,9 +953,9 @@ export default function ContractDetail() {
                     <Input type="number" value={contract.discount || 0} onChange={(e) => updateContract({ discount: Number(e.target.value || 0) })} disabled={isLocked} />
                   </div>
                   <div className="space-y-1 text-sm">
-                    <p>Subtotal: ${subtotal.toFixed(2)}</p>
-                    <p>Discount: ${discountAmount.toFixed(2)}</p>
-                    <p className="font-semibold">Total: ${total.toFixed(2)}</p>
+                    <p>Subtotal: {formatMoney(subtotal)}</p>
+                    <p>Discount: {formatMoney(discountAmount)}</p>
+                    <p className="font-semibold">Total: {formatMoney(total)}</p>
                   </div>
                 </div>
               </CardContent>
@@ -902,11 +1031,6 @@ export default function ContractDetail() {
           </TabsContent>
 
           <TabsContent value="preview" className="space-y-3">
-            {!canSendContract ? (
-              <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                Missing required fields in {missingRequiredSections.join(", ")}. Complete them before sending the contract link.
-              </div>
-            ) : null}
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => void openPdfView()} disabled={pdfGenerating}>
                 {pdfGenerating ? "Generating PDF..." : "Save as PDF"}
@@ -918,7 +1042,7 @@ export default function ContractDetail() {
             <div id="contract-content" className="rounded-xl border bg-white p-8">
               <h1 className="mb-6 text-center text-2xl font-semibold">FREELANCE SERVICES AGREEMENT</h1>
               <div className="mb-6 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
-                Internal preview (freelancer only). Dynamic values are rendered from saved contract data.
+                Internal preview (freelancer only). Missing values are shown as blue template tags in the body.
               </div>
               <section
                 className="mb-6 text-[15px] leading-relaxed text-zinc-800 [&_h1]:mb-3 [&_h1]:text-3xl [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:text-2xl [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:text-xl [&_h3]:font-semibold [&_h4]:mb-2 [&_h4]:text-lg [&_h4]:font-semibold [&_p]:mb-2 [&_ul]:mb-2 [&_ol]:mb-2 [&_li]:ml-5"
@@ -960,7 +1084,12 @@ export default function ContractDetail() {
                     <p className="text-sm"><strong>Company:</strong> {contract.freelancer_company || "—"}</p>
                     <p className="text-sm"><strong>Tax ID:</strong> {contract.freelancer_tax_id || "—"}</p>
                     <p className="text-sm"><strong>Email:</strong> {contract.freelancer_email || "—"} {contract.freelancer_sign_email_verified ? "• Email validated" : ""}</p>
-                    <p className={`text-sm ${contract.freelancer_signed_at ? "text-emerald-700" : "text-amber-600"}`}><strong>Date and time:</strong> {contract.freelancer_signed_at ? new Date(contract.freelancer_signed_at).toLocaleString() : "Pending signature"}</p>
+                    <p className="text-sm">
+                      <strong>Date and time:</strong>{" "}
+                      <span className={`inline-block rounded-md px-2 py-0.5 ${contract.freelancer_signed_at ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                        {contract.freelancer_signed_at ? new Date(contract.freelancer_signed_at).toLocaleString() : "Pending signature"}
+                      </span>
+                    </p>
                     <p className="text-sm"><strong>Geolocation:</strong> {contract.freelancer_sign_geo || "—"}</p>
                     <p className="text-sm"><strong>IP:</strong> {contract.freelancer_sign_ip || "—"}{contract.freelancer_sign_isp ? ` (${contract.freelancer_sign_isp})` : ""}</p>
                     <p className="text-sm"><strong>Device:</strong> {contract.freelancer_sign_device || "—"}</p>
@@ -971,7 +1100,12 @@ export default function ContractDetail() {
                     {contract.client_entity_type === "company" ? <p className="text-sm"><strong>Company:</strong> {contract.client_company || "—"}</p> : null}
                     <p className="text-sm"><strong>Tax ID:</strong> {contract.client_tax_id || "—"}</p>
                     <p className="text-sm"><strong>Email:</strong> {contract.client_email || "—"} {contract.client_sign_email_verified ? "• Email validated" : ""}</p>
-                    <p className={`text-sm ${contract.client_signed_at ? "text-emerald-700" : "text-amber-600"}`}><strong>Date and time:</strong> {contract.client_signed_at ? new Date(contract.client_signed_at).toLocaleString() : "Pending signature"}</p>
+                    <p className="text-sm">
+                      <strong>Date and time:</strong>{" "}
+                      <span className={`inline-block rounded-md px-2 py-0.5 ${contract.client_signed_at ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                        {contract.client_signed_at ? new Date(contract.client_signed_at).toLocaleString() : "Pending signature"}
+                      </span>
+                    </p>
                     <p className="text-sm"><strong>Geolocation:</strong> {contract.client_sign_geo || "—"}</p>
                     <p className="text-sm"><strong>IP:</strong> {contract.client_sign_ip || "—"}{contract.client_sign_isp ? ` (${contract.client_sign_isp})` : ""}</p>
                     <p className="text-sm"><strong>Device:</strong> {contract.client_sign_device || "—"}</p>
@@ -992,7 +1126,7 @@ export default function ContractDetail() {
                   {contract.freelancer_signed_at ? (
                     <>
                       <p className="text-sm">{contract.freelancer_signed_name || "Signed"}</p>
-                      <p className="text-xs text-emerald-700">{new Date(contract.freelancer_signed_at).toLocaleString()}</p>
+                      <p className="text-xs"><span className="inline-block rounded-md bg-emerald-100 px-2 py-0.5 text-emerald-700">{new Date(contract.freelancer_signed_at).toLocaleString()}</span></p>
                       <p className="text-xs text-muted-foreground">Email: {contract.freelancer_email || "—"} {contract.freelancer_sign_email_verified ? "• Email validated" : ""}</p>
                       <p className="text-xs text-muted-foreground">Tax ID: {contract.freelancer_tax_id || "—"}</p>
                       <p className="text-xs text-muted-foreground">IP: {contract.freelancer_sign_ip || "—"}</p>
@@ -1016,7 +1150,7 @@ export default function ContractDetail() {
                   {contract.client_signed_at ? (
                     <>
                       <p className="text-sm">{contract.client_signed_name || "Signed"}</p>
-                      <p className="text-xs text-emerald-700">{new Date(contract.client_signed_at).toLocaleString()}</p>
+                      <p className="text-xs"><span className="inline-block rounded-md bg-emerald-100 px-2 py-0.5 text-emerald-700">{new Date(contract.client_signed_at).toLocaleString()}</span></p>
                       <p className="text-xs text-muted-foreground">Email: {contract.client_email || "—"} {contract.client_sign_email_verified ? "• Email validated" : ""}</p>
                       <p className="text-xs text-muted-foreground">Tax ID: {contract.client_tax_id || "—"}</p>
                       <p className="text-xs text-muted-foreground">IP: {contract.client_sign_ip || "—"}</p>
@@ -1181,6 +1315,15 @@ export default function ContractDetail() {
       </Sheet>
 
       <style>{`
+        .contract-token {
+          display: inline-block;
+          padding: 1px 6px;
+          border-radius: 9999px;
+          background: #e0ecff;
+          color: #1d4ed8;
+          font-weight: 600;
+          font-size: 0.86em;
+        }
         @media print {
           body * {
             visibility: hidden;

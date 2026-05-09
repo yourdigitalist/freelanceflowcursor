@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { HorizontalScroll } from '@/components/ui/horizontal-scroll';
 import {
   DndContext,
   DragOverlay,
@@ -57,6 +58,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { currencies, countryToCurrency } from '@/lib/locale-data';
 
 interface Client {
   id: string;
@@ -116,6 +118,14 @@ const AVATAR_COLORS = [
   '#EC4899', // Pink
   '#06B6D4', // Cyan
 ];
+
+const countryDisplayNames = new Intl.DisplayNames(['en'], { type: 'region' });
+const countryOptions = Object.keys(countryToCurrency)
+  .sort()
+  .map((code) => ({
+    value: code,
+    label: `${countryDisplayNames.of(code) || code} (${code})`,
+  }));
 
 const CRM_STAGES: Array<{ value: string; label: string }> = [
   { value: 'lead_new', label: 'New lead' },
@@ -450,7 +460,7 @@ export default function Clients() {
       city: formData.get('city') as string || null,
       state: formData.get('state') as string || null,
       postal_code: formData.get('postal_code') as string || null,
-      country: formData.get('country') as string || null,
+      country: (formData.get('country') as string) === 'none' ? null : ((formData.get('country') as string) || null),
       avatar_color: selectedColor,
       status: formData.get('status') as string,
       notes: formData.get('notes') as string || null,
@@ -951,12 +961,9 @@ export default function Clients() {
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
-            <p className="text-muted-foreground">
-              Manage your client relationships
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">Clients</h1>
           </div>
           <input
             ref={csvInputRef}
@@ -1132,11 +1139,19 @@ export default function Clients() {
                       defaultValue={editingClient?.postal_code || ''}
                       placeholder="ZIP/Postal Code"
                     />
-                    <Input
-                      name="country"
-                      defaultValue={editingClient?.country || ''}
-                      placeholder="Country"
-                    />
+                    <Select name="country" defaultValue={editingClient?.country || 'none'}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Country" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No country</SelectItem>
+                        {countryOptions.map((country) => (
+                          <SelectItem key={country.value} value={country.value}>
+                            {country.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   
                   <div className="space-y-2">
@@ -1200,12 +1215,18 @@ export default function Clients() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="currency">Currency</Label>
-                      <Input
-                        id="currency"
-                        name="currency"
-                        placeholder="USD"
-                        defaultValue={editingClient?.currency || 'USD'}
-                      />
+                      <Select name="currency" defaultValue={editingClient?.currency || 'USD'}>
+                        <SelectTrigger id="currency">
+                          <SelectValue placeholder="Currency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {currencies.map((currency) => (
+                            <SelectItem key={currency.value} value={currency.value}>
+                              {currency.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
@@ -1357,8 +1378,7 @@ export default function Clients() {
                 onDragEnd={handleDragEnd}
                 onDragCancel={() => setActiveDragClient(null)}
               >
-                <div className="overflow-x-auto pb-4 -mx-1">
-                  <div className="flex gap-4 min-w-max px-1">
+                <HorizontalScroll className="-mx-1" contentClassName="flex gap-4 min-w-max px-1">
                     {CRM_STAGES.map((stage) => {
                       const columnClients = sortedClients.filter((c) => (c.status || 'active') === stage.value);
                       return (
@@ -1398,7 +1418,7 @@ export default function Clients() {
                                 <DraggableClientCard
                                   key={client.id}
                                   client={client}
-                                  onOpen={() => setViewingClient(client)}
+                                  onOpen={() => navigate(`/clients/${client.id}`)}
                                   onEdit={() => openEditDialog(client)}
                                   onDelete={() => handleDelete(client.id)}
                                 />
@@ -1424,8 +1444,7 @@ export default function Clients() {
                         </div>
                       );
                     })}
-                  </div>
-                </div>
+                </HorizontalScroll>
                 <DragOverlay>
                   {activeDragClient ? (
                     <div className="w-[300px]">
@@ -1446,7 +1465,7 @@ export default function Clients() {
                 <Card
                   key={client.id}
                   className={`${viewMode === 'list' ? 'border-l-4 ' + getStatusBorderClass(client.status) : 'border-0'} shadow-sm hover:shadow-md transition-shadow cursor-pointer`}
-                  onClick={() => (viewMode === 'grid' || viewMode === 'list') && setViewingClient(client)}
+                  onClick={() => (viewMode === 'grid' || viewMode === 'list') && navigate(`/clients/${client.id}`)}
                 >
                   <CardContent className={viewMode === 'grid' ? "p-5 relative" : "p-4 flex items-center justify-between"}>
                     {viewMode === 'grid' && (
@@ -1557,7 +1576,7 @@ export default function Clients() {
             )}
 
             <Sheet open={!!viewingClient} onOpenChange={(open) => !open && setViewingClient(null)}>
-              <SheetContent className="sm:max-w-md">
+              <SheetContent className="sm:max-w-md overflow-y-auto no-scrollbar">
                 <SheetHeader>
                   <SheetTitle>Client details</SheetTitle>
                 </SheetHeader>

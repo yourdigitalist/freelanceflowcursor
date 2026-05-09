@@ -2,15 +2,14 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { useTimer } from '@/contexts/TimerContext';
 import { formatElapsed } from '@/contexts/TimerContext';
-import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Square, Play } from '@/components/icons';
+import { Play, Trash2, Check } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
+import { Pause } from 'lucide-react';
 
 export function TimerBar() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const {
     draftSegments,
     timerDescription,
@@ -28,23 +27,15 @@ export function TimerBar() {
   const totalSeconds = getDraftTotalSeconds();
 
   const handleSave = async () => {
-    if (!timerDescription?.trim()) {
-      toast({
-        title: 'Add a description',
-        description: 'Type what you worked on in the bar above, then save.',
-        variant: 'destructive',
-      });
-      return;
-    }
     await logTimeFromTimer();
   };
 
   return (
-    <div className="border-t bg-card shadow-lg">
-      <div className="flex flex-wrap items-center gap-2 sm:gap-3 px-3 py-2 sm:px-4 sm:py-2.5 max-w-4xl mx-auto">
-        <div className="flex items-center gap-2 text-foreground shrink-0">
-          <SlotIcon slot="timer_bar_clock" className="h-4 w-4 text-primary" />
-          <span className="font-mono font-semibold tabular-nums text-sm sm:text-base">
+    <div className="border-t border-black/30 bg-black text-white shadow-2xl">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 px-3 py-2 sm:px-4 sm:py-2.5 max-w-5xl mx-auto">
+        <div className="flex items-center gap-2 shrink-0">
+          <SlotIcon slot="timer_bar_clock" className="h-4 w-4 text-white/90" />
+          <span className="font-mono font-semibold tabular-nums text-sm sm:text-base text-white">
             {formatElapsed(totalSeconds)}
           </span>
         </div>
@@ -52,36 +43,35 @@ export function TimerBar() {
           value={timerDescription}
           onChange={(e) => setTimerDescription(e.target.value)}
           placeholder="Optional notes"
-          className="h-8 flex-1 min-w-[120px] max-w-md text-sm"
+          className="h-8 flex-1 min-w-[120px] max-w-md text-sm bg-white/10 border-white/20 text-white placeholder:text-white/60"
         />
-        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end sm:justify-start">
+        <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto justify-end sm:justify-start">
           {isLocalTimerRunning ? (
-            <Button variant="outline" size="sm" onClick={stopTimer} className="gap-1.5">
-              <Square className="h-3.5 w-3.5" />
-              Pause
+            <Button variant="secondary" size="icon" onClick={stopTimer} title="Pause timer" className="h-8 w-8">
+              <Pause className="h-3.5 w-3.5" />
             </Button>
           ) : (
-            <Button variant="outline" size="sm" onClick={startTimer} className="gap-1.5">
+            <Button variant="secondary" size="icon" onClick={startTimer} title="Resume timer" className="h-8 w-8">
               <Play className="h-3.5 w-3.5" />
-              Resume
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={handleSave} className="gap-1.5">
-            Save
+          <Button variant="secondary" size="icon" onClick={handleSave} title="Save entry" className="h-8 w-8">
+            <Check className="h-3.5 w-3.5" />
           </Button>
           <Button
-            variant="ghost"
-            size="sm"
+            variant="secondary"
+            size="icon"
             onClick={() => {
               if (confirm('Discard this timer entry? This removes all tracked segments and closes the timer bar.')) {
                 discardTimerSegment();
               }
             }}
-            className="gap-1.5 text-destructive hover:text-destructive"
+            title="Discard draft"
+            className="h-8 w-8 text-destructive"
           >
-            Discard
+            <Trash2 className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" asChild className="gap-1.5">
+          <Button variant="ghost" size="sm" asChild className="gap-1.5 text-white/80 hover:text-white hover:bg-white/10">
             <Link to="/time/timer">
               <SlotIcon slot="timer_bar_open" className="h-3.5 w-3.5" />
               Open Timer

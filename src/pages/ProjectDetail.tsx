@@ -132,7 +132,7 @@ export default function ProjectDetail() {
           hourly_rate,
           icon_emoji,
           icon_color,
-          clients(name)
+          clients(id, name)
         `)
         .eq('id', id)
         .maybeSingle();
@@ -880,7 +880,7 @@ export default function ProjectDetail() {
 
         <Card className="border-0 shadow-sm">
           <CardHeader>
-            <CardTitle>Time Tracking Entries</CardTitle>
+            <CardTitle className="text-base font-semibold">Time Tracking Entries</CardTitle>
           </CardHeader>
           <CardContent>
             {projectTimeEntries.length === 0 ? (
@@ -918,6 +918,7 @@ export default function ProjectDetail() {
         <TaskEditSheet
           task={editingTask}
           statuses={statuses}
+          trackedSeconds={editingTask ? (trackedSecondsByTask[editingTask.id] || 0) : 0}
           isOpen={isSheetOpen}
           onClose={() => {
             setIsSheetOpen(false);

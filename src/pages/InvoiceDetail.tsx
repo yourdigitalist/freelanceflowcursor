@@ -95,6 +95,7 @@ interface Invoice {
     state: string | null;
     postal_code: string | null;
     country: string | null;
+    currency?: string | null;
   } | null;
   projects?: { name: string; hourly_rate: number | null; budget: number | null } | null;
 }
@@ -131,6 +132,15 @@ interface UserProfile {
   reminder_body_default: string | null;
 }
 
+const EMAIL_MERGE_TAGS = [
+  { tag: '{{client_name}}', label: 'Client Name' },
+  { tag: '{{invoice_number}}', label: 'Invoice Number' },
+  { tag: '{{total}}', label: 'Total' },
+  { tag: '{{due_date}}', label: 'Due Date' },
+  { tag: '{{business_name}}', label: 'Business Name' },
+  { tag: '{{project_name}}', label: 'Project Name' },
+];
+
 // Exact styles from CustomJS HTML template so preview matches PDF/email
 const INVOICE_PREVIEW_STYLES = `
   @media print { body { width: 210mm; height: 297mm; margin: 0; padding: 0; font-size: 10pt; } }
@@ -154,13 +164,15 @@ const INVOICE_PREVIEW_STYLES = `
   .invoice-preview-root .invoice-body { margin-top: 40px; }
   .invoice-preview-root .invoice-body .table { border-collapse: collapse; width: 100%; table-layout: fixed; }
   .invoice-preview-root .invoice-body .table thead tr th { font-size: 11px; border: 1px solid #dcdcdc; text-align: left; padding: 10px 8px; background-color: #f5f5f5; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
-  .invoice-preview-root .invoice-body .table thead tr th:nth-child(1) { width: 12%; }
-  .invoice-preview-root .invoice-body .table thead tr th:nth-child(2) { width: 36%; }
-  .invoice-preview-root .invoice-body .table thead tr th:nth-child(3) { width: 10%; text-align: right; }
-  .invoice-preview-root .invoice-body .table thead tr th:nth-child(4) { width: 20%; text-align: right; }
-  .invoice-preview-root .invoice-body .table thead tr th:nth-child(5) { width: 22%; text-align: right; }
+  .invoice-preview-root .invoice-body .table thead tr th.col-date { width: 12%; }
+  .invoice-preview-root .invoice-body .table thead tr th.col-description { width: 44%; }
+  .invoice-preview-root .invoice-body .table thead tr th.col-qty { width: 8%; text-align: right; }
+  .invoice-preview-root .invoice-body .table thead tr th.col-rate { width: 16%; text-align: right; }
+  .invoice-preview-root .invoice-body .table thead tr th.col-amount { width: 20%; text-align: right; }
   .invoice-preview-root .invoice-body .table tbody tr td { font-size: 13px; border: 1px solid #e5e5e5; text-align: left; padding: 10px 8px; background-color: #fff; word-wrap: break-word; color: #333; }
   .invoice-preview-root .invoice-body .table tbody tr td.text-right { text-align: right; }
+  .invoice-preview-root .invoice-body .table tr { break-inside: avoid; page-break-inside: avoid; }
+  .invoice-preview-root .invoice-body .table td, .invoice-preview-root .invoice-body .table th { break-inside: avoid; page-break-inside: avoid; }
   .invoice-preview-root .invoice-body .table tbody tr td small { font-size: 11px; color: #888; display: block; margin-top: 3px; }
   .invoice-preview-root .invoice-body .flex-table { display: flex; margin-top: 20px; }
   .invoice-preview-root .invoice-body .flex-table .flex-column { width: 100%; }
@@ -174,7 +186,12 @@ const INVOICE_PREVIEW_STYLES = `
   .invoice-preview-root .invoice-notes p, .invoice-preview-root .invoice-bank-details p { font-size: 13px; color: #555; line-height: 1.6; white-space: pre-wrap; }
   .invoice-preview-root .invoice-footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #dcdcdc; }
   .invoice-preview-root .invoice-footer p { font-size: 12px; color: #888; text-align: center; line-height: 1.6; }
-  @media print { .invoice-preview-root .table thead tr th { -webkit-print-color-adjust: exact; background-color: #f5f5f5 !important; } }
+  @media print {
+    @page { size: A4; margin: 12mm 10mm; }
+    .invoice-preview-root { padding: 0; min-height: auto; }
+    .invoice-preview-root .table thead tr th { -webkit-print-color-adjust: exact; background-color: #f5f5f5 !important; }
+    .invoice-preview-root .invoice-notes, .invoice-preview-root .invoice-bank-details, .invoice-preview-root .invoice-footer, .invoice-preview-root .flex-table { break-inside: avoid; page-break-inside: avoid; }
+  }
 `;
 
 interface Tax {
@@ -218,6 +235,12 @@ export default function InvoiceDetail() {
   const [issueDateEdit, setIssueDateEdit] = useState('');
   const [dueDateEdit, setDueDateEdit] = useState('');
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [appCommsDefaults, setAppCommsDefaults] = useState<{
+    invoice_email_subject_default: string | null;
+    invoice_email_message_default: string | null;
+    reminder_subject_default: string | null;
+    reminder_body_default: string | null;
+  } | null>(null);
   
   // Send invoice modal state
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
@@ -257,6 +280,14 @@ export default function InvoiceDetail() {
       fetchInvoice();
       fetchItems();
       fetchProfile();
+      (async () => {
+        const { data } = await supabase
+          .from('app_comms_defaults')
+          .select('invoice_email_subject_default, invoice_email_message_default, reminder_subject_default, reminder_body_default')
+          .eq('id', 1)
+          .maybeSingle();
+        setAppCommsDefaults(data ?? null);
+      })();
       fetchTaxes();
     }
   }, [user, id]);
@@ -296,10 +327,12 @@ export default function InvoiceDetail() {
     switch (status) {
       case 'paid':
         return 'bg-success/10 text-success border-success/20';
+      case 'overdue':
+        return 'bg-destructive/10 text-destructive border-destructive/20';
       case 'sent':
-        return 'bg-muted text-muted-foreground border-muted';
-      case 'draft':
         return 'bg-warning/10 text-warning border-warning/20';
+      case 'draft':
+        return 'bg-muted text-muted-foreground border-muted';
       default:
         return 'bg-muted text-muted-foreground border-muted';
     }
@@ -370,7 +403,7 @@ export default function InvoiceDetail() {
         .from('invoices')
         .select(`
           *,
-          clients(name, email, phone, company, tax_id, street, city, state, postal_code, country),
+          clients(name, email, phone, company, tax_id, street, city, state, postal_code, country, currency),
           projects(name, hourly_rate, budget)
         `)
         .eq('id', id)
@@ -1077,7 +1110,8 @@ export default function InvoiceDetail() {
     setProfile((p) => (p ? { ...p, [field]: value } : null));
   };
 
-  const fmt = (amount: number) => formatCurrency(amount, profile?.currency, profile?.currency_display, profile?.number_format);
+  const resolvedCurrency = invoice?.clients?.currency || profile?.currency;
+  const fmt = (amount: number) => formatCurrency(amount, resolvedCurrency, profile?.currency_display, profile?.number_format);
 
   // Resolve merge tags for default email message: {{client_name}}, {{invoice_number}}, {{total}}, {{due_date}}
   const resolveEmailMessage = (template: string) => {
@@ -1092,13 +1126,46 @@ export default function InvoiceDetail() {
       .replace(/\{\{project_name\}\}/gi, invoice?.projects?.name ?? '');
   };
 
+  const applySendModalDefaults = (mode: 'send' | 'reminder' | 'receipt') => {
+    if (mode === 'receipt') {
+      setEmailSubject(`Receipt for Invoice ${invoice?.invoice_number ?? ''} – Paid`);
+      setEmailMessage(`This invoice has been paid. Balance due: ${fmt(0)}. Thank you for your business.`);
+      return;
+    }
+
+    if (mode === 'reminder') {
+      const subjectTpl =
+        profile?.reminder_subject_default ||
+        appCommsDefaults?.reminder_subject_default ||
+        'Reminder: Invoice {{invoice_number}} Due Soon';
+      const bodyTpl =
+        profile?.reminder_body_default ||
+        appCommsDefaults?.reminder_body_default ||
+        'Hi {{client_name}}, this is a reminder that invoice {{invoice_number}} is due on {{due_date}}.';
+      setEmailSubject(resolveEmailMessage(subjectTpl));
+      setEmailMessage(resolveEmailMessage(bodyTpl));
+      return;
+    }
+
+    const subjectTpl =
+      profile?.invoice_email_subject_default ||
+      appCommsDefaults?.invoice_email_subject_default ||
+      'Invoice {{invoice_number}} from {{business_name}}';
+    const bodyTpl =
+      profile?.invoice_email_message_default ||
+      appCommsDefaults?.invoice_email_message_default ||
+      'Hi {{client_name}}, please find attached invoice {{invoice_number}} for {{total}}. Due by {{due_date}}.';
+    setEmailSubject(resolveEmailMessage(subjectTpl));
+    setEmailMessage(resolveEmailMessage(bodyTpl));
+  };
+
   const previewNotes = notes.trim() || profile?.invoice_notes_default?.trim() || '';
   const previewFooter = invoiceFooter.trim() || profile?.invoice_footer?.trim() || '';
   const previewClientMessage = emailMessage.trim() || resolveEmailMessage(profile?.invoice_email_message_default ?? '');
   const previewBankDetails = bankDetails.trim() || '';
 
   // Data for CustomJS-style preview (matches send-invoice payload)
-  const currencySymbol = currencies.find((c) => c.value === (profile?.currency || 'USD'))?.symbol ?? '$';
+  const currencySymbol = currencies.find((c) => c.value === (resolvedCurrency || 'USD'))?.symbol ?? '$';
   const senderAddress1 = [profile?.business_street, profile?.business_street2].filter(Boolean).join(', ') || '';
   const senderAddress2 = [profile?.business_city, profile?.business_state, profile?.business_postal_code].filter(Boolean).join(', ') || (profile?.business_country || '');
   const sender = {
@@ -1170,9 +1237,9 @@ export default function InvoiceDetail() {
   return (
     <AppLayout>
       <TooltipProvider>
-      <div className="space-y-6 max-w-4xl">
+      <div className="space-y-6 max-w-6xl">
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate('/invoices')}>
               <ArrowLeft className="h-5 w-5" />
@@ -1186,18 +1253,77 @@ export default function InvoiceDetail() {
                   placeholder="Invoice number"
                 />
               ) : (
-                <h1 className="text-2xl font-bold truncate">{invoice.invoice_number}</h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold truncate">{invoice.invoice_number}</h1>
+                  <Badge variant="outline" className={getInvoiceStatusBadgeStyle(invoice.status || 'draft')}>
+                    {(invoice.status || 'draft').charAt(0).toUpperCase() + (invoice.status || 'draft').slice(1)}
+                  </Badge>
+                </div>
               )}
-              <Badge variant="outline" className={getInvoiceStatusBadgeStyle(invoice.status || 'draft')}>
-                {(invoice.status || 'draft').charAt(0).toUpperCase() + (invoice.status || 'draft').slice(1)}
-              </Badge>
+              {isEditMode && (
+                <Badge variant="outline" className={getInvoiceStatusBadgeStyle(invoice.status || 'draft')}>
+                  {(invoice.status || 'draft').charAt(0).toUpperCase() + (invoice.status || 'draft').slice(1)}
+                </Badge>
+              )}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setIsPreviewOpen(true)}>
-              <SlotIcon slot="action_preview" className="mr-2 h-4 w-4" />
-              Preview
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    if (isEditMode) {
+                      void saveInvoice();
+                      return;
+                    }
+                    if (invoice.status === 'sent' || invoice.status === 'paid') {
+                      if (window.confirm('This invoice has already been sent. Any changes you make won\'t update the version the client received. To send an updated copy, save your changes and use "Send to Client" again. Continue to edit?')) {
+                        setIsEditMode(true);
+                      }
+                    } else {
+                      setIsEditMode(true);
+                    }
+                  }}
+                  title={isEditMode ? 'Save invoice' : 'Edit invoice'}
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <SlotIcon slot="action_edit" className="h-4 w-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{isEditMode ? 'Save invoice' : 'Edit invoice'}</TooltipContent>
+            </Tooltip>
+            <Button variant="outline" size="icon" onClick={() => setIsPreviewOpen(true)} title="Preview">
+              <SlotIcon slot="action_preview" className="h-4 w-4" />
             </Button>
+            {invoice.clients?.email && (
+              <Button
+                size="sm"
+                onClick={async () => {
+                  if (isEditMode) {
+                    const ok = await saveInvoice();
+                    if (!ok) return;
+                  }
+                  const isReceipt = invoice.status === 'paid';
+                  const isReminder = invoice.status === 'sent' || invoice.status === 'paid';
+                  if (isReceipt) {
+                    setSendModalMode('receipt');
+                    applySendModalDefaults('receipt');
+                  } else if (isReminder) {
+                    setSendModalMode('reminder');
+                    applySendModalDefaults('reminder');
+                  } else {
+                    setSendModalMode('send');
+                    applySendModalDefaults('send');
+                  }
+                  setCcEmails([]);
+                  setIsSendModalOpen(true);
+                }}
+              >
+                <SlotIcon slot="action_send" className="mr-2 h-4 w-4" />
+                {invoice.status === 'paid' ? 'Send receipt' : invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send to Client'}
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon" className="h-9 w-9">
@@ -1245,63 +1371,6 @@ export default function InvoiceDetail() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            {isEditMode ? (
-              <Button variant="outline" size="sm" onClick={saveInvoice} disabled={saving}>
-                {saving ? 'Saving...' : 'Save'}
-              </Button>
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                      if (invoice.status === 'sent' || invoice.status === 'paid') {
-                        if (window.confirm('This invoice has already been sent. Any changes you make won\'t update the version the client received. To send an updated copy, save your changes and use "Send to Client" again. Continue to edit?')) {
-                          setIsEditMode(true);
-                        }
-                      } else {
-                        setIsEditMode(true);
-                      }
-                    }}
-                  >
-                    <SlotIcon slot="action_edit" className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Edit Invoice</TooltipContent>
-              </Tooltip>
-            )}
-            {invoice.clients?.email && (
-              <Button
-                size="sm"
-                onClick={async () => {
-                  if (isEditMode) {
-                    const ok = await saveInvoice();
-                    if (!ok) return;
-                  }
-                  const isReceipt = invoice.status === 'paid';
-                  const isReminder = invoice.status === 'sent' || invoice.status === 'paid';
-                  if (isReceipt) {
-                    setSendModalMode('receipt');
-                    setEmailSubject(`Receipt for Invoice ${invoice.invoice_number} – Paid`);
-                    setEmailMessage(`This invoice has been paid. Balance due: ${fmt(0)}. Thank you for your business.`);
-                  } else if (isReminder) {
-                    setSendModalMode('reminder');
-                    setEmailSubject(profile?.reminder_subject_default ? resolveEmailMessage(profile.reminder_subject_default) : '');
-                    setEmailMessage(profile?.reminder_body_default ? resolveEmailMessage(profile.reminder_body_default) : '');
-                  } else {
-                    setSendModalMode('send');
-                    setEmailSubject(profile?.invoice_email_subject_default ? resolveEmailMessage(profile.invoice_email_subject_default) : '');
-                    setEmailMessage(resolveEmailMessage(profile?.invoice_email_message_default ?? ''));
-                  }
-                  setCcEmails([]);
-                  setIsSendModalOpen(true);
-                }}
-              >
-                <SlotIcon slot="action_send" className="mr-2 h-4 w-4" />
-                {invoice.status === 'paid' ? 'Send receipt' : invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send to Client'}
-              </Button>
-            )}
           </div>
         </div>
 
@@ -1446,13 +1515,13 @@ export default function InvoiceDetail() {
             )}
           </CardHeader>
           <CardContent>
-            <div className="space-y-4 overflow-x-auto">
+            <div className="space-y-4 overflow-x-auto no-scrollbar">
               {items.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   No items yet. {isEditMode ? 'Add your first line item or import from time entries.' : ''}
                 </div>
               ) : (
-                <Table className="min-w-[640px] w-full">
+                <Table className="min-w-[560px] w-full">
                   <TableHeader>
                     <TableRow className="border-b hover:bg-transparent">
                       <TableHead className="w-[110px] min-w-[110px]">
@@ -1468,8 +1537,8 @@ export default function InvoiceDetail() {
                           )}
                         </div>
                       </TableHead>
-                      <TableHead className="min-w-[160px]">Item</TableHead>
-                      <TableHead className="min-w-[140px]">
+                      <TableHead className="min-w-[140px]">Item</TableHead>
+                      <TableHead className="min-w-[120px]">
                         <div className="flex items-center gap-2">
                           Notes
                           {isEditMode && (
@@ -1495,7 +1564,7 @@ export default function InvoiceDetail() {
                           )}
                         </div>
                       </TableHead>
-                      <TableHead className="w-[100px] min-w-[100px] text-right">
+                      <TableHead className="w-[90px] min-w-[90px] text-right">
                         <div className="flex items-center gap-2 justify-end">
                           Rate
                           {isEditMode && (
@@ -1508,8 +1577,8 @@ export default function InvoiceDetail() {
                           )}
                         </div>
                       </TableHead>
-                      <TableHead className="w-[120px] min-w-[120px] text-right">Amount</TableHead>
-                      {isEditMode && <TableHead className="w-12 min-w-12" />}
+                      <TableHead className="w-[110px] min-w-[110px] text-right">Amount</TableHead>
+                      {isEditMode && <TableHead className="sticky right-0 z-10 w-12 min-w-12 bg-card" />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1527,7 +1596,7 @@ export default function InvoiceDetail() {
                             <span className="text-sm">{item.line_date ? format(new Date(item.line_date), 'MMM d, yyyy') : '—'}</span>
                           )}
                         </TableCell>
-                        <TableCell className="py-2 align-middle min-w-[160px]">
+                        <TableCell className="py-2 align-middle min-w-[140px]">
                           {isEditMode ? (
                             <Input
                               value={item.description}
@@ -1539,7 +1608,7 @@ export default function InvoiceDetail() {
                             <span className="text-sm break-words">{item.description}</span>
                           )}
                         </TableCell>
-                        <TableCell className="py-2 align-middle min-w-[140px]">
+                        <TableCell className="py-2 align-middle min-w-[120px]">
                           {isEditMode ? (
                             <Input
                               value={item.line_description ?? ''}
@@ -1559,7 +1628,7 @@ export default function InvoiceDetail() {
                               onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
                               min="0"
                               step="0.01"
-                              className="h-8 w-16 text-center mx-auto"
+                              className="h-8 w-14 text-center mx-auto"
                             />
                           ) : (
                             <span className="text-sm">{item.quantity}</span>
@@ -1573,7 +1642,7 @@ export default function InvoiceDetail() {
                               onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
                               min="0"
                               step="0.01"
-                              className="h-8 w-24 text-right ml-auto"
+                              className="h-8 w-20 text-right ml-auto"
                             />
                           ) : (
                             <span className="text-sm">{fmt(Number(item.unit_price))}</span>
@@ -1583,7 +1652,7 @@ export default function InvoiceDetail() {
                           {fmt(Number(item.quantity) * Number(item.unit_price))}
                         </TableCell>
                         {isEditMode && (
-                          <TableCell className="py-2 align-middle w-12">
+                          <TableCell className="sticky right-0 z-10 w-12 bg-card py-2 align-middle">
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1775,11 +1844,11 @@ export default function InvoiceDetail() {
                       <table className="table">
                         <thead>
                           <tr>
-                            {showLineDate ? <th>Date</th> : null}
-                            <th>Description</th>
-                            {showQuantity ? <th>Qty</th> : null}
-                            {showRate ? <th>Rate</th> : null}
-                            <th>Amount</th>
+                            {showLineDate ? <th className="col-date">Date</th> : null}
+                            <th className="col-description">Description</th>
+                            {showQuantity ? <th className="col-qty">Qty</th> : null}
+                            {showRate ? <th className="col-rate">Rate</th> : null}
+                            <th className="col-amount">Amount</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1840,7 +1909,7 @@ export default function InvoiceDetail() {
                 </section>
               </div>
               {previewClientMessage ? (
-                <div className="border-t pt-4 mt-4 p-4 bg-muted/30">
+                <div className="mt-4 rounded-lg border bg-background p-4">
                   <p className="text-sm font-medium mb-1">Message to client (email)</p>
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{previewClientMessage}</p>
                 </div>
@@ -1998,16 +2067,6 @@ export default function InvoiceDetail() {
       {/* Send Invoice Modal */}
       <Dialog open={isSendModalOpen} onOpenChange={(open) => {
         setIsSendModalOpen(open);
-        if (open) {
-          const isReminder = invoice.status === 'sent' || invoice.status === 'paid';
-          if (isReminder) {
-            setEmailSubject(profile?.reminder_subject_default ? resolveEmailMessage(profile.reminder_subject_default) : '');
-            setEmailMessage(profile?.reminder_body_default ? resolveEmailMessage(profile.reminder_body_default) : '');
-          } else {
-            setEmailSubject(profile?.invoice_email_subject_default ? resolveEmailMessage(profile.invoice_email_subject_default) : '');
-            setEmailMessage(resolveEmailMessage(profile?.invoice_email_message_default ?? ''));
-          }
-        }
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -2076,7 +2135,26 @@ export default function InvoiceDetail() {
               ))}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email-subject">Subject</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="email-subject">Subject</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" className="h-8">
+                      Insert placeholder
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {EMAIL_MERGE_TAGS.map(({ tag, label }) => (
+                      <DropdownMenuItem
+                        key={tag}
+                        onSelect={() => setEmailSubject((s) => s + (s ? ' ' : '') + tag)}
+                      >
+                        {label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
               <Input
                 id="email-subject"
                 value={emailSubject}
@@ -2094,14 +2172,7 @@ export default function InvoiceDetail() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    {[
-                      { tag: '{{client_name}}', label: 'Client Name' },
-                      { tag: '{{invoice_number}}', label: 'Invoice Number' },
-                      { tag: '{{total}}', label: 'Total' },
-                      { tag: '{{due_date}}', label: 'Due Date' },
-                      { tag: '{{business_name}}', label: 'Business Name' },
-                      { tag: '{{project_name}}', label: 'Project Name' },
-                    ].map(({ tag, label }) => (
+                    {EMAIL_MERGE_TAGS.map(({ tag, label }) => (
                       <DropdownMenuItem
                         key={tag}
                         onSelect={() => setEmailMessage((m) => m + (m ? ' ' : '') + tag)}

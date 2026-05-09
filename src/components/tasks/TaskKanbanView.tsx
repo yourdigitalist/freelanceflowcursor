@@ -10,6 +10,7 @@ import { Task, ProjectStatus } from './types';
 import { TaskCard } from './TaskCard';
 import { QuickAddTask } from './QuickAddTask';
 import { useState } from 'react';
+import { HorizontalScroll } from '@/components/ui/horizontal-scroll';
 
 interface TaskKanbanViewProps {
   tasks: Task[];
@@ -107,7 +108,7 @@ export function TaskKanbanView({
   onQuickAdd,
 }: TaskKanbanViewProps) {
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
+    <HorizontalScroll contentClassName="flex gap-4 min-w-max">
       {statuses.map((status) => {
         const statusTasks = tasks.filter((t) => t.status_id === status.id);
         return (
@@ -122,6 +123,6 @@ export function TaskKanbanView({
           />
         );
       })}
-    </div>
+    </HorizontalScroll>
   );
 }

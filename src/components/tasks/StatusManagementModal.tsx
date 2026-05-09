@@ -42,7 +42,9 @@ interface StatusManagementModalProps {
   isOpen: boolean;
   onClose: () => void;
   statuses: ProjectStatus[];
-  onSave: (statuses: Omit<ProjectStatus, 'id' | 'project_id' | 'user_id'>[]) => void;
+  onSave: (statuses: Omit<ProjectStatus, 'id' | 'project_id' | 'user_id'>[]) => void | Promise<void>;
+  projectId: string;
+  userId: string;
 }
 
 interface EditableStatus {
