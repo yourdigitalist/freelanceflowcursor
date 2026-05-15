@@ -17,6 +17,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowLeft, CheckCircle, Plus, Trash2, Upload } from "@/components/icons";
 import { useProfileCurrency } from "@/hooks/useProfileCurrency";
+import { useLocalePreferences } from "@/hooks/useLocalePreferences";
+import { formatLocaleDate } from "@/lib/datetime";
+import { proposalSnapshotsFromClientId } from "@/lib/clientLifecycle";
+import { ProposalDocument } from "@/components/proposals/ProposalDocument";
 
 const MAX_COVER_SIZE = 10 * 1024 * 1024;
 const MAX_STORAGE_BYTES = 200 * 1024 * 1024;
@@ -35,6 +39,7 @@ export default function ProposalDetail() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { currency } = useProfileCurrency();
+  const { dateFormat } = useLocalePreferences();
   const [proposal, setProposal] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
   const [catalogOpen, setCatalogOpen] = useState(false);
@@ -47,6 +52,7 @@ export default function ProposalDetail() {
   const [businessLogo, setBusinessLogo] = useState<string | null>(null);
   const [businessEmail, setBusinessEmail] = useState<string | null>(null);
   const [businessPhone, setBusinessPhone] = useState<string | null>(null);
+  const [proposalMainColor, setProposalMainColor] = useState<string | undefined>(undefined);
   const [coverSignedUrl, setCoverSignedUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("data");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
@@ -57,11 +63,17 @@ export default function ProposalDetail() {
   const load = async () => {
     if (!id) return;
     const [{ data: p }, { data: s }, { data: svc }, { data: profile }, { data: allClients }, { data: allProjects }] = await Promise.all([
-      supabase.from("proposals").select("*, clients(name, company, currency), projects(name)").eq("id", id).single(),
+      supabase.from("proposals").select("*, clients(name, company, currency, logo_url), projects(name)").eq("id", id).single(),
       supabase.from("proposal_services").select("*").eq("proposal_id", id).order("position"),
       supabase.from("services").select("*").order("name"),
-      user ? supabase.from("profiles").select("business_name, business_logo, business_email, business_phone").eq("user_id", user.id).maybeSingle() : Promise.resolve({ data: null } as any),
-      supabase.from("clients").select("id, name, company, currency").order("name"),
+      user
+        ? supabase
+            .from("profiles")
+            .select("business_name, business_logo, business_email, business_phone, notification_preferences")
+            .eq("user_id", user.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null } as any),
+      supabase.from("clients").select("id, name, company, currency, archived_at").order("name"),
       supabase.from("projects").select("id, name, client_id").order("name"),
     ]);
     const paymentMethods = Array.isArray(p?.payment_methods) ? p.payment_methods : [];
@@ -80,6 +92,8 @@ export default function ProposalDetail() {
     setBusinessLogo(profile?.business_logo || null);
     setBusinessEmail(profile?.business_email || null);
     setBusinessPhone(profile?.business_phone || null);
+    const prefs = profile?.notification_preferences as { proposal_main_color?: string } | null;
+    setProposalMainColor(prefs?.proposal_main_color || undefined);
     if (p?.cover_image_url) {
       const { data: signed } = await supabase.storage.from("proposal-images").createSignedUrl(p.cover_image_url, 3600);
       setCoverSignedUrl(signed?.signedUrl || null);
@@ -109,8 +123,8 @@ export default function ProposalDetail() {
     if (!proposal?.validity_days) return null;
     const d = new Date();
     d.setDate(d.getDate() + Number(proposal.validity_days || 0));
-    return d.toLocaleDateString();
-  }, [proposal?.validity_days]);
+    return formatLocaleDate(d, dateFormat);
+  }, [proposal?.validity_days, dateFormat]);
 
   const updateProposal = (patch: any) => setProposal((prev: any) => ({ ...prev, ...patch }));
   const createTempItemId = () =>
@@ -271,6 +285,8 @@ export default function ProposalDetail() {
         payment_structure: proposal.payment_structure,
         payment_methods: paymentMethodsForSave,
         client_id: proposal.client_id,
+        client_name_snapshot: proposal.client_name_snapshot ?? null,
+        client_company_snapshot: proposal.client_company_snapshot ?? null,
         project_id: resolvedProjectId,
         installment_description: proposal.installment_description || null,
         conditions_notes: proposal.conditions_notes,
@@ -442,10 +458,17 @@ export default function ProposalDetail() {
                   <Label>Client</Label>
                   <Select
                     value={proposal.client_id || ""}
-                    onValueChange={(value) => {
+                    onValueChange={async (value) => {
                       const nextProjects = projects.filter((project) => project.client_id === value);
+                      let snapshots = { client_name_snapshot: null as string | null, client_company_snapshot: null as string | null };
+                      try {
+                        snapshots = await proposalSnapshotsFromClientId(value);
+                      } catch {
+                        /* keep existing snapshots on failure */
+                      }
                       updateProposal({
                         client_id: value,
+                        ...snapshots,
                         project_id: proposal.project_id && nextProjects.some((project) => project.id === proposal.project_id)
                           ? proposal.project_id
                           : null,
@@ -456,9 +479,12 @@ export default function ProposalDetail() {
                       <SelectValue placeholder="Select client" />
                     </SelectTrigger>
                     <SelectContent>
-                      {clients.map((client) => (
+                      {clients
+                        .filter((client) => !client.archived_at || client.id === proposal.client_id)
+                        .map((client) => (
                         <SelectItem key={client.id} value={client.id}>
                           {client.company ? `${client.name} — ${client.company}` : `${client.name} — Individual`}
+                          {client.archived_at ? " (Archived)" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -523,13 +549,26 @@ export default function ProposalDetail() {
               </div>
               <div className="space-y-2">
                 <Label>Cover image</Label>
+                {coverSignedUrl ? (
+                  <img src={coverSignedUrl} alt="" className="h-36 w-full max-w-2xl rounded-lg border object-cover" />
+                ) : null}
                 <input ref={fileInputRef} className="hidden" type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && onCoverUpload(e.target.files[0])} />
                 <div className="flex items-center gap-2">
                   <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
                     <Upload className="mr-2 h-4 w-4" />
                     Upload cover image
                   </Button>
-                  {proposal.cover_image_url ? <Button variant="ghost" onClick={() => updateProposal({ cover_image_url: null })}>Remove</Button> : null}
+                  {proposal.cover_image_url ? (
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        updateProposal({ cover_image_url: null });
+                        setCoverSignedUrl(null);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  ) : null}
                 </div>
                 <p className="text-xs text-muted-foreground">Choose an image related to the project to increase the visual appeal of your proposal. Recommended upload: 1500 x 500px (3:1 ratio). The visible area may crop slightly depending on screen size.</p>
               </div>
@@ -658,11 +697,27 @@ export default function ProposalDetail() {
               </Button>
               <Button onClick={() => save(true)}>Save and Send</Button>
             </div>
-            <div className="overflow-hidden rounded-xl border">
-              <iframe
-                title="Client proposal preview"
-                src={`/proposal/${proposal.public_token}?preview=1`}
-                className="h-[900px] w-full bg-white"
+            <div className="max-h-[min(70vh,900px)] overflow-y-auto rounded-xl border bg-background">
+              <ProposalDocument
+                proposal={{
+                  ...proposal,
+                  subtotal,
+                  projects: proposal.projects,
+                }}
+                items={items.map((item) => ({
+                  ...item,
+                  line_total: Number(item.price || 0) * Number(item.quantity || 0),
+                  currency: item.currency || resolvedCurrency,
+                }))}
+                business={{
+                  business_name: businessName,
+                  business_logo: businessLogo,
+                  business_email: businessEmail,
+                  notification_preferences: proposalMainColor ? { proposal_main_color: proposalMainColor } : null,
+                }}
+                coverImageUrl={coverSignedUrl}
+                proposalMainColor={proposalMainColor}
+                showAcceptActions={false}
               />
             </div>
           </TabsContent>

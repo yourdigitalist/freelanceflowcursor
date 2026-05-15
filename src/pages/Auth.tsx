@@ -447,7 +447,7 @@ export default function Auth() {
                         className="mt-1 h-4 w-4 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       />
                       <Label htmlFor="accept-terms-and-privacy" className="text-sm font-normal leading-relaxed">
-                        accept privacy policy and terms and conditions (
+                        Accept privacy policy and terms and conditions (
                         <Link to="/privacy" className="text-primary hover:underline">Privacy policy</Link>
                         {' '}and{' '}
                         <Link to="/terms" className="text-primary hover:underline">Terms and conditions</Link>

@@ -58,11 +58,11 @@ export function TaskCard({ task, status, commentCount = 0, trackedSeconds = 0, o
         </h4>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {priorityConfig && (
+          {priorityConfig ? (
             <Badge className={priorityConfig.color} variant="secondary">
               {priorityConfig.label}
             </Badge>
-          )}
+          ) : null}
           
           {task.due_date && (
             <span className="text-xs text-muted-foreground flex items-center gap-1">

@@ -20,12 +20,26 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Send, MessageSquare, Trash2 } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
-import { Task, ProjectStatus, TaskComment, PRIORITY_OPTIONS } from './types';
+import { Task, ProjectStatus, TaskComment } from './types';
+import { PrioritySelect } from './PrioritySelect';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { formatDuration } from '@/lib/time';
+
+export interface TaskTimeEntryRow {
+  id: string;
+  description: string | null;
+  start_time: string;
+  end_time: string | null;
+  started_at?: string | null;
+  total_duration_seconds: number | null;
+  duration_minutes: number | null;
+  billable: boolean | null;
+  project_id: string | null;
+  task_id: string | null;
+}
 
 interface TaskEditSheetProps {
   task: Task | null;
@@ -36,6 +50,8 @@ interface TaskEditSheetProps {
   onDuplicate?: (task: Task) => void;
   onDelete?: (taskId: string) => void;
   trackedSeconds?: number;
+  taskTimeEntries?: TaskTimeEntryRow[];
+  onEditTimeEntry?: (entry: TaskTimeEntryRow) => void;
 }
 
 export function TaskEditSheet({
@@ -47,6 +63,8 @@ export function TaskEditSheet({
   onDuplicate,
   onDelete,
   trackedSeconds = 0,
+  taskTimeEntries = [],
+  onEditTimeEntry,
 }: TaskEditSheetProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -54,7 +72,7 @@ export function TaskEditSheet({
     title: '',
     description: '',
     status_id: '',
-    priority: 'medium',
+    priority: null as string | null,
     due_date: '',
     estimated_hours: '',
   });
@@ -68,7 +86,7 @@ export function TaskEditSheet({
         title: task.title,
         description: task.description || '',
         status_id: task.status_id || '',
-        priority: task.priority,
+        priority: task.priority || null,
         due_date: task.due_date || '',
         estimated_hours: task.estimated_hours?.toString() || '',
       });
@@ -78,7 +96,7 @@ export function TaskEditSheet({
         title: '',
         description: '',
         status_id: statuses[0]?.id || '',
-        priority: 'medium',
+        priority: null as string | null,
         due_date: '',
         estimated_hours: '',
       });
@@ -224,28 +242,15 @@ export function TaskEditSheet({
 
             <div className="space-y-2">
               <Label>Priority</Label>
-              <Select
+              <PrioritySelect
                 value={formData.priority}
-                onValueChange={(value) => setFormData({ ...formData, priority: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRIORITY_OPTIONS.map((priority) => (
-                    <SelectItem key={priority.value} value={priority.value}>
-                      <Badge className={priority.color} variant="secondary">
-                        {priority.label}
-                      </Badge>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onValueChange={(priority) => setFormData({ ...formData, priority })}
+              />
             </div>
           </div>
 
           {task && (
-            <div className="rounded-lg border bg-background p-3">
+            <div className="rounded-lg border bg-background p-3 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">Logged time</p>
@@ -259,6 +264,44 @@ export function TaskEditSheet({
                   </Link>
                 </Button>
               </div>
+              {taskTimeEntries.length > 0 && (
+                <div className="space-y-2 max-h-[180px] overflow-y-auto border-t pt-3">
+                  {taskTimeEntries.map((entry) => {
+                    const secs =
+                      entry.total_duration_seconds ??
+                      (entry.duration_minutes != null ? entry.duration_minutes * 60 : 0);
+                    return (
+                      <div
+                        key={entry.id}
+                        className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">
+                            {format(parseISO(entry.started_at || entry.start_time), 'MMM d, yyyy')}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {entry.description || 'No notes'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="font-mono text-xs">{formatDuration(Math.max(0, secs), true)}</span>
+                          {onEditTimeEntry && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => onEditTimeEntry(entry)}
+                            >
+                              <SlotIcon slot="action_edit" className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 

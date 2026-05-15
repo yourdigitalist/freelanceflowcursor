@@ -12,59 +12,25 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { HardDrive, Trash2, FileText, Image, Loader2, AlertTriangle } from '@/components/icons';
-
-const MAX_STORAGE_BYTES = 209_715_200; // 200MB per user
-
-interface StorageFile {
-  id: string;
-  file_name: string;
-  file_type: string | null;
-  file_size: number | null;
-  review_request_id: string;
-  review_requests?: { title: string } | null;
-  file_url: string;
-}
+import { HardDrive, Trash2, FileText, Loader2, AlertTriangle } from '@/components/icons';
+import {
+  MAX_USER_STORAGE_BYTES,
+  listUserStorageFiles,
+  type UserStorageFile,
+} from '@/lib/userStorage';
 
 export default function StorageSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [files, setFiles] = useState<StorageFile[]>([]);
+  const [files, setFiles] = useState<UserStorageFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<StorageFile | null>(null);
-
-  useEffect(() => {
-    if (user) fetchFiles();
-  }, [user]);
+  const [confirmDelete, setConfirmDelete] = useState<UserStorageFile | null>(null);
 
   const fetchFiles = async () => {
     if (!user) return;
     try {
-      const { data: requests } = await supabase
-        .from('review_requests')
-        .select('id')
-        .eq('user_id', user.id);
-      const requestIds = (requests || []).map((r) => r.id);
-      if (requestIds.length === 0) {
-        setFiles([]);
-        setLoading(false);
-        return;
-      }
-      const { data, error } = await supabase
-        .from('review_files')
-        .select(`
-          id,
-          file_name,
-          file_type,
-          file_size,
-          review_request_id,
-          file_url,
-          review_requests(title)
-        `)
-        .in('review_request_id', requestIds);
-      if (error) throw error;
-      setFiles((data as StorageFile[]) || []);
+      setFiles(await listUserStorageFiles(user.id));
     } catch (e) {
       console.error(e);
       toast({ title: 'Error loading storage', variant: 'destructive' });
@@ -73,162 +39,181 @@ export default function StorageSettings() {
     }
   };
 
-  const totalBytes = files.reduce((sum, f) => sum + (f.file_size || 0), 0);
-  const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
-  const maxMB = (MAX_STORAGE_BYTES / (1024 * 1024)).toFixed(0);
-  const percentUsed = Math.min(100, Math.round((totalBytes / MAX_STORAGE_BYTES) * 100));
+  useEffect(() => {
+    if (user) {
+      setLoading(true);
+      void fetchFiles();
+    }
+  }, [user?.id]);
 
-  const handleDeleteClick = (file: StorageFile) => {
-    setConfirmDelete(file);
-  };
+  const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
+  const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
+  const maxMB = (MAX_USER_STORAGE_BYTES / (1024 * 1024)).toFixed(0);
+  const percentUsed = Math.min(100, Math.round((totalBytes / MAX_USER_STORAGE_BYTES) * 100));
 
   const handleDeleteConfirm = async () => {
     if (!confirmDelete || !user) return;
     setDeletingId(confirmDelete.id);
     try {
-      const { data: reviewRequest } = await supabase
-        .from('review_requests')
-        .select('id')
-        .eq('id', confirmDelete.review_request_id)
-        .single();
-      const { data: otherFiles } = await supabase
-        .from('review_files')
-        .select('id')
-        .eq('review_request_id', confirmDelete.review_request_id)
-        .neq('id', confirmDelete.id);
-      const isOnlyFile = !otherFiles?.length;
-
-      const pathMatch = confirmDelete.file_url.match(/review-files\/(.+)$/);
-      const storagePath = pathMatch ? pathMatch[1] : null;
-      if (storagePath) {
-        await supabase.storage.from('review-files').remove([storagePath]);
-      }
-      await supabase.from('review_files').delete().eq('id', confirmDelete.id);
-      if (isOnlyFile && reviewRequest) {
-        await supabase.from('review_requests').delete().eq('id', confirmDelete.review_request_id);
-        toast({ title: 'File and review request deleted' });
+      if (confirmDelete.id.startsWith('review:')) {
+        const reviewFileId = confirmDelete.id.replace('review:', '');
+        const pathMatch = confirmDelete.path.match(/review-files\/(.+)$/);
+        if (pathMatch?.[1]) {
+          await supabase.storage.from('review-files').remove([pathMatch[1]]);
+        }
+        const { data: fileRow } = await supabase
+          .from('review_files')
+          .select('review_request_id')
+          .eq('id', reviewFileId)
+          .single();
+        await supabase.from('review_files').delete().eq('id', reviewFileId);
+        if (fileRow?.review_request_id) {
+          const { count } = await supabase
+            .from('review_files')
+            .select('id', { count: 'exact', head: true })
+            .eq('review_request_id', fileRow.review_request_id);
+          if (!count) {
+            await supabase.from('review_requests').delete().eq('id', fileRow.review_request_id);
+          }
+        }
       } else {
-        toast({ title: 'File deleted' });
+        await supabase.storage.from(confirmDelete.bucket).remove([confirmDelete.path]);
+        if (confirmDelete.bucket === 'business-logos') {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('business_logo')
+            .eq('user_id', user.id)
+            .maybeSingle();
+          if (profile?.business_logo?.includes(confirmDelete.path)) {
+            await supabase.from('profiles').update({ business_logo: null }).eq('user_id', user.id);
+          }
+        }
+        if (confirmDelete.bucket === 'proposal-images') {
+          await supabase
+            .from('profiles')
+            .update({ proposal_default_cover_image_url: null })
+            .eq('user_id', user.id)
+            .eq('proposal_default_cover_image_url', confirmDelete.path);
+          await supabase
+            .from('proposals')
+            .update({ cover_image_url: null })
+            .eq('user_id', user.id)
+            .eq('cover_image_url', confirmDelete.path);
+        }
+        if (confirmDelete.bucket === 'client-logos') {
+          await supabase.from('clients').update({ logo_url: null }).eq('user_id', user.id).eq('logo_url', confirmDelete.path);
+        }
+        if (confirmDelete.bucket === 'avatars') {
+          await supabase.from('profiles').update({ avatar_url: null }).eq('user_id', user.id);
+        }
       }
+      toast({ title: 'File deleted' });
       setConfirmDelete(null);
-      fetchFiles();
-    } catch (e: any) {
-      toast({ title: 'Error deleting file', description: e.message, variant: 'destructive' });
+      await fetchFiles();
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      toast({ title: 'Error deleting file', description: message, variant: 'destructive' });
     } finally {
       setDeletingId(null);
     }
   };
 
-  const reviewTitle = confirmDelete?.review_requests?.title || 'this approval';
-
   return (
     <div className="space-y-6 max-w-3xl">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Storage</h1>
-          <p className="text-muted-foreground">
-            Manage your uploaded files. Max {maxMB}MB per user.
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Storage</h1>
+        <p className="text-muted-foreground">Manage your uploaded files. Max {maxMB}MB per user.</p>
+      </div>
 
-        <Card className="border-0 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <HardDrive className="h-5 w-5" />
-              Usage
-            </CardTitle>
-            <CardDescription>
-              {totalMB}MB of {maxMB}MB used. Company logo and profile photo count toward this total.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-2 rounded-full bg-muted overflow-hidden">
-              <div
-                className="h-full bg-primary transition-all"
-                style={{ width: `${percentUsed}%` }}
-              />
+      <Card className="border-0 shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <HardDrive className="h-5 w-5" />
+            Usage
+          </CardTitle>
+          <CardDescription>
+            {totalMB}MB of {maxMB}MB used. Includes company logos, proposal covers, client logos, profile photos, and
+            review files.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div className="h-full bg-primary transition-all" style={{ width: `${percentUsed}%` }} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-0 shadow-sm">
+        <CardHeader>
+          <CardTitle>Files</CardTitle>
+          <CardDescription>All files stored in your Lance account.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-sm">
-          <CardHeader>
-            <CardTitle>Files</CardTitle>
-            <CardDescription>
-              Review files you've uploaded. Deleting a file removes it from the review.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : files.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No files yet</p>
-            ) : (
-              <ul className="space-y-3">
-                {files.map((file) => (
-                  <li
-                    key={file.id}
-                    className="flex items-center gap-3 p-3 rounded-lg border bg-card"
-                  >
-                    {file.file_type?.startsWith('image/') ? (
-                      <Image className="h-5 w-5 text-muted-foreground shrink-0" />
-                    ) : (
-                      <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{file.file_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {((file.file_size || 0) / 1024).toFixed(1)} KB
-                        {file.review_requests?.title && (
-                          <> · {file.review_requests.title}</>
-                        )}
-                      </p>
-                    </div>
+          ) : files.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">No files yet</p>
+          ) : (
+            <ul className="space-y-3">
+              {files.map((file) => (
+                <li key={file.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+                  {file.previewUrl && /\.(png|jpe?g|gif|webp)/i.test(file.name) ? (
+                    <img
+                      src={file.previewUrl}
+                      alt=""
+                      className="h-10 w-10 rounded object-cover shrink-0 border bg-muted"
+                    />
+                  ) : (
+                    <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{file.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {file.category} · {(file.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                  {file.canDelete ? (
                     <Button
                       variant="ghost"
                       size="sm"
                       className="text-destructive hover:text-destructive"
-                      onClick={() => handleDeleteClick(file)}
+                      onClick={() => setConfirmDelete(file)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
-        <Dialog open={!!confirmDelete} onOpenChange={(open) => !open && setConfirmDelete(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Delete file?</DialogTitle>
-              <DialogDescription>
-                This file is part of review request &quot;{reviewTitle}&quot;. Deleting it will
-                remove the file from that review. If it&apos;s the only file in that review, the
-                review request will be deleted as well.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 text-sm text-amber-800 dark:text-amber-200">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              <span>This action cannot be undone.</span>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setConfirmDelete(null)}>
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={handleDeleteConfirm}
-                disabled={!!deletingId}
-              >
-                {deletingId ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Delete file
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+      <Dialog open={!!confirmDelete} onOpenChange={(open) => !open && setConfirmDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete file?</DialogTitle>
+            <DialogDescription>
+              Delete &quot;{confirmDelete?.name}&quot;? Linked settings may be cleared if this file is in use.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 text-sm text-amber-800 dark:text-amber-200">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>This action cannot be undone.</span>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handleDeleteConfirm()} disabled={!!deletingId}>
+              {deletingId ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Delete file
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

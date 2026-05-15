@@ -216,6 +216,8 @@ export default function BusinessSettings() {
     }
     setSaving(true);
     try {
+      const { assertStorageCapacity } = await import('@/lib/userStorage');
+      await assertStorageCapacity(user.id, file.size);
       const ext = file.name.split('.').pop() || 'png';
       const path = `${user.id}/logo-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
@@ -265,6 +267,8 @@ export default function BusinessSettings() {
 
     setSaving(true);
     try {
+      const { assertStorageCapacity } = await import('@/lib/userStorage');
+      await assertStorageCapacity(user.id, file.size);
       const ext = file.name.split('.').pop() || 'png';
       const path = `${user.id}/email-logo-secondary-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage

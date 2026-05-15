@@ -39,10 +39,14 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { EmojiPicker } from '@/components/ui/emoji-picker';
 import { downloadCsv, getProjectsTemplateRows, PROJECTS_CSV_HEADERS, parseCsv } from '@/lib/csv';
+import { useLocalePreferences } from '@/hooks/useLocalePreferences';
+import { formatLocaleDate } from '@/lib/datetime';
 
 interface Client {
   id: string;
   name: string;
+  email?: string | null;
+  company?: string | null;
 }
 
 interface Project {
@@ -92,7 +96,12 @@ export default function Projects() {
   const [selectedColor, setSelectedColor] = useState('#9B63E9');
   const [importProjectsDialogOpen, setImportProjectsDialogOpen] = useState(false);
   const [importingProjects, setImportingProjects] = useState(false);
+  const [showCreateClientInline, setShowCreateClientInline] = useState(false);
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientEmail, setNewClientEmail] = useState('');
+  const [newClientCompany, setNewClientCompany] = useState('');
   const projectsCsvInputRef = useRef<HTMLInputElement>(null);
+  const { dateFormat } = useLocalePreferences();
 
   useEffect(() => {
     if (user) {
@@ -175,7 +184,8 @@ export default function Projects() {
     try {
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name')
+        .select('id, name, email, company')
+        .is('archived_at', null)
         .order('name');
 
       if (error) throw error;
@@ -183,6 +193,43 @@ export default function Projects() {
     } catch (error) {
       console.error('Error fetching clients:', error);
     }
+  };
+
+  const createClientInline = async () => {
+    if (!user) return;
+    const trimmedName = newClientName.trim();
+    if (!trimmedName) {
+      toast({ title: 'Client name is required', variant: 'destructive' });
+      return;
+    }
+    const existing = clients.find((client) => client.name.toLowerCase() === trimmedName.toLowerCase());
+    if (existing) {
+      setDialogClientId(existing.id);
+      setShowCreateClientInline(false);
+      setNewClientName('');
+      setNewClientEmail('');
+      setNewClientCompany('');
+      return;
+    }
+    const payload = {
+      user_id: user.id,
+      name: trimmedName,
+      email: newClientEmail.trim() || null,
+      company: newClientCompany.trim() || null,
+      status: 'active',
+    };
+    const { data, error } = await supabase.from('clients').insert(payload).select('id, name, email, company').single();
+    if (error || !data) {
+      toast({ title: 'Failed to create client', description: error?.message, variant: 'destructive' });
+      return;
+    }
+    setClients((prev) => [...prev, data as Client].sort((a, b) => a.name.localeCompare(b.name)));
+    setDialogClientId(data.id);
+    setShowCreateClientInline(false);
+    setNewClientName('');
+    setNewClientEmail('');
+    setNewClientCompany('');
+    toast({ title: 'Client created' });
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -458,6 +505,10 @@ export default function Projects() {
                 setDialogClientId('none');
               setSelectedEmoji('📁');
               setSelectedColor('#9B63E9');
+              setShowCreateClientInline(false);
+              setNewClientName('');
+              setNewClientEmail('');
+              setNewClientCompany('');
             }
           }}>
             <DialogTrigger asChild>
@@ -517,7 +568,17 @@ export default function Projects() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="client_id">Client</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="client_id">Client</Label>
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="h-auto p-0 text-sm"
+                      onClick={() => setShowCreateClientInline((prev) => !prev)}
+                    >
+                      {showCreateClientInline ? 'Cancel' : 'Create new client'}
+                    </Button>
+                  </div>
                   <Select name="client_id" value={dialogClientId} onValueChange={setDialogClientId}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a client" />
@@ -531,6 +592,31 @@ export default function Projects() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {showCreateClientInline ? (
+                    <div className="rounded-lg border p-3 space-y-2">
+                      <Input
+                        value={newClientName}
+                        onChange={(e) => setNewClientName(e.target.value)}
+                        placeholder="Client name *"
+                      />
+                      <Input
+                        type="email"
+                        value={newClientEmail}
+                        onChange={(e) => setNewClientEmail(e.target.value)}
+                        placeholder="Email (optional)"
+                      />
+                      <Input
+                        value={newClientCompany}
+                        onChange={(e) => setNewClientCompany(e.target.value)}
+                        placeholder="Company (optional)"
+                      />
+                      <div className="flex justify-end">
+                        <Button type="button" size="sm" onClick={() => void createClientInline()}>
+                          Add client
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="description">Description</Label>
@@ -766,20 +852,25 @@ export default function Projects() {
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       {project.due_date && (
-                        <span className="flex items-center gap-1">
-                          <SlotIcon slot="task_calendar" className="h-3.5 w-3.5" />
-                          {format(new Date(project.due_date), 'MMM d')}
+                        <span className="inline-flex items-center gap-1.5">
+                          <SlotIcon slot="task_calendar" className="h-3.5 w-3.5 shrink-0" />
+                          <span>{formatLocaleDate(project.due_date, dateFormat)}</span>
                         </span>
                       )}
-                      <span className="flex items-center gap-1">
-                        <SlotIcon slot="task_clock" className="h-3.5 w-3.5" />
-                        {(project.hours || 0).toFixed(1)}h
+                      <span className="inline-flex items-center gap-1.5">
+                        <SlotIcon slot="task_clock" className="h-3.5 w-3.5 shrink-0" />
+                        <span>{(project.hours || 0).toFixed(1)}h</span>
                       </span>
                     </div>
-                    <span>{project.task_count || 0} tasks</span>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={getStatusColor(project.status)}>
+                        {formatStatus(project.status)}
+                      </Badge>
+                      <span>{project.task_count || 0} tasks</span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -835,7 +926,7 @@ export default function Projects() {
                     {project.due_date && (
                       <span className="flex items-center gap-1">
                         <SlotIcon slot="task_calendar" className="h-3.5 w-3.5" />
-                        {format(new Date(project.due_date), 'MMM d')}
+                        {formatLocaleDate(project.due_date, dateFormat)}
                       </span>
                     )}
                     <span className="flex items-center gap-1">

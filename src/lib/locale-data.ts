@@ -439,3 +439,28 @@ export const countryToNumberFormat: Record<string, string> = {
   'AR': '1.234,56',
   'RU': '1 234,56',
 };
+
+const countryDisplayNames = new Intl.DisplayNames(["en"], { type: "region" });
+
+/** ISO country codes for client address dropdowns (shared across create/edit client forms). */
+export const countryOptions = Object.keys(countryToCurrency)
+  .sort()
+  .map((code) => ({
+    value: code,
+    label: `${countryDisplayNames.of(code) || code} (${code})`,
+  }));
+
+export function countrySelectValue(stored: string | null | undefined): string {
+  const code = (stored || "").trim();
+  return code || "none";
+}
+
+export function countryFromSelectValue(value: string): string | null {
+  return value === "none" ? null : value;
+}
+
+export function countryLabel(code: string | null | undefined): string {
+  const normalized = (code || "").trim();
+  if (!normalized) return "";
+  return countryOptions.find((c) => c.value === normalized)?.label ?? normalized;
+}

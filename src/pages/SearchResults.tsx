@@ -4,7 +4,10 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { SlotIcon } from '@/contexts/IconSlotContext';
+import { useLocalePreferences } from '@/hooks/useLocalePreferences';
+import { formatLocaleDate } from '@/lib/datetime';
 
 interface ProjectResult {
   id: string;
@@ -16,6 +19,7 @@ interface ClientResult {
   id: string;
   name: string;
   company: string | null;
+  archived_at: string | null;
 }
 
 interface InvoiceResult {
@@ -55,6 +59,7 @@ interface ReviewResult {
 
 export default function SearchResults() {
   const [searchParams] = useSearchParams();
+  const { dateFormat } = useLocalePreferences();
   const q = searchParams.get('q')?.trim() || '';
   const { user } = useAuth();
   const [projects, setProjects] = useState<ProjectResult[]>([]);
@@ -87,8 +92,8 @@ export default function SearchResults() {
         .ilike('name', pattern)
         .limit(10),
       Promise.all([
-        supabase.from('clients').select('id, name, company').eq('user_id', user.id).ilike('name', pattern).limit(10),
-        supabase.from('clients').select('id, name, company').eq('user_id', user.id).ilike('company', pattern).limit(10),
+        supabase.from('clients').select('id, name, company, archived_at').eq('user_id', user.id).ilike('name', pattern).limit(10),
+        supabase.from('clients').select('id, name, company, archived_at').eq('user_id', user.id).ilike('company', pattern).limit(10),
       ]).then(([byName, byCompany]) => {
         const byId = new Map<string, ClientResult>();
         (byName.data || []).forEach((r) => byId.set(r.id, r as ClientResult));
@@ -241,6 +246,9 @@ export default function SearchResults() {
                           <div className="flex items-center gap-3">
                             <SlotIcon slot="sidebar_clients" className="h-4 w-4 text-muted-foreground" />
                             <span className="font-medium">{c.name}</span>
+                            {c.archived_at && (
+                              <Badge variant="outline" className="text-xs">Archived</Badge>
+                            )}
                             {c.company && (
                               <span className="text-xs text-muted-foreground">{c.company}</span>
                             )}
@@ -364,7 +372,7 @@ export default function SearchResults() {
                       const dateText = (() => {
                         const parsed = new Date(entry.start_time);
                         if (Number.isNaN(parsed.getTime())) return '';
-                        return parsed.toLocaleDateString();
+                        return formatLocaleDate(parsed, dateFormat);
                       })();
 
                       return (

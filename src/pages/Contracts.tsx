@@ -66,6 +66,12 @@ export default function Contracts() {
   const [templateRows, setTemplateRows] = useState<TemplateRow[]>([]);
   const [templateId, setTemplateId] = useState<string>("none");
   const [templateDeleteId, setTemplateDeleteId] = useState<string | null>(null);
+  const [showCreateClientInline, setShowCreateClientInline] = useState(false);
+  const [showCreateProjectInline, setShowCreateProjectInline] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientEmail, setNewClientEmail] = useState("");
+  const [newClientCompany, setNewClientCompany] = useState("");
+  const [newProjectName, setNewProjectName] = useState("");
 
   const load = async () => {
     const [{ data: contracts }, { data: allClients }, { data: allProjects }, { data: allTemplates }] = await Promise.all([
@@ -73,7 +79,7 @@ export default function Contracts() {
         .from("contracts")
         .select("id, identifier, status, total, client_id, project_id, clients(name, currency), projects(name)")
         .order("created_at", { ascending: false }),
-      supabase.from("clients").select("id, name, company, email, phone, address, city, state, postal_code, country, tax_id, currency").order("name"),
+      supabase.from("clients").select("id, name, company, email, phone, address, city, state, postal_code, country, tax_id, currency").is("archived_at", null).order("name"),
       supabase.from("projects").select("id, name, client_id").order("name"),
       supabase.from("contract_templates").select("id, name, description, content, is_default").order("created_at"),
     ]);
@@ -292,6 +298,74 @@ export default function Contracts() {
       .not("status", "in", "(Won,Active)");
 
     navigate(`/contracts/${contract.id}`);
+  };
+
+  const createClientInline = async () => {
+    if (!user) return;
+    const name = newClientName.trim();
+    if (!name) {
+      toast({ title: "Client name is required", variant: "destructive" });
+      return;
+    }
+    const existing = clients.find((c) => c.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      setClientId(existing.id);
+      setShowCreateClientInline(false);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("clients")
+      .insert({
+        user_id: user.id,
+        name,
+        email: newClientEmail.trim() || null,
+        company: newClientCompany.trim() || null,
+        status: "active",
+      })
+      .select("id, name, company, email, phone, address, city, state, postal_code, country, tax_id, currency")
+      .single();
+    if (error || !data) {
+      toast({ title: "Could not create client", description: error?.message, variant: "destructive" });
+      return;
+    }
+    setClients((prev) => [...prev, data as any].sort((a, b) => a.name.localeCompare(b.name)));
+    setClientId(data.id);
+    setShowCreateClientInline(false);
+    setNewClientName("");
+    setNewClientEmail("");
+    setNewClientCompany("");
+  };
+
+  const createProjectInline = async () => {
+    if (!user) return;
+    const name = newProjectName.trim();
+    if (!name) {
+      toast({ title: "Project name is required", variant: "destructive" });
+      return;
+    }
+    const existing = projects.find((p) => p.name.toLowerCase() === name.toLowerCase() && p.client_id === (clientId || null));
+    if (existing) {
+      setProjectId(existing.id);
+      setShowCreateProjectInline(false);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("projects")
+      .insert({
+        user_id: user.id,
+        name,
+        client_id: clientId || null,
+      })
+      .select("id, name, client_id")
+      .single();
+    if (error || !data) {
+      toast({ title: "Could not create project", description: error?.message, variant: "destructive" });
+      return;
+    }
+    setProjects((prev) => [...prev, data as any].sort((a, b) => a.name.localeCompare(b.name)));
+    setProjectId(data.id);
+    setShowCreateProjectInline(false);
+    setNewProjectName("");
   };
 
   const cancelContract = async () => {
@@ -535,7 +609,20 @@ export default function Contracts() {
         </Tabs>
       </div>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowCreateClientInline(false);
+            setShowCreateProjectInline(false);
+            setNewClientName("");
+            setNewClientEmail("");
+            setNewClientCompany("");
+            setNewProjectName("");
+          }
+          setCreateOpen(open);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create Contract</DialogTitle>
@@ -548,12 +635,9 @@ export default function Contracts() {
                   type="button"
                   variant="link"
                   className="h-auto p-0 text-sm"
-                  onClick={() => {
-                    setCreateOpen(false);
-                    navigate("/clients");
-                  }}
+                  onClick={() => setShowCreateClientInline((prev) => !prev)}
                 >
-                  Create new client
+                  {showCreateClientInline ? "Cancel" : "Create new client"}
                 </Button>
               </div>
               <Select value={clientId} onValueChange={setClientId}>
@@ -568,6 +652,16 @@ export default function Contracts() {
                   ))}
                 </SelectContent>
               </Select>
+              {showCreateClientInline ? (
+                <div className="rounded-lg border p-3 space-y-2">
+                  <Input value={newClientName} onChange={(e) => setNewClientName(e.target.value)} placeholder="Client name *" />
+                  <Input value={newClientEmail} onChange={(e) => setNewClientEmail(e.target.value)} placeholder="Email (optional)" />
+                  <Input value={newClientCompany} onChange={(e) => setNewClientCompany(e.target.value)} placeholder="Company (optional)" />
+                  <div className="flex justify-end">
+                    <Button type="button" size="sm" onClick={() => void createClientInline()}>Add client</Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -576,12 +670,9 @@ export default function Contracts() {
                   type="button"
                   variant="link"
                   className="h-auto p-0 text-sm"
-                  onClick={() => {
-                    setCreateOpen(false);
-                    navigate("/projects");
-                  }}
+                  onClick={() => setShowCreateProjectInline((prev) => !prev)}
                 >
-                  Create new project
+                  {showCreateProjectInline ? "Cancel" : "Create new project"}
                 </Button>
               </div>
               <Select value={projectId} onValueChange={setProjectId}>
@@ -597,6 +688,14 @@ export default function Contracts() {
                   ))}
                 </SelectContent>
               </Select>
+              {showCreateProjectInline ? (
+                <div className="rounded-lg border p-3 space-y-2">
+                  <Input value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Project name *" />
+                  <div className="flex justify-end">
+                    <Button type="button" size="sm" onClick={() => void createProjectInline()}>Add project</Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
             {proposalCandidates.length > 0 ? (
               <div className="rounded-lg border border-emerald-500/20 bg-emerald-50 p-3 text-sm text-emerald-900">

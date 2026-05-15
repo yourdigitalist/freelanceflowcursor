@@ -13,7 +13,7 @@ type GuideItemId =
   | 'companyProfile'
   | 'uploadLogo'
   | 'customizeInvoices'
-  | 'firstInvoice'
+  | 'firstClient'
   | 'firstProject';
 
 type ManualState = Partial<Record<GuideItemId, boolean>>;
@@ -50,7 +50,7 @@ export function StartGuide() {
     companyProfile: false,
     uploadLogo: false,
     customizeInvoices: false,
-    firstInvoice: false,
+    firstClient: false,
     firstProject: false,
   });
   const [manual, setManual] = useState<ManualState>({});
@@ -59,7 +59,12 @@ export function StartGuide() {
 
   const loadGuideState = useCallback(() => {
     if (!user?.id) return;
-    const manualState = loadJson<ManualState>(storageKey('manual', user.id), {});
+    const rawManual = loadJson<ManualState & { firstInvoice?: boolean }>(storageKey('manual', user.id), {});
+    const manualState: ManualState = { ...rawManual };
+    if (rawManual.firstInvoice && !manualState.firstClient) {
+      manualState.firstClient = true;
+    }
+    delete (manualState as { firstInvoice?: boolean }).firstInvoice;
     const isMinimized = loadJson<boolean>(storageKey('minimized', user.id), false);
     const isDismissed = loadJson<boolean>(storageKey('dismissed', user.id), false);
     setManual(manualState);
@@ -71,23 +76,25 @@ export function StartGuide() {
     if (!user?.id) return;
     setLoading(true);
     try {
-      const [{ data: profile }, { count: projectCount }, { count: invoiceCount }] = await Promise.all([
-        supabase
-          .from('profiles')
-          .select(
-            'business_name, business_logo, business_email, business_phone, business_address, business_website, invoice_footer, invoice_notes_default, invoice_email_subject_default'
-          )
-          .eq('user_id', user.id)
-          .maybeSingle(),
-        supabase
-          .from('projects')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id),
-        supabase
-          .from('invoices')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id),
-      ]);
+      const [{ data: profile }, { count: projectCount }, { count: clientCount }, { count: taxCount }] =
+        await Promise.all([
+          supabase
+            .from('profiles')
+            .select(
+              'business_name, business_logo, business_email, business_phone, business_address, business_website, hourly_rate, invoice_prefix, invoice_include_year, invoice_number_start, invoice_number_padding, invoice_number_reset_yearly, invoice_footer, invoice_notes_default, invoice_bank_details_default, invoice_email_subject_default, invoice_email_message_default, reminder_enabled, reminder_subject_default, reminder_body_default, reminder_days_before',
+            )
+            .eq('user_id', user.id)
+            .maybeSingle(),
+          supabase
+            .from('projects')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id),
+          supabase
+            .from('clients')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id),
+          supabase.from('taxes').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        ]);
 
       const hasBusinessName = !!(profile?.business_name || '').trim();
       const hasBusinessDetail = !!(
@@ -98,17 +105,31 @@ export function StartGuide() {
       );
       const hasCompanyProfile = hasBusinessName && hasBusinessDetail;
       const hasLogo = !!(profile?.business_logo || '').trim();
+      const prefix = (profile?.invoice_prefix || '').trim();
       const hasInvoiceCustomization = !!(
         (profile?.invoice_footer || '').trim() ||
         (profile?.invoice_notes_default || '').trim() ||
-        (profile?.invoice_email_subject_default || '').trim()
+        (profile?.invoice_bank_details_default || '').trim() ||
+        (profile?.invoice_email_subject_default || '').trim() ||
+        (profile?.invoice_email_message_default || '').trim() ||
+        (profile?.reminder_subject_default || '').trim() ||
+        (profile?.reminder_body_default || '').trim() ||
+        profile?.reminder_enabled === true ||
+        (profile?.hourly_rate != null && Number(profile.hourly_rate) > 0) ||
+        (prefix && prefix !== 'INV') ||
+        profile?.invoice_include_year === false ||
+        profile?.invoice_number_reset_yearly === false ||
+        (profile?.invoice_number_start != null && profile.invoice_number_start !== 1) ||
+        (profile?.invoice_number_padding != null && profile.invoice_number_padding !== 4) ||
+        (profile?.reminder_days_before != null && profile.reminder_days_before !== 1) ||
+        (taxCount || 0) > 0
       );
 
       setAuto({
         companyProfile: hasCompanyProfile,
         uploadLogo: hasLogo,
         customizeInvoices: hasInvoiceCustomization,
-        firstInvoice: (invoiceCount || 0) > 0,
+        firstClient: (clientCount || 0) > 0,
         firstProject: (projectCount || 0) > 0,
       });
     } finally {
@@ -124,18 +145,19 @@ export function StartGuide() {
 
   useEffect(() => {
     const handler = () => {
-      refreshAutoState();
+      loadGuideState();
+      void refreshAutoState();
     };
     window.addEventListener(GUIDE_REFRESH_EVENT, handler);
     return () => window.removeEventListener(GUIDE_REFRESH_EVENT, handler);
-  }, [refreshAutoState]);
+  }, [loadGuideState, refreshAutoState]);
 
   const items = useMemo(
     () => [
       { id: 'companyProfile' as const, label: 'Complete your company profile', link: '/settings/business' },
       { id: 'uploadLogo' as const, label: 'Upload your logo', link: '/settings/business' },
       { id: 'customizeInvoices' as const, label: 'Customize your invoices', link: '/settings/invoices' },
-      { id: 'firstInvoice' as const, label: 'Create your first invoice', link: '/invoices' },
+      { id: 'firstClient' as const, label: 'Create your first client', link: '/clients' },
       { id: 'firstProject' as const, label: 'Create your first project', link: '/projects' },
     ],
     []
@@ -146,7 +168,7 @@ export function StartGuide() {
       companyProfile: false,
       uploadLogo: false,
       customizeInvoices: false,
-      firstInvoice: false,
+      firstClient: false,
       firstProject: false,
     };
     for (const item of items) {
@@ -242,4 +264,12 @@ export function StartGuide() {
 export function notifyStartGuideRefresh() {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new Event(GUIDE_REFRESH_EVENT));
+}
+
+/** Marks a getting-started item complete (e.g. after saving invoice settings). */
+export function markStartGuideItemComplete(userId: string, id: GuideItemId) {
+  const key = storageKey('manual', userId);
+  const next = { ...loadJson<ManualState>(key, {}), [id]: true };
+  saveJson(key, next);
+  notifyStartGuideRefresh();
 }

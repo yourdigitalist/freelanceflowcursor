@@ -128,8 +128,9 @@ serve(async (req) => {
     supabase.from("contracts").select("id, user_id, identifier, timeline_days, sent_at, created_at, status, reminder_near_end").eq("reminder_near_end", true),
     supabase
       .from("client_follow_ups")
-      .select("id, user_id, client_id, title, due_at, remind_at, completed_at, clients(name)")
-      .is("completed_at", null),
+      .select("id, user_id, client_id, title, due_at, remind_at, completed_at, clients!inner(name)")
+      .is("completed_at", null)
+      .is("clients.archived_at", null),
   ]);
 
   const notifications: Array<{ user_id: string; type: string; title: string; body: string | null; link: string | null; event_key: string }> = [];

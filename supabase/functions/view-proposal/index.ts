@@ -35,7 +35,7 @@ serve(async (req) => {
     );
     const { data: proposal } = await supabase
       .from("proposals")
-      .select("*, clients(name, company), projects(name)")
+      .select("*, clients(name, company, logo_url), projects(name)")
       .eq("public_token", token)
       .single();
 

@@ -10,11 +10,42 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ArrowLeft, Check, MoreVertical, X } from "@/components/icons";
-import { addMonths, addWeeks, eachDayOfInterval, endOfMonth, endOfWeek, format, parseISO, startOfMonth, startOfWeek, subMonths, subWeeks } from "date-fns";
+import { addMonths, addWeeks, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, parseISO, startOfMonth, startOfWeek, subMonths, subWeeks } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/ui/phone-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  countryFromSelectValue,
+  countryLabel,
+  countryOptions,
+  countrySelectValue,
+  currencies,
+} from "@/lib/locale-data";
+import { useLocalePreferences } from "@/hooks/useLocalePreferences";
+import { formatLocaleDate, formatLocaleDateTime } from "@/lib/datetime";
+import {
+  archiveClient,
+  buildArchiveConfirmMessage,
+  buildBlockedDeleteMessage,
+  buildDeleteConfirmMessage,
+  buildRestoreConfirmMessage,
+  canHardDeleteClient,
+  deleteClient,
+  formatClientDeleteError,
+  getClientRelatedCounts,
+  hasClientRelatedRecords,
+  isClientArchived,
+  restoreClient,
+} from "@/lib/clientLifecycle";
 
 type Client = {
   id: string;
@@ -40,6 +71,7 @@ type Client = {
   currency: string | null;
   tags: string[] | null;
   created_at: string;
+  archived_at: string | null;
 };
 
 type Project = { id: string; name: string; status: string | null; due_date: string | null; budget: number | null };
@@ -56,6 +88,8 @@ type TimeEntry = {
   start_time: string | null;
   total_duration_seconds: number | null;
   duration_minutes: number | null;
+  billable: boolean | null;
+  billing_status: string | null;
   projects?: { name: string } | null;
   tasks?: { title: string } | null;
 };
@@ -170,11 +204,12 @@ export default function ClientDetail() {
   const [infoDraft, setInfoDraft] = useState<Partial<Client>>({});
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [newTag, setNewTag] = useState("");
-  const [dateFormatPreference, setDateFormatPreference] = useState("MM/DD/YYYY");
   const [loading, setLoading] = useState(true);
+  const { dateFormat, timeFormat } = useLocalePreferences();
 
   const [timeView, setTimeView] = useState<"week" | "month">("week");
   const [timeAnchor, setTimeAnchor] = useState<Date>(new Date());
+  const [selectedTimeDay, setSelectedTimeDay] = useState<Date>(new Date());
   const hasUnsavedChanges = useMemo(() => {
     if (!client) return false;
     const infoDirty =
@@ -191,7 +226,7 @@ export default function ClientDetail() {
         city: infoDraft.city || "",
         state: infoDraft.state || "",
         postal_code: infoDraft.postal_code || "",
-        country: infoDraft.country || "",
+        country: countrySelectValue(infoDraft.country),
         lead_source: infoDraft.lead_source || "",
         estimated_value: infoDraft.estimated_value ?? null,
         currency: infoDraft.currency || "USD",
@@ -208,7 +243,7 @@ export default function ClientDetail() {
           city: client.city || "",
           state: client.state || "",
           postal_code: client.postal_code || "",
-          country: client.country || "",
+          country: countrySelectValue(client.country),
           lead_source: client.lead_source || "",
           estimated_value: client.estimated_value ?? null,
           currency: client.currency || "USD",
@@ -234,7 +269,7 @@ export default function ClientDetail() {
       if (!user || !id) return;
       setLoading(true);
       try {
-        const [{ data: c, error: cErr }, { data: p }, { data: inv }, { data: prop }, { data: ctr }, { data: appr }, { data: fu }, { data: profile }] = await Promise.all([
+        const [{ data: c, error: cErr }, { data: p }, { data: inv }, { data: prop }, { data: ctr }, { data: appr }, { data: fu }] = await Promise.all([
           supabase.from("clients").select("*").eq("id", id).eq("user_id", user.id).maybeSingle(),
           supabase.from("projects").select("id, name, status, due_date, budget").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("invoices").select("id, invoice_number, status, total, due_date").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
@@ -242,7 +277,6 @@ export default function ClientDetail() {
           supabase.from("contracts").select("id, identifier, status, total").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("review_requests").select("id, title, status, created_at, project_id, projects(name)").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("client_follow_ups").select("id, title, due_at, completed_at").eq("client_id", id).order("created_at", { ascending: false }),
-          supabase.from("profiles").select("date_format").eq("user_id", user.id).maybeSingle(),
         ]);
 
         if (cErr) throw cErr;
@@ -256,13 +290,12 @@ export default function ClientDetail() {
         setContracts((ctr || []) as Contract[]);
         setApprovals((appr || []) as Approval[]);
         setFollowUps((fu || []) as FollowUp[]);
-        setDateFormatPreference((profile as { date_format?: string | null } | null)?.date_format || "MM/DD/YYYY");
 
         const projectIds = ((p || []) as Project[]).map((row) => row.id);
         if (projectIds.length > 0) {
           const { data: te } = await supabase
             .from("time_entries")
-            .select("id, project_id, task_id, description, started_at, start_time, total_duration_seconds, duration_minutes, projects(name), tasks(title)")
+            .select("id, project_id, task_id, description, started_at, start_time, total_duration_seconds, duration_minutes, billable, billing_status, projects(name), tasks(title)")
             .in("project_id", projectIds)
             .eq("user_id", user.id)
             .order("started_at", { ascending: false });
@@ -279,37 +312,43 @@ export default function ClientDetail() {
     void load();
   }, [id, user]);
 
-  const range = useMemo(() => {
-    if (timeView === "week") {
-      return {
-        start: startOfWeek(timeAnchor, { weekStartsOn: 1 }),
-        end: endOfWeek(timeAnchor, { weekStartsOn: 1 }),
-      };
-    }
-    return { start: startOfMonth(timeAnchor), end: endOfMonth(timeAnchor) };
+  useEffect(() => {
+    setSelectedTimeDay(timeAnchor);
   }, [timeAnchor, timeView]);
 
-  const days = useMemo(() => eachDayOfInterval(range), [range.start, range.end]);
+  const weekRange = useMemo(
+    () => ({
+      start: startOfWeek(timeAnchor, { weekStartsOn: 1 }),
+      end: endOfWeek(timeAnchor, { weekStartsOn: 1 }),
+    }),
+    [timeAnchor],
+  );
+  const days = useMemo(() => eachDayOfInterval(weekRange), [weekRange.start, weekRange.end]);
   const dayKeys = useMemo(() => days.map((d) => format(d, "yyyy-MM-dd")), [days]);
+  const monthStart = useMemo(() => startOfMonth(timeAnchor), [timeAnchor]);
+  const monthEnd = useMemo(() => endOfMonth(timeAnchor), [timeAnchor]);
+  const monthGridStart = useMemo(() => startOfWeek(monthStart, { weekStartsOn: 1 }), [monthStart]);
+  const monthGridEnd = useMemo(() => endOfWeek(monthEnd, { weekStartsOn: 1 }), [monthEnd]);
+  const monthGridDays = useMemo(() => eachDayOfInterval({ start: monthGridStart, end: monthGridEnd }), [monthGridStart, monthGridEnd]);
 
   const groupedRows = useMemo(() => {
-    const map = new Map<string, { projectName: string; taskName: string; notes: string; byDay: Record<string, number> }>();
+    const map = new Map<string, { projectId: string | null; taskId: string | null; projectName: string; taskName: string; notes: string; byDay: Record<string, number> }>();
     timeEntries.forEach((entry) => {
       const dateStr = entry.started_at || entry.start_time;
       if (!dateStr) return;
       const d = parseISO(dateStr);
-      if (d < range.start || d > range.end) return;
+      if (d < weekRange.start || d > weekRange.end) return;
       const keyDay = format(d, "yyyy-MM-dd");
       const projectName = entry.projects?.name || "No project";
       const taskName = entry.tasks?.title || "No task";
       const notes = entry.description || "";
       const key = `${entry.project_id || "none"}::${entry.task_id || "none"}::${notes}`;
-      if (!map.has(key)) map.set(key, { projectName, taskName, notes, byDay: {} });
+      if (!map.has(key)) map.set(key, { projectId: entry.project_id, taskId: entry.task_id, projectName, taskName, notes, byDay: {} });
       const row = map.get(key)!;
       row.byDay[keyDay] = (row.byDay[keyDay] || 0) + toSeconds(entry);
     });
     return Array.from(map.values());
-  }, [timeEntries, range.start, range.end]);
+  }, [timeEntries, weekRange.start, weekRange.end]);
 
   const dayTotals = useMemo(() => {
     const out: Record<string, number> = {};
@@ -321,15 +360,107 @@ export default function ClientDetail() {
     return out;
   }, [groupedRows, dayKeys]);
 
-  const deleteClient = async () => {
-    if (!client || !window.confirm("Delete this client? This action cannot be undone.")) return;
-    const { error } = await supabase.from("clients").delete().eq("id", client.id);
+  const monthDayTotals = useMemo(() => {
+    const out: Record<string, number> = {};
+    timeEntries.forEach((entry) => {
+      const dateStr = entry.started_at || entry.start_time;
+      if (!dateStr) return;
+      const d = parseISO(dateStr);
+      if (d < monthStart || d > monthEnd) return;
+      const key = format(d, "yyyy-MM-dd");
+      out[key] = (out[key] || 0) + toSeconds(entry);
+    });
+    return out;
+  }, [timeEntries, monthStart, monthEnd]);
+
+  const selectedDayEntries = useMemo(
+    () =>
+      timeEntries
+        .filter((entry) => {
+          const dateStr = entry.started_at || entry.start_time;
+          if (!dateStr) return false;
+          return isSameDay(parseISO(dateStr), selectedTimeDay);
+        })
+        .sort((a, b) => {
+          const aDate = parseISO(a.started_at || a.start_time || new Date(0).toISOString()).getTime();
+          const bDate = parseISO(b.started_at || b.start_time || new Date(0).toISOString()).getTime();
+          return bDate - aDate;
+        }),
+    [timeEntries, selectedTimeDay],
+  );
+
+  const timeBillingSummary = useMemo(() => {
+    const summary = {
+      unbilledSeconds: 0,
+      billedSeconds: 0,
+      paidSeconds: 0,
+      notBillableSeconds: 0,
+    };
+    for (const entry of timeEntries) {
+      const seconds = toSeconds(entry);
+      if (!entry.billable) {
+        summary.notBillableSeconds += seconds;
+        continue;
+      }
+      if (entry.billing_status === "paid") summary.paidSeconds += seconds;
+      else if (entry.billing_status === "billed") summary.billedSeconds += seconds;
+      else summary.unbilledSeconds += seconds;
+    }
+    return summary;
+  }, [timeEntries]);
+
+  const handleArchiveClient = async () => {
+    if (!client || !window.confirm(buildArchiveConfirmMessage(client.name))) return;
+    const { error } = await archiveClient(client.id);
     if (error) {
-      toast({ title: "Failed to delete client", description: error.message, variant: "destructive" });
+      toast({ title: "Failed to archive client", description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "Client deleted" });
-    navigate("/clients");
+    toast({ title: "Client archived" });
+    const { data } = await supabase.from("clients").select("*").eq("id", client.id).maybeSingle();
+    if (data) setClient(data as Client);
+  };
+
+  const handleRestoreClient = async () => {
+    if (!client || !window.confirm(buildRestoreConfirmMessage(client.name))) return;
+    const { error } = await restoreClient(client.id);
+    if (error) {
+      toast({ title: "Failed to restore client", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Client restored" });
+    const { data } = await supabase.from("clients").select("*").eq("id", client.id).maybeSingle();
+    if (data) setClient(data as Client);
+  };
+
+  const handleDeleteClient = async () => {
+    if (!client) return;
+    try {
+      const counts = await getClientRelatedCounts(client.id);
+      if (hasClientRelatedRecords(counts)) {
+        toast({
+          title: "Cannot delete client",
+          description: buildBlockedDeleteMessage(counts),
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!window.confirm(buildDeleteConfirmMessage())) return;
+      const { error } = await deleteClient(client.id);
+      if (error) {
+        toast({
+          title: "Failed to delete client",
+          description: formatClientDeleteError(error.message),
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({ title: "Client deleted" });
+      navigate("/clients");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Could not delete client.";
+      toast({ title: "Failed to delete client", description: message, variant: "destructive" });
+    }
   };
 
   const saveClientInfo = async () => {
@@ -350,7 +481,7 @@ export default function ClientDetail() {
       city: infoDraft.city || null,
       state: infoDraft.state || null,
       postal_code: infoDraft.postal_code || null,
-      country: infoDraft.country || null,
+      country: countryFromSelectValue(countrySelectValue(infoDraft.country)),
       lead_source: infoDraft.lead_source || null,
       estimated_value: infoDraft.estimated_value != null ? Number(infoDraft.estimated_value) : null,
       currency: infoDraft.currency || "USD",
@@ -583,24 +714,26 @@ export default function ClientDetail() {
     return rows;
   }, [client?.next_action, client?.next_follow_up_at, followUps]);
 
-  const toDateFnsPattern = (pattern: string) =>
-    pattern.replace(/YYYY/g, "yyyy").replace(/DD/g, "dd").replace(/\bD\b/g, "d");
-
-  const formatUserDate = (value: string | null | undefined, includeTime = false) => {
-    if (!value) return "—";
-    const parsed = parseISO(value);
-    if (Number.isNaN(parsed.getTime())) return "—";
-    return includeTime
-      ? `${format(parsed, toDateFnsPattern(dateFormatPreference))} ${format(parsed, "HH:mm")}`
-      : format(parsed, toDateFnsPattern(dateFormatPreference));
+  const formatUserDate = (value: string | Date | null | undefined, includeTime = false) => {
+    return includeTime ? formatLocaleDateTime(value, dateFormat, timeFormat) : formatLocaleDate(value, dateFormat);
   };
 
   if (loading) return <AppLayout><div className="text-sm text-muted-foreground">Loading client...</div></AppLayout>;
   if (!client) return <AppLayout><div className="text-sm text-muted-foreground">Client not found.</div></AppLayout>;
 
+  const clientArchived = isClientArchived(client);
+
   return (
     <AppLayout>
       <div className="space-y-6">
+        {clientArchived ? (
+          <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              This client is archived. They are hidden from your main client list and cannot be selected for new work.
+            </p>
+            <Button size="sm" onClick={() => void handleRestoreClient()}>Restore client</Button>
+          </div>
+        ) : null}
         <div className="flex items-center justify-between gap-3 border-b pb-4">
           <div>
             <Link to="/clients" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
@@ -706,7 +839,14 @@ export default function ClientDetail() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem className="text-destructive" onClick={deleteClient}>Delete Client</DropdownMenuItem>
+                {clientArchived ? (
+                  <DropdownMenuItem onClick={() => void handleRestoreClient()}>Restore client</DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onClick={() => void handleArchiveClient()}>Archive client</DropdownMenuItem>
+                )}
+                <DropdownMenuItem className="text-destructive" onClick={() => void handleDeleteClient()}>
+                  Delete client
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -745,21 +885,67 @@ export default function ClientDetail() {
               <CardContent className="space-y-2 text-sm">
                 {editingInfo ? (
                   <div className="grid gap-3 md:grid-cols-2">
-                    <div className="space-y-1"><Label>First name</Label><Input value={infoDraft.first_name || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, first_name: e.target.value }))} /></div>
-                    <div className="space-y-1"><Label>Last name</Label><Input value={infoDraft.last_name || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, last_name: e.target.value }))} /></div>
-                    <div className="space-y-1"><Label>Company</Label><Input value={infoDraft.company || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, company: e.target.value }))} /></div>
-                    <div className="space-y-1"><Label>Email</Label><Input value={infoDraft.email || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, email: e.target.value }))} /></div>
-                    <div className="space-y-1"><Label>Phone</Label><Input value={infoDraft.phone || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, phone: e.target.value }))} /></div>
-                    <div className="space-y-1"><Label>Tax ID</Label><Input value={infoDraft.tax_id || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, tax_id: e.target.value }))} /></div>
-                    <div className="space-y-1"><Label>Street</Label><Input value={infoDraft.street || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, street: e.target.value }))} /></div>
-                    <div className="space-y-1"><Label>Street 2</Label><Input value={infoDraft.street2 || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, street2: e.target.value }))} /></div>
-                    <div className="space-y-1"><Label>City</Label><Input value={infoDraft.city || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, city: e.target.value }))} /></div>
-                    <div className="space-y-1"><Label>State</Label><Input value={infoDraft.state || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, state: e.target.value }))} /></div>
-                    <div className="space-y-1"><Label>Postal code</Label><Input value={infoDraft.postal_code || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, postal_code: e.target.value }))} /></div>
-                    <div className="space-y-1"><Label>Country</Label><Input value={infoDraft.country || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, country: e.target.value }))} /></div>
-                    <div className="space-y-1"><Label>Lead source</Label><Input value={infoDraft.lead_source || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, lead_source: e.target.value }))} /></div>
-                    <div className="space-y-1"><Label>Currency</Label><Input value={infoDraft.currency || "USD"} onChange={(e) => setInfoDraft((p) => ({ ...p, currency: e.target.value }))} /></div>
-                    <div className="space-y-1"><Label>Estimated value</Label><Input type="number" step="0.01" value={infoDraft.estimated_value ?? ""} onChange={(e) => setInfoDraft((p) => ({ ...p, estimated_value: e.target.value ? Number(e.target.value) : null }))} /></div>
+                    <div className="space-y-1 min-w-0"><Label>First name</Label><Input value={infoDraft.first_name || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, first_name: e.target.value }))} /></div>
+                    <div className="space-y-1 min-w-0"><Label>Last name</Label><Input value={infoDraft.last_name || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, last_name: e.target.value }))} /></div>
+                    <div className="space-y-1 min-w-0"><Label>Email</Label><Input type="email" value={infoDraft.email || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, email: e.target.value }))} /></div>
+                    <div className="space-y-1 min-w-0"><Label>Company</Label><Input value={infoDraft.company || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, company: e.target.value }))} /></div>
+                    <div className="space-y-1 min-w-0">
+                      <Label htmlFor="client-phone">Phone</Label>
+                      <PhoneInput
+                        id="client-phone"
+                        className="min-w-0 [&_button]:w-[5.5rem] [&_button]:px-2"
+                        value={infoDraft.phone || ""}
+                        onChange={(phone) => setInfoDraft((p) => ({ ...p, phone }))}
+                        placeholder="Phone number"
+                      />
+                    </div>
+                    <div className="space-y-1 min-w-0"><Label>Tax ID</Label><Input value={infoDraft.tax_id || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, tax_id: e.target.value }))} placeholder="Tax ID / VAT number" /></div>
+                    <div className="space-y-1 min-w-0 md:col-span-2"><Label>Street</Label><Input value={infoDraft.street || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, street: e.target.value }))} placeholder="Street" /></div>
+                    <div className="space-y-1 min-w-0 md:col-span-2"><Label>Street 2</Label><Input value={infoDraft.street2 || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, street2: e.target.value }))} placeholder="Street 2" /></div>
+                    <div className="space-y-1 min-w-0"><Label>City</Label><Input value={infoDraft.city || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, city: e.target.value }))} placeholder="City" /></div>
+                    <div className="space-y-1 min-w-0"><Label>State</Label><Input value={infoDraft.state || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, state: e.target.value }))} placeholder="State/Province" /></div>
+                    <div className="space-y-1 min-w-0"><Label>Postal code</Label><Input value={infoDraft.postal_code || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, postal_code: e.target.value }))} placeholder="ZIP/Postal Code" /></div>
+                    <div className="space-y-1 min-w-0">
+                      <Label>Country</Label>
+                      <Select
+                        value={countrySelectValue(infoDraft.country)}
+                        onValueChange={(value) =>
+                          setInfoDraft((p) => ({ ...p, country: countryFromSelectValue(value) }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Country" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No country</SelectItem>
+                          {countryOptions.map((country) => (
+                            <SelectItem key={country.value} value={country.value}>
+                              {country.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1 min-w-0"><Label>Lead source</Label><Input value={infoDraft.lead_source || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, lead_source: e.target.value }))} placeholder="e.g. Referral, Website" /></div>
+                    <div className="space-y-1 min-w-0">
+                      <Label>Currency</Label>
+                      <Select
+                        value={infoDraft.currency || "USD"}
+                        onValueChange={(value) => setInfoDraft((p) => ({ ...p, currency: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Currency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {currencies.map((currency) => (
+                            <SelectItem key={currency.value} value={currency.value}>
+                              {currency.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1 min-w-0"><Label>Estimated value</Label><Input type="number" step="0.01" value={infoDraft.estimated_value ?? ""} onChange={(e) => setInfoDraft((p) => ({ ...p, estimated_value: e.target.value ? Number(e.target.value) : null }))} placeholder="0.00" /></div>
                   </div>
                 ) : (
                   <>
@@ -768,7 +954,7 @@ export default function ClientDetail() {
                     <p><strong>Phone:</strong> {client.phone || "—"}</p>
                     <p><strong>Tax ID:</strong> {client.tax_id || "—"}</p>
                     <p><strong>Currency:</strong> {client.currency || "USD"}</p>
-                    <p><strong>Address:</strong> {[client.street, client.street2, client.city, client.state, client.postal_code, client.country].filter(Boolean).join(", ") || "—"}</p>
+                    <p><strong>Address:</strong> {[client.street, client.street2, client.city, client.state, client.postal_code, countryLabel(client.country)].filter(Boolean).join(", ") || "—"}</p>
                     <p><strong>Lead source:</strong> {client.lead_source || "—"}</p>
                     <p>
                       <strong>Estimated value:</strong>{" "}
@@ -875,47 +1061,194 @@ export default function ClientDetail() {
               <h3 className="text-base font-semibold">Time</h3>
               <Button variant="outline" asChild><Link to={`/time?view=week&client=${client.id}`}>Open Full Timesheet</Link></Button>
             </div>
+            <div className="grid gap-3 md:grid-cols-4">
+              <Card className="border">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Unbilled</p>
+                  <p className="font-mono text-sm font-semibold">{formatHm(timeBillingSummary.unbilledSeconds)}</p>
+                </CardContent>
+              </Card>
+              <Card className="border">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Billed</p>
+                  <p className="font-mono text-sm font-semibold">{formatHm(timeBillingSummary.billedSeconds)}</p>
+                </CardContent>
+              </Card>
+              <Card className="border">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Paid</p>
+                  <p className="font-mono text-sm font-semibold">{formatHm(timeBillingSummary.paidSeconds)}</p>
+                </CardContent>
+              </Card>
+              <Card className="border">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Not billable</p>
+                  <p className="font-mono text-sm font-semibold">{formatHm(timeBillingSummary.notBillableSeconds)}</p>
+                </CardContent>
+              </Card>
+            </div>
             <div className="flex items-center justify-between">
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setTimeAnchor((d) => (timeView === "week" ? subWeeks(d, 1) : subMonths(d, 1)))}>Previous</Button>
                 <Button variant="outline" onClick={() => setTimeAnchor((d) => (timeView === "week" ? addWeeks(d, 1) : addMonths(d, 1)))}>Next</Button>
+                <Button variant="outline" onClick={() => { const now = new Date(); setTimeAnchor(now); setSelectedTimeDay(now); }}>Today</Button>
+                <Input
+                  type="date"
+                  className="h-9 w-[170px]"
+                  value={format(selectedTimeDay, "yyyy-MM-dd")}
+                  onChange={(e) => {
+                    const picked = new Date(`${e.target.value}T12:00:00`);
+                    if (Number.isNaN(picked.getTime())) return;
+                    setSelectedTimeDay(picked);
+                    setTimeAnchor(picked);
+                  }}
+                />
               </div>
               <div className="flex gap-2">
                 <Button variant={timeView === "week" ? "default" : "outline"} onClick={() => setTimeView("week")}>Week</Button>
                 <Button variant={timeView === "month" ? "default" : "outline"} onClick={() => setTimeView("month")}>Month</Button>
               </div>
             </div>
-            <Card><CardContent className="p-0 overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Project / Task</TableHead>
-                    {days.map((day) => <TableHead key={day.toISOString()}>{format(day, timeView === "week" ? "EEE d" : "d")}</TableHead>)}
-                    <TableHead>Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {groupedRows.map((row, idx) => {
-                    const rowTotal = dayKeys.reduce((sum, k) => sum + (row.byDay[k] || 0), 0);
+            {timeView === "week" ? (
+              <Card><CardContent className="p-0 overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Project / Task</TableHead>
+                      {days.map((day) => <TableHead key={day.toISOString()}>{format(day, "EEE d")}</TableHead>)}
+                      <TableHead>Total</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {groupedRows.map((row, idx) => {
+                      const rowTotal = dayKeys.reduce((sum, k) => sum + (row.byDay[k] || 0), 0);
+                      const rowTimerHref = row.projectId
+                        ? `/time/timer?project=${row.projectId}${row.taskId ? `&task=${row.taskId}` : ""}`
+                        : "/time/timer";
+                      return (
+                        <TableRow key={`${row.projectName}-${row.taskName}-${idx}`}>
+                          <TableCell>
+                            <div className="font-medium">
+                              {row.projectId ? (
+                                <Link to={`/projects/${row.projectId}`} className="hover:underline">
+                                  {row.projectName}
+                                </Link>
+                              ) : (
+                                row.projectName
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{row.taskName}</div>
+                          </TableCell>
+                          {dayKeys.map((k) => (
+                            <TableCell
+                              key={k}
+                              className="font-mono cursor-pointer hover:bg-muted/40"
+                              onClick={() => setSelectedTimeDay(new Date(`${k}T12:00:00`))}
+                            >
+                              {row.byDay[k] ? formatHm(row.byDay[k]) : "—"}
+                            </TableCell>
+                          ))}
+                          <TableCell className="font-mono font-medium">{formatHm(rowTotal)}</TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" asChild>
+                              <Link to={rowTimerHref}>Resume</Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    <TableRow>
+                      <TableCell className="font-semibold">Total</TableCell>
+                      {dayKeys.map((k) => <TableCell key={k} className="font-mono font-semibold">{dayTotals[k] ? formatHm(dayTotals[k]) : "—"}</TableCell>)}
+                      <TableCell className="font-mono font-semibold">{formatHm(Object.values(dayTotals).reduce((s, v) => s + v, 0))}</TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </CardContent></Card>
+            ) : (
+              <Card><CardContent className="p-4">
+                <div className="grid grid-cols-7 gap-2">
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => (
+                    <div key={label} className="px-2 py-1 text-xs font-medium text-muted-foreground">{label}</div>
+                  ))}
+                  {monthGridDays.map((d) => {
+                    const key = format(d, "yyyy-MM-dd");
+                    const inMonth = d >= monthStart && d <= monthEnd;
+                    const total = monthDayTotals[key] || 0;
                     return (
-                      <TableRow key={`${row.projectName}-${row.taskName}-${idx}`}>
-                        <TableCell>
-                          <div className="font-medium">{row.projectName}</div>
-                          <div className="text-xs text-muted-foreground">{row.taskName}</div>
-                        </TableCell>
-                        {dayKeys.map((k) => <TableCell key={k} className="font-mono">{row.byDay[k] ? formatHm(row.byDay[k]) : "—"}</TableCell>)}
-                        <TableCell className="font-mono font-medium">{formatHm(rowTotal)}</TableCell>
-                      </TableRow>
+                      <button
+                        key={key}
+                        onClick={() => setSelectedTimeDay(d)}
+                        className={`rounded-md border min-h-[88px] p-2 text-left ${
+                          inMonth ? "bg-card" : "bg-muted/30 text-muted-foreground"
+                        } ${isSameDay(d, selectedTimeDay) ? "border-primary bg-primary/5" : ""}`}
+                      >
+                        <p className="text-xs">{format(d, "d")}</p>
+                        <p className="mt-2 text-xs font-mono">{total ? formatHm(total) : "0:00"}</p>
+                      </button>
                     );
                   })}
-                  <TableRow>
-                    <TableCell className="font-semibold">Total</TableCell>
-                    {dayKeys.map((k) => <TableCell key={k} className="font-mono font-semibold">{dayTotals[k] ? formatHm(dayTotals[k]) : "—"}</TableCell>)}
-                    <TableCell className="font-mono font-semibold">{formatHm(Object.values(dayTotals).reduce((s, v) => s + v, 0))}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent></Card>
+                </div>
+              </CardContent></Card>
+            )}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-semibold">Entries on {formatUserDate(selectedTimeDay)}</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {selectedDayEntries.length === 0 ? (
+                  <div className="px-4 pb-4 text-sm text-muted-foreground">No entries for this day.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Project / Task</TableHead>
+                        <TableHead>Notes</TableHead>
+                        <TableHead>Duration</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedDayEntries.map((entry) => {
+                        const resumeHref = entry.project_id
+                          ? `/time/timer?project=${entry.project_id}${entry.task_id ? `&task=${entry.task_id}` : ""}`
+                          : "/time/timer";
+                        return (
+                          <TableRow key={entry.id}>
+                            <TableCell>
+                              <div className="font-medium">
+                                {entry.project_id ? (
+                                  <Link to={`/projects/${entry.project_id}`} className="hover:underline">
+                                    {entry.projects?.name || "No project"}
+                                  </Link>
+                                ) : (
+                                  entry.projects?.name || "No project"
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground">{entry.tasks?.title || "No task"}</div>
+                            </TableCell>
+                            <TableCell>{entry.description || <span className="text-muted-foreground">No notes</span>}</TableCell>
+                            <TableCell className="font-mono">{formatHm(toSeconds(entry))}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button variant="ghost" size="sm" asChild>
+                                  <Link to={`/time?view=day&edit=${entry.id}`}>Edit</Link>
+                                </Button>
+                                <Button variant="ghost" size="sm" asChild>
+                                  <Link to={resumeHref}>Resume</Link>
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="invoices" className="space-y-3">

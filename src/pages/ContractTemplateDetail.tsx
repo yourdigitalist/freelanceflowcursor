@@ -13,6 +13,8 @@ import { ArrowLeft } from "@/components/icons";
 import ReactQuill from "react-quill";
 import type ReactQuillType from "react-quill";
 import "react-quill/dist/quill.snow.css";
+import { useLocalePreferences } from "@/hooks/useLocalePreferences";
+import { formatLocaleDate } from "@/lib/datetime";
 
 type Row = { id: string; name: string; description: string | null; content: string };
 
@@ -23,6 +25,7 @@ export default function ContractTemplateDetail() {
   const [tab, setTab] = useState("data");
   const [row, setRow] = useState<Row | null>(null);
   const quillRef = useRef<ReactQuillType>(null);
+  const { dateFormat } = useLocalePreferences();
 
   const quillModules = useMemo(
     () => ({
@@ -191,7 +194,7 @@ export default function ContractTemplateDetail() {
               />
               <section className="mt-10 border-t pt-6">
                 <div className="mb-5 text-right text-sm text-zinc-600">
-                  City, {new Date().toLocaleDateString()}
+                  City, {formatLocaleDate(new Date(), dateFormat)}
                 </div>
                 <div className="mb-6 grid gap-8 md:grid-cols-2">
                   <div className="text-center">

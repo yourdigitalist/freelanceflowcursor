@@ -4,7 +4,7 @@ export interface Task {
   description: string | null;
   status: string;
   status_id: string | null;
-  priority: string;
+  priority: string | null;
   due_date: string | null;
   estimated_hours: number | null;
   position: number;

@@ -12,6 +12,8 @@ import { Plus, ArrowRight, Bell, Search } from '@/components/icons';
 import { Input } from '@/components/ui/input';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { getContractsAccessMode } from '@/lib/features';
+import { useLocalePreferences } from '@/hooks/useLocalePreferences';
+import { formatLocaleDate } from '@/lib/datetime';
 
 interface DashboardStats {
   totalClients: number;
@@ -70,6 +72,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { formatCurrency: fmt } = useProfileCurrency();
+  const { dateFormat } = useLocalePreferences();
   const [isAdmin, setIsAdmin] = useState(false);
   const [stats, setStats] = useState<DashboardStats>({
     totalClients: 0,
@@ -115,7 +118,8 @@ export default function Dashboard() {
       // Fetch clients count
       const { count: clientsCount } = await supabase
         .from('clients')
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .is('archived_at', null);
 
       // Fetch active projects count
       const { count: projectsCount } = await supabase
@@ -276,9 +280,10 @@ export default function Dashboard() {
       // CRM follow-up todos
       const { data: followUpClients } = await supabase
         .from('client_follow_ups')
-        .select('id, client_id, title, due_at, clients(name)')
+        .select('id, client_id, title, due_at, clients!inner(name)')
         .eq('user_id', user!.id)
         .is('completed_at', null)
+        .is('clients.archived_at', null)
         .order('due_at', { ascending: true, nullsFirst: false })
         .limit(10);
       setFollowUps((followUpClients as FollowUpClient[]) || []);
@@ -581,7 +586,7 @@ export default function Dashboard() {
                         <div className="flex items-center gap-3">
                           {project.due_date && (
                             <span className="flex items-center gap-1">
-                              📅 {new Date(project.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              📅 {formatLocaleDate(project.due_date, dateFormat)}
                             </span>
                           )}
                           <span className="flex items-center gap-1">
@@ -724,7 +729,7 @@ export default function Dashboard() {
                       </p>
                       {c.due_at && (
                         <p className="text-xs text-muted-foreground truncate">
-                          Due {new Date(c.due_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          Due {formatLocaleDate(c.due_at, dateFormat)}
                         </p>
                       )}
                     </li>

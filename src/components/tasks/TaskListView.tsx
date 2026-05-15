@@ -27,7 +27,8 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { GripVertical, Trash2, MessageSquare, Plus, ChevronUp, ChevronDown } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
-import { Task, ProjectStatus, PRIORITY_OPTIONS } from './types';
+import { Task, ProjectStatus } from './types';
+import { PrioritySelect } from './PrioritySelect';
 import { format } from 'date-fns';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { cn } from '@/lib/utils';
@@ -43,7 +44,7 @@ interface TaskListViewProps {
   trackedSecondsByTask: Record<string, number>;
   onTaskClick: (task: Task) => void;
   onStatusChange: (taskId: string, statusId: string) => void;
-  onPriorityChange: (taskId: string, priority: string) => void;
+  onPriorityChange: (taskId: string, priority: string | null) => void;
   onTitleChange: (taskId: string, title: string) => void;
   onEstHoursChange: (taskId: string, hours: number | null) => void;
   onDueDateChange: (taskId: string, date: string | null) => void;
@@ -60,7 +61,7 @@ interface SortableRowProps {
   trackedSeconds: number;
   onTaskClick: () => void;
   onStatusChange: (statusId: string) => void;
-  onPriorityChange: (priority: string) => void;
+  onPriorityChange: (priority: string | null) => void;
   onTitleChange: (title: string) => void;
   onEstHoursChange: (hours: number | null) => void;
   onDueDateChange: (date: string | null) => void;
@@ -102,7 +103,6 @@ function SortableRow({
   };
 
   const currentStatus = statuses.find(s => s.id === task.status_id);
-  const priorityConfig = PRIORITY_OPTIONS.find(p => p.value === task.priority);
   const isDone = currentStatus?.is_done_status;
 
   const handleTitleBlur = () => {
@@ -215,24 +215,11 @@ function SortableRow({
         </Select>
       </TableCell>
       <TableCell>
-        <Select value={task.priority} onValueChange={onPriorityChange}>
-          <SelectTrigger className="w-[100px] h-8 border-0 bg-transparent p-0">
-            {priorityConfig && (
-              <Badge className={priorityConfig.color} variant="secondary">
-                {priorityConfig.label}
-              </Badge>
-            )}
-          </SelectTrigger>
-          <SelectContent>
-            {PRIORITY_OPTIONS.map((priority) => (
-              <SelectItem key={priority.value} value={priority.value}>
-                <Badge className={priority.color} variant="secondary">
-                  {priority.label}
-                </Badge>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <PrioritySelect
+          value={task.priority}
+          onValueChange={onPriorityChange}
+          triggerClassName="w-[110px] h-8 border-0 bg-transparent p-0 shadow-none"
+        />
       </TableCell>
       <TableCell>
         {isEditingHours ? (
@@ -377,7 +364,8 @@ export function TaskListView({
     if (!sortKey) return tasks;
     const statusPos = (s: ProjectStatus) => s.position;
     const statusName = (t: Task) => statuses.find((s) => s.id === t.status_id)?.name ?? '';
-    const priorityOrder = (p: string) => ['low', 'medium', 'high', 'urgent'].indexOf(p);
+    const priorityOrder = (p: string | null) =>
+      p ? ['low', 'medium', 'high', 'urgent'].indexOf(p) : -1;
     const cmp = (a: Task, b: Task): number => {
       let va: string | number | null;
       let vb: string | number | null;
@@ -398,8 +386,8 @@ export function TaskListView({
           break;
         }
         case 'priority':
-          va = priorityOrder(a.priority ?? 'medium');
-          vb = priorityOrder(b.priority ?? 'medium');
+          va = priorityOrder(a.priority);
+          vb = priorityOrder(b.priority);
           break;
         case 'estimated_hours':
           va = a.estimated_hours ?? -1;

@@ -21,7 +21,10 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ArrowLeft, CheckCircle, Plus, Trash2 } from "@/components/icons";
 import { DEFAULT_CONTRACT_TEMPLATE_CONTENT, renderTemplate } from "@/lib/contractTemplate";
+import { resolveContractTemplateContent } from "@/lib/resolveContractTemplate";
 import type { Contract, ContractService } from "@/types/contracts";
+import { useLocalePreferences } from "@/hooks/useLocalePreferences";
+import { formatLocaleDate, formatLocaleDateTime } from "@/lib/datetime";
 
 const PAYMENT_METHOD_OPTIONS = [
   "bank transfer",
@@ -63,6 +66,7 @@ export default function ContractDetail() {
   const [newProjectName, setNewProjectName] = useState("");
   const [creatingProject, setCreatingProject] = useState(false);
   const [showCreateProject, setShowCreateProject] = useState(false);
+  const { dateFormat, timeFormat } = useLocalePreferences();
   const saveInFlightRef = useRef(false);
   const pdfOpenInFlightRef = useRef(false);
   const clientViewOpenInFlightRef = useRef(false);
@@ -112,22 +116,14 @@ export default function ContractDetail() {
         }
       : null;
     setContract(mergedContract);
-    if (c?.template_id) {
-      const selected = templatesData.find((t) => t.id === c.template_id);
-      setTemplateName(selected?.name || "Contract template");
-      setTemplateContent(selected?.content || DEFAULT_CONTRACT_TEMPLATE_CONTENT);
-    } else {
-      const serviceAgreement = templatesData.find((t) => t.name?.trim().toLowerCase() === "service agreement");
-      const defaultTemplate = serviceAgreement || templatesData.find((t) => t.is_default) || templatesData[0];
-      if (defaultTemplate && mergedContract) {
-        setContract((prev) => (prev ? { ...prev, template_id: defaultTemplate.id } : prev));
-        setTemplateName(defaultTemplate.name || "Contract template");
-        setTemplateContent(defaultTemplate.content || DEFAULT_CONTRACT_TEMPLATE_CONTENT);
-      } else {
-        setTemplateName("Default template");
-        setTemplateContent(DEFAULT_CONTRACT_TEMPLATE_CONTENT);
-      }
-    }
+    const resolvedContent = resolveContractTemplateContent(c?.template_id, templatesData);
+    const resolvedTemplate = c?.template_id
+      ? templatesData.find((t) => t.id === c.template_id)
+      : templatesData.find((t) => t.name?.trim().toLowerCase() === "service agreement") ||
+        templatesData.find((t) => t.is_default) ||
+        templatesData[0];
+    setTemplateName(resolvedTemplate?.name || "Default template");
+    setTemplateContent(resolvedContent);
     setItems((lineItems || []).map((item) => ({ ...item, price: Number(item.price || 0), quantity: Number(item.quantity || 1) })));
     setServices(catalog || []);
     setAllProjects((projects || []) as Array<{ id: string; name: string; client_id: string | null }>);
@@ -201,6 +197,8 @@ export default function ContractDetail() {
     });
   }, [contract, items, templateContent]);
   const sanitizedTemplateHtml = useMemo(() => DOMPurify.sanitize(renderedTemplate), [renderedTemplate]);
+  const fmtDate = (value: string | Date | null | undefined) => formatLocaleDate(value, dateFormat);
+  const fmtDateTime = (value: string | Date | null | undefined) => formatLocaleDateTime(value, dateFormat, timeFormat);
 
   const updateContract = (patch: Record<string, unknown>) =>
     setContract((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -1042,7 +1040,7 @@ export default function ContractDetail() {
             <div id="contract-content" className="rounded-xl border bg-white p-8">
               <h1 className="mb-6 text-center text-2xl font-semibold">FREELANCE SERVICES AGREEMENT</h1>
               <div className="mb-6 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
-                Internal preview (freelancer only). Missing values are shown as blue template tags in the body.
+                This preview uses the same template and data as the client view. Empty fields appear as blue placeholders until filled.
               </div>
               <section
                 className="mb-6 text-[15px] leading-relaxed text-zinc-800 [&_h1]:mb-3 [&_h1]:text-3xl [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:text-2xl [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:text-xl [&_h3]:font-semibold [&_h4]:mb-2 [&_h4]:text-lg [&_h4]:font-semibold [&_p]:mb-2 [&_ul]:mb-2 [&_ol]:mb-2 [&_li]:ml-5"
@@ -1050,7 +1048,7 @@ export default function ContractDetail() {
               />
               <section className="mt-10 border-t pt-6">
                 <div className="mb-5 text-right text-sm text-zinc-600">
-                  {contract.freelancer_city || contract.client_city || "City"}, {new Date().toLocaleDateString()}
+                  {contract.freelancer_city || contract.client_city || "City"}, {fmtDate(new Date())}
                 </div>
                 <div className="mb-6 grid gap-8 md:grid-cols-2">
                   <div className="text-center">
@@ -1060,7 +1058,7 @@ export default function ContractDetail() {
                     <div className="mx-auto mt-3 h-px w-full bg-zinc-500" />
                     <p className="mt-2 text-lg font-semibold tracking-wide text-zinc-900">CONTRACTING PARTY</p>
                     <p className="mt-1 text-xs text-zinc-500">
-                      Signed at: {contract.client_signed_at ? new Date(contract.client_signed_at).toLocaleString() : "Pending signature"}
+                      Signed at: {contract.client_signed_at ? fmtDateTime(contract.client_signed_at) : "Pending signature"}
                     </p>
                   </div>
                   <div className="text-center">
@@ -1070,7 +1068,7 @@ export default function ContractDetail() {
                     <div className="mx-auto mt-3 h-px w-full bg-zinc-500" />
                     <p className="mt-2 text-lg font-semibold tracking-wide text-zinc-900">SERVICE PROVIDER</p>
                     <p className="mt-1 text-xs text-zinc-500">
-                      Signed at: {contract.freelancer_signed_at ? new Date(contract.freelancer_signed_at).toLocaleString() : "Pending signature"}
+                      Signed at: {contract.freelancer_signed_at ? fmtDateTime(contract.freelancer_signed_at) : "Pending signature"}
                     </p>
                   </div>
                 </div>
@@ -1087,7 +1085,7 @@ export default function ContractDetail() {
                     <p className="text-sm">
                       <strong>Date and time:</strong>{" "}
                       <span className={`inline-block rounded-md px-2 py-0.5 ${contract.freelancer_signed_at ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                        {contract.freelancer_signed_at ? new Date(contract.freelancer_signed_at).toLocaleString() : "Pending signature"}
+                        {contract.freelancer_signed_at ? fmtDateTime(contract.freelancer_signed_at) : "Pending signature"}
                       </span>
                     </p>
                     <p className="text-sm"><strong>Geolocation:</strong> {contract.freelancer_sign_geo || "—"}</p>
@@ -1103,7 +1101,7 @@ export default function ContractDetail() {
                     <p className="text-sm">
                       <strong>Date and time:</strong>{" "}
                       <span className={`inline-block rounded-md px-2 py-0.5 ${contract.client_signed_at ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                        {contract.client_signed_at ? new Date(contract.client_signed_at).toLocaleString() : "Pending signature"}
+                        {contract.client_signed_at ? fmtDateTime(contract.client_signed_at) : "Pending signature"}
                       </span>
                     </p>
                     <p className="text-sm"><strong>Geolocation:</strong> {contract.client_sign_geo || "—"}</p>
@@ -1126,7 +1124,7 @@ export default function ContractDetail() {
                   {contract.freelancer_signed_at ? (
                     <>
                       <p className="text-sm">{contract.freelancer_signed_name || "Signed"}</p>
-                      <p className="text-xs"><span className="inline-block rounded-md bg-emerald-100 px-2 py-0.5 text-emerald-700">{new Date(contract.freelancer_signed_at).toLocaleString()}</span></p>
+                      <p className="text-xs"><span className="inline-block rounded-md bg-emerald-100 px-2 py-0.5 text-emerald-700">{fmtDateTime(contract.freelancer_signed_at)}</span></p>
                       <p className="text-xs text-muted-foreground">Email: {contract.freelancer_email || "—"} {contract.freelancer_sign_email_verified ? "• Email validated" : ""}</p>
                       <p className="text-xs text-muted-foreground">Tax ID: {contract.freelancer_tax_id || "—"}</p>
                       <p className="text-xs text-muted-foreground">IP: {contract.freelancer_sign_ip || "—"}</p>
@@ -1150,7 +1148,7 @@ export default function ContractDetail() {
                   {contract.client_signed_at ? (
                     <>
                       <p className="text-sm">{contract.client_signed_name || "Signed"}</p>
-                      <p className="text-xs"><span className="inline-block rounded-md bg-emerald-100 px-2 py-0.5 text-emerald-700">{new Date(contract.client_signed_at).toLocaleString()}</span></p>
+                      <p className="text-xs"><span className="inline-block rounded-md bg-emerald-100 px-2 py-0.5 text-emerald-700">{fmtDateTime(contract.client_signed_at)}</span></p>
                       <p className="text-xs text-muted-foreground">Email: {contract.client_email || "—"} {contract.client_sign_email_verified ? "• Email validated" : ""}</p>
                       <p className="text-xs text-muted-foreground">Tax ID: {contract.client_tax_id || "—"}</p>
                       <p className="text-xs text-muted-foreground">IP: {contract.client_sign_ip || "—"}</p>

@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
+import { markStartGuideItemComplete, notifyStartGuideRefresh } from '@/components/layout/StartGuide';
 import { Loader2, Plus, Trash2, Pencil, Check, X, ChevronDown } from '@/components/icons';
 import {
   DropdownMenu,
@@ -121,6 +122,8 @@ export default function InvoiceSettings() {
     toast({ title: 'Invoice settings saved successfully' });
     await fetchProfile();
     dirtyContext?.setDirty(false);
+    markStartGuideItemComplete(user.id, 'customizeInvoices');
+    notifyStartGuideRefresh();
   };
 
   const discard = () => {
@@ -228,6 +231,8 @@ export default function InvoiceSettings() {
       setNewTaxName('');
       setNewTaxRate('');
       fetchTaxes();
+      markStartGuideItemComplete(user!.id, 'customizeInvoices');
+      notifyStartGuideRefresh();
     } catch (error: any) {
       toast({
         title: 'Error adding tax',

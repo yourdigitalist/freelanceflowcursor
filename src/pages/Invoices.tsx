@@ -51,12 +51,15 @@ import {
   INVOICES_CSV_HEADERS,
 } from '@/lib/csv';
 import { formatCurrency } from '@/lib/locale-data';
+import { useLocalePreferences } from '@/hooks/useLocalePreferences';
+import { formatLocaleDate } from '@/lib/datetime';
 
 interface Client {
   id: string;
   name: string;
   company?: string | null;
   currency?: string | null;
+  email?: string | null;
 }
 
 interface Project {
@@ -125,6 +128,13 @@ export default function Invoices() {
     invoice_footer: string | null;
     invoice_bank_details_default: string | null;
   } | null>(null);
+  const { dateFormat } = useLocalePreferences();
+  const [showCreateClientInline, setShowCreateClientInline] = useState(false);
+  const [showCreateProjectInline, setShowCreateProjectInline] = useState(false);
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientEmail, setNewClientEmail] = useState('');
+  const [newClientCompany, setNewClientCompany] = useState('');
+  const [newProjectName, setNewProjectName] = useState('');
 
   useEffect(() => {
     if (!isDialogOpen || !user) {
@@ -236,7 +246,8 @@ export default function Invoices() {
     try {
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name, company, currency')
+        .select('id, name, company, currency, email')
+        .is('archived_at', null)
         .order('name');
       if (error) throw error;
       setClients(data || []);
@@ -353,6 +364,74 @@ export default function Invoices() {
         variant: 'destructive',
       });
     }
+  };
+
+  const createClientInline = async () => {
+    if (!user) return;
+    const name = newClientName.trim();
+    if (!name) {
+      toast({ title: 'Client name is required', variant: 'destructive' });
+      return;
+    }
+    const existing = clients.find((c) => c.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      setCreateClientId(existing.id);
+      setShowCreateClientInline(false);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('clients')
+      .insert({
+        user_id: user.id,
+        name,
+        email: newClientEmail.trim() || null,
+        company: newClientCompany.trim() || null,
+        status: 'active',
+      })
+      .select('id, name, company, currency, email')
+      .single();
+    if (error || !data) {
+      toast({ title: 'Could not create client', description: error?.message, variant: 'destructive' });
+      return;
+    }
+    setClients((prev) => [...prev, data as Client].sort((a, b) => a.name.localeCompare(b.name)));
+    setCreateClientId(data.id);
+    setShowCreateClientInline(false);
+    setNewClientName('');
+    setNewClientEmail('');
+    setNewClientCompany('');
+  };
+
+  const createProjectInline = async () => {
+    if (!user) return;
+    const name = newProjectName.trim();
+    if (!name) {
+      toast({ title: 'Project name is required', variant: 'destructive' });
+      return;
+    }
+    const existing = projects.find((p) => p.name.toLowerCase() === name.toLowerCase() && p.client_id === (createClientId || null));
+    if (existing) {
+      setCreateProjectId(existing.id);
+      setShowCreateProjectInline(false);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('projects')
+      .insert({
+        user_id: user.id,
+        name,
+        client_id: createClientId || null,
+      })
+      .select('id, name, client_id')
+      .single();
+    if (error || !data) {
+      toast({ title: 'Could not create project', description: error?.message, variant: 'destructive' });
+      return;
+    }
+    setProjects((prev) => [...prev, data as Project].sort((a, b) => a.name.localeCompare(b.name)));
+    setCreateProjectId(data.id);
+    setShowCreateProjectInline(false);
+    setNewProjectName('');
   };
 
   const handleStatusChange = async (id: string, status: string) => {
@@ -632,7 +711,21 @@ export default function Invoices() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) setCreateProjectId(''); setIsDialogOpen(open); }}>
+          <Dialog
+            open={isDialogOpen}
+            onOpenChange={(open) => {
+              if (!open) {
+                setCreateProjectId('');
+                setShowCreateClientInline(false);
+                setShowCreateProjectInline(false);
+                setNewClientName('');
+                setNewClientEmail('');
+                setNewClientCompany('');
+                setNewProjectName('');
+              }
+              setIsDialogOpen(open);
+            }}
+          >
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -665,7 +758,17 @@ export default function Invoices() {
               )}
               <form onSubmit={handleCreate} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="client_id">Client</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="client_id">Client</Label>
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="h-auto p-0 text-sm"
+                      onClick={() => setShowCreateClientInline((prev) => !prev)}
+                    >
+                      {showCreateClientInline ? 'Cancel' : 'Create new client'}
+                    </Button>
+                  </div>
                   <Select
                     name="client_id"
                     value={createClientId || 'none'}
@@ -681,9 +784,29 @@ export default function Invoices() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {showCreateClientInline ? (
+                    <div className="rounded-lg border p-3 space-y-2">
+                      <Input value={newClientName} onChange={(e) => setNewClientName(e.target.value)} placeholder="Client name *" />
+                      <Input value={newClientEmail} onChange={(e) => setNewClientEmail(e.target.value)} placeholder="Email (optional)" />
+                      <Input value={newClientCompany} onChange={(e) => setNewClientCompany(e.target.value)} placeholder="Company (optional)" />
+                      <div className="flex justify-end">
+                        <Button type="button" size="sm" onClick={() => void createClientInline()}>Add client</Button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="project_id">Project (optional)</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="project_id">Project (optional)</Label>
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="h-auto p-0 text-sm"
+                      onClick={() => setShowCreateProjectInline((prev) => !prev)}
+                    >
+                      {showCreateProjectInline ? 'Cancel' : 'Create new project'}
+                    </Button>
+                  </div>
                   <Select
                     name="project_id"
                     value={createProjectId || 'none'}
@@ -706,6 +829,14 @@ export default function Invoices() {
                         : "Only projects for this client are shown. You can change a project's client in Projects."
                       : "Select a client to see their projects."}
                   </p>
+                  {showCreateProjectInline ? (
+                    <div className="rounded-lg border p-3 space-y-2">
+                      <Input value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Project name *" />
+                      <div className="flex justify-end">
+                        <Button type="button" size="sm" onClick={() => void createProjectInline()}>Add project</Button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="tax">Tax Rate</Label>
@@ -974,10 +1105,10 @@ export default function Invoices() {
                         {invoice.clients?.name || <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell>
-                        {format(new Date(invoice.issue_date), 'MMM d, yyyy')}
+                        {formatLocaleDate(invoice.issue_date, dateFormat)}
                       </TableCell>
                       <TableCell>
-                        {invoice.due_date ? format(new Date(invoice.due_date), 'MMM d, yyyy') : '—'}
+                        {formatLocaleDate(invoice.due_date, dateFormat)}
                       </TableCell>
                       <TableCell className="font-medium">
                         {fmtForClient(Number(invoice.total), invoice.clients?.currency)}

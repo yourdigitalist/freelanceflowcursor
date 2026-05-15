@@ -331,11 +331,11 @@ export function PhoneInput({
           <Button
             type="button"
             variant="outline"
-            className="w-[120px] shrink-0 justify-between"
+            className="min-w-[8.5rem] w-auto max-w-[11rem] shrink-0 justify-between px-2.5"
           >
-            <span className="flex items-center gap-2 truncate">
-              <span>{selectedCountryData?.flag}</span>
-              <span className="text-muted-foreground">{selectedCountryData?.dial}</span>
+            <span className="flex items-center gap-1.5 min-w-0">
+              <span className="shrink-0">{selectedCountryData?.flag}</span>
+              <span className="text-muted-foreground whitespace-nowrap tabular-nums">{selectedCountryData?.dial}</span>
             </span>
             <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
           </Button>

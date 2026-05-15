@@ -179,7 +179,7 @@ export default function ReviewRequests() {
         clients(name),
         projects(name)
       `).eq('user_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('clients').select('id, name, email').eq('user_id', user.id).order('name'),
+      supabase.from('clients').select('id, name, email').eq('user_id', user.id).is('archived_at', null).order('name'),
       supabase.from('projects').select('id, name').eq('user_id', user.id).order('name'),
     ]);
     

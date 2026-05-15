@@ -244,6 +244,7 @@ export type Database = {
       }
       clients: {
         Row: {
+          archived_at: string | null
           address: string | null
           avatar_color: string | null
           city: string | null
@@ -277,6 +278,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          archived_at?: string | null
           address?: string | null
           avatar_color?: string | null
           city?: string | null
@@ -310,6 +312,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          archived_at?: string | null
           address?: string | null
           avatar_color?: string | null
           city?: string | null
@@ -1568,7 +1571,9 @@ export type Database = {
         Row: {
           accepted_at: string | null
           availability_required: boolean
+          client_company_snapshot: string | null
           client_id: string
+          client_name_snapshot: string | null
           conditions_notes: string | null
           cover_image_url: string | null
           created_at: string
@@ -1597,7 +1602,9 @@ export type Database = {
         Insert: {
           accepted_at?: string | null
           availability_required?: boolean
+          client_company_snapshot?: string | null
           client_id: string
+          client_name_snapshot?: string | null
           conditions_notes?: string | null
           cover_image_url?: string | null
           created_at?: string
@@ -1626,7 +1633,9 @@ export type Database = {
         Update: {
           accepted_at?: string | null
           availability_required?: boolean
+          client_company_snapshot?: string | null
           client_id?: string
+          client_name_snapshot?: string | null
           conditions_notes?: string | null
           cover_image_url?: string | null
           created_at?: string

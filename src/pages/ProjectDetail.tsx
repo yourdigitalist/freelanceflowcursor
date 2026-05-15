@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -50,7 +50,8 @@ import { ProjectHeader } from '@/components/tasks/ProjectHeader';
 import { TaskFilters } from '@/components/tasks/TaskFilters';
 import { TaskKanbanView } from '@/components/tasks/TaskKanbanView';
 import { TaskListView } from '@/components/tasks/TaskListView';
-import { TaskEditSheet } from '@/components/tasks/TaskEditSheet';
+import { TaskEditSheet, type TaskTimeEntryRow } from '@/components/tasks/TaskEditSheet';
+import { TimeEntryLogDialog, type TimeEntryLogDialogEntry } from '@/components/time/TimeEntryLogDialog';
 import { StatusManagementModal } from '@/components/tasks/StatusManagementModal';
 import { formatDuration } from '@/lib/time';
 import { format, parseISO } from 'date-fns';
@@ -60,10 +61,12 @@ interface ProjectTimeEntry {
   description: string | null;
   start_time: string;
   end_time: string | null;
+  started_at?: string | null;
   total_duration_seconds: number | null;
   duration_minutes: number | null;
   billable: boolean | null;
   billing_status: string | null;
+  project_id: string | null;
   task_id: string | null;
   tasks: { title: string } | null;
 }
@@ -102,6 +105,8 @@ export default function ProjectDetail() {
   const [hideDone, setHideDone] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [editingTimeEntry, setEditingTimeEntry] = useState<TimeEntryLogDialogEntry | null>(null);
+  const [timeEntryDialogOpen, setTimeEntryDialogOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [importTaskDialogOpen, setImportTaskDialogOpen] = useState(false);
@@ -114,6 +119,26 @@ export default function ProjectDetail() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  const timeBillingSummary = useMemo(() => {
+    const summary = {
+      unbilledSeconds: 0,
+      billedSeconds: 0,
+      paidSeconds: 0,
+      notBillableSeconds: 0,
+    };
+    for (const entry of projectTimeEntries) {
+      const seconds = entry.total_duration_seconds ?? (entry.duration_minutes || 0) * 60;
+      if (!entry.billable) {
+        summary.notBillableSeconds += seconds;
+        continue;
+      }
+      if (entry.billing_status === 'paid') summary.paidSeconds += seconds;
+      else if (entry.billing_status === 'billed') summary.billedSeconds += seconds;
+      else summary.unbilledSeconds += seconds;
+    }
+    return summary;
+  }, [projectTimeEntries]);
 
   // Data fetching
   const fetchProject = useCallback(async () => {
@@ -248,7 +273,7 @@ export default function ProjectDetail() {
     try {
       const { data, error } = await supabase
         .from('time_entries')
-        .select('id, description, start_time, end_time, total_duration_seconds, duration_minutes, billable, billing_status, task_id, tasks(title)')
+        .select('id, description, start_time, end_time, started_at, total_duration_seconds, duration_minutes, billable, billing_status, project_id, task_id, tasks(title)')
         .eq('project_id', id)
         .order('start_time', { ascending: false })
         .limit(100);
@@ -319,7 +344,7 @@ export default function ProjectDetail() {
             title: taskData.title || '',
             description: taskData.description,
             status_id: taskData.status_id,
-            priority: taskData.priority || 'medium',
+            priority: taskData.priority || null,
             due_date: taskData.due_date,
             estimated_hours: taskData.estimated_hours,
             project_id: id,
@@ -353,7 +378,7 @@ export default function ProjectDetail() {
         title,
         status_id: statusId,
         status: 'todo',
-        priority: 'medium',
+        priority: null,
         project_id: id,
         user_id: user.id,
         position: tasks.length,
@@ -883,6 +908,32 @@ export default function ProjectDetail() {
             <CardTitle className="text-base font-semibold">Time Tracking Entries</CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="mb-4 grid gap-3 md:grid-cols-4">
+              <Card className="border">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Unbilled</p>
+                  <p className="font-mono text-sm font-semibold">{formatDuration(timeBillingSummary.unbilledSeconds, true)}</p>
+                </CardContent>
+              </Card>
+              <Card className="border">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Billed</p>
+                  <p className="font-mono text-sm font-semibold">{formatDuration(timeBillingSummary.billedSeconds, true)}</p>
+                </CardContent>
+              </Card>
+              <Card className="border">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Paid</p>
+                  <p className="font-mono text-sm font-semibold">{formatDuration(timeBillingSummary.paidSeconds, true)}</p>
+                </CardContent>
+              </Card>
+              <Card className="border">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Not billable</p>
+                  <p className="font-mono text-sm font-semibold">{formatDuration(timeBillingSummary.notBillableSeconds, true)}</p>
+                </CardContent>
+              </Card>
+            </div>
             {projectTimeEntries.length === 0 ? (
               <p className="text-sm text-muted-foreground">No entries yet for this project.</p>
             ) : (
@@ -894,6 +945,7 @@ export default function ProjectDetail() {
                     <TableHead>Description</TableHead>
                     <TableHead>Duration</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -906,6 +958,32 @@ export default function ProjectDetail() {
                         <TableCell>{entry.description || <span className="text-muted-foreground">No description</span>}</TableCell>
                         <TableCell>{formatDuration(secs, true)}</TableCell>
                         <TableCell>{entry.billable ? (entry.billing_status || 'unbilled') : 'not_billable'}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/time?view=day&edit=${entry.id}`);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const params = new URLSearchParams({ project: id ?? '' });
+                                if (entry.task_id) params.set('task', entry.task_id);
+                                navigate(`/time/timer?${params.toString()}`);
+                              }}
+                            >
+                              Resume
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -919,6 +997,26 @@ export default function ProjectDetail() {
           task={editingTask}
           statuses={statuses}
           trackedSeconds={editingTask ? (trackedSecondsByTask[editingTask.id] || 0) : 0}
+          taskTimeEntries={
+            editingTask
+              ? (projectTimeEntries.filter((entry) => entry.task_id === editingTask.id) as TaskTimeEntryRow[])
+              : []
+          }
+          onEditTimeEntry={(entry) => {
+            setEditingTimeEntry({
+              id: entry.id,
+              description: entry.description,
+              start_time: entry.start_time,
+              end_time: entry.end_time,
+              started_at: entry.started_at ?? null,
+              total_duration_seconds: entry.total_duration_seconds,
+              duration_minutes: entry.duration_minutes,
+              billable: entry.billable ?? true,
+              project_id: entry.project_id ?? id ?? null,
+              task_id: entry.task_id,
+            });
+            setTimeEntryDialogOpen(true);
+          }}
           isOpen={isSheetOpen}
           onClose={() => {
             setIsSheetOpen(false);
@@ -927,6 +1025,21 @@ export default function ProjectDetail() {
           onSave={handleSaveTask}
           onDuplicate={handleDuplicateTask}
           onDelete={handleDeleteTask}
+        />
+
+        <TimeEntryLogDialog
+          open={timeEntryDialogOpen}
+          onOpenChange={(open) => {
+            setTimeEntryDialogOpen(open);
+            if (!open) setEditingTimeEntry(null);
+          }}
+          entry={editingTimeEntry}
+          defaultProjectId={id}
+          defaultTaskId={editingTimeEntry?.task_id ?? editingTask?.id}
+          lockProject
+          onSaved={() => {
+            void fetchProjectTimeEntries();
+          }}
         />
 
         <StatusManagementModal

@@ -2,6 +2,21 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
+import {
+  archiveClient,
+  buildArchiveConfirmMessage,
+  buildBlockedDeleteMessage,
+  buildDeleteConfirmMessage,
+  buildRestoreConfirmMessage,
+  canHardDeleteClient,
+  deleteClient,
+  formatClientDeleteError,
+  getClientRelatedCounts,
+  hasClientRelatedRecords,
+  isClientArchived,
+  restoreClient,
+} from '@/lib/clientLifecycle';
+import { Checkbox } from '@/components/ui/checkbox';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { notifyStartGuideRefresh } from '@/components/layout/StartGuide';
 import { Button } from '@/components/ui/button';
@@ -42,6 +57,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PhoneInput } from '@/components/ui/phone-input';
+import { useProfileCurrency } from '@/hooks/useProfileCurrency';
+import { assertStorageCapacity } from '@/lib/userStorage';
+import { clientLogoPublicUrl } from '@/lib/clientLogo';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { HorizontalScroll } from '@/components/ui/horizontal-scroll';
 import {
@@ -58,7 +76,9 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { currencies, countryToCurrency } from '@/lib/locale-data';
+import { currencies, countryOptions } from '@/lib/locale-data';
+import { useLocalePreferences } from '@/hooks/useLocalePreferences';
+import { formatLocaleDate, formatLocaleDateTime } from '@/lib/datetime';
 
 interface Client {
   id: string;
@@ -76,6 +96,7 @@ interface Client {
   postal_code: string | null;
   country: string | null;
   avatar_color: string | null;
+  logo_url: string | null;
   status: string | null;
   notes: string | null;
   next_action: string | null;
@@ -86,6 +107,7 @@ interface Client {
   tags: string[] | null;
   last_contacted_at: string | null;
   created_at: string;
+  archived_at: string | null;
   project_count?: number;
 }
 
@@ -118,14 +140,6 @@ const AVATAR_COLORS = [
   '#EC4899', // Pink
   '#06B6D4', // Cyan
 ];
-
-const countryDisplayNames = new Intl.DisplayNames(['en'], { type: 'region' });
-const countryOptions = Object.keys(countryToCurrency)
-  .sort()
-  .map((code) => ({
-    value: code,
-    label: `${countryDisplayNames.of(code) || code} (${code})`,
-  }));
 
 const CRM_STAGES: Array<{ value: string; label: string }> = [
   { value: 'lead_new', label: 'New lead' },
@@ -181,15 +195,22 @@ function DraggableClientCard({
   client,
   onOpen,
   onEdit,
+  onArchive,
+  onRestore,
   onDelete,
+  formatDate,
   isOverlay = false,
 }: {
   client: Client;
   onOpen: () => void;
   onEdit: () => void;
+  onArchive: () => void;
+  onRestore: () => void;
   onDelete: () => void;
+  formatDate: (value: string | null | undefined) => string;
   isOverlay?: boolean;
 }) {
+  const archived = isClientArchived(client);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: client.id,
     data: { clientId: client.id, currentStatus: client.status || 'active' },
@@ -241,6 +262,11 @@ function DraggableClientCard({
                   <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
                   Edit
                 </DropdownMenuItem>
+                {archived ? (
+                  <DropdownMenuItem onClick={onRestore}>Restore client</DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onClick={onArchive}>Archive client</DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={onDelete} className="text-destructive">
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete
@@ -269,7 +295,7 @@ function DraggableClientCard({
           {client.next_follow_up_at && (
             <p className="truncate flex items-center gap-1.5">
               <SlotIcon slot="task_calendar" className="h-3.5 w-3.5 shrink-0" />
-              <span>Follow-up {client.next_follow_up_at.slice(0, 10)}</span>
+              <span>Follow-up {formatDate(client.next_follow_up_at)}</span>
             </p>
           )}
           {client.next_action && (
@@ -322,6 +348,7 @@ export default function Clients() {
   const [selectedColor, setSelectedColor] = useState(AVATAR_COLORS[4]);
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'board'>('board');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showArchived, setShowArchived] = useState(false);
   const [viewingClient, setViewingClient] = useState<Client | null>(null);
   const [activities, setActivities] = useState<ClientActivity[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(false);
@@ -338,6 +365,10 @@ export default function Clients() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [activeDragClient, setActiveDragClient] = useState<Client | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
+  const { dateFormat, timeFormat } = useLocalePreferences();
+  const { currency: profileCurrency } = useProfileCurrency();
+  const [clientLogoPreview, setClientLogoPreview] = useState<string | null>(null);
+  const clientLogoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) {
@@ -354,6 +385,7 @@ export default function Clients() {
   useEffect(() => {
     setClientPhone(editingClient?.phone || '');
     setSelectedColor(editingClient?.avatar_color || AVATAR_COLORS[4]);
+    setClientLogoPreview(editingClient?.logo_url ? clientLogoPublicUrl(editingClient.logo_url) : null);
   }, [editingClient]);
 
   // Sync view mode and status filter from URL
@@ -447,6 +479,20 @@ export default function Clients() {
     const followUpRaw = (formData.get('next_follow_up_at') as string) || '';
     const nextFollowUpAt = followUpRaw ? new Date(followUpRaw).toISOString() : null;
 
+    let logoPath: string | null = editingClient?.logo_url || null;
+    const logoFile = clientLogoInputRef.current?.files?.[0];
+    if (!logoFile && !clientLogoPreview) {
+      logoPath = null;
+    }
+    if (logoFile && user) {
+      await assertStorageCapacity(user.id, logoFile.size);
+      const ext = logoFile.name.split('.').pop() || 'png';
+      const path = `${user.id}/client-${editingClient?.id || 'new'}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from('client-logos').upload(path, logoFile, { upsert: true });
+      if (uploadError) throw uploadError;
+      logoPath = path;
+    }
+
     const clientData = {
       name: fullName,
       first_name: firstName || null,
@@ -462,13 +508,14 @@ export default function Clients() {
       postal_code: formData.get('postal_code') as string || null,
       country: (formData.get('country') as string) === 'none' ? null : ((formData.get('country') as string) || null),
       avatar_color: selectedColor,
+      logo_url: logoPath,
       status: formData.get('status') as string,
       notes: formData.get('notes') as string || null,
       lead_source: (formData.get('lead_source') as string) || null,
       next_action: (formData.get('next_action') as string) || null,
       next_follow_up_at: nextFollowUpAt,
       estimated_value: estimatedValue,
-      currency: ((formData.get('currency') as string) || 'USD') || 'USD',
+      currency: (formData.get('currency') as string) || profileCurrency || 'USD',
       tags,
       user_id: user!.id,
     };
@@ -505,21 +552,54 @@ export default function Clients() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this client?')) return;
-    
+  const handleArchive = async (id: string) => {
+    const target = clients.find((c) => c.id === id);
+    if (!target || !confirm(buildArchiveConfirmMessage(target.name))) return;
     try {
-      const { error } = await supabase
-        .from('clients')
-        .delete()
-        .eq('id', id);
+      const { error } = await archiveClient(id);
+      if (error) throw error;
+      toast({ title: 'Client archived' });
+      fetchClients();
+    } catch (error: any) {
+      toast({ title: 'Could not archive client', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleRestore = async (id: string) => {
+    const target = clients.find((c) => c.id === id);
+    if (!target || !confirm(buildRestoreConfirmMessage(target.name))) return;
+    try {
+      const { error } = await restoreClient(id);
+      if (error) throw error;
+      toast({ title: 'Client restored' });
+      fetchClients();
+    } catch (error: any) {
+      toast({ title: 'Could not restore client', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    const target = clients.find((c) => c.id === id);
+    if (!target) return;
+    try {
+      const counts = await getClientRelatedCounts(id);
+      if (hasClientRelatedRecords(counts)) {
+        toast({
+          title: 'Cannot delete client',
+          description: buildBlockedDeleteMessage(counts),
+          variant: 'destructive',
+        });
+        return;
+      }
+      if (!confirm(buildDeleteConfirmMessage())) return;
+      const { error } = await deleteClient(id);
       if (error) throw error;
       toast({ title: 'Client deleted successfully' });
       fetchClients();
     } catch (error: any) {
       toast({
         title: 'Error deleting client',
-        description: error.message,
+        description: formatClientDeleteError(error?.message || 'Could not delete client.'),
         variant: 'destructive',
       });
     }
@@ -530,25 +610,30 @@ export default function Clients() {
     setIsDialogOpen(true);
   };
 
-  const filteredClients = clients.filter(
-    (client) => {
-      const matchesSearch =
-        client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        client.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        client.company?.toLowerCase().includes(searchQuery.toLowerCase());
-      const stage = client.status || 'active';
-      const matchesStatus = statusFilter === 'all' || stage === statusFilter;
-      return matchesSearch && matchesStatus;
-    }
-  );
+  const matchesClientFilters = (client: Client) => {
+    const matchesSearch =
+      client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      client.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      client.company?.toLowerCase().includes(searchQuery.toLowerCase());
+    const stage = client.status || 'active';
+    const matchesStatus = statusFilter === 'all' || stage === statusFilter;
+    return matchesSearch && matchesStatus;
+  };
+
+  const activeClients = clients.filter((c) => !isClientArchived(c) && matchesClientFilters(c));
+  const archivedClients = clients.filter((c) => isClientArchived(c) && matchesClientFilters(c));
 
   // Sort by pipeline stage order so list/grid/board show clients grouped by status
   const stageOrder = CRM_STAGES.map((s) => s.value);
-  const sortedClients = [...filteredClients].sort((a, b) => {
+  const sortedClients = [...activeClients].sort((a, b) => {
     const aStage = a.status || 'active';
     const bStage = b.status || 'active';
     return stageOrder.indexOf(aStage) - stageOrder.indexOf(bStage);
   });
+
+  const sortedArchivedClients = [...archivedClients].sort((a, b) =>
+    (b.archived_at || '').localeCompare(a.archived_at || ''),
+  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -680,7 +765,7 @@ export default function Clients() {
       };
       let created = 0;
       let updated = 0;
-      let errors: string[] = [];
+      const errors: string[] = [];
       for (let r = 1; r < rows.length; r++) {
         const row = rows[r];
         const firstName = get('first_name')(row);
@@ -956,6 +1041,8 @@ export default function Clients() {
     }
     return client.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
+  const fmtDate = (value: string | null | undefined) => formatLocaleDate(value, dateFormat);
+  const fmtDateTime = (value: string | null | undefined) => formatLocaleDateTime(value, dateFormat, timeFormat);
 
   return (
     <AppLayout>
@@ -1215,7 +1302,7 @@ export default function Clients() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="currency">Currency</Label>
-                      <Select name="currency" defaultValue={editingClient?.currency || 'USD'}>
+                      <Select name="currency" defaultValue={editingClient?.currency || profileCurrency || 'USD'}>
                         <SelectTrigger id="currency">
                           <SelectValue placeholder="Currency" />
                         </SelectTrigger>
@@ -1242,7 +1329,56 @@ export default function Clients() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label>Avatar Color</Label>
+                    <Label>Client logo (optional)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Shown on proposals instead of initials. Counts toward storage.
+                    </p>
+                    <div className="flex items-center gap-3">
+                      {clientLogoPreview ? (
+                        <img src={clientLogoPreview} alt="" className="h-12 w-12 rounded-full object-cover border" />
+                      ) : (
+                        <div
+                          className="h-12 w-12 rounded-full flex items-center justify-center text-sm font-medium text-white"
+                          style={{ backgroundColor: selectedColor }}
+                        >
+                          {(editingClient?.name || 'C').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex flex-col gap-1">
+                        <input
+                          ref={clientLogoInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setClientLogoPreview(URL.createObjectURL(file));
+                          }}
+                        />
+                        <Button type="button" variant="outline" size="sm" onClick={() => clientLogoInputRef.current?.click()}>
+                          Upload logo
+                        </Button>
+                        {clientLogoPreview ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground"
+                            onClick={() => {
+                              setClientLogoPreview(null);
+                              if (clientLogoInputRef.current) clientLogoInputRef.current.value = '';
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Avatar color (when no logo)</Label>
                     <div className="flex gap-2 flex-wrap">
                       {AVATAR_COLORS.map((color) => (
                         <button
@@ -1294,7 +1430,11 @@ export default function Clients() {
               className="pl-10"
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
+              <Checkbox checked={showArchived} onCheckedChange={(v) => setShowArchived(!!v)} />
+              Show archived
+            </label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[130px]">
                 <SelectValue placeholder="Status" />
@@ -1352,12 +1492,18 @@ export default function Clients() {
               </Card>
             ))}
           </div>
-        ) : filteredClients.length === 0 ? (
+        ) : sortedClients.length === 0 && (!showArchived || sortedArchivedClients.length === 0) ? (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-12">
-              <h3 className="text-lg font-semibold mb-1">No clients yet</h3>
+              <h3 className="text-lg font-semibold mb-1">
+                {clients.length === 0 ? "No clients yet" : clients.every((c) => isClientArchived(c)) ? "No active clients" : "No clients match your filters"}
+              </h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Get started by adding your first client
+                {clients.length === 0
+                  ? "Get started by adding your first client"
+                  : clients.every((c) => isClientArchived(c))
+                    ? "Turn on “Show archived” below to see archived clients, or add a new client."
+                    : "Try adjusting search or status filters."}
               </p>
               <Button onClick={() => setIsDialogOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
@@ -1420,7 +1566,10 @@ export default function Clients() {
                                   client={client}
                                   onOpen={() => navigate(`/clients/${client.id}`)}
                                   onEdit={() => openEditDialog(client)}
+                                  onArchive={() => handleArchive(client.id)}
+                                  onRestore={() => handleRestore(client.id)}
                                   onDelete={() => handleDelete(client.id)}
+                                  formatDate={fmtDate}
                                 />
                               ))}
                             </SortableContext>
@@ -1452,7 +1601,10 @@ export default function Clients() {
                         client={activeDragClient}
                         onOpen={() => {}}
                         onEdit={() => {}}
+                        onArchive={() => {}}
+                        onRestore={() => {}}
                         onDelete={() => {}}
+                        formatDate={fmtDate}
                         isOverlay
                       />
                     </div>
@@ -1481,6 +1633,7 @@ export default function Clients() {
                               <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleArchive(client.id)}>Archive client</DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => handleDelete(client.id)}
                               className="text-destructive"
@@ -1558,6 +1711,7 @@ export default function Clients() {
                               <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleArchive(client.id)}>Archive client</DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => handleDelete(client.id)}
                               className="text-destructive"
@@ -1574,6 +1728,35 @@ export default function Clients() {
               ))}
             </div>
             )}
+
+            {showArchived && sortedArchivedClients.length > 0 ? (
+              <div className="mt-8 space-y-3">
+                <h3 className="text-sm font-semibold text-muted-foreground">Archived clients</h3>
+                <div className={viewMode === 'grid' ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3" : "space-y-3"}>
+                  {sortedArchivedClients.map((client) => (
+                    <Card
+                      key={client.id}
+                      className="border border-dashed opacity-80 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => navigate(`/clients/${client.id}`)}
+                    >
+                      <CardContent className="p-4 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold truncate">{client.name}</p>
+                            <Badge variant="secondary">Archived</Badge>
+                          </div>
+                          {client.company ? <p className="text-sm text-muted-foreground truncate">{client.company}</p> : null}
+                        </div>
+                        <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Button size="sm" variant="outline" onClick={() => void handleRestore(client.id)}>Restore</Button>
+                          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void handleDelete(client.id)}>Delete</Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <Sheet open={!!viewingClient} onOpenChange={(open) => !open && setViewingClient(null)}>
               <SheetContent className="sm:max-w-md overflow-y-auto no-scrollbar">
@@ -1604,7 +1787,7 @@ export default function Clients() {
                         <p className="text-sm text-muted-foreground">Next follow-up</p>
                         <p className="text-sm">
                           {viewingClient.next_follow_up_at
-                            ? viewingClient.next_follow_up_at.slice(0, 10)
+                            ? fmtDate(viewingClient.next_follow_up_at)
                             : '—'}
                         </p>
                       </div>
@@ -1673,7 +1856,7 @@ export default function Clients() {
                                   <div className="min-w-0">
                                     <p className={`text-sm ${f.completed_at ? 'line-through text-muted-foreground' : ''}`}>{f.title}</p>
                                     <p className="text-xs text-muted-foreground">
-                                      {f.due_at ? `Due ${f.due_at.slice(0, 10)}` : 'No due date'}
+                                      {f.due_at ? `Due ${fmtDate(f.due_at)}` : 'No due date'}
                                     </p>
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0">
@@ -1756,7 +1939,7 @@ export default function Clients() {
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <p className="text-xs text-muted-foreground">
-                                    {a.type} • {a.occurred_at.slice(0, 10)}
+                                    {a.type} • {fmtDateTime(a.occurred_at)}
                                   </p>
                                   <p className="text-sm whitespace-pre-wrap">{a.body}</p>
                                 </div>

@@ -15,6 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2 } from "@/components/icons";
 import { SlotIcon } from "@/contexts/IconSlotContext";
+import { useLocalePreferences } from "@/hooks/useLocalePreferences";
+import { formatLocaleDate } from "@/lib/datetime";
+import { proposalSnapshotsFromClientId } from "@/lib/clientLifecycle";
+import { displayProposalClientName } from "@/lib/proposalClientDisplay";
 
 type ProposalRow = {
   id: string;
@@ -24,6 +28,8 @@ type ProposalRow = {
   expires_at: string | null;
   client_id: string;
   project_id: string | null;
+  client_name_snapshot?: string | null;
+  client_company_snapshot?: string | null;
   clients: { name: string; currency?: string | null } | null;
   projects: { name: string } | null;
 };
@@ -44,7 +50,7 @@ export default function Proposals() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [rows, setRows] = useState<ProposalRow[]>([]);
-  const [clients, setClients] = useState<{ id: string; name: string; currency?: string | null }[]>([]);
+  const [clients, setClients] = useState<{ id: string; name: string; currency?: string | null; email?: string | null; company?: string | null }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string; client_id: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -54,6 +60,13 @@ export default function Proposals() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "sent" | "read" | "accepted">("all");
   const [defaults, setDefaults] = useState<ProposalDefaults | null>(null);
+  const [showCreateClientInline, setShowCreateClientInline] = useState(false);
+  const [showCreateProjectInline, setShowCreateProjectInline] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientEmail, setNewClientEmail] = useState("");
+  const [newClientCompany, setNewClientCompany] = useState("");
+  const [newProjectName, setNewProjectName] = useState("");
+  const { dateFormat } = useLocalePreferences();
 
   const formatStatus = (status: string) =>
     status ? status.charAt(0).toUpperCase() + status.slice(1) : "Draft";
@@ -76,9 +89,9 @@ export default function Proposals() {
     const [{ data: proposals }, { data: allClients }, { data: allProjects }, { data: profileDefaults }] = await Promise.all([
       supabase
         .from("proposals")
-        .select("id, identifier, status, total, expires_at, client_id, project_id, clients(name, currency), projects(name)")
+        .select("id, identifier, status, total, expires_at, client_id, project_id, client_name_snapshot, client_company_snapshot, clients(name, currency), projects(name)")
         .order("created_at", { ascending: false }),
-      supabase.from("clients").select("id, name, currency").order("name"),
+      supabase.from("clients").select("id, name, currency, email, company").is("archived_at", null).order("name"),
       supabase.from("projects").select("id, name, client_id").order("name"),
       user
         ? supabase
@@ -128,18 +141,25 @@ export default function Proposals() {
     const query = searchQuery.trim().toLowerCase();
     return rows.filter((row) => {
       const matchesStatus = statusFilter === "all" ? true : row.status === statusFilter;
-      const matchesQuery = !query || [row.identifier, row.clients?.name || "", row.projects?.name || ""].join(" ").toLowerCase().includes(query);
+      const matchesQuery = !query || [row.identifier, displayProposalClientName(row), row.projects?.name || ""].join(" ").toLowerCase().includes(query);
       return matchesStatus && matchesQuery;
     });
   }, [rows, searchQuery, statusFilter]);
 
   const createProposal = async () => {
     if (!user || !clientId) return;
+    let snapshots = { client_name_snapshot: null as string | null, client_company_snapshot: null as string | null };
+    try {
+      snapshots = await proposalSnapshotsFromClientId(clientId);
+    } catch {
+      /* proceed without snapshots */
+    }
     const { data, error } = await supabase
       .from("proposals")
       .insert({
         user_id: user.id,
         client_id: clientId,
+        ...snapshots,
         project_id: projectId === "none" ? null : projectId,
         cover_image_url: defaults?.proposal_default_cover_image_url || null,
         validity_days: defaults?.proposal_default_validity_days ?? 30,
@@ -161,6 +181,74 @@ export default function Proposals() {
     navigate(`/proposals/${data.id}`);
   };
 
+  const createClientInline = async () => {
+    if (!user) return;
+    const name = newClientName.trim();
+    if (!name) {
+      toast({ title: "Client name is required", variant: "destructive" });
+      return;
+    }
+    const existing = clients.find((c) => c.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      setClientId(existing.id);
+      setShowCreateClientInline(false);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("clients")
+      .insert({
+        user_id: user.id,
+        name,
+        email: newClientEmail.trim() || null,
+        company: newClientCompany.trim() || null,
+        status: "active",
+      })
+      .select("id, name, currency, email, company")
+      .single();
+    if (error || !data) {
+      toast({ title: "Could not create client", description: error?.message, variant: "destructive" });
+      return;
+    }
+    setClients((prev) => [...prev, data as any].sort((a, b) => a.name.localeCompare(b.name)));
+    setClientId(data.id);
+    setShowCreateClientInline(false);
+    setNewClientName("");
+    setNewClientEmail("");
+    setNewClientCompany("");
+  };
+
+  const createProjectInline = async () => {
+    if (!user) return;
+    const name = newProjectName.trim();
+    if (!name) {
+      toast({ title: "Project name is required", variant: "destructive" });
+      return;
+    }
+    const existing = projects.find((p) => p.name.toLowerCase() === name.toLowerCase() && p.client_id === (clientId || null));
+    if (existing) {
+      setProjectId(existing.id);
+      setShowCreateProjectInline(false);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("projects")
+      .insert({
+        user_id: user.id,
+        name,
+        client_id: clientId || null,
+      })
+      .select("id, name, client_id")
+      .single();
+    if (error || !data) {
+      toast({ title: "Could not create project", description: error?.message, variant: "destructive" });
+      return;
+    }
+    setProjects((prev) => [...prev, data as any].sort((a, b) => a.name.localeCompare(b.name)));
+    setProjectId(data.id);
+    setShowCreateProjectInline(false);
+    setNewProjectName("");
+  };
+
   const duplicateProposal = async (id: string) => {
     if (!user) return;
     const { data: proposal } = await supabase.from("proposals").select("*").eq("id", id).single();
@@ -171,6 +259,8 @@ export default function Proposals() {
       .insert({
         user_id: user.id,
         client_id: proposal.client_id,
+        client_name_snapshot: proposal.client_name_snapshot,
+        client_company_snapshot: proposal.client_company_snapshot,
         project_id: proposal.project_id,
         objective: proposal.objective,
         presentation: proposal.presentation,
@@ -272,7 +362,7 @@ export default function Proposals() {
                   {filteredRows.map((row) => (
                     <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/proposals/${row.id}`)}>
                       <TableCell className="font-medium">{row.identifier}</TableCell>
-                      <TableCell>{row.clients?.name || "—"}</TableCell>
+                      <TableCell>{displayProposalClientName(row)}</TableCell>
                       <TableCell>{row.projects?.name || "—"}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={statusBadgeClass(row.status)}>
@@ -280,7 +370,7 @@ export default function Proposals() {
                         </Badge>
                       </TableCell>
                       <TableCell>{formatMoney(row.total || 0, row.clients?.currency)}</TableCell>
-                      <TableCell>{row.expires_at ? new Date(row.expires_at).toLocaleDateString() : "—"}</TableCell>
+                      <TableCell>{formatLocaleDate(row.expires_at, dateFormat)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button size="icon" variant="ghost" asChild onClick={(event) => event.stopPropagation()} aria-label="Edit proposal">
@@ -303,7 +393,20 @@ export default function Proposals() {
         </Card>
       </div>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowCreateClientInline(false);
+            setShowCreateProjectInline(false);
+            setNewClientName("");
+            setNewClientEmail("");
+            setNewClientCompany("");
+            setNewProjectName("");
+          }
+          setCreateOpen(open);
+        }}
+      >
         <DialogContent>
           <DialogHeader><DialogTitle>Create Proposal</DialogTitle></DialogHeader>
           <div className="space-y-4">
@@ -314,18 +417,25 @@ export default function Proposals() {
                   type="button"
                   variant="link"
                   className="h-auto p-0 text-sm"
-                  onClick={() => {
-                    setCreateOpen(false);
-                    navigate("/clients");
-                  }}
+                  onClick={() => setShowCreateClientInline((prev) => !prev)}
                 >
-                  Create new client
+                  {showCreateClientInline ? "Cancel" : "Create new client"}
                 </Button>
               </div>
               <Select value={clientId} onValueChange={setClientId}>
                 <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
                 <SelectContent>{clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
               </Select>
+              {showCreateClientInline ? (
+                <div className="rounded-lg border p-3 space-y-2">
+                  <Input value={newClientName} onChange={(e) => setNewClientName(e.target.value)} placeholder="Client name *" />
+                  <Input value={newClientEmail} onChange={(e) => setNewClientEmail(e.target.value)} placeholder="Email (optional)" />
+                  <Input value={newClientCompany} onChange={(e) => setNewClientCompany(e.target.value)} placeholder="Company (optional)" />
+                  <div className="flex justify-end">
+                    <Button type="button" size="sm" onClick={() => void createClientInline()}>Add client</Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -334,12 +444,9 @@ export default function Proposals() {
                   type="button"
                   variant="link"
                   className="h-auto p-0 text-sm"
-                  onClick={() => {
-                    setCreateOpen(false);
-                    navigate("/projects");
-                  }}
+                  onClick={() => setShowCreateProjectInline((prev) => !prev)}
                 >
-                  Create new project
+                  {showCreateProjectInline ? "Cancel" : "Create new project"}
                 </Button>
               </div>
               <Select value={projectId} onValueChange={setProjectId}>
@@ -351,6 +458,14 @@ export default function Proposals() {
               </Select>
               {!clientId ? (
                 <p className="text-xs text-muted-foreground">Tip: choose a client first to filter related projects.</p>
+              ) : null}
+              {showCreateProjectInline ? (
+                <div className="rounded-lg border p-3 space-y-2">
+                  <Input value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Project name *" />
+                  <div className="flex justify-end">
+                    <Button type="button" size="sm" onClick={() => void createProjectInline()}>Add project</Button>
+                  </div>
+                </div>
               ) : null}
             </div>
             <div className="space-y-1">

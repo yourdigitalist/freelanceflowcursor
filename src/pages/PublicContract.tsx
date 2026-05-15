@@ -171,12 +171,7 @@ export default function PublicContract() {
     }
     setContract(data.contract);
     setServices(data.services || []);
-    if (data.contract?.template_id) {
-      const { data: template } = await supabase.from("contract_templates").select("content").eq("id", data.contract.template_id).maybeSingle();
-      setTemplateContent(template?.content || DEFAULT_CONTRACT_TEMPLATE_CONTENT);
-    } else {
-      setTemplateContent(DEFAULT_CONTRACT_TEMPLATE_CONTENT);
-    }
+    setTemplateContent(data.template_content || DEFAULT_CONTRACT_TEMPLATE_CONTENT);
     setClientData({
       client_entity_type: data.contract.client_entity_type || "individual",
       client_name: data.contract.client_name || "",

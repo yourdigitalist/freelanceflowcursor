@@ -150,12 +150,8 @@ export default function ProposalSettings() {
     }
     setUploading(true);
     try {
-      const { data: owned } = await supabase.storage.from("proposal-images").list(user.id, { limit: 200 });
-      const currentBytes = (owned || []).reduce((sum: number, item: any) => sum + Number(item.metadata?.size || 0), 0);
-      if (currentBytes + file.size > MAX_STORAGE_BYTES) {
-        toast({ title: "Storage limit reached", description: "Please remove files first.", variant: "destructive" });
-        return;
-      }
+      const { assertStorageCapacity } = await import("@/lib/userStorage");
+      await assertStorageCapacity(user.id, file.size);
       const ext = file.name.split(".").pop() || "jpg";
       const path = `${user.id}/proposal-default-cover-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage.from("proposal-images").upload(path, file, { upsert: true });

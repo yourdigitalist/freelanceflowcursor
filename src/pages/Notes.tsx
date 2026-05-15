@@ -34,6 +34,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { useLocalePreferences } from '@/hooks/useLocalePreferences';
+import { formatLocaleDateTime } from '@/lib/datetime';
 import { EmojiPicker } from '@/components/ui/emoji-picker';
 import { FolderPlus } from '@/components/icons';
 import { cn } from '@/lib/utils';
@@ -66,8 +68,8 @@ const FOLDER_COLORS = [
 
 const DEBOUNCE_MS = 800;
 
-function getDefaultNoteTitle(): string {
-  return `New Note ${new Date().toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+function getDefaultNoteTitle(dateLabel: string): string {
+  return `New Note ${dateLabel}`;
 }
 
 function escapeHtmlAttr(s: string): string {
@@ -90,6 +92,7 @@ function excerptFromHtml(html: string | null, maxLen = NOTE_EXCERPT_LEN): string
 
 export default function Notes() {
   const [searchParams] = useSearchParams();
+  const { dateFormat, timeFormat } = useLocalePreferences();
   const openId = searchParams.get('open');
   const { user } = useAuth();
   const { toast } = useToast();
@@ -122,7 +125,7 @@ export default function Notes() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('clients').select('id, name').eq('user_id', user.id).order('name').then(({ data }) => setClients((data as { id: string; name: string }[]) || []));
+    supabase.from('clients').select('id, name').eq('user_id', user.id).is('archived_at', null).order('name').then(({ data }) => setClients((data as { id: string; name: string }[]) || []));
     supabase.from('projects').select('id, name').eq('user_id', user.id).order('updated_at', { ascending: false }).then(({ data }) => setProjects((data as { id: string; name: string }[]) || []));
     supabase.from('note_folders').select('id, name, emoji, color').eq('user_id', user.id).order('name').then(({ data }) => setFolders((data as NoteFolder[]) || []));
   }, [user]);
@@ -331,7 +334,7 @@ export default function Notes() {
 
   const handleCreateQuickNote = useCallback(async () => {
     if (!user) return;
-    const defaultTitle = getDefaultNoteTitle();
+    const defaultTitle = getDefaultNoteTitle(formatLocaleDateTime(new Date(), dateFormat, timeFormat));
     try {
       const { data, error } = await supabase
         .from('notes')
@@ -390,8 +393,8 @@ export default function Notes() {
   const downloadNoteAsDoc = useCallback(() => {
     if (!selectedNote || !title) return;
     const dateLabel = selectedNote.updated_at
-      ? new Date(selectedNote.updated_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-      : new Date().toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      ? formatLocaleDateTime(selectedNote.updated_at, dateFormat, timeFormat)
+      : formatLocaleDateTime(new Date(), dateFormat, timeFormat);
     const safeTitle = (title || 'Untitled').replace(/[<>:"/\\|?*]/g, '').trim() || 'Note';
     const html = `<!DOCTYPE html>
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
@@ -410,7 +413,7 @@ export default function Notes() {
     a.download = `${safeTitle}_${dateStr}.doc`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [selectedNote, title, content]);
+  }, [selectedNote, title, content, dateFormat, timeFormat]);
 
   const handleDelete = async (id: string) => {
     try {

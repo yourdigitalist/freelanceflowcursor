@@ -55,6 +55,7 @@ export function EntityLinkPopover({
       .from('clients')
       .select('id, name')
       .eq('user_id', user.id)
+      .is('archived_at', null)
       .order('name')
       .limit(100);
     setClients((data as { id: string; name: string }[]) || []);
@@ -236,7 +237,7 @@ export function EntityLinkPickerContent({
     if (!user) return;
     setLoading(true);
     Promise.all([
-      supabase.from('clients').select('id, name').eq('user_id', user.id).order('name').limit(100),
+      supabase.from('clients').select('id, name').eq('user_id', user.id).is('archived_at', null).order('name').limit(100),
       supabase.from('projects').select('id, name, icon_emoji').eq('user_id', user.id).order('updated_at', { ascending: false }).limit(100),
       supabase.from('tasks').select('id, title, project_id, projects(name)').eq('user_id', user.id).order('updated_at', { ascending: false }).limit(150),
     ]).then(([c, p, t]) => {

@@ -272,6 +272,7 @@ export default function InvoiceDetail() {
   const [importIncludeNotes, setImportIncludeNotes] = useState(false);
   const [importIncludeLineDate, setImportIncludeLineDate] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
+  const [unlinkingImports, setUnlinkingImports] = useState(false);
   const [clientProjectsForImport, setClientProjectsForImport] = useState<Array<{ id: string; name: string }>>([]);
   const preloadedDefaultsRef = useRef<string | null>(null);
 
@@ -731,6 +732,58 @@ export default function InvoiceDetail() {
         description: error.message,
         variant: 'destructive',
       });
+    }
+  };
+
+  const unlinkSelectedImportedEntries = async () => {
+    const selectedIds = Array.from(selectedEntries);
+    if (selectedIds.length === 0) {
+      toast({
+        title: 'No entries selected',
+        description: 'Select entries to unlink first.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!window.confirm('Unlink selected time entries from this invoice? They will be marked as unbilled again.')) return;
+    setUnlinkingImports(true);
+    try {
+      const { data: linkedRows, error: linkedError } = await supabase
+        .from('time_entries')
+        .select('id')
+        .in('id', selectedIds)
+        .eq('invoice_id', id);
+      if (linkedError) throw linkedError;
+      const linkedIds = (linkedRows || []).map((row) => row.id);
+      if (linkedIds.length === 0) {
+        toast({ title: 'Nothing to unlink', description: 'Selected entries are not linked to this invoice.' });
+        return;
+      }
+      const { error: updateError } = await supabase
+        .from('time_entries')
+        .update({ billing_status: 'unbilled', invoice_id: null })
+        .in('id', linkedIds);
+      if (updateError) throw updateError;
+      const { error: linkDeleteError } = await supabase
+        .from('invoice_time_entry_links')
+        .delete()
+        .eq('invoice_id', id)
+        .in('time_entry_id', linkedIds);
+      if (linkDeleteError) throw linkDeleteError;
+      toast({
+        title: `Unlinked ${linkedIds.length} entries`,
+        description: 'Billing status moved from billed/paid back to unbilled.',
+      });
+      await fetchImportEntries();
+      await fetchItems();
+    } catch (error: any) {
+      toast({
+        title: 'Error unlinking entries',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setUnlinkingImports(false);
     }
   };
 
@@ -1194,12 +1247,33 @@ export default function InvoiceDetail() {
   const previewItems = items.map((it) => ({
     description: it.description || '',
     price: Number(it.amount),
-    unit_price: Number(it.unit_price) ?? Number(it.amount),
+    unit_price: Number(it.unit_price) || Number(it.amount),
     quantity: Number(it.quantity) || 1,
     line_date: it.line_date ? String(it.line_date).slice(0, 10) : '',
     line_description: it.line_description != null ? String(it.line_description) : '',
   }));
   const amt = (n: number) => `${currencySymbol}${Number(n).toFixed(2)}`;
+  const selectedImportEntries = importEntries.filter((entry) => selectedEntries.has(entry.id));
+  const importSummary = (() => {
+    const totalHours = selectedImportEntries.reduce((sum, entry) => {
+      const hours = entry.total_duration_seconds != null ? entry.total_duration_seconds / 3600 : entry.duration_minutes / 60;
+      return sum + hours;
+    }, 0);
+    const totalAmount = selectedImportEntries.reduce((sum, entry) => {
+      const hours = entry.total_duration_seconds != null ? entry.total_duration_seconds / 3600 : entry.duration_minutes / 60;
+      const rate = entry.hourly_rate ?? defaultHourlyRate;
+      return sum + (hours * rate);
+    }, 0);
+    const groupedCount = new Set(
+      selectedImportEntries.map((entry) => `${entry.project_id}__${entry.task_id || 'none'}__${entry.hourly_rate ?? defaultHourlyRate}`),
+    ).size;
+    return {
+      totalHours,
+      totalAmount,
+      groupedCount,
+      entryCount: selectedImportEntries.length,
+    };
+  })();
 
   const formatClientAddress = (client: Invoice['clients']) => {
     if (!client) return '';
@@ -2048,11 +2122,37 @@ export default function InvoiceDetail() {
               </div>
             )}
           </ScrollArea>
+          <div className="rounded-lg border bg-muted/20 p-3 text-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="font-medium">Import preview</span>
+              <span className="text-muted-foreground">{importSummary.entryCount} entries</span>
+              <span className="text-muted-foreground">{importSummary.totalHours.toFixed(2)}h</span>
+              <span className="text-muted-foreground">{fmt(importSummary.totalAmount)}</span>
+              <span className="text-muted-foreground">
+                {importGrouping === 'grouped' ? `${importSummary.groupedCount} grouped lines` : `${importSummary.entryCount} detailed lines`}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {importGrouping === 'grouped'
+                ? 'Grouped import creates one invoice line per project/task/rate combination.'
+                : 'Detailed import creates one invoice line per selected time entry.'}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Unlinking selected imported entries moves their billing status back to <span className="font-medium">unbilled</span>.
+            </p>
+          </div>
           <div className="flex justify-between items-center pt-4 border-t">
             <p className="text-sm text-muted-foreground">
               {selectedEntries.size} entries selected ({importGrouping === 'grouped' ? 'grouped import' : 'detailed import'})
             </p>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={unlinkSelectedImportedEntries}
+                disabled={selectedEntries.size === 0 || unlinkingImports}
+              >
+                {unlinkingImports ? 'Unlinking…' : 'Unlink selected'}
+              </Button>
               <Button variant="outline" onClick={() => setIsImportModalOpen(false)}>
                 Cancel
               </Button>
