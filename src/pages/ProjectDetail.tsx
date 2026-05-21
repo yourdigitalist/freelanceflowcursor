@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useProfileCurrency } from '@/hooks/useProfileCurrency';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { notifyStartGuideRefresh } from '@/components/layout/StartGuide';
+import { notifyStartGuideRefresh } from '@/components/layout/startGuideUtils';
 import { useToast } from '@/hooks/use-toast';
 import {
   downloadCsv,

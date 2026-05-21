@@ -18,7 +18,7 @@ import {
 } from '@/lib/clientLifecycle';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { notifyStartGuideRefresh } from '@/components/layout/StartGuide';
+import { notifyStartGuideRefresh } from '@/components/layout/startGuideUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -1579,7 +1579,7 @@ export default function Clients() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="w-full justify-start text-muted-foreground hover:text-primary-foreground border border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10"
+                              className="w-full justify-start text-muted-foreground border border-dashed border-border bg-muted/30 hover:bg-muted/60"
                               onClick={() => {
                                 setAddWithStatus(stage.value);
                                 setEditingClient(null);

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -20,10 +20,26 @@ import { useProfileCurrency } from "@/hooks/useProfileCurrency";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate } from "@/lib/datetime";
 import { proposalSnapshotsFromClientId } from "@/lib/clientLifecycle";
+import {
+  assignProposalIdentifierIfMissing,
+  effectiveValidityDays,
+  mergeProposalWithDefaults,
+  normalizeProposalPaymentMethods,
+  type ProposalProfileDefaults,
+} from "@/lib/proposalDefaults";
 import { ProposalDocument } from "@/components/proposals/ProposalDocument";
 
 const MAX_COVER_SIZE = 10 * 1024 * 1024;
 const MAX_STORAGE_BYTES = 200 * 1024 * 1024;
+type ProposalCreateState = {
+  fromCreate?: boolean;
+  clientId?: string;
+  projectId?: string | null;
+  client_name_snapshot?: string | null;
+  client_company_snapshot?: string | null;
+  clients?: { name: string; company: string | null; currency?: string | null } | null;
+};
+
 const PAYMENT_METHOD_OPTIONS = [
   "bank transfer",
   "credit card",
@@ -34,8 +50,27 @@ const PAYMENT_METHOD_OPTIONS = [
   "other",
 ];
 
+async function fetchProposalRow(proposalId: string, attempt = 0): Promise<{ data: Record<string, unknown> | null; error: Error | null }> {
+  const { data, error } = await supabase
+    .from("proposals")
+    .select("*, clients(name, company, currency, logo_url), projects(name)")
+    .eq("id", proposalId)
+    .maybeSingle();
+  if (data && !error) return { data: data as Record<string, unknown>, error: null };
+  if (attempt < 4) {
+    await new Promise((resolve) => window.setTimeout(resolve, 200 * (attempt + 1)));
+    return fetchProposalRow(proposalId, attempt + 1);
+  }
+  return { data: null, error: error ?? new Error("Proposal not found") };
+}
+
 export default function ProposalDetail() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const createState = (location.state as ProposalCreateState | null)?.fromCreate
+    ? (location.state as ProposalCreateState)
+    : null;
   const { user } = useAuth();
   const { toast } = useToast();
   const { currency } = useProfileCurrency();
@@ -44,7 +79,7 @@ export default function ProposalDetail() {
   const [items, setItems] = useState<any[]>([]);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [services, setServices] = useState<any[]>([]);
-  const [clients, setClients] = useState<{ id: string; name: string; company: string | null; currency?: string | null }[]>([]);
+  const [clients, setClients] = useState<{ id: string; name: string; company: string | null; currency?: string | null; archived_at?: string | null }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string; client_id: string | null }[]>([]);
   const [projectNameInput, setProjectNameInput] = useState("");
   const [showCreateProjectInput, setShowCreateProjectInput] = useState(false);
@@ -57,45 +92,98 @@ export default function ProposalDetail() {
   const [activeTab, setActiveTab] = useState("data");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [lastSaveError, setLastSaveError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const saveInFlightRef = useRef(false);
+  const skipAutosaveRef = useRef(true);
+  const proposalLoadedRef = useRef(false);
 
   const load = async () => {
     if (!id) return;
-    const [{ data: p }, { data: s }, { data: svc }, { data: profile }, { data: allClients }, { data: allProjects }] = await Promise.all([
-      supabase.from("proposals").select("*, clients(name, company, currency, logo_url), projects(name)").eq("id", id).single(),
+    proposalLoadedRef.current = false;
+    setLoadError(null);
+    const [{ data: p, error: proposalError }, { data: s }, { data: svc }, { data: profile }, { data: allClients }, { data: allProjects }] = await Promise.all([
+      fetchProposalRow(id),
       supabase.from("proposal_services").select("*").eq("proposal_id", id).order("position"),
       supabase.from("services").select("*").order("name"),
       user
         ? supabase
             .from("profiles")
-            .select("business_name, business_logo, business_email, business_phone, notification_preferences")
+            .select(
+              "business_name, business_logo, business_email, business_phone, notification_preferences, proposal_default_cover_image_url, proposal_default_validity_days, proposal_default_immediate_availability, proposal_default_payment_structure, proposal_default_payment_methods, proposal_default_conditions_notes, proposal_default_installment_description",
+            )
             .eq("user_id", user.id)
             .maybeSingle()
         : Promise.resolve({ data: null } as any),
       supabase.from("clients").select("id, name, company, currency, archived_at").order("name"),
       supabase.from("projects").select("id, name, client_id").order("name"),
     ]);
-    const paymentMethods = Array.isArray(p?.payment_methods) ? p.payment_methods : [];
-    const otherMethod = paymentMethods.find((method: string) => method.startsWith("other:"));
-    setProposal({
-      ...p,
-      payment_methods: otherMethod ? [...paymentMethods.filter((method: string) => !method.startsWith("other:")), "other"] : paymentMethods,
-      payment_other: otherMethod ? otherMethod.replace(/^other:\s*/i, "") : "",
-    });
+    const defaults: ProposalProfileDefaults | null = profile
+      ? {
+          proposal_default_cover_image_url: profile.proposal_default_cover_image_url ?? null,
+          proposal_default_validity_days: profile.proposal_default_validity_days ?? null,
+          proposal_default_immediate_availability: profile.proposal_default_immediate_availability ?? null,
+          proposal_default_payment_structure: profile.proposal_default_payment_structure ?? null,
+          proposal_default_payment_methods: profile.proposal_default_payment_methods ?? null,
+          proposal_default_conditions_notes: profile.proposal_default_conditions_notes ?? null,
+          proposal_default_installment_description: profile.proposal_default_installment_description ?? null,
+        }
+      : null;
+    let row = p;
+    if (!row && createState?.clientId) {
+      row = {
+        id,
+        client_id: createState.clientId,
+        project_id: createState.projectId ?? null,
+        client_name_snapshot: createState.client_name_snapshot ?? null,
+        client_company_snapshot: createState.client_company_snapshot ?? null,
+        clients: createState.clients ?? null,
+        status: "draft",
+        payment_methods: [],
+      };
+    }
+    if (!row?.client_id) {
+      setProposal(null);
+      setLoadError(proposalError?.message || "Could not load proposal.");
+      return;
+    }
+
+    let identifier = String(row.identifier || "").trim();
+    if (!identifier && user?.id && id) {
+      try {
+        identifier = await assignProposalIdentifierIfMissing(id, user.id, row.identifier as string | null);
+      } catch {
+        /* keep empty; save will retry */
+      }
+    }
+    const payment = normalizeProposalPaymentMethods(row.payment_methods as string[] | undefined);
+    const merged = mergeProposalWithDefaults(
+      {
+        ...row,
+        identifier: identifier || row.identifier,
+        ...payment,
+      },
+      defaults,
+    );
+    setProposal(merged);
+    proposalLoadedRef.current = true;
+    if (createState?.fromCreate) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
     setItems((s || []).map((x: any) => ({ ...x, price: Number(x.price || 0), quantity: Number(x.quantity || 1), line_total: Number(x.line_total || 0) })));
     setServices(svc || []);
     setClients((allClients || []) as any);
     setProjects((allProjects || []) as any);
-    setProjectNameInput(p?.projects?.name || "");
+    setProjectNameInput((row.projects as { name?: string } | null)?.name || "");
     setBusinessName(profile?.business_name || null);
     setBusinessLogo(profile?.business_logo || null);
     setBusinessEmail(profile?.business_email || null);
     setBusinessPhone(profile?.business_phone || null);
     const prefs = profile?.notification_preferences as { proposal_main_color?: string } | null;
     setProposalMainColor(prefs?.proposal_main_color || undefined);
-    if (p?.cover_image_url) {
-      const { data: signed } = await supabase.storage.from("proposal-images").createSignedUrl(p.cover_image_url, 3600);
+    const coverPath = merged.cover_image_url || row.cover_image_url;
+    if (coverPath) {
+      const { data: signed } = await supabase.storage.from("proposal-images").createSignedUrl(coverPath, 3600);
       setCoverSignedUrl(signed?.signedUrl || null);
     } else {
       setCoverSignedUrl(null);
@@ -103,8 +191,17 @@ export default function ProposalDetail() {
   };
 
   useEffect(() => {
+    setProposal(null);
     void load();
   }, [id, user?.id]);
+
+  useEffect(() => {
+    skipAutosaveRef.current = true;
+    const timer = window.setTimeout(() => {
+      skipAutosaveRef.current = false;
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [id]);
 
   const subtotal = useMemo(() => items.reduce((sum, i) => sum + (Number(i.price) || 0) * (Number(i.quantity) || 0), 0), [items]);
   const selectedClientCurrency = useMemo(
@@ -119,10 +216,9 @@ export default function ProposalDetail() {
     return proposal.discount_type === "percent" ? subtotal * ((Number(proposal.discount_value) || 0) / 100) : Number(proposal.discount_value || 0);
   }, [proposal, subtotal]);
   const total = Math.max(0, subtotal - discount);
-  const expiryPreview = useMemo(() => {
-    if (!proposal?.validity_days) return null;
+  const expiresOnLabel = useMemo(() => {
     const d = new Date();
-    d.setDate(d.getDate() + Number(proposal.validity_days || 0));
+    d.setDate(d.getDate() + effectiveValidityDays(proposal));
     return formatLocaleDate(d, dateFormat);
   }, [proposal?.validity_days, dateFormat]);
 
@@ -136,15 +232,19 @@ export default function ProposalDetail() {
     Boolean(proposal?.timeline_days) &&
     Boolean(proposal?.payment_structure) &&
     (proposal?.payment_methods || []).length > 0 &&
-    (proposal?.payment_structure !== "installments" || Boolean(String(proposal?.installment_description || "").trim()));
+    (proposal?.payment_structure !== "installments" || Boolean(String(proposal?.installment_description || "").trim())) &&
+    (!(proposal?.payment_methods || []).includes("other") || Boolean(String(proposal?.payment_other || "").trim()));
   const hasRequiredData = Boolean(
-    proposal?.identifier &&
+    proposal?.client_id &&
     String(proposal?.presentation || "").trim() &&
-    String(proposal?.objective || "").trim()
+    String(proposal?.objective || "").trim(),
   );
 
   const getRequiredFieldErrors = () => {
     const errors: string[] = [];
+    if (!proposal?.client_id) {
+      errors.push("Client is required.");
+    }
     if (!String(proposal?.presentation || "").trim()) {
       errors.push("About you is required.");
     }
@@ -162,6 +262,12 @@ export default function ProposalDetail() {
     }
     if (!(proposal?.payment_methods || []).length) {
       errors.push("Select at least one payment method.");
+    }
+    if (
+      (proposal?.payment_methods || []).includes("other") &&
+      !String(proposal?.payment_other || "").trim()
+    ) {
+      errors.push("Describe the other payment method.");
     }
     if (
       proposal?.payment_structure === "installments" &&
@@ -270,8 +376,13 @@ export default function ProposalDetail() {
       const paymentMethodsForSave = (proposal.payment_methods || []).includes("other") && proposal.payment_other
         ? [...(proposal.payment_methods || []).filter((method: string) => method !== "other"), `other: ${proposal.payment_other}`]
         : (proposal.payment_methods || []).filter((method: string) => method !== "other");
+      let identifier = String(proposal.identifier || "").trim();
+      if (!identifier && user?.id) {
+        identifier = await assignProposalIdentifierIfMissing(id, user.id, proposal.identifier);
+        setProposal((prev: any) => ({ ...prev, identifier }));
+      }
       const payload = {
-        identifier: proposal.identifier,
+        ...(identifier ? { identifier } : {}),
         objective: proposal.objective,
         presentation: proposal.presentation,
         validity_days: proposal.validity_days,
@@ -359,13 +470,22 @@ export default function ProposalDetail() {
   };
 
   const onTabChange = async (nextTab: string) => {
-    if (nextTab !== activeTab) {
+    if (nextTab === activeTab) return;
+    if (nextTab !== "preview") {
       if (saveInFlightRef.current) return;
       const ok = await save(false, true, false);
       if (!ok) return;
-      setActiveTab(nextTab);
     }
+    setActiveTab(nextTab);
   };
+
+  useEffect(() => {
+    if (skipAutosaveRef.current || !proposalLoadedRef.current || !proposal?.client_id || !id) return;
+    const timer = window.setTimeout(() => {
+      void save(false, true, false);
+    }, 2000);
+    return () => window.clearTimeout(timer);
+  }, [proposal, items, projectNameInput, id]);
 
   const discountDisplayText = proposal?.discount_type === "percent"
     ? `${formatMoney(discount)} (${Number(proposal.discount_value || 0)}%)`
@@ -377,8 +497,34 @@ export default function ProposalDetail() {
     preview: hasRequiredData && hasRequiredService && hasRequiredConditions,
   };
   const filteredProjects = projects.filter((project) => !proposal?.client_id || project.client_id === proposal.client_id);
+  const clientSelectOptions = useMemo(() => {
+    const active = clients.filter((client) => !client.archived_at || client.id === proposal?.client_id);
+    if (proposal?.client_id && !active.some((client) => client.id === proposal.client_id)) {
+      const linked = (proposal.clients as { name?: string; company?: string | null; currency?: string | null } | null) || null;
+      if (linked?.name) {
+        return [
+          {
+            id: proposal.client_id,
+            name: linked.name,
+            company: linked.company ?? null,
+            currency: linked.currency ?? null,
+          },
+          ...active,
+        ];
+      }
+    }
+    return active;
+  }, [clients, proposal?.client_id, proposal?.clients]);
 
-  if (!proposal) return <AppLayout><div className="text-sm text-muted-foreground">Loading proposal...</div></AppLayout>;
+  if (!proposal) {
+    return (
+      <AppLayout>
+        <div className="text-sm text-muted-foreground">
+          {loadError || "Loading proposal..."}
+        </div>
+      </AppLayout>
+    );
+  }
 
   const formatStatus = (status: string) =>
     status ? status.charAt(0).toUpperCase() + status.slice(1) : "Draft";
@@ -401,9 +547,12 @@ export default function ProposalDetail() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
           <div>
-            <Link to="/proposals" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="mr-2 h-4 w-4" />Back</Link>
+            <Link to="/proposals" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Proposals
+            </Link>
             <div className="mt-2 flex items-center gap-2">
-              <h1 className="text-2xl font-bold">{proposal.identifier}</h1>
+              <h1 className="text-2xl font-bold">{proposal.identifier || "Draft proposal"}</h1>
               <Badge variant="outline" className={statusBadgeClass(proposal.status)}>
                 {formatStatus(proposal.status)}
               </Badge>
@@ -455,10 +604,11 @@ export default function ProposalDetail() {
               <div className="border-b" />
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Client</Label>
+                  <Label>Client *</Label>
                   <Select
                     value={proposal.client_id || ""}
                     onValueChange={async (value) => {
+                      const selectedClient = clients.find((client) => client.id === value);
                       const nextProjects = projects.filter((project) => project.client_id === value);
                       let snapshots = { client_name_snapshot: null as string | null, client_company_snapshot: null as string | null };
                       try {
@@ -466,22 +616,31 @@ export default function ProposalDetail() {
                       } catch {
                         /* keep existing snapshots on failure */
                       }
+                      const keepProject =
+                        proposal.project_id && nextProjects.some((project) => project.id === proposal.project_id);
+                      const selectedProject = keepProject
+                        ? nextProjects.find((project) => project.id === proposal.project_id)
+                        : null;
                       updateProposal({
                         client_id: value,
                         ...snapshots,
-                        project_id: proposal.project_id && nextProjects.some((project) => project.id === proposal.project_id)
-                          ? proposal.project_id
+                        clients: selectedClient
+                          ? { name: selectedClient.name, company: selectedClient.company, currency: selectedClient.currency }
                           : null,
+                        project_id: keepProject ? proposal.project_id : null,
+                        projects: selectedProject ? { name: selectedProject.name } : null,
                       });
+                      if (!keepProject) {
+                        setProjectNameInput("");
+                        setShowCreateProjectInput(false);
+                      }
                     }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select client" />
                     </SelectTrigger>
                     <SelectContent>
-                      {clients
-                        .filter((client) => !client.archived_at || client.id === proposal.client_id)
-                        .map((client) => (
+                      {clientSelectOptions.map((client) => (
                         <SelectItem key={client.id} value={client.id}>
                           {client.company ? `${client.name} — ${client.company}` : `${client.name} — Individual`}
                           {client.archived_at ? " (Archived)" : ""}
@@ -499,7 +658,10 @@ export default function ProposalDetail() {
                       const selectedProject = filteredProjects.find((project) => project.id === nextProjectId);
                       setProjectNameInput(selectedProject?.name || "");
                       setShowCreateProjectInput(false);
-                      updateProposal({ project_id: nextProjectId });
+                      updateProposal({
+                        project_id: nextProjectId,
+                        projects: selectedProject ? { name: selectedProject.name } : null,
+                      });
                     }}
                   >
                     <SelectTrigger>
@@ -543,7 +705,7 @@ export default function ProposalDetail() {
                 </div>
               </div>
               <div className="space-y-1">
-                <Label>Identifier</Label>
+                <Label>Proposal identifier</Label>
                 <Input value={proposal.identifier || ""} onChange={(e) => updateProposal({ identifier: e.target.value })} />
                 <p className="text-xs text-muted-foreground">The automatic proposal ID is active. You can use any text you prefer. You can disable this in Settings at any time.</p>
               </div>
@@ -583,8 +745,20 @@ export default function ProposalDetail() {
                 <p className="text-xs text-muted-foreground">What is the client trying to achieve? Describe the goal this project will solve.</p>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
-                <div><Label>Validity period (days)</Label><Input type="number" value={proposal.validity_days || 30} onChange={(e) => updateProposal({ validity_days: Number(e.target.value || 0) })} /></div>
-                <div><Label>Expiry preview</Label><Input value={expiryPreview || "—"} readOnly /></div>
+                <div className="space-y-1">
+                  <Label>Validity period (days)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={effectiveValidityDays(proposal)}
+                    onChange={(e) => updateProposal({ validity_days: Math.max(1, Number(e.target.value || 30)) })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Expires on</Label>
+                  <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm">{expiresOnLabel}</p>
+                  <p className="text-xs text-muted-foreground">Calculated from the validity period above.</p>
+                </div>
               </div>
             </CardContent></Card>
           </TabsContent>
@@ -592,7 +766,7 @@ export default function ProposalDetail() {
           <TabsContent value="services">
             <Card><CardContent className="space-y-4 p-6">
               <div className="space-y-1">
-                <h3 className="text-lg font-semibold">Services</h3>
+                <h3 className="text-lg font-semibold">Services *</h3>
                 <p className="text-sm text-muted-foreground">List the services that will be delivered and add a discount.</p>
               </div>
               <div className="border-b" />
@@ -681,7 +855,6 @@ export default function ProposalDetail() {
                 <p className="text-sm text-muted-foreground">See exactly how your client will view your proposal and get ready to send it.</p>
               </div>
             </div>
-            {(!proposal.presentation || !proposal.objective) ? <div className="rounded-lg border border-amber-400/40 bg-amber-50 px-4 py-2 text-sm text-amber-800">About You and Objective are required before sending.</div> : null}
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -702,7 +875,13 @@ export default function ProposalDetail() {
                 proposal={{
                   ...proposal,
                   subtotal,
-                  projects: proposal.projects,
+                  projects:
+                    proposal.projects ||
+                    (proposal.project_id
+                      ? { name: filteredProjects.find((p) => p.id === proposal.project_id)?.name || projectNameInput || null }
+                      : projectNameInput.trim()
+                        ? { name: projectNameInput.trim() }
+                        : null),
                 }}
                 items={items.map((item) => ({
                   ...item,

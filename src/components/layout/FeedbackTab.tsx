@@ -66,7 +66,7 @@ function PillGroup<T extends string>({
                 'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
                 selected
                   ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  : 'border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
               {opt}
@@ -104,7 +104,7 @@ function PillGroupMulti({
                 'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
                 selected
                   ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  : 'border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
               {opt}
@@ -245,7 +245,7 @@ export function FeedbackTab() {
           type="button"
           onClick={() => handleOpenChange(true)}
           className={cn(
-            'pointer-events-auto flex w-7 shrink-0 flex-col items-center justify-center gap-0 border-y border-l border-r-0 border-border bg-card py-3 shadow-md transition-colors hover:bg-accent',
+            'pointer-events-auto flex w-7 shrink-0 flex-col items-center justify-center gap-0 border-y border-l border-r-0 border-border bg-card py-3 shadow-md transition-colors hover:bg-muted',
             'rounded-l-lg border-border',
             '[writing-mode:vertical-rl] [text-orientation:mixed] text-[11px] font-semibold tracking-wide text-foreground leading-tight',
           )}

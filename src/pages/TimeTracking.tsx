@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useTimer, formatElapsed, TIMER_ENTRY_SAVED_EVENT } from '@/contexts/TimerContext';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { notifyStartGuideRefresh } from '@/components/layout/StartGuide';
+import { notifyStartGuideRefresh } from '@/components/layout/startGuideUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,6 +38,7 @@ import {
   startOfWeek,
   endOfWeek,
   subDays,
+  addDays,
   startOfMonth,
   endOfMonth,
   addWeeks,
@@ -720,6 +721,12 @@ export default function TimeTracking() {
       setWeekStart(startOfWeek(next, { weekStartsOn: 1 }));
       return;
     }
+    if (timesheetView === 'day') {
+      const next = direction === 'prev' ? subDays(selectedDay, 1) : addDays(selectedDay, 1);
+      setSelectedDay(next);
+      setWeekStart(startOfWeek(next, { weekStartsOn: 1 }));
+      return;
+    }
     const nextWeekStart = direction === 'prev' ? subWeeks(weekStart, 1) : addWeeks(weekStart, 1);
     const nextWeekEnd = endOfWeek(nextWeekStart, { weekStartsOn: 1 });
     setWeekStart(nextWeekStart);
@@ -981,6 +988,8 @@ export default function TimeTracking() {
         const key = format(d, 'yyyy-MM-dd');
         const daySeconds = weekDayTotals[key] || 0;
         const isToday = isTodayVisible(d);
+        const isSelected =
+          timesheetView === 'day' && isSameDay(d, selectedDay);
         const isWeekend = getDay(d) === 0 || getDay(d) === 6;
         const hasHours = daySeconds > 0;
 
@@ -991,8 +1000,12 @@ export default function TimeTracking() {
             onClick={() => setSelectedDay(d)}
             className={cn(
               'cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
-              isToday ? todayHighlightClass : 'border-border bg-card',
-              !isToday && isWeekend && 'bg-secondary',
+              isSelected
+                ? todayHighlightClass
+                : isToday
+                  ? 'border-primary/50 bg-primary/5'
+                  : 'border-border bg-card',
+              !isSelected && !isToday && isWeekend && 'bg-secondary',
             )}
           >
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -1172,7 +1185,8 @@ export default function TimeTracking() {
                       onEdit={openLogDialog}
                       onDelete={handleDelete}
                       onResume={resumeEntry}
-                      emptyMessage="No entries for this day. Use Track time to add one."
+                      emptyMessage="No entries for this day."
+                      emptyTrackTimeHref="/time/timer"
                     />
                   </div>
                   {timesheetTableEntries.length > 0 && (

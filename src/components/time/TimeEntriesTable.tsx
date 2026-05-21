@@ -48,6 +48,8 @@ interface TimeEntriesTableProps {
   onToggleSelection?: (id: string) => void;
   onRowClick?: (entry: TimeEntriesTableEntry) => void;
   emptyMessage?: string;
+  /** Minimal purple link shown below empty message (timesheet day view). */
+  emptyTrackTimeHref?: string;
   variant?: TimeEntriesTableVariant;
   headerActions?: React.ReactNode;
 }
@@ -67,6 +69,7 @@ export function TimeEntriesTable({
   onToggleSelection,
   onRowClick,
   emptyMessage = 'No time entries found',
+  emptyTrackTimeHref,
   variant = 'default',
   headerActions,
 }: TimeEntriesTableProps) {
@@ -76,6 +79,14 @@ export function TimeEntriesTable({
     return (
       <div className="text-center py-8 text-muted-foreground">
         <p>{emptyMessage}</p>
+        {emptyTrackTimeHref && (
+          <Link
+            to={emptyTrackTimeHref}
+            className="mt-2 inline-block text-sm font-bold text-primary hover:underline"
+          >
+            + Track time
+          </Link>
+        )}
       </div>
     );
   }

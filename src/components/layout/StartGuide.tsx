@@ -8,40 +8,16 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, ChevronDown, ChevronUp, X } from '@/components/icons';
-
-type GuideItemId =
-  | 'companyProfile'
-  | 'uploadLogo'
-  | 'customizeInvoices'
-  | 'firstClient'
-  | 'firstProject';
+import {
+  GUIDE_REFRESH_EVENT,
+  type GuideItemId,
+  loadJson,
+  saveJson,
+  storageKey,
+} from '@/components/layout/startGuideUtils';
 
 type ManualState = Partial<Record<GuideItemId, boolean>>;
 type AutoState = Record<GuideItemId, boolean>;
-
-const GUIDE_REFRESH_EVENT = 'start-guide-refresh';
-
-function storageKey(prefix: string, userId: string) {
-  return `start-guide:${prefix}:${userId}`;
-}
-
-function loadJson<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function saveJson<T>(key: string, value: T) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // ignore localStorage failures
-  }
-}
 
 export function StartGuide() {
   const { user } = useAuth();
@@ -259,17 +235,4 @@ export function StartGuide() {
       </Card>
     </div>
   );
-}
-
-export function notifyStartGuideRefresh() {
-  if (typeof window === 'undefined') return;
-  window.dispatchEvent(new Event(GUIDE_REFRESH_EVENT));
-}
-
-/** Marks a getting-started item complete (e.g. after saving invoice settings). */
-export function markStartGuideItemComplete(userId: string, id: GuideItemId) {
-  const key = storageKey('manual', userId);
-  const next = { ...loadJson<ManualState>(key, {}), [id]: true };
-  saveJson(key, next);
-  notifyStartGuideRefresh();
 }

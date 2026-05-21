@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { notifyStartGuideRefresh } from '@/components/layout/StartGuide';
+import { notifyStartGuideRefresh } from '@/components/layout/startGuideUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -532,7 +532,7 @@ export default function Projects() {
                     <EmojiPicker value={selectedEmoji} onChange={setSelectedEmoji}>
                       <button
                         type="button"
-                        className="h-12 w-12 rounded-lg flex items-center justify-center text-xl cursor-pointer border-2 border-border hover:border-primary transition-colors"
+                        className="h-12 w-12 rounded-lg flex items-center justify-center text-xl cursor-pointer border-2 border-border hover:border-muted-foreground/40 hover:bg-muted/50 transition-colors"
                         style={{ backgroundColor: selectedColor }}
                       >
                         {selectedEmoji}

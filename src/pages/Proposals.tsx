@@ -169,16 +169,28 @@ export default function Proposals() {
         conditions_notes: defaults?.proposal_default_conditions_notes || null,
         installment_description: defaults?.proposal_default_installment_description || null,
       } as any)
-      .select("id")
+      .select("id, identifier")
       .single();
     if (error) {
       toast({ title: "Could not create proposal", description: error.message, variant: "destructive" });
       return;
     }
+    const selectedClient = clients.find((c) => c.id === clientId);
     setCreateOpen(false);
     setClientId("");
     setProjectId("none");
-    navigate(`/proposals/${data.id}`);
+    navigate(`/proposals/${data.id}`, {
+      state: {
+        fromCreate: true,
+        clientId,
+        projectId: projectId === "none" ? null : projectId,
+        client_name_snapshot: snapshots.client_name_snapshot,
+        client_company_snapshot: snapshots.client_company_snapshot,
+        clients: selectedClient
+          ? { name: selectedClient.name, company: selectedClient.company ?? null, currency: selectedClient.currency ?? null }
+          : null,
+      },
+    });
   };
 
   const createClientInline = async () => {

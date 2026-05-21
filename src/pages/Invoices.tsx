@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { notifyStartGuideRefresh } from '@/components/layout/StartGuide';
+import { notifyStartGuideRefresh } from '@/components/layout/startGuideUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';

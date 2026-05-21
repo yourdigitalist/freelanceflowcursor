@@ -1,6 +1,53 @@
-/* Editor content: extra top padding so first line isn't flush with top */
+/* Notes editor fills the white card */
+.rich-text-editor-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.rich-text-editor-wrapper .notes-quill-editor,
+.rich-text-editor-wrapper .notes-quill-editor > .quill {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.rich-text-editor-wrapper .ql-container.ql-snow {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+}
+
 .rich-text-editor-wrapper .ql-editor {
-  padding-top: 14px;
+  flex: 1;
+  min-height: 12rem;
+  padding-top: 8px;
+  padding-bottom: 12px;
+}
+
+/* H1–H3: light spacing below toolbar */
+.rich-text-editor-wrapper .ql-editor h1 {
+  margin-top: 0.35em;
+  margin-bottom: 0.35em;
+  padding-top: 0.1em;
+  line-height: 1.25;
+}
+
+.rich-text-editor-wrapper .ql-editor h2 {
+  margin-top: 0.3em;
+  margin-bottom: 0.3em;
+  padding-top: 0.05em;
+}
+
+.rich-text-editor-wrapper .ql-editor h3 {
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+  padding-top: 0;
 }
 
 /* Custom toolbar (Lucide) – layout only */
@@ -9,23 +56,73 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 2px;
-  padding: 6px 8px;
+  padding: 8px 10px;
   overflow-x: auto;
   overflow-y: hidden;
   min-height: 40px;
   -webkit-overflow-scrolling: touch;
 }
 
+/* @-mention entity pills (client / project / task) */
+.rich-text-editor-wrapper .ql-editor .entity-pill,
+.rich-text-editor-wrapper .ql-editor [data-entity][data-href] {
+  display: inline-block;
+  padding: 0.12em 0.55em;
+  border-radius: 9999px;
+  font-weight: 500;
+  font-size: 0.92em;
+  text-decoration: none !important;
+  cursor: pointer;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+.rich-text-editor-wrapper .ql-editor .entity-pill--client,
+.rich-text-editor-wrapper .ql-editor [data-entity='client'] {
+  background: hsl(214 95% 93%);
+  color: hsl(214 70% 32%);
+}
+
+.rich-text-editor-wrapper .ql-editor .entity-pill--project,
+.rich-text-editor-wrapper .ql-editor [data-entity='project'] {
+  background: hsl(142 50% 90%);
+  color: hsl(142 45% 28%);
+}
+
+.rich-text-editor-wrapper .ql-editor .entity-pill--task,
+.rich-text-editor-wrapper .ql-editor [data-entity='task'] {
+  background: hsl(265 55% 92%);
+  color: hsl(265 55% 38%);
+}
+
+.dark .rich-text-editor-wrapper .ql-editor .entity-pill--client,
+.dark .rich-text-editor-wrapper .ql-editor [data-entity='client'] {
+  background: hsl(214 40% 22%);
+  color: hsl(214 80% 78%);
+}
+
+.dark .rich-text-editor-wrapper .ql-editor .entity-pill--project,
+.dark .rich-text-editor-wrapper .ql-editor [data-entity='project'] {
+  background: hsl(142 35% 20%);
+  color: hsl(142 50% 75%);
+}
+
+.dark .rich-text-editor-wrapper .ql-editor .entity-pill--task,
+.dark .rich-text-editor-wrapper .ql-editor [data-entity='task'] {
+  background: hsl(265 35% 22%);
+  color: hsl(265 70% 82%);
+}
+
 /* Checklist in content: tight spacing, identical layout when checked/unchecked so text doesn’t move */
-.rich-text-editor-wrapper .ql-editor ul[data-checked="false"],
-.rich-text-editor-wrapper .ql-editor ul[data-checked="true"] {
+.rich-text-editor-wrapper .ql-editor ul[data-checked='false'],
+.rich-text-editor-wrapper .ql-editor ul[data-checked='true'] {
   list-style: none;
   padding-left: 1.5em;
   margin-left: 0;
   margin-bottom: 0.25em;
 }
-.rich-text-editor-wrapper .ql-editor ul[data-checked="false"] li,
-.rich-text-editor-wrapper .ql-editor ul[data-checked="true"] li {
+.rich-text-editor-wrapper .ql-editor ul[data-checked='false'] li,
+.rich-text-editor-wrapper .ql-editor ul[data-checked='true'] li {
   list-style: none;
   padding-left: 1.15em;
   position: relative;
@@ -33,15 +130,15 @@
   min-height: 1.5em;
   display: block;
 }
-.rich-text-editor-wrapper .ql-editor ul[data-checked="false"] li::marker,
-.rich-text-editor-wrapper .ql-editor ul[data-checked="true"] li::marker {
+.rich-text-editor-wrapper .ql-editor ul[data-checked='false'] li::marker,
+.rich-text-editor-wrapper .ql-editor ul[data-checked='true'] li::marker {
   display: none;
-  content: "";
+  content: '';
 }
 /* Same box for both states – same size, same border color, same line weight */
-.rich-text-editor-wrapper .ql-editor ul[data-checked="false"] li::before,
-.rich-text-editor-wrapper .ql-editor ul[data-checked="true"] li::before {
-  content: "";
+.rich-text-editor-wrapper .ql-editor ul[data-checked='false'] li::before,
+.rich-text-editor-wrapper .ql-editor ul[data-checked='true'] li::before {
+  content: '';
   position: absolute;
   left: 0;
   top: 0.3em;
@@ -53,14 +150,14 @@
   border: 1.5px solid #64748b;
   background: transparent;
 }
-.rich-text-editor-wrapper .ql-editor ul[data-checked="true"] li {
+.rich-text-editor-wrapper .ql-editor ul[data-checked='true'] li {
   text-decoration: line-through;
   color: var(--muted-foreground);
 }
 /* Checked: same box (same border color/size), only add checkmark in primary */
-.rich-text-editor-wrapper .ql-editor ul[data-checked="true"] li::before {
+.rich-text-editor-wrapper .ql-editor ul[data-checked='true'] li::before {
   color: var(--primary);
-  content: "\2713";
+  content: '\2713';
   font-size: 0.75em;
   font-weight: normal;
   line-height: 1em;

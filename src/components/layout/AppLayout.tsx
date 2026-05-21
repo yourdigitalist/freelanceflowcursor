@@ -65,7 +65,7 @@ export function AppLayout({
       const next = !prev;
       try {
         localStorage.setItem('sidebarCollapsed', next ? 'true' : 'false');
-      } catch {}
+      } catch { /* ignore localStorage */ }
       return next;
     });
   };
@@ -108,12 +108,12 @@ export function AppLayout({
   const isOnTrial = profile?.subscription_status === 'trial' && !!trialEndDate && trialEndDate >= new Date();
   const isPro = profile?.subscription_status === 'active';
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(() => {
-    try { return localStorage.getItem('trial_banner_dismissed') === 'true'; } catch { return false; }
+    try { return localStorage.getItem('trial_banner_dismissed') === 'true'; } catch { /* ignore */ return false; }
   });
   const showTrialBanner = isOnTrial && !trialBannerDismissed;
   const handleTrialBannerDismiss = () => {
     setTrialBannerDismissed(true);
-    try { localStorage.setItem('trial_banner_dismissed', 'true'); } catch {}
+    try { localStorage.setItem('trial_banner_dismissed', 'true'); } catch { /* ignore localStorage */ }
   };
   const timer = useTimer();
   const showTimerBar = timer.draftSegments.length > 0;

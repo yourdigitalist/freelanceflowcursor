@@ -1,30 +1,81 @@
 import { useRef, useMemo, useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ReactQuill from 'react-quill';
 import type ReactQuillType from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import './notes-editor.css';
 
+export type EntityMentionValue = {
+  type: 'client' | 'project' | 'task';
+  id: string;
+  href: string;
+  label: string;
+};
+
 let dividerBlotRegistered = false;
+let entityMentionBlotRegistered = false;
+
 try {
-  const QuillConstructor = (ReactQuill as { Quill?: { import: (path: string) => unknown; register: (blot: unknown) => void } }).Quill;
+  const QuillConstructor = (ReactQuill as {
+    Quill?: {
+      import: (path: string) => unknown;
+      register: (blot: unknown, suppressWarning?: boolean) => void;
+    };
+  }).Quill;
   if (QuillConstructor) {
-    const BlockEmbed = QuillConstructor.import('blots/block/embed') as new (node: HTMLElement, value: unknown) => { length: () => number };
+    const BlockEmbed = QuillConstructor.import('blots/block/embed') as new (
+      node: HTMLElement,
+      value: unknown,
+    ) => { length: () => number };
     class DividerBlot extends BlockEmbed {
       static blotName = 'divider';
       static tagName = 'HR';
     }
     QuillConstructor.register(DividerBlot);
     dividerBlotRegistered = true;
+
+    const Embed = QuillConstructor.import('blots/embed') as {
+      create: (value?: unknown) => HTMLElement;
+      blotName: string;
+      tagName: string;
+      new (node: HTMLElement, value?: unknown): unknown;
+    };
+    class EntityMentionBlot extends Embed {
+      static blotName = 'entityMention';
+      static tagName = 'span';
+
+      static create(value: EntityMentionValue) {
+        const node = super.create() as HTMLElement;
+        node.setAttribute('data-entity', value.type);
+        node.setAttribute('data-entity-id', value.id);
+        node.setAttribute('data-href', value.href);
+        node.setAttribute('contenteditable', 'false');
+        node.classList.add('entity-pill', `entity-pill--${value.type}`);
+        node.textContent = value.label;
+        return node;
+      }
+
+      static value(node: HTMLElement): EntityMentionValue {
+        return {
+          type: (node.getAttribute('data-entity') || 'client') as EntityMentionValue['type'],
+          id: node.getAttribute('data-entity-id') || '',
+          href: node.getAttribute('data-href') || '',
+          label: node.textContent || '',
+        };
+      }
+    }
+    QuillConstructor.register(EntityMentionBlot, true);
+    entityMentionBlotRegistered = true;
   }
 } catch {
-  // Divider blot registration failed; editor still works, divider button won't
+  // Custom blot registration failed; editor still works without divider/entity pills
 }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  Tag,
   CheckSquare,
+  X,
   Bold,
   Italic,
   Underline,
@@ -39,10 +90,8 @@ import {
   SeparatorHorizontal,
   type LucideIcon,
 } from 'lucide-react';
-import { SlotIcon } from '@/contexts/IconSlotContext';
-import { EntityLinkPopover, EntityLinkPickerContent } from './EntityLinkPopover';
+import { EntityLinkPickerContent } from './EntityLinkPopover';
 import type { EntityOption } from './EntityLinkPopover';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Dialog,
   DialogContent,
@@ -53,8 +102,59 @@ import {
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
-const QUILL_MODULES = {
+const tagColorClass = (tag: string) => {
+  const palette = [
+    'bg-blue-50 text-blue-700 border-blue-200',
+    'bg-emerald-50 text-emerald-700 border-emerald-200',
+    'bg-violet-50 text-violet-700 border-violet-200',
+    'bg-amber-50 text-amber-700 border-amber-200',
+    'bg-rose-50 text-rose-700 border-rose-200',
+    'bg-cyan-50 text-cyan-700 border-cyan-200',
+  ];
+  const hash = Array.from(tag).reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return palette[hash % palette.length];
+};
+
+const formatTag = (tag: string) =>
+  tag
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+
+const buildQuillModules = () => {
+  const QuillConstructor = (ReactQuill as { Quill?: { import: (path: string) => unknown } }).Quill;
+  const DeltaCtor = QuillConstructor?.import('delta') as
+    | (new () => { insert: (value: unknown) => { insert: (value: unknown) => unknown } })
+    | undefined;
+
+  const clipboardMatchers: [string, (node: Element, delta: unknown) => unknown] = entityMentionBlotRegistered
+    ? [
+        [
+          'span[data-entity]',
+          (node: Element, delta) => {
+            const el = node as HTMLElement;
+            const type = el.getAttribute('data-entity') as EntityMentionValue['type'] | null;
+            if (!type || !DeltaCtor) return delta;
+            const mentionDelta = new DeltaCtor().insert({
+              entityMention: {
+                type,
+                id: el.getAttribute('data-entity-id') || '',
+                href: el.getAttribute('data-href') || '',
+                label: el.textContent || '',
+              },
+            });
+            return mentionDelta;
+          },
+        ],
+      ]
+    : [];
+
+  return {
   toolbar: false,
+  clipboard: clipboardMatchers.length ? { matchers: clipboardMatchers } : undefined,
   keyboard: {
     bindings: {
       // Backspace at start of blockquote: remove blockquote and stay on same line (return to normal text)
@@ -97,6 +197,7 @@ const QUILL_MODULES = {
     },
   },
 };
+};
 
 function ToolbarButton({ Icon, onClick, title }: { Icon: LucideIcon; onClick: () => void; title: string }) {
   return (
@@ -118,6 +219,7 @@ const QUILL_FORMATS = [
   'link', 'image',
   'blockquote', 'code-block',
   ...(dividerBlotRegistered ? ['divider' as const] : []),
+  ...(entityMentionBlotRegistered ? ['entityMention' as const] : []),
 ];
 
 function escapeHtml(s: string): string {
@@ -126,10 +228,8 @@ function escapeHtml(s: string): string {
   return div.innerHTML;
 }
 
-const EMOJI_OPTIONS = ['📝', '📌', '💡', '📋', '✅', '📅', '🔖', '⭐', '💼', '📧', '📞', '🎯', '🚀', '💬', '📎'];
-const COVER_COLORS = ['#f0f0f0', '#e8f5e9', '#e3f2fd', '#fff3e0', '#fce4ec', '#f3e5f5', '#e0f7fa', '#efebe9'];
-
 interface DocumentEditorProps {
+  noteId?: string | null;
   title: string;
   onTitleChange: (title: string) => void;
   content: string;
@@ -137,13 +237,9 @@ interface DocumentEditorProps {
   tags: string[];
   onTagsChange: (tags: string[]) => void;
   suggestedTags?: string[];
-  iconEmoji?: string;
-  onIconEmojiChange?: (emoji: string) => void;
-  coverColor?: string;
-  onCoverColorChange?: (color: string) => void;
   onRequestCreateTask?: (selectedText: string) => void;
   onUploadImage?: (file: File) => Promise<string | null>;
-  updatedAt?: string | null;
+  formattedDate?: string | null;
   placeholder?: string;
   className?: string;
   minHeight?: string;
@@ -152,6 +248,7 @@ interface DocumentEditorProps {
 }
 
 export function DocumentEditor({
+  noteId = null,
   title,
   onTitleChange,
   content,
@@ -159,33 +256,29 @@ export function DocumentEditor({
   tags,
   onTagsChange,
   suggestedTags = [],
-  iconEmoji = '',
-  onIconEmojiChange,
-  coverColor = '',
-  onCoverColorChange,
   onRequestCreateTask,
   onUploadImage,
-  updatedAt,
+  formattedDate = null,
   placeholder = 'Write your note… Type @ to link a client, project, or task.',
   className,
   minHeight = '400px',
   clientName,
   projectName,
 }: DocumentEditorProps) {
+  const navigate = useNavigate();
   const quillRef = useRef<ReactQuillType>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const [localTitle, setLocalTitle] = useState(title);
   const atMentionIndexRef = useRef<number | null>(null);
   const [showAtPopover, setShowAtPopover] = useState(false);
   const [atPopoverPosition, setAtPopoverPosition] = useState({ top: 0, left: 0 });
-  const [tagsPopoverOpen, setTagsPopoverOpen] = useState(false);
-  const [iconPopoverOpen, setIconPopoverOpen] = useState(false);
-  const [coverPopoverOpen, setCoverPopoverOpen] = useState(false);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [imageUploading, setImageUploading] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
-  const [tagsDialogOpen, setTagsDialogOpen] = useState(false);
-  const [newTagInput, setNewTagInput] = useState('');
+  const [isAddingTag, setIsAddingTag] = useState(false);
+  const [newTag, setNewTag] = useState('');
   const [selectionRange, setSelectionRange] = useState<{ index: number; length: number } | null>(null);
   const [createTaskButtonPos, setCreateTaskButtonPos] = useState<{ top: number; left: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -194,7 +287,48 @@ export function DocumentEditor({
   const linkDialogOpenRef = useRef(false);
   const handleLinkApplyRef = useRef<() => void>(() => {});
 
-  const modules = useMemo(() => QUILL_MODULES, []);
+  const prevNoteIdRef = useRef(noteId);
+  // Only reset title field when switching notes (avoids glitch while typing)
+  useEffect(() => {
+    if (prevNoteIdRef.current !== noteId) {
+      prevNoteIdRef.current = noteId;
+      setLocalTitle(title);
+      setIsAddingTag(false);
+      setNewTag('');
+    }
+  }, [noteId, title]);
+
+  const modules = useMemo(() => buildQuillModules(), []);
+
+  const handleTitleInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const v = e.target.value;
+      setLocalTitle(v);
+      onTitleChange(v);
+    },
+    [onTitleChange],
+  );
+
+  const handleEditorClick = useCallback(
+    (e: React.MouseEvent) => {
+      const pill = (e.target as HTMLElement).closest?.('[data-entity][data-href]');
+      if (pill) {
+        e.preventDefault();
+        const href = pill.getAttribute('data-href');
+        if (href) navigate(href);
+        return;
+      }
+      const a = (e.target as HTMLElement).closest?.('a[href]');
+      if (a) {
+        const href = (a as HTMLAnchorElement).getAttribute('href');
+        if (href && !href.startsWith('javascript:')) {
+          e.preventDefault();
+          window.open(href, '_blank', 'noopener,noreferrer');
+        }
+      }
+    },
+    [navigate],
+  );
 
   const saveSelection = useCallback(() => {
     const q = quillRef.current?.getEditor();
@@ -362,9 +496,21 @@ export function DocumentEditor({
       return;
     }
     q.deleteText(idx, 1, 'user'); // remove the @
-    const html = `<a href="${escapeHtml(entity.href)}" data-entity="${escapeHtml(entity.type)}" data-entity-id="${escapeHtml(entity.id)}">${escapeHtml(entity.label)}</a>`;
-    q.clipboard.dangerouslyPasteHTML(idx, html, 'user');
-    q.setSelection(idx + entity.label.length + 2, 0);
+    if (entityMentionBlotRegistered) {
+      q.insertEmbed(
+        idx,
+        'entityMention',
+        { type: entity.type, id: entity.id, href: entity.href, label: entity.label },
+        'user',
+      );
+      q.insertText(idx + 1, ' ', 'user');
+      q.setSelection(idx + 2, 0, 'user');
+    } else {
+      const pillClass = `entity-pill entity-pill--${escapeHtml(entity.type)}`;
+      const html = `<span class="${pillClass}" data-entity="${escapeHtml(entity.type)}" data-entity-id="${escapeHtml(entity.id)}" data-href="${escapeHtml(entity.href)}" contenteditable="false">${escapeHtml(entity.label)}</span>&nbsp;`;
+      q.clipboard.dangerouslyPasteHTML(idx, html, 'user');
+      q.setSelection(idx + entity.label.length + 2, 0, 'user');
+    }
     atMentionIndexRef.current = null;
     setShowAtPopover(false);
   }, []);
@@ -393,31 +539,28 @@ export function DocumentEditor({
   useEffect(() => {
     const q = quillRef.current?.getEditor();
     if (!q) return;
-    const handler = (delta: { ops?: { insert?: string }[] }, _old: unknown, source: string) => {
-      if (source !== 'user' || !delta.ops?.length) return;
-      for (const op of delta.ops) {
-        if (typeof op.insert !== 'string') continue;
-        if (!op.insert.includes('@')) continue;
-        const sel = q.getSelection(true);
-        if (!sel) return;
-        const atPos = op.insert.indexOf('@');
-        const index = sel.index - op.insert.length + atPos;
-        const atIndex = index;
-        if (atIndex >= 0) {
-          const bounds = q.getBounds(atIndex);
-          if (bounds && containerRef.current) {
-            const rect = containerRef.current.getBoundingClientRect();
-            setAtPopoverPosition({
-              top: rect.top + bounds.bottom + 4,
-              left: rect.left + bounds.left,
-            });
-            atMentionIndexRef.current = atIndex;
-            setShowAtPopover(true);
-          }
-        }
-        break;
-      }
+
+    const openAtPopoverIfNeeded = () => {
+      const sel = q.getSelection();
+      if (sel == null || sel.index < 1) return;
+      const atIndex = sel.index - 1;
+      if (q.getText(atIndex, 1) !== '@') return;
+      const bounds = q.getBounds(atIndex);
+      if (!bounds || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      setAtPopoverPosition({
+        top: rect.top + bounds.bottom + 4,
+        left: rect.left + bounds.left,
+      });
+      atMentionIndexRef.current = atIndex;
+      setShowAtPopover(true);
     };
+
+    const handler = (_delta: unknown, _old: unknown, source: string) => {
+      if (source !== 'user') return;
+      requestAnimationFrame(openAtPopoverIfNeeded);
+    };
+
     q.on('text-change', handler);
     return () => {
       q.off('text-change', handler);
@@ -480,198 +623,120 @@ export function DocumentEditor({
     q.setSelection(selectionRange.index + selectionRange.length, 0);
   }, [selectionRange, onRequestCreateTask]);
 
-  const timestampLabel = useMemo(() => {
-    if (!updatedAt) return null;
-    const d = new Date(updatedAt);
-    const today = new Date();
-    const isToday = d.toDateString() === today.toDateString();
-    if (isToday) {
-      return `@Today ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-    }
-    return `@${d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })} ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-  }, [updatedAt]);
-
-  const addTag = useCallback(() => {
-    const t = newTagInput.trim();
+  const saveTag = useCallback(() => {
+    const t = newTag.trim();
     if (t && !tags.includes(t)) {
       onTagsChange([...tags, t]);
-      setNewTagInput('');
     }
-  }, [newTagInput, tags, onTagsChange]);
+    setNewTag('');
+    setIsAddingTag(false);
+  }, [newTag, tags, onTagsChange]);
 
-  const removeTag = useCallback((tag: string) => {
-    onTagsChange(tags.filter((x) => x !== tag));
-  }, [tags, onTagsChange]);
+  const removeTag = useCallback(
+    (tag: string) => {
+      onTagsChange(tags.filter((x) => x !== tag));
+    },
+    [tags, onTagsChange],
+  );
 
   return (
-    <div ref={containerRef} className={cn('flex flex-col bg-white rounded-lg border shadow-sm overflow-hidden', className)}>
-      {/* Cover color bar - fixed height so no layout shift when toggled */}
-      {coverColor && (
-        <div className="h-2 w-full shrink-0" style={{ backgroundColor: coverColor }} aria-hidden />
-      )}
-
-      {/* Header: Add icon, Add cover, and date/time on the right */}
-      <div className="flex items-center justify-between gap-4 px-4 pt-4 pb-3 text-sm text-muted-foreground border-b shrink-0">
-        <div className="flex items-center gap-4">
-          <Popover open={iconPopoverOpen} onOpenChange={setIconPopoverOpen} modal={false}>
-            <PopoverTrigger asChild>
-              <button type="button" className="flex items-center gap-1.5 hover:text-foreground">
-                {iconEmoji ? <span className="text-lg">{iconEmoji}</span> : <SlotIcon slot="notes_add_icon" className="h-4 w-4" />}
-                <span>Add icon</span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-48 p-2" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
-              <div className="grid grid-cols-5 gap-1">
-                {EMOJI_OPTIONS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    className="h-8 w-8 rounded hover:bg-muted flex items-center justify-center text-lg"
-                    onClick={() => {
-                      onIconEmojiChange?.(emoji);
-                      setIconPopoverOpen(false);
-                    }}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-              {iconEmoji && (
-                <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={() => { onIconEmojiChange?.(''); setIconPopoverOpen(false); }}>
-                  Remove icon
-                </Button>
-              )}
-            </PopoverContent>
-          </Popover>
-          <Popover open={coverPopoverOpen} onOpenChange={setCoverPopoverOpen} modal={false}>
-            <PopoverTrigger asChild>
-              <button type="button" className="flex items-center gap-1.5 hover:text-foreground">
-                <SlotIcon slot="notes_add_cover" className="h-4 w-4" />
-                Add cover
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-52 p-2" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
-              <div className="grid grid-cols-4 gap-2">
-                {COVER_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    className="h-8 w-8 rounded border-2 border-muted hover:border-primary shrink-0"
-                    style={{ backgroundColor: color }}
-                    onClick={() => {
-                      onCoverColorChange?.(color);
-                      setCoverPopoverOpen(false);
-                    }}
-                  />
-                ))}
-              </div>
-              {coverColor && (
-                <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={() => { onCoverColorChange?.(''); setCoverPopoverOpen(false); }}>
-                  Remove cover
-                </Button>
-              )}
-            </PopoverContent>
-          </Popover>
+    <div
+      ref={containerRef}
+      className={cn('flex flex-col flex-1 min-h-0 bg-card rounded-lg border shadow-sm overflow-hidden', className)}
+    >
+      {/* Title + date; tags row below (matches client detail panel) */}
+      <div className="px-5 py-4 border-b shrink-0 space-y-3">
+        <div className="flex items-start gap-4">
+          <input
+            ref={titleInputRef}
+            type="text"
+            value={localTitle}
+            onChange={handleTitleInput}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            placeholder="Untitled"
+            className="flex-1 min-w-0 text-3xl font-semibold bg-transparent border-none outline-none placeholder:text-muted-foreground py-0 leading-tight"
+          />
+          {formattedDate && (
+            <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 pt-2 tabular-nums">
+              {formattedDate}
+            </span>
+          )}
         </div>
-        {timestampLabel && <span className="text-muted-foreground text-xs shrink-0">{timestampLabel}</span>}
-      </div>
 
-      {/* Client/project (if set) */}
-      {(clientName || projectName) && (
-        <div className="px-4 pt-2 pb-1 flex flex-wrap items-center gap-x-3 text-sm text-muted-foreground">
-          {clientName && <span>Client: {clientName}</span>}
-          {clientName && projectName && <span aria-hidden>·</span>}
-          {projectName && <span>Project: {projectName}</span>}
-        </div>
-      )}
-
-      {/* Title: large text, white background, no box */}
-      <div className="flex items-center gap-2 px-4 py-3 bg-white">
-        {iconEmoji && <span className="text-2xl shrink-0">{iconEmoji}</span>}
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => onTitleChange(e.target.value)}
-          onPointerDown={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          placeholder="Untitled"
-          className="flex-1 min-w-0 text-3xl font-semibold bg-transparent border-none outline-none placeholder:text-muted-foreground py-0"
-        />
-      </div>
-
-      {/* Tags row + hint */}
-      <div className="px-4 py-2 flex items-center gap-2 flex-wrap border-b">
-        <span className="text-xs text-muted-foreground">Type <kbd className="px-1 py-0.5 rounded bg-muted font-mono">@</kbd> in the editor to link a client, project, or task</span>
-        <div className="flex-1" />
-        <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setTagsDialogOpen(true)}>
-          <Tag className="h-4 w-4 mr-1.5" />
-          Tags
-        </Button>
-      </div>
-
-      {/* Tags dialog - stays open while adding so input works */}
-      <Dialog open={tagsDialogOpen} onOpenChange={setTagsDialogOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Tags</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="flex gap-2 flex-wrap">
-              {tags.map((t) => (
-                <Badge key={t} variant="secondary" className="pr-1">
-                  {t}
-                  <button type="button" className="ml-1 rounded hover:bg-muted-foreground/20" onClick={() => removeTag(t)} aria-label={`Remove ${t}`}>×</button>
-                </Badge>
-              ))}
-            </div>
-            {suggestedTags.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Reuse</p>
-                <div className="flex gap-1 flex-wrap">
-                  {suggestedTags.filter((t) => !tags.includes(t)).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => onTagsChange([...tags, t])}
-                      className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80"
-                    >
-                      + {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+          {tags.map((t) => (
+            <Badge key={t} variant="outline" className={cn('group relative pr-6', tagColorClass(t))}>
+              {formatTag(t)}
+              <button
+                type="button"
+                className="absolute right-0.5 top-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/10"
+                onClick={() => removeTag(t)}
+                aria-label={`Remove ${t}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+          {!isAddingTag ? (
+            <button
+              type="button"
+              className="rounded-full border border-dashed px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setIsAddingTag(true)}
+            >
+              + Add tag
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5">
               <Input
-                placeholder="Add new tag"
-                value={newTagInput}
-                onChange={(e) => setNewTagInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                className="h-8"
+                className="h-6 w-28 border-0 px-1 text-xs shadow-none focus-visible:ring-0"
+                placeholder="Tag"
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                onBlur={() => saveTag()}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveTag();
+                  }
+                  if (e.key === 'Escape') {
+                    setNewTag('');
+                    setIsAddingTag(false);
+                  }
+                }}
               />
-              <Button size="sm" onClick={addTag}>Add</Button>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setTagsDialogOpen(false)}>Done</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </span>
+          )}
+          {suggestedTags
+            .filter((t) => !tags.includes(t))
+            .slice(0, 6)
+            .map((t) => (
+              <button
+                key={t}
+                type="button"
+                className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground hover:text-foreground"
+                onClick={() => onTagsChange([...tags, t])}
+              >
+                {formatTag(t)}
+              </button>
+            ))}
+        </div>
 
-      {/* Editor - white background. Clicks on links open in new tab (Quill doesn't do this by default). */}
-      <div className="px-4 pb-6">
+        {(clientName || projectName) && (
+          <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+            {clientName && <span>Client: {clientName}</span>}
+            {clientName && projectName && <span aria-hidden>·</span>}
+            {projectName && <span>Project: {projectName}</span>}
+          </div>
+        )}
+      </div>
+
+      {/* Rich text editor — fills remaining card height */}
+      <div className="flex flex-col flex-1 min-h-0 px-5 pt-5 pb-0">
         <div
-          className="rich-text-editor-wrapper [&_.ql-toolbar]:rounded-t-lg [&_.ql-container]:rounded-b-lg [&_.ql-editor]:min-h-[300px] [&_.ql-editor]:text-base [&_.ql-container]:bg-white [&_.ql-editor]:bg-white [&_.ql-snow]:border-muted"
-          onClick={(e) => {
-            const a = (e.target as HTMLElement).closest?.('a[href]');
-            if (a) {
-              const href = (a as HTMLAnchorElement).href;
-              if (href && !href.startsWith('javascript:')) {
-                e.preventDefault();
-                window.open(href, '_blank', 'noopener,noreferrer');
-              }
-            }
-          }}
+          className="rich-text-editor-wrapper flex flex-col flex-1 min-h-0 [&_.ql-toolbar]:rounded-t-lg [&_.ql-container]:rounded-b-lg [&_.ql-editor]:text-base [&_.ql-container]:bg-card [&_.ql-editor]:bg-card [&_.ql-snow]:border-muted"
+          onClick={handleEditorClick}
         >
           {/* Custom toolbar: mousedown keeps editor focus so selection is preserved for Link/Image/Code/Clear */}
           <div
@@ -717,7 +782,8 @@ export function DocumentEditor({
             modules={modules}
             formats={QUILL_FORMATS}
             placeholder={placeholder}
-            style={{ minHeight }}
+            className="notes-quill-editor flex flex-col flex-1 min-h-0"
+            style={{ minHeight: minHeight === '100%' ? undefined : minHeight, height: minHeight === '100%' ? '100%' : undefined }}
           />
         </div>
       </div>

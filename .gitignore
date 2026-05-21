@@ -23,3 +23,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Vendored / scratch copies (not part of the app)
+magicuidesign-saas-template-*/
+tmp-lp-rebuild/

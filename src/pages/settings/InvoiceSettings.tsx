@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { markStartGuideItemComplete, notifyStartGuideRefresh } from '@/components/layout/StartGuide';
+import { markStartGuideItemComplete, notifyStartGuideRefresh } from '@/components/layout/startGuideUtils';
 import { Loader2, Plus, Trash2, Pencil, Check, X, ChevronDown } from '@/components/icons';
 import {
   DropdownMenu,
@@ -139,11 +139,12 @@ export default function InvoiceSettings() {
     const withBankDefault = 'hourly_rate, invoice_prefix, invoice_include_year, invoice_number_start, invoice_number_padding, invoice_number_reset_yearly, invoice_notes_default, invoice_footer, invoice_bank_details_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_days_before, reminder_subject_default, reminder_body_default';
     const withoutBankDefault = 'hourly_rate, invoice_prefix, invoice_include_year, invoice_number_start, invoice_number_padding, invoice_number_reset_yearly, invoice_notes_default, invoice_footer, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_days_before, reminder_subject_default, reminder_body_default';
     try {
-      let { data, error } = await supabase
+      const { data: initialData, error } = await supabase
         .from('profiles')
         .select(withBankDefault)
         .eq('user_id', user!.id)
         .maybeSingle();
+      let data = initialData;
 
       if (error) {
         const tryFallback = /column.*does not exist|invoice_bank_details_default|42703/i.test(String(error.message));

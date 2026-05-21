@@ -24,8 +24,9 @@
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
 
-    --accent: 265 78% 65%;
-    --accent-foreground: 0 0% 100%;
+    /* Neutral hover/focus surfaces (match sidebar menu hover — not purple) */
+    --accent: 262 40% 97%;
+    --accent-foreground: 222 47% 11%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
@@ -83,8 +84,8 @@
     --muted: 222 47% 14%;
     --muted-foreground: 215 20% 65%;
 
-    --accent: 265 78% 65%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 222 47% 11%;
+    --accent-foreground: 210 40% 96%;
 
     --destructive: 0 62% 30%;
     --destructive-foreground: 210 40% 98%;
@@ -132,11 +133,11 @@
   }
   
   .gradient-primary {
-    @apply bg-gradient-to-r from-primary to-accent;
+    @apply bg-gradient-to-r from-primary to-[hsl(var(--purple-dark))];
   }
   
   .text-gradient {
-    @apply bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-primary to-[hsl(var(--purple-dark))] bg-clip-text text-transparent;
   }
   
   .upgrade-gradient {

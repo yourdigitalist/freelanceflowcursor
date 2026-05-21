@@ -678,7 +678,7 @@ export default function ReviewRequests() {
           /* Cards view: folder grid – click a folder to open it (empty folders always visible) */
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <Card
-              className="cursor-pointer hover:shadow-md transition-shadow border-2 border-dashed hover:border-primary/30"
+              className="cursor-pointer hover:shadow-md transition-shadow border-2 border-dashed hover:border-border hover:bg-muted/40"
               onClick={() => setOpenedFolderId('none')}
             >
               <CardContent className="p-6 flex flex-col items-center justify-center min-h-[120px] gap-2">
@@ -1159,7 +1159,7 @@ export default function ReviewRequests() {
                 <div className="space-y-3">
                   <Label>Files *</Label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
+                    <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-border hover:bg-muted/40 transition-colors">
                       <input type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleImageFileChange} className="hidden" id="upload-images" />
                       <label htmlFor="upload-images" className="cursor-pointer block">
                         <SlotIcon slot="approval_images" className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
@@ -1167,7 +1167,7 @@ export default function ReviewRequests() {
                         <p className="text-xs text-muted-foreground">JPG, PNG, GIF, WebP (max {MAX_FILE_SIZE_MB}MB)</p>
                       </label>
                     </div>
-                    <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
+                    <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-border hover:bg-muted/40 transition-colors">
                       <input type="file" multiple accept=".pdf,application/pdf" onChange={handlePdfFileChange} className="hidden" id="upload-pdf" />
                       <label htmlFor="upload-pdf" className="cursor-pointer block">
                         <SlotIcon slot="approval_documents" className="h-8 w-8 mx-auto text-muted-foreground mb-2" />

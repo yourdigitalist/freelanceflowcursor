@@ -466,7 +466,7 @@ export function TaskListView({
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-start text-muted-foreground hover:text-primary-foreground"
+            className="w-full justify-start text-muted-foreground"
             onClick={() => setShowQuickAdd(true)}
           >
             <Plus className="h-4 w-4 mr-2" />

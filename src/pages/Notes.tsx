@@ -108,8 +108,6 @@ export default function Notes() {
   const [createTaskProjectId, setCreateTaskProjectId] = useState('');
   const [createTaskSubmitting, setCreateTaskSubmitting] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
-  const [iconEmoji, setIconEmoji] = useState<string>('');
-  const [coverColor, setCoverColor] = useState<string>('');
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
@@ -187,29 +185,23 @@ export default function Notes() {
         setTitle(note.title);
         setContent(note.content || '');
         setTags(note.tags || []);
-        setIconEmoji(note.icon_emoji || '');
-        setCoverColor(note.cover_color || '');
         setFolderIdInNote(note.folder_id ?? null);
       } else {
         setTitle('');
         setContent('');
         setTags([]);
-        setIconEmoji('');
-        setCoverColor('');
         setFolderIdInNote(null);
       }
     }
   }, [selectedId]);
 
-  const persistNote = useCallback(async (noteId: string, payload: { title: string; content: string; tags: string[]; icon_emoji?: string; cover_color?: string; folder_id?: string | null }) => {
+  const persistNote = useCallback(async (noteId: string, payload: { title: string; content: string; tags: string[]; folder_id?: string | null }) => {
     setSaving(true);
     try {
       const updatePayload: Record<string, unknown> = {
         title: payload.title,
         content: payload.content,
         tags: payload.tags,
-        icon_emoji: payload.icon_emoji ?? null,
-        cover_color: payload.cover_color ?? null,
         updated_at: new Date().toISOString(),
       };
       if (payload.folder_id !== undefined) updatePayload.folder_id = payload.folder_id;
@@ -219,10 +211,18 @@ export default function Notes() {
         .eq('id', noteId)
         .eq('user_id', user!.id);
       if (error) throw error;
+      const now = new Date().toISOString();
       setNotes((prev) =>
         prev.map((n) =>
           n.id === noteId
-            ? { ...n, title: payload.title, content: payload.content, tags: payload.tags, icon_emoji: payload.icon_emoji ?? null, cover_color: payload.cover_color ?? null, folder_id: payload.folder_id !== undefined ? payload.folder_id : n.folder_id }
+            ? {
+                ...n,
+                title: payload.title,
+                content: payload.content,
+                tags: payload.tags,
+                folder_id: payload.folder_id !== undefined ? payload.folder_id : n.folder_id,
+                updated_at: now,
+              }
             : n
         )
       );
@@ -237,16 +237,22 @@ export default function Notes() {
     if (!selectedId || !user) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      const note = notes.find((n) => n.id === selectedId);
-      if (note && (title !== note.title || content !== (note.content || '') || JSON.stringify(tags) !== JSON.stringify(note.tags || []) || iconEmoji !== (note.icon_emoji || '') || coverColor !== (note.cover_color || '') || folderIdInNote !== (note.folder_id ?? null))) {
-        persistNote(selectedId, { title, content, tags, icon_emoji: iconEmoji || undefined, cover_color: coverColor || undefined, folder_id: folderIdInNote });
+      const note = notesRef.current.find((n) => n.id === selectedId);
+      if (
+        note &&
+        (title !== note.title ||
+          content !== (note.content || '') ||
+          JSON.stringify(tags) !== JSON.stringify(note.tags || []) ||
+          folderIdInNote !== (note.folder_id ?? null))
+      ) {
+        persistNote(selectedId, { title, content, tags, folder_id: folderIdInNote });
       }
       saveTimeoutRef.current = null;
     }, DEBOUNCE_MS);
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [title, content, tags, iconEmoji, coverColor, folderIdInNote, selectedId, notes, user, persistNote]);
+  }, [title, content, tags, folderIdInNote, selectedId, user, persistNote]);
 
   const handleRequestCreateTask = useCallback((selectedText: string) => {
     setCreateTaskTitle(selectedText);
@@ -358,8 +364,6 @@ export default function Notes() {
       setTitle(newNote.title);
       setContent(newNote.content || '');
       setTags(newNote.tags || []);
-      setIconEmoji('');
-      setCoverColor('');
       setFolderIdInNote(null);
     } catch (err: any) {
       toast({ title: 'Error creating note', description: err.message, variant: 'destructive' });
@@ -435,10 +439,10 @@ export default function Notes() {
 
   return (
     <AppLayout>
-      <div className="flex h-[calc(100vh-4rem)]">
-        {/* Sidebar */}
-        <aside className="w-80 border-r bg-muted/30 flex flex-col shrink-0">
-          <div className="p-3 border-b space-y-2">
+      <div className="flex flex-1 min-h-0 -mx-4 -my-4 lg:-mx-8 lg:-my-8 min-h-[calc(100svh-4.5rem)] lg:min-h-[calc(100svh-4rem)]">
+        {/* Sidebar — full-bleed panel bg to main content edges */}
+        <aside className="w-80 border-r bg-muted/50 flex flex-col shrink-0 self-stretch">
+          <div className="px-3 py-3 border-b space-y-2">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-sm">Notes</h2>
               <div className="flex gap-1">
@@ -495,7 +499,7 @@ export default function Notes() {
             </div>
           </div>
           <ScrollArea className="flex-1">
-            <div className="p-2 space-y-1.5">
+            <div className="px-3 py-2 space-y-1.5">
               {loading ? (
                 <p className="text-sm text-muted-foreground p-2">Loading…</p>
               ) : filteredNotes.length === 0 ? (
@@ -512,8 +516,8 @@ export default function Notes() {
                       className={cn(
                         'group rounded-lg border px-3 py-2.5 text-left cursor-pointer transition-colors',
                         selectedId === note.id
-                          ? 'border-primary bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                          : 'border-border bg-background hover:bg-muted hover:border-muted-foreground/30'
+                          ? 'border-primary/40 bg-white shadow-md ring-1 ring-primary/15'
+                          : 'border-border/80 bg-white hover:bg-muted/60 hover:border-muted-foreground/25 shadow-sm'
                       )}
                       onClick={() => setSelectedId(note.id)}
                       onKeyDown={(e) => e.key === 'Enter' && setSelectedId(note.id)}
@@ -567,12 +571,12 @@ export default function Notes() {
         </aside>
 
         {/* Editor */}
-        <main className="flex-1 overflow-auto">
-          <div className="max-w-3xl mx-auto px-6 py-8">
+        <main className="flex-1 flex flex-col min-h-0 overflow-hidden bg-background">
+          <div className="flex flex-1 flex-col min-h-0 max-w-3xl w-full mx-auto px-4 py-5 lg:px-5">
             {selectedNote ? (
-              <>
+              <div className="flex flex-1 flex-col min-h-0">
                 {/* Saving indicator + Folder + Download as doc */}
-                <div className="h-9 mb-1 flex items-center justify-between gap-2 flex-wrap">
+                <div className="h-9 mb-1 flex shrink-0 items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
                     {saving && (
                       <p className="text-xs text-muted-foreground">Saving…</p>
@@ -595,6 +599,7 @@ export default function Notes() {
                   </Button>
                 </div>
                 <DocumentEditor
+                  noteId={selectedId}
                   title={title}
                   onTitleChange={setTitle}
                   content={content}
@@ -602,19 +607,20 @@ export default function Notes() {
                   tags={tags}
                   onTagsChange={setTags}
                   suggestedTags={allTagsFromNotes}
-                  iconEmoji={iconEmoji}
-                  onIconEmojiChange={setIconEmoji}
-                  coverColor={coverColor}
-                  onCoverColorChange={setCoverColor}
                   onRequestCreateTask={handleRequestCreateTask}
                   onUploadImage={handleUploadNoteImage}
-                  updatedAt={selectedNote.created_at}
+                  formattedDate={
+                    selectedNote.updated_at
+                      ? formatLocaleDateTime(selectedNote.updated_at, dateFormat, timeFormat)
+                      : null
+                  }
                   clientName={selectedNote.client_id ? (clients.find((c) => c.id === selectedNote.client_id)?.name ?? null) : null}
                   projectName={selectedNote.project_id ? (projects.find((p) => p.id === selectedNote.project_id)?.name ?? null) : null}
                   placeholder="Write your note… Type @ to link a client, project, or task."
-                  minHeight="400px"
+                  className="flex-1 min-h-0"
+                  minHeight="100%"
                 />
-              </>
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-24 text-center">
                 <h3 className="text-lg font-semibold mb-1">No note selected</h3>

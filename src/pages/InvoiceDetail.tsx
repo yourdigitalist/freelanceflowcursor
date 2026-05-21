@@ -343,11 +343,12 @@ export default function InvoiceDetail() {
     const columnsWithBankDefault = 'full_name, email, company_name, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, currency, currency_display, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, invoice_footer, invoice_bank_details_default, invoice_notes_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_subject_default, reminder_body_default, hourly_rate';
     const columnsWithoutBankDefault = 'full_name, email, company_name, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, currency, currency_display, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, invoice_footer, invoice_notes_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_subject_default, reminder_body_default, hourly_rate';
     try {
-      let { data, error } = await supabase
+      const { data: initialData, error } = await supabase
         .from('profiles')
         .select(columnsWithBankDefault)
         .eq('user_id', user!.id)
         .maybeSingle();
+      let data = initialData;
       if (error) {
         const tryFallback = /column.*does not exist|invoice_bank_details_default|42703/i.test(String(error.message));
         if (tryFallback) {

@@ -25,8 +25,6 @@ export default function CtaSection() {
       title={cta?.title || "Ready to get started?"}
       subtitle={cta?.subtext || "Start your free trial today."}
       className={wrapperClassName}
-      // inline style so admin can control background image
-      // eslint-disable-next-line react-perf/jsx-no-new-object-as-prop
       style={hasBgImage ? { backgroundImage: `url(${cta.bgImageUrl})` } : {}}
     >
       <div className="flex flex-col w-full sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4 pt-4">
