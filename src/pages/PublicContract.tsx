@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CheckCircle } from "@/components/icons";
+import { PortalBackLink, usePortalTokenFromSearch } from "@/components/clients/PortalBackLink";
 import { DEFAULT_CONTRACT_TEMPLATE_CONTENT, renderTemplate } from "@/lib/contractTemplate";
 import type { Contract, ContractService } from "@/types/contracts";
 
@@ -18,6 +19,7 @@ type Step = "view" | "details" | "agree" | "otp" | "done";
 
 export default function PublicContract() {
   const { token } = useParams<{ token: string }>();
+  const portalToken = usePortalTokenFromSearch();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [contract, setContract] = useState<(Contract & { projects?: { name: string } | null }) | null>(null);
@@ -318,9 +320,13 @@ export default function PublicContract() {
   return (
     <div className="min-h-screen bg-background py-8 px-4">
       <div className="mx-auto max-w-4xl space-y-4">
-        <button className="text-sm text-muted-foreground hover:text-foreground" onClick={() => history.back()}>
-          ← Back to Client Area
-        </button>
+        {portalToken ? (
+          <PortalBackLink portalToken={portalToken} />
+        ) : (
+          <button type="button" className="text-sm text-muted-foreground hover:text-foreground" onClick={() => history.back()}>
+            ← Back to Client Area
+          </button>
+        )}
 
         {(step === "view" || bothSigned) && (
           <>

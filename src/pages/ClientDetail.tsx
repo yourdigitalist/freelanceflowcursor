@@ -37,6 +37,7 @@ import {
 import { countryLabel } from "@/lib/locale-data";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate, formatLocaleDateTime } from "@/lib/datetime";
+import { ClientPortalSettings } from "@/components/clients/ClientPortalSettings";
 import {
   archiveClient,
   buildArchiveConfirmMessage,
@@ -79,6 +80,9 @@ type Client = {
   tags: string[] | null;
   created_at: string;
   archived_at: string | null;
+  portal_enabled: boolean | null;
+  portal_token: string | null;
+  portal_sections: unknown;
 };
 
 type Project = { id: string; name: string; status: string | null; due_date: string | null; budget: number | null };
@@ -823,7 +827,6 @@ export default function ClientDetail() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" disabled>Client Portal</Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon">
@@ -854,6 +857,7 @@ export default function ClientDetail() {
               ["proposals", "Proposals"],
               ["contracts", "Contracts"],
               ["approvals", "Approvals"],
+              ["portal", "Portal"],
             ].map(([value, label]) => (
               <TabsTrigger key={value} value={value} className="rounded-none border-b-2 border-transparent px-4 pb-3 pt-0 data-[state=active]:border-primary data-[state=active]:bg-transparent">
                 {label}
@@ -1282,6 +1286,22 @@ export default function ClientDetail() {
                 {approvals.length === 0 ? <TableRow><TableCell colSpan={4} className="text-muted-foreground">No approvals yet.</TableCell></TableRow> : null}
               </TableBody>
             </Table></CardContent></Card>
+          </TabsContent>
+
+          <TabsContent value="portal" className="space-y-3">
+            <ClientPortalSettings
+              client={{
+                id: client.id,
+                name: client.name,
+                email: client.email,
+                portal_enabled: client.portal_enabled,
+                portal_token: client.portal_token,
+                portal_sections: client.portal_sections,
+                logo_url: client.logo_url,
+                avatar_color: client.avatar_color,
+              }}
+              onClientUpdate={(patch) => setClient((prev) => (prev ? { ...prev, ...patch } : prev))}
+            />
           </TabsContent>
         </Tabs>
       </div>

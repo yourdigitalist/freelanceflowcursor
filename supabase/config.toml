@@ -76,3 +76,12 @@ verify_jwt = false
 
 [functions.verify-contract-otp]
 verify_jwt = false
+
+[functions.view-client-portal]
+verify_jwt = false
+
+[functions.view-invoice-pdf]
+verify_jwt = false
+
+[functions.send-client-portal-link]
+verify_jwt = false

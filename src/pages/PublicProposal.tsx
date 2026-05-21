@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { PortalBackLink, usePortalTokenFromSearch } from "@/components/clients/PortalBackLink";
 import { ProposalDocument } from "@/components/proposals/ProposalDocument";
 
 export default function PublicProposal() {
@@ -9,6 +10,7 @@ export default function PublicProposal() {
   const [data, setData] = useState<any>(null);
   const [state, setState] = useState<"loading" | "unavailable" | "live">("loading");
   const isPreviewMode = searchParams.get("preview") === "1";
+  const portalToken = usePortalTokenFromSearch();
 
   useEffect(() => {
     const load = async () => {
@@ -34,6 +36,9 @@ export default function PublicProposal() {
 
   return (
     <div className="min-h-screen bg-background px-4 py-8">
+      <div className="max-w-4xl mx-auto">
+        <PortalBackLink portalToken={portalToken} />
+      </div>
       <ProposalDocument
         proposal={proposal}
         items={items}

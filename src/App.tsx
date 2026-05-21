@@ -53,6 +53,8 @@ import ReviewRequestDetail from "./pages/ReviewRequestDetail";
 import ClientReview from "./pages/ClientReview";
 import PublicProposal from "./pages/PublicProposal";
 import PublicContract from "./pages/PublicContract";
+import PublicClientPortal from "./pages/PublicClientPortal";
+import PublicPortalInvoice from "./pages/PublicPortalInvoice";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
@@ -237,6 +239,8 @@ function AppRoutes() {
       <Route path="/review/:token" element={<ClientReview />} />
       <Route path="/proposal/:token" element={<PublicProposal />} />
       <Route path="/contract/:token" element={<PublicContractsRoute><PublicContract /></PublicContractsRoute>} />
+      <Route path="/portal/:token" element={<PublicClientPortal />} />
+      <Route path="/portal/:portalToken/invoice/:invoiceId" element={<PublicPortalInvoice />} />
         <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
       <Route path="/search" element={<ProtectedRoute><SearchResults /></ProtectedRoute>} />
       <Route path="/help" element={<ProtectedRoute><Navigate to="/feature-requests" replace /></ProtectedRoute>} />

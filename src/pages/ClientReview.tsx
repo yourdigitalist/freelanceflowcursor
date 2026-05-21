@@ -29,6 +29,7 @@ import {
   X,
   Check,
 } from '@/components/icons';
+import { PortalBackLink, usePortalTokenFromSearch } from '@/components/clients/PortalBackLink';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { cn } from '@/lib/utils';
 
@@ -71,6 +72,7 @@ interface CommentPin {
 
 export default function ClientReview() {
   const { token } = useParams<{ token: string }>();
+  const portalToken = usePortalTokenFromSearch();
   const { toast } = useToast();
   
   const [request, setRequest] = useState<ReviewRequest | null>(null);
@@ -506,6 +508,7 @@ export default function ClientReview() {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-card border-b">
         <div className="container mx-auto pl-0 pr-4 py-4">
+          <PortalBackLink portalToken={portalToken} />
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-8">

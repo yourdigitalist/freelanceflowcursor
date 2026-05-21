@@ -273,6 +273,9 @@ export type Database = {
           next_follow_up_at: string | null
           notes: string | null
           phone: string | null
+          portal_enabled: boolean
+          portal_sections: Json
+          portal_token: string | null
           postal_code: string | null
           state: string | null
           status: string | null
@@ -307,6 +310,9 @@ export type Database = {
           next_follow_up_at?: string | null
           notes?: string | null
           phone?: string | null
+          portal_enabled?: boolean
+          portal_sections?: Json
+          portal_token?: string | null
           postal_code?: string | null
           state?: string | null
           status?: string | null
@@ -341,6 +347,9 @@ export type Database = {
           next_follow_up_at?: string | null
           notes?: string | null
           phone?: string | null
+          portal_enabled?: boolean
+          portal_sections?: Json
+          portal_token?: string | null
           postal_code?: string | null
           state?: string | null
           status?: string | null
