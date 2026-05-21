@@ -129,7 +129,10 @@ export default function UserSettings() {
 
       await supabase.auth.signOut();
       navigate('/auth', { replace: true });
-      toast({ title: 'Account deleted' });
+      toast({
+        title: 'Account deleted',
+        description: 'A confirmation email has been sent to your address.',
+      });
     } catch (error: any) {
       toast({
         title: 'Failed to delete account',

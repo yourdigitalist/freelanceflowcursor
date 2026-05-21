@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendAccountDeletedEmail } from "../_shared/lance-email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -86,6 +87,7 @@ serve(async (req) => {
 
     const { data: authData, error: authError } = await authClient.auth.getUser();
     const userId = authData.user?.id;
+    const authEmail = authData.user?.email?.trim() || "";
 
     if (authError || !userId) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -95,6 +97,47 @@ serve(async (req) => {
     }
 
     const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey);
+
+    const { data: profile } = await adminClient
+      .from("profiles")
+      .select("email, full_name, first_name, last_name")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const profileEmail = (profile?.email as string | null)?.trim() || "";
+    const recipientEmail = profileEmail || authEmail;
+    if (!recipientEmail) {
+      return new Response(JSON.stringify({ error: "No email on file for this account" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const first = (profile?.first_name as string | null)?.trim() || "";
+    const last = (profile?.last_name as string | null)?.trim() || "";
+    const combined = `${first} ${last}`.trim();
+    const recipientName =
+      combined ||
+      (profile?.full_name as string | null)?.trim() ||
+      recipientEmail.split("@")[0] ||
+      "there";
+
+    // Send confirmation before deleting auth user (profile row cascades or is removed with user).
+    const emailResult = await sendAccountDeletedEmail(adminClient, {
+      email: recipientEmail,
+      name: recipientName,
+    });
+    if (!emailResult.ok) {
+      return new Response(
+        JSON.stringify({
+          error: emailResult.error || "Failed to send account deleted confirmation email",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
 
     const reviewFilePaths = await listAllFilesInFolder(adminClient, "review-files", userId);
     if (reviewFilePaths.length > 0) {
@@ -124,7 +167,7 @@ serve(async (req) => {
       );
     }
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ success: true, emailSent: true }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

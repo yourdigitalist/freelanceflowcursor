@@ -175,12 +175,14 @@ export default function Notes() {
   });
   const selectedNote = notes.find((n) => n.id === selectedId);
   const prevSelectedIdRef = useRef<string | null>(null);
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
 
-  // Sync from selected note only when switching notes (prevents jump when save updates the list)
+  // Sync from selected note only when switching notes (prevents reset when autosave updates the list)
   useEffect(() => {
     if (selectedId !== prevSelectedIdRef.current) {
       prevSelectedIdRef.current = selectedId;
-      const note = notes.find((n) => n.id === selectedId);
+      const note = selectedId ? notesRef.current.find((n) => n.id === selectedId) : null;
       if (note) {
         setTitle(note.title);
         setContent(note.content || '');
@@ -197,7 +199,7 @@ export default function Notes() {
         setFolderIdInNote(null);
       }
     }
-  }, [selectedId, notes]);
+  }, [selectedId]);
 
   const persistNote = useCallback(async (noteId: string, payload: { title: string; content: string; tags: string[]; icon_emoji?: string; cover_color?: string; folder_id?: string | null }) => {
     setSaving(true);

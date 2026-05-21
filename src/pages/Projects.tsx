@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, MoreVertical, Trash2, LayoutGrid, List, Download, Upload } from '@/components/icons';
+import { Plus, Search, MoreVertical, Trash2, LayoutGrid, List, Download, Upload, Calendar, Clock } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import {
   DropdownMenu,
@@ -856,21 +856,16 @@ export default function Projects() {
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       {project.due_date && (
                         <span className="inline-flex items-center gap-1.5">
-                          <SlotIcon slot="task_calendar" className="h-3.5 w-3.5 shrink-0" />
+                          <Calendar className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
                           <span>{formatLocaleDate(project.due_date, dateFormat)}</span>
                         </span>
                       )}
                       <span className="inline-flex items-center gap-1.5">
-                        <SlotIcon slot="task_clock" className="h-3.5 w-3.5 shrink-0" />
+                        <Clock className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
                         <span>{(project.hours || 0).toFixed(1)}h</span>
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className={getStatusColor(project.status)}>
-                        {formatStatus(project.status)}
-                      </Badge>
-                      <span>{project.task_count || 0} tasks</span>
-                    </div>
+                    <span className="text-sm text-muted-foreground shrink-0">{project.task_count || 0} tasks</span>
                   </div>
                 </CardContent>
               </Card>
@@ -925,12 +920,12 @@ export default function Projects() {
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     {project.due_date && (
                       <span className="flex items-center gap-1">
-                        <SlotIcon slot="task_calendar" className="h-3.5 w-3.5" />
+                        <Calendar className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
                         {formatLocaleDate(project.due_date, dateFormat)}
                       </span>
                     )}
                     <span className="flex items-center gap-1">
-                      <SlotIcon slot="task_clock" className="h-3.5 w-3.5" />
+                      <Clock className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
                       {(project.hours || 0).toFixed(1)}h
                     </span>
                     <span>{project.task_count || 0} tasks</span>

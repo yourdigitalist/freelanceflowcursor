@@ -1,12 +1,9 @@
 <!--
-  Lance-branded frame for Supabase Auth emails (reset password, magic link, confirm signup).
-  Paste into Supabase → Authentication → Email Templates. Edit only the MAIN CONTENT block per template.
-
-  Subject suggestions:
-  - Reset: Reset your Lance password
-  - Magic link: Your Lance sign-in link
-  - Confirm: Confirm your email for Lance
+  Shared Lance auth email frame (Supabase Authentication → Email Templates).
+  Header: white wordmark (lance-logo-white.png). Footer: black wordmark (lance-logo-black.svg).
 -->
+<!-- LANCE_EMAIL_LOGO_WHITE: https://www.getlance.app/email/lance-logo-white.png -->
+<!-- LANCE_EMAIL_LOGO_BLACK: https://www.getlance.app/email/lance-logo-black.svg -->
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
@@ -31,20 +28,10 @@
                 </a>
               </div>
               <div style="padding:24px 20px; font-size:15px; line-height:1.6; color:#111827;">
-                <!-- MAIN CONTENT — change this block per template (Reset password / Magic link / Confirm signup) -->
-                <h2 style="margin:0 0 16px 0; font-size:18px; color:#9B63E9;">Reset your password</h2>
-                <p style="margin:0 0 16px 0;">Hi,</p>
-                <p style="margin:0 0 20px 0;">We received a request to reset the password for your Lance account. Click the button below to choose a new password. This link expires after a short time.</p>
-                <p style="margin:0 0 24px 0;">
-                  <a href="{{ .ConfirmationURL }}" style="display:inline-block; background:#9B63E9; color:#ffffff !important; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:600;">Reset password</a>
-                </p>
-                <p style="margin:0 0 12px 0; font-size:13px; color:#6b7280;">If the button doesn't work, copy and paste this link into your browser:</p>
-                <p style="margin:0; font-size:12px; word-break:break-all; color:#6b7280;">{{ .ConfirmationURL }}</p>
-                <p style="margin:24px 0 0 0; font-size:14px; color:#374151;">If you didn't ask to reset your password, you can ignore this email—your password will stay the same.</p>
-                <!-- END MAIN CONTENT -->
+                <!-- MAIN_CONTENT -->
               </div>
               <div style="padding:14px 20px; font-size:12px; color:#6b7280; border-top:1px solid #e5e7eb;">
-                <img src="https://www.getlance.app/email/lance-logo-black.svg" alt="Lance" width="80" height="20" style="height:20px; max-width:100px; width:auto; display:block; margin-bottom:8px; border:0;" />
+                <img src="https://www.getlance.app/email/lance-logo-black.svg" alt="Lance" width="80" height="20" style="height:20px; max-width:100px;width:auto;display:block;margin-bottom:8px;border:0;" />
                 Sent by <span style="color:#9B63E9; font-weight:600;">Lance</span>
                 <span style="color:#9ca3af;"> · </span>
                 <a href="{{ .SiteURL }}/help" style="color:#6b7280; font-weight:normal;">Help</a>

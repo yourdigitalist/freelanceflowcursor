@@ -15,7 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
@@ -404,15 +403,15 @@ export function TimeEntryLogDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[min(90vh,720px)] flex flex-col gap-0 p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
+      <DialogContent className="max-w-lg max-h-[min(90vh,720px)] !flex flex-col gap-0 p-0 overflow-hidden sm:max-w-lg">
+        <DialogHeader className="px-6 pt-6 pb-2 shrink-0 pr-12">
           <DialogTitle>{isEditing ? 'Edit Time Entry' : 'Manual Log'}</DialogTitle>
           <DialogDescription>
             {isEditing ? 'Update this time entry' : 'Add time for a project task'}
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="flex-1 min-h-0">
-          <form id="time-entry-log-form" onSubmit={handleSubmit} className="space-y-4 px-6 pb-4">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6" style={{ maxHeight: 'min(60vh, 520px)' }}>
+          <form id="time-entry-log-form" onSubmit={handleSubmit} className="space-y-4 pb-4">
             <div className="space-y-2">
               <Label>Project *</Label>
               <Popover open={dialogProjectPopoverOpen} onOpenChange={setDialogProjectPopoverOpen}>
@@ -637,8 +636,8 @@ export function TimeEntryLogDialog({
               />
             </div>
           </form>
-        </ScrollArea>
-        <DialogFooter className="px-6 py-4 border-t shrink-0">
+        </div>
+        <DialogFooter className="px-6 py-4 border-t shrink-0 bg-card">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>

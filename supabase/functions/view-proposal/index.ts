@@ -76,14 +76,14 @@ serve(async (req) => {
           subject: `Proposal viewed: ${proposal.identifier}`,
           html: `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
             <div style="padding:18px 20px;background:#9B63E9;color:white;display:flex;align-items:center;gap:8px;">
-              <img src="https://getlance.app/favicon.ico" alt="Lance" width="18" height="18" style="display:inline-block;border-radius:4px;" />
-              <strong>Lance</strong>
+              <img src="https://www.getlance.app/email/lance-logo-white.png" alt="Lance" width="120" height="28" style="height:28px;max-width:160px;width:auto;display:block;border:0;" />
             </div>
             <div style="padding:20px;">
               <h2 style="color:#9B63E9;margin-top:0;">Proposal viewed by client</h2>
               <p style="color:#333;">Your proposal <strong>${escapeHtml(proposal.identifier)}</strong> has just been viewed.</p>
             </div>
             <div style="padding: 14px 20px; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb;">
+              <img src="https://www.getlance.app/email/lance-logo-black.svg" alt="Lance" width="80" height="20" style="height:20px;max-width:100px;width:auto;display:block;margin-bottom:8px;border:0;" />
               Sent by <span style="color: #9B63E9; font-weight: 600;">Lance</span>
             </div>
           </div>`,

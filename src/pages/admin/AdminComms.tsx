@@ -24,6 +24,8 @@ interface AppCommsDefaults {
   trial_body_0d: string | null;
   announcement_default_body: string | null;
   announcement_custom_html: string | null;
+  account_deleted_subject: string | null;
+  account_deleted_body: string | null;
   updated_at: string;
 }
 
@@ -53,6 +55,8 @@ export default function AdminComms() {
     trial_body_0d: null,
     announcement_default_body: null,
     announcement_custom_html: null,
+    account_deleted_subject: null,
+    account_deleted_body: null,
     updated_at: '',
   });
 
@@ -84,6 +88,8 @@ export default function AdminComms() {
           trial_body_0d: data.trial_body_0d ?? null,
           announcement_default_body: data.announcement_default_body ?? null,
           announcement_custom_html: data.announcement_custom_html ?? null,
+          account_deleted_subject: data.account_deleted_subject ?? null,
+          account_deleted_body: data.account_deleted_body ?? null,
           updated_at: data.updated_at ?? '',
         });
       }
@@ -113,6 +119,8 @@ export default function AdminComms() {
           trial_body_0d: form.trial_body_0d || null,
           announcement_default_body: form.announcement_default_body || null,
           announcement_custom_html: form.announcement_custom_html || null,
+          account_deleted_subject: form.account_deleted_subject || null,
+          account_deleted_body: form.account_deleted_body || null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', 1);
@@ -153,7 +161,7 @@ export default function AdminComms() {
             <Mail className="h-5 w-5" />
             Lance → User email wrapper
           </CardTitle>
-          <CardDescription>Used by trial reminders and announcements unless custom HTML is provided.</CardDescription>
+          <CardDescription>Used by trial reminders, account-deleted confirmations, and announcements unless custom HTML is provided.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -187,6 +195,25 @@ export default function AdminComms() {
           <CardDescription>Default bodies for trial reminders and announcements to users.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="account_deleted_subject">Account deleted subject</Label>
+            <Input
+              id="account_deleted_subject"
+              value={form.account_deleted_subject ?? ''}
+              onChange={(e) => update('account_deleted_subject', e.target.value || null)}
+              placeholder="Your Lance account has been deleted"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="account_deleted_body">Account deleted body</Label>
+            <Textarea
+              id="account_deleted_body"
+              value={form.account_deleted_body ?? ''}
+              onChange={(e) => update('account_deleted_body', e.target.value || null)}
+              placeholder="Tokens: {{user_name}}, {{support_url}}"
+              rows={5}
+            />
+          </div>
           <div className="space-y-2">
             <Label htmlFor="trial_body_5d">Trial body (5 days left)</Label>
             <Textarea

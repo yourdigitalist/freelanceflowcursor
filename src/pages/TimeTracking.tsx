@@ -42,8 +42,11 @@ import {
   endOfMonth,
   addWeeks,
   subWeeks,
+  subMonths,
   eachDayOfInterval,
   isSameDay,
+  isSameMonth,
+  getDay,
 } from 'date-fns';
 import { Pause } from 'lucide-react';
 import {
@@ -65,6 +68,7 @@ import { formatDuration } from '@/lib/time';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDate } from '@/lib/datetime';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
   downloadCsv,
@@ -74,8 +78,9 @@ import {
 } from '@/lib/csv';
 import {
   applyTimeEntryFilters,
+  getDateRangeForPreset,
+  type DateRangePreset,
   type StatusFilter,
-  type TimeframeFilter,
 } from '@/lib/timeEntryFilters';
 import { TimeEntryLogDialog } from '@/components/time/TimeEntryLogDialog';
 import { TimeEntriesTable } from '@/components/time/TimeEntriesTable';
@@ -172,7 +177,13 @@ export default function TimeTracking() {
   const prefilledTaskId = searchParams.get('task') || '';
   const prefilledClientId = searchParams.get('client') || '';
   const prefilledStatus = searchParams.get('status') || '';
-  const prefilledTimeframe = searchParams.get('timeframe') || '';
+  const HISTORY_DATE_PRESETS: { id: DateRangePreset; label: string }[] = [
+    { id: 'all', label: 'All time' },
+    { id: 'this_week', label: 'This week' },
+    { id: 'this_month', label: 'This month' },
+    { id: 'last_6_months', label: 'Last 6 months' },
+    { id: 'ytd', label: 'Year to date' },
+  ];
   const editEntryId = searchParams.get('edit') || '';
   const lockPrefilledProject = Boolean(prefilledProjectId);
   const [projectQuery, setProjectQuery] = useState('');
@@ -181,10 +192,25 @@ export default function TimeTracking() {
   const [taskPopoverOpen, setTaskPopoverOpen] = useState(false);
 
   // Filters (initialized from URL when present)
-  const [timeframeFilter, setTimeframeFilter] = useState<TimeframeFilter>(() => {
-    const v = searchParams.get('timeframe');
-    return v === 'today' || v === 'week' || v === 'month' || v === 'last30' ? v : 'all';
+  const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>(() => {
+    const preset = searchParams.get('preset');
+    if (
+      preset === 'this_week' ||
+      preset === 'this_month' ||
+      preset === 'last_6_months' ||
+      preset === 'ytd' ||
+      preset === 'custom'
+    ) {
+      return preset;
+    }
+    const legacy = searchParams.get('timeframe');
+    if (legacy === 'week') return 'this_week';
+    if (legacy === 'month') return 'this_month';
+    if (legacy === 'last30') return 'last_6_months';
+    return 'all';
   });
+  const [dateFrom, setDateFrom] = useState(() => searchParams.get('from') || '');
+  const [dateTo, setDateTo] = useState(() => searchParams.get('to') || '');
   const [projectFilter, setProjectFilter] = useState<string>(() => searchParams.get('project') || 'all');
   const [clientFilter, setClientFilter] = useState<string>(() => searchParams.get('client') || 'all');
   const [taskFilter, setTaskFilter] = useState<string>(() => searchParams.get('task') || 'all');
@@ -212,6 +238,10 @@ export default function TimeTracking() {
   });
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+  const [weekPickerOpen, setWeekPickerOpen] = useState(false);
+
+  const todayHighlightClass = 'border-primary bg-primary/10';
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const [createTaskDialogOpen, setCreateTaskDialogOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -255,7 +285,11 @@ export default function TimeTracking() {
     setOrDelete('project', projectFilter);
     setOrDelete('task', taskFilter);
     setOrDelete('status', statusFilter);
-    if (isHistoryView) setOrDelete('timeframe', timeframeFilter);
+    if (isHistoryView) {
+      setOrDelete('preset', dateRangePreset);
+      setOrDelete('from', dateFrom);
+      setOrDelete('to', dateTo);
+    }
     const view = searchParams.get('view');
     if (view) next.set('view', view);
     const edit = searchParams.get('edit');
@@ -263,7 +297,7 @@ export default function TimeTracking() {
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true });
     }
-  }, [clientFilter, projectFilter, taskFilter, statusFilter, timeframeFilter, isTimesheetView, isHistoryView]);
+  }, [clientFilter, projectFilter, taskFilter, statusFilter, dateRangePreset, dateFrom, dateTo, isTimesheetView, isHistoryView]);
 
   useEffect(() => {
     if (!isTimerView) return;
@@ -515,9 +549,9 @@ export default function TimeTracking() {
         clientFilter,
         taskFilter,
         statusFilter,
-        timeframeFilter,
+        ...(isHistoryView ? { dateRangePreset, dateFrom, dateTo } : {}),
       }),
-    [entries, projectFilter, clientFilter, taskFilter, statusFilter, timeframeFilter],
+    [entries, projectFilter, clientFilter, taskFilter, statusFilter, dateRangePreset, dateFrom, dateTo, isHistoryView],
   );
 
   const selectAllFiltered = () => {
@@ -587,8 +621,14 @@ export default function TimeTracking() {
     if (e.start_time && e.end_time) return Math.max(0, differenceInMinutes(parseISO(e.end_time), parseISO(e.start_time))) * 60;
     return 0;
   };
-  const totalHours = filteredEntries.reduce((sum, e) => sum + getEntrySeconds(e), 0) / 3600;
-  const billableHours = filteredEntries.filter(e => e.billable).reduce((sum, e) => sum + getEntrySeconds(e), 0) / 3600;
+
+  const historyStats = useMemo(() => {
+    const totalSeconds = filteredEntries.reduce((sum, e) => sum + getEntrySeconds(e), 0);
+    const billableSeconds = filteredEntries
+      .filter((e) => e.billable)
+      .reduce((sum, e) => sum + getEntrySeconds(e), 0);
+    return { totalSeconds, billableSeconds, count: filteredEntries.length };
+  }, [filteredEntries]);
 
   const formatHm = (seconds: number) => {
     const totalMinutes = Math.round(Math.max(0, seconds) / 60);
@@ -625,8 +665,8 @@ export default function TimeTracking() {
       return acc;
     }, {});
   }, [entriesMatchingFilters, weekDays]);
-  const monthDayTotals = useMemo(() => {
-    return monthDays.reduce<Record<string, number>>((acc, day) => {
+  const calendarDayTotals = useMemo(() => {
+    return monthGridDays.reduce<Record<string, number>>((acc, day) => {
       const key = format(day, 'yyyy-MM-dd');
       acc[key] = entriesMatchingFilters.reduce((sum, e) => {
         const d = parseISO(e.started_at || e.start_time);
@@ -635,7 +675,23 @@ export default function TimeTracking() {
       }, 0);
       return acc;
     }, {});
-  }, [entriesMatchingFilters, monthDays]);
+  }, [entriesMatchingFilters, monthGridDays]);
+
+  const weekTotalSeconds = useMemo(
+    () => weekDays.reduce((sum, d) => sum + (weekDayTotals[format(d, 'yyyy-MM-dd')] || 0), 0),
+    [weekDays, weekDayTotals],
+  );
+
+  const monthTotalSeconds = useMemo(() => {
+    return entriesMatchingFilters.reduce((sum, e) => {
+      const d = parseISO(e.started_at || e.start_time);
+      if (d < monthStart || d > monthEnd) return sum;
+      return sum + getEntrySeconds(e);
+    }, 0);
+  }, [entriesMatchingFilters, monthStart, monthEnd]);
+
+  const isCurrentWeek = isSameDay(weekStart, startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const isCurrentMonth = isSameMonth(selectedDay, new Date());
 
   const timesheetTableEntries = useMemo(() => {
     let list = entriesMatchingFilters;
@@ -664,8 +720,13 @@ export default function TimeTracking() {
       setWeekStart(startOfWeek(next, { weekStartsOn: 1 }));
       return;
     }
-    setWeekStart((prev) => (direction === 'prev' ? subWeeks(prev, 1) : addWeeks(prev, 1)));
-    setSelectedDay((prev) => (direction === 'prev' ? subWeeks(prev, 1) : addWeeks(prev, 1)));
+    const nextWeekStart = direction === 'prev' ? subWeeks(weekStart, 1) : addWeeks(weekStart, 1);
+    const nextWeekEnd = endOfWeek(nextWeekStart, { weekStartsOn: 1 });
+    setWeekStart(nextWeekStart);
+    setSelectedDay((prev) => {
+      if (prev >= nextWeekStart && prev <= nextWeekEnd) return prev;
+      return nextWeekStart;
+    });
   };
 
   const setTimesheetMode = (mode: 'day' | 'week' | 'month') => {
@@ -691,11 +752,104 @@ export default function TimeTracking() {
     setCreateTaskDialogOpen(false);
   };
 
-  const renderEntryFilters = (options?: { showTimeframe?: boolean }) => (
-    <div className="flex flex-wrap items-center gap-3">
-      <Filter className="h-4 w-4 text-muted-foreground" />
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (projectFilter !== 'all') count++;
+    if (clientFilter !== 'all') count++;
+    if (taskFilter !== 'all') count++;
+    if (statusFilter !== 'all') count++;
+    if (isHistoryView && dateRangePreset !== 'all') count++;
+    return count;
+  }, [projectFilter, clientFilter, taskFilter, statusFilter, dateRangePreset, isHistoryView]);
+
+  const resetFilters = () => {
+    setProjectFilter('all');
+    setClientFilter('all');
+    setTaskFilter('all');
+    setStatusFilter('all');
+    setDateRangePreset('all');
+    setDateFrom('');
+    setDateTo('');
+  };
+
+  const applyHistoryDatePreset = (preset: DateRangePreset) => {
+    setDateRangePreset(preset);
+    if (preset === 'all') {
+      setDateFrom('');
+      setDateTo('');
+      return;
+    }
+    if (preset !== 'custom') {
+      const { from, to } = getDateRangeForPreset(preset);
+      setDateFrom(from);
+      setDateTo(to);
+    }
+  };
+
+  const goToCurrentWeek = () => {
+    const now = new Date();
+    setWeekStart(startOfWeek(now, { weekStartsOn: 1 }));
+    setSelectedDay(now);
+  };
+
+  const goToCurrentMonth = () => {
+    const now = new Date();
+    setSelectedDay(now);
+    setWeekStart(startOfWeek(now, { weekStartsOn: 1 }));
+  };
+
+  const setTimesheetMonth = (year: number, monthIndex: number) => {
+    const next = new Date(year, monthIndex, 1);
+    setSelectedDay(next);
+    setWeekStart(startOfWeek(next, { weekStartsOn: 1 }));
+  };
+
+  const renderHistoryDateRangeBar = () => (
+    <div className="flex flex-col gap-2 flex-1 min-w-0">
+      <div className="flex flex-wrap gap-1.5">
+        {HISTORY_DATE_PRESETS.map((preset) => (
+          <Button
+            key={preset.id}
+            type="button"
+            variant={dateRangePreset === preset.id ? 'default' : 'outline'}
+            size="sm"
+            className="h-8"
+            onClick={() => applyHistoryDatePreset(preset.id)}
+          >
+            {preset.label}
+          </Button>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => {
+            setDateFrom(e.target.value);
+            setDateRangePreset('custom');
+          }}
+          className="h-8 w-[140px]"
+          aria-label="From date"
+        />
+        <span className="text-sm text-muted-foreground">to</span>
+        <Input
+          type="date"
+          value={dateTo}
+          onChange={(e) => {
+            setDateTo(e.target.value);
+            setDateRangePreset('custom');
+          }}
+          className="h-8 w-[140px]"
+          aria-label="To date"
+        />
+      </div>
+    </div>
+  );
+
+  const renderEntryFilterFields = () => (
+    <div className="flex flex-col gap-3 min-w-[200px]">
       <Select value={projectFilter} onValueChange={setProjectFilter}>
-        <SelectTrigger className="w-40">
+        <SelectTrigger className="w-full">
           <SelectValue placeholder="All Projects" />
         </SelectTrigger>
         <SelectContent>
@@ -708,7 +862,7 @@ export default function TimeTracking() {
         </SelectContent>
       </Select>
       <Select value={clientFilter} onValueChange={setClientFilter}>
-        <SelectTrigger className="w-40">
+        <SelectTrigger className="w-full">
           <SelectValue placeholder="All Clients" />
         </SelectTrigger>
         <SelectContent>
@@ -721,7 +875,7 @@ export default function TimeTracking() {
         </SelectContent>
       </Select>
       <Select value={taskFilter} onValueChange={setTaskFilter}>
-        <SelectTrigger className="w-44">
+        <SelectTrigger className="w-full">
           <SelectValue placeholder="All Tasks" />
         </SelectTrigger>
         <SelectContent>
@@ -733,22 +887,8 @@ export default function TimeTracking() {
           ))}
         </SelectContent>
       </Select>
-      {options?.showTimeframe && (
-        <Select value={timeframeFilter} onValueChange={(v) => setTimeframeFilter(v as TimeframeFilter)}>
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="All Time" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Time</SelectItem>
-            <SelectItem value="today">Today</SelectItem>
-            <SelectItem value="week">This Week</SelectItem>
-            <SelectItem value="month">This Month</SelectItem>
-            <SelectItem value="last30">Last 30 Days</SelectItem>
-          </SelectContent>
-        </Select>
-      )}
       <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-        <SelectTrigger className="w-36">
+        <SelectTrigger className="w-full">
           <SelectValue placeholder="All Status" />
         </SelectTrigger>
         <SelectContent>
@@ -759,6 +899,117 @@ export default function TimeTracking() {
           <SelectItem value="not_billable">Not Billable</SelectItem>
         </SelectContent>
       </Select>
+    </div>
+  );
+
+  const renderFilterPopover = () => (
+    <div className="flex items-center gap-2 shrink-0">
+      {activeFilterCount > 0 && (
+        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={resetFilters}>
+          Reset
+        </Button>
+      )}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="relative h-8 w-8 p-0" aria-label="Filters">
+            <Filter className="h-4 w-4" />
+            {activeFilterCount > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                {activeFilterCount}
+              </span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-4" align="end" onOpenAutoFocus={(e) => e.preventDefault()}>
+          {renderEntryFilterFields()}
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+
+  const isTodayVisible = (d: Date) => {
+    const today = new Date();
+    if (timesheetView === 'month') {
+      return isCurrentMonth && isSameDay(d, today);
+    }
+    return isCurrentWeek && isSameDay(d, today);
+  };
+
+  const renderWeekPeriodPicker = () => (
+    <Popover open={weekPickerOpen} onOpenChange={setWeekPickerOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" type="button">
+          {isCurrentWeek
+            ? `This week ${formatUserDate(weekStart)} – ${formatUserDate(weekEnd)}`
+            : `${formatUserDate(weekStart)} – ${formatUserDate(weekEnd)}`}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={selectedDay}
+          onSelect={(date) => {
+            if (!date) return;
+            setSelectedDay(date);
+            setWeekStart(startOfWeek(date, { weekStartsOn: 1 }));
+            setWeekPickerOpen(false);
+          }}
+          defaultMonth={selectedDay}
+          initialFocus
+        />
+        <div className="border-t p-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => {
+              goToCurrentWeek();
+              setWeekPickerOpen(false);
+            }}
+          >
+            This week
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+
+  const renderWeekDayStrip = () => (
+    <div className="relative z-10 grid grid-cols-7 gap-2">
+      {weekDays.map((d) => {
+        const key = format(d, 'yyyy-MM-dd');
+        const daySeconds = weekDayTotals[key] || 0;
+        const isToday = isTodayVisible(d);
+        const isWeekend = getDay(d) === 0 || getDay(d) === 6;
+        const hasHours = daySeconds > 0;
+
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setSelectedDay(d)}
+            className={cn(
+              'cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
+              isToday ? todayHighlightClass : 'border-border bg-card',
+              !isToday && isWeekend && 'bg-secondary',
+            )}
+          >
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {format(d, 'EEE')}
+            </p>
+            <p className="mt-0.5 text-[13px] font-medium text-foreground">{format(d, 'd MMM')}</p>
+            <p
+              className={cn(
+                'mt-1 text-[13px] font-medium',
+                hasHours ? 'text-foreground' : 'text-muted-foreground',
+              )}
+            >
+              {formatHm(daySeconds)}
+            </p>
+          </button>
+        );
+      })}
     </div>
   );
 
@@ -789,6 +1040,14 @@ export default function TimeTracking() {
           <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Timesheet</h1>
+              {(timesheetView === 'day' || timesheetView === 'week') && (
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Week of {format(weekStart, 'd')}–{format(weekEnd, 'd MMM yyyy')}
+                </p>
+              )}
+              {timesheetView === 'month' && (
+                <p className="text-sm text-muted-foreground mt-0.5">{format(monthStart, 'MMMM yyyy')}</p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" asChild>
@@ -811,96 +1070,147 @@ export default function TimeTracking() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => shiftPeriod('prev')}>←</Button>
-              <Button variant="outline" size="sm" onClick={() => { setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 })); setSelectedDay(new Date()); }}>
-                {timesheetView === 'month'
-                  ? `This month ${format(monthStart, 'MMM yyyy')}`
-                  : `This week ${formatUserDate(weekStart)} - ${formatUserDate(weekEnd)}`}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => shiftPeriod('prev')} aria-label="Previous period">
+                ←
               </Button>
-              <Button variant="outline" size="sm" onClick={() => shiftPeriod('next')}>→</Button>
-              <Input
-                type="date"
-                className="h-8 w-[170px]"
-                value={format(selectedDay, 'yyyy-MM-dd')}
-                onChange={(e) => {
-                  const picked = new Date(`${e.target.value}T12:00:00`);
-                  if (Number.isNaN(picked.getTime())) return;
-                  setSelectedDay(picked);
-                  setWeekStart(startOfWeek(picked, { weekStartsOn: 1 }));
-                }}
-              />
+              {timesheetView === 'month' ? (
+                <Popover open={monthPickerOpen} onOpenChange={setMonthPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" type="button">
+                      {isCurrentMonth
+                        ? `This month ${format(monthStart, 'MMM yyyy')}`
+                        : format(monthStart, 'MMM yyyy')}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-3" align="start">
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        <Select
+                          value={String(selectedDay.getMonth())}
+                          onValueChange={(m) => setTimesheetMonth(selectedDay.getFullYear(), Number(m))}
+                        >
+                          <SelectTrigger className="w-[130px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 12 }, (_, i) => (
+                              <SelectItem key={i} value={String(i)}>
+                                {format(new Date(2024, i, 1), 'MMMM')}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={String(selectedDay.getFullYear())}
+                          onValueChange={(y) => setTimesheetMonth(Number(y), selectedDay.getMonth())}
+                        >
+                          <SelectTrigger className="w-[100px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 11 }, (_, i) => {
+                              const year = new Date().getFullYear() - 5 + i;
+                              return (
+                                <SelectItem key={year} value={String(year)}>
+                                  {year}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => {
+                          goToCurrentMonth();
+                          setMonthPickerOpen(false);
+                        }}
+                      >
+                        This month
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                renderWeekPeriodPicker()
+              )}
+              <Button variant="outline" size="sm" onClick={() => shiftPeriod('next')} aria-label="Next period">
+                →
+              </Button>
+              {(timesheetView === 'day' || timesheetView === 'week') && (
+                <span className="text-sm text-muted-foreground">
+                  Week total: <span className="font-mono font-medium text-foreground">{formatHm(weekTotalSeconds)}</span>
+                </span>
+              )}
+              {timesheetView === 'month' && (
+                <span className="text-sm text-muted-foreground">
+                  Month total: <span className="font-mono font-medium text-foreground">{formatHm(monthTotalSeconds)}</span>
+                </span>
+              )}
             </div>
+            {renderFilterPopover()}
           </div>
-
-          {renderEntryFilters()}
 
           {(timesheetView === 'day' || timesheetView === 'week') && (
             <div className="space-y-4">
-              {timesheetView === 'day' && (
-                <>
-                  <div className="grid grid-cols-7 gap-2">
-                    {weekDays.map((d) => {
-                      const key = format(d, 'yyyy-MM-dd');
-                      return (
-                        <button
-                          key={key}
-                          onClick={() => setSelectedDay(d)}
-                          className={cn(
-                            'rounded-md border px-2 py-2 text-left',
-                            isSameDay(d, selectedDay) ? 'border-primary bg-primary/5' : 'border-border',
-                          )}
-                        >
-                          <p className="text-xs text-muted-foreground">{format(d, 'EEE')}</p>
-                          <p className="text-sm font-medium">{format(d, 'dd MMM')}</p>
-                          <p className="text-xs font-mono">{formatHm(weekDayTotals[key] || 0)}</p>
-                        </button>
-                      );
-                    })}
+              {renderWeekDayStrip()}
+              {timesheetView === 'day' ? (
+                <div className="rounded-lg border border-border bg-card overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <TimeEntriesTable
+                      variant="timesheetDay"
+                      entries={timesheetTableEntries}
+                      clientById={clientById}
+                      formatUserDate={formatUserDate}
+                      getEntrySeconds={getEntrySeconds}
+                      getStatusBadge={getStatusBadge}
+                      onEdit={openLogDialog}
+                      onDelete={handleDelete}
+                      onResume={resumeEntry}
+                      emptyMessage="No entries for this day. Use Track time to add one."
+                    />
                   </div>
-                  <div className="flex justify-end">
-                    <p className="text-sm font-medium">
-                      Week total:{' '}
-                      <span className="font-mono">
-                        {formatHm(weekDays.reduce((sum, d) => sum + (weekDayTotals[format(d, 'yyyy-MM-dd')] || 0), 0))}
-                      </span>
-                    </p>
-                  </div>
-                </>
-              )}
-              {timesheetView === 'week' && (
-                <p className="text-sm text-muted-foreground">
-                  {formatUserDate(weekStart)} – {formatUserDate(weekEnd)}
-                </p>
-              )}
-              <Card className="border-0 shadow-sm">
-                <CardContent className="p-0 overflow-x-auto">
-                  <TimeEntriesTable
-                    entries={timesheetTableEntries}
-                    clientById={clientById}
-                    formatUserDate={formatUserDate}
-                    getEntrySeconds={getEntrySeconds}
-                    getStatusBadge={getStatusBadge}
-                    onEdit={openLogDialog}
-                    onDelete={handleDelete}
-                    onResume={resumeEntry}
-                    emptyMessage={
-                      timesheetView === 'day'
-                        ? 'No entries for this day. Use Track time to add one.'
-                        : 'No entries for this week.'
-                    }
-                  />
-                  {timesheetTableEntries.length > 0 && timesheetView === 'day' && (
-                    <div className="flex items-center justify-end bg-muted/20 px-4 py-3 border-t">
-                      <p className="text-sm font-medium">
+                  {timesheetTableEntries.length > 0 && (
+                    <div className="flex items-center justify-end border-t border-border px-4 py-3">
+                      <p className="text-sm font-medium text-foreground">
                         Day total:{' '}
-                        <span className="font-mono">{formatHm(weekDayTotals[format(selectedDay, 'yyyy-MM-dd')] || 0)}</span>
+                        <span className="font-mono">
+                          {formatHm(weekDayTotals[format(selectedDay, 'yyyy-MM-dd')] || 0)}
+                        </span>
                       </p>
                     </div>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              ) : (
+                <Card className="border-0 shadow-sm">
+                  <CardContent className="p-0 overflow-x-auto">
+                    <TimeEntriesTable
+                      entries={timesheetTableEntries}
+                      clientById={clientById}
+                      formatUserDate={formatUserDate}
+                      getEntrySeconds={getEntrySeconds}
+                      getStatusBadge={getStatusBadge}
+                      onEdit={openLogDialog}
+                      onDelete={handleDelete}
+                      onResume={resumeEntry}
+                      emptyMessage="No entries for this week."
+                    />
+                    {timesheetTableEntries.length > 0 && (
+                      <div className="flex items-center justify-end bg-muted/20 px-4 py-3 border-t">
+                        <p className="text-sm font-medium">
+                          Week total:{' '}
+                          <span className="font-mono">{formatHm(weekTotalSeconds)}</span>
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
           {timesheetView === 'month' && (
@@ -914,7 +1224,7 @@ export default function TimeTracking() {
                 {monthGridDays.map((d) => {
                   const key = format(d, 'yyyy-MM-dd');
                   const inMonth = d >= monthStart && d <= monthEnd;
-                  const total = monthDayTotals[key] || 0;
+                  const total = calendarDayTotals[key] || 0;
                   return (
                     <button
                       key={key}
@@ -926,7 +1236,7 @@ export default function TimeTracking() {
                       className={cn(
                         'rounded-md border min-h-[88px] p-2 text-left',
                         inMonth ? 'bg-card' : 'bg-muted/30 text-muted-foreground',
-                        isSameDay(d, new Date()) && 'border-orange-300 bg-orange-50',
+                        isTodayVisible(d) && todayHighlightClass,
                       )}
                     >
                       <p className="text-xs">{format(d, 'd')}</p>
@@ -1359,7 +1669,7 @@ export default function TimeTracking() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total Hours</p>
-                  <p className="text-2xl font-bold">{formatDuration(Math.round(totalHours * 3600), true)}</p>
+                  <p className="text-2xl font-bold">{formatDuration(historyStats.totalSeconds, true)}</p>
                 </div>
               </div>
             </CardContent>
@@ -1372,7 +1682,7 @@ export default function TimeTracking() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Billable Hours</p>
-                  <p className="text-2xl font-bold">{formatDuration(Math.round(billableHours * 3600), true)}</p>
+                  <p className="text-2xl font-bold">{formatDuration(historyStats.billableSeconds, true)}</p>
                 </div>
               </div>
             </CardContent>
@@ -1385,32 +1695,22 @@ export default function TimeTracking() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Entries</p>
-                  <p className="text-2xl font-bold">{filteredEntries.length}</p>
+                  <p className="text-2xl font-bold">{historyStats.count}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {renderEntryFilters({ showTimeframe: true })}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          {renderHistoryDateRangeBar()}
+          {renderFilterPopover()}
+        </div>
 
         <Card className="border-0 shadow-sm">
           <CardContent className="p-0">
-            {filteredEntries.length > 0 && (
-              <div className="flex justify-end px-4 pt-4">
-                {selectionMode ? (
-                  <Button variant="ghost" size="sm" onClick={() => { setSelectionMode(false); clearSelection(); }}>
-                    Done
-                  </Button>
-                ) : (
-                  <Button variant="outline" size="sm" onClick={() => setSelectionMode(true)}>
-                    Select
-                  </Button>
-                )}
-              </div>
-            )}
             {selectionMode && filteredEntries.length > 0 && (
-              <div className="flex flex-wrap items-center gap-3 mb-4 px-4 py-2 border-b">
+              <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-b">
                 <Button variant="ghost" size="sm" onClick={selectAllFiltered}>
                   Select all
                 </Button>
@@ -1447,6 +1747,26 @@ export default function TimeTracking() {
               selectedEntryIds={selectedEntryIds}
               onToggleSelection={toggleEntrySelection}
               onRowClick={openLogDetails}
+              headerActions={
+                filteredEntries.length > 0 ? (
+                  selectionMode ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectionMode(false);
+                        clearSelection();
+                      }}
+                    >
+                      Done
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={() => setSelectionMode(true)}>
+                      Select
+                    </Button>
+                  )
+                ) : undefined
+              }
             />
           </CardContent>
         </Card>

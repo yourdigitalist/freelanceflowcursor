@@ -68,7 +68,7 @@ export function PrioritySelect({
           <SelectValue placeholder={placeholder} />
         )}
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="[&_[data-highlighted]]:bg-muted [&_[data-highlighted]]:text-foreground">
         {includeNone ? (
           <SelectItem value={PRIORITY_NONE}>
             <span className="text-muted-foreground">No priority</span>

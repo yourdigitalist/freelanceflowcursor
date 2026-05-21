@@ -16,6 +16,10 @@ export default function SystemCheck() {
   const [sendingTrialTest, setSendingTrialTest] = useState(false);
   const [trialTestResult, setTrialTestResult] = useState<string>('');
 
+  const [deletedTestEmail, setDeletedTestEmail] = useState(defaultEmail);
+  const [sendingDeletedTest, setSendingDeletedTest] = useState(false);
+  const [deletedTestResult, setDeletedTestResult] = useState<string>('');
+
   const [checkingBilling, setCheckingBilling] = useState(false);
   const [billingResult, setBillingResult] = useState<string>('');
 
@@ -80,6 +84,42 @@ export default function SystemCheck() {
     }
   };
 
+  const sendAccountDeletedTest = async () => {
+    setDeletedTestResult('');
+    setSendingDeletedTest(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!token || !supabaseUrl) throw new Error('Missing session or Supabase URL');
+
+      const testName = await getBestTestName();
+      const res = await fetch(`${supabaseUrl}/functions/v1/send-account-deleted`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testEmail: deletedTestEmail, testName }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+
+      setDeletedTestResult(`Sent ${json?.sent ?? 0} (test mode — no account deleted)`);
+      toast({
+        title: 'Account deleted email test sent',
+        description: 'Check your inbox (and spam). This does not delete any user.',
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed';
+      setDeletedTestResult(message);
+      toast({
+        title: 'Failed to send test email',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setSendingDeletedTest(false);
+    }
+  };
+
   const runBillingHealthCheck = async () => {
     setBillingResult('');
     setCheckingBilling(true);
@@ -135,6 +175,32 @@ export default function SystemCheck() {
             </Button>
             {trialTestResult ? (
               <p className="text-sm text-muted-foreground">Result: {trialTestResult}</p>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Account deleted email</CardTitle>
+            <CardDescription>
+              Sends the same confirmation users get after Settings → Delete account. Test only — does not delete anyone.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-2">
+              <Label>Send test to</Label>
+              <Input
+                value={deletedTestEmail}
+                onChange={(e) => setDeletedTestEmail(e.target.value)}
+                placeholder="you@example.com"
+                inputMode="email"
+              />
+            </div>
+            <Button onClick={sendAccountDeletedTest} disabled={sendingDeletedTest || !deletedTestEmail.trim()}>
+              {sendingDeletedTest ? 'Sending…' : 'Send account deleted test'}
+            </Button>
+            {deletedTestResult ? (
+              <p className="text-sm text-muted-foreground">Result: {deletedTestResult}</p>
             ) : null}
           </CardContent>
         </Card>

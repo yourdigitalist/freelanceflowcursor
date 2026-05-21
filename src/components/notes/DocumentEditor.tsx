@@ -592,6 +592,8 @@ export function DocumentEditor({
           type="text"
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
           placeholder="Untitled"
           className="flex-1 min-w-0 text-3xl font-semibold bg-transparent border-none outline-none placeholder:text-muted-foreground py-0"
         />

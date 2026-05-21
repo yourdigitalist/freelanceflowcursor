@@ -4,6 +4,14 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import {
+  escapeHtml,
+  getDefaultLanceFooter,
+  getDefaultLanceHeader,
+  LANCE_EMAIL_LOGO_BLACK_URL,
+  LANCE_EMAIL_LOGO_WHITE_URL,
+  replaceTokens,
+} from "../_shared/lance-email.ts";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
@@ -12,39 +20,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, content-type",
 };
-
-function escapeHtml(text: string | null | undefined): string {
-  if (!text) return "";
-  return String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function replaceTokens(template: string, tokens: Record<string, string>): string {
-  return Object.entries(tokens).reduce((out, [key, value]) => {
-    const re = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "gi");
-    return out.replace(re, value);
-  }, template);
-}
-
-function getDefaultLanceHeader(logoUrl: string, primaryColor: string): string {
-  return `<div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
-  <div style="padding: 18px 20px; background: ${primaryColor}; color: white;">
-    <div style="display: flex; align-items: center; gap: 10px;">
-      ${logoUrl ? `<img src="${logoUrl}" alt="Lance" style="height: 28px; max-width: 140px; object-fit: contain;" />` : `<strong style="font-size: 18px;">Lance</strong>`}
-    </div>
-  </div>
-  <div style="padding: 20px;">`;
-}
-
-function getDefaultLanceFooter(primaryColor: string): string {
-  return `</div><div style="padding: 14px 20px; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb;">
-  Sent by <span style="color: ${primaryColor}; font-weight: 600;">Lance</span>
-</div></div>`;
-}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -167,7 +142,7 @@ serve(async (req) => {
     const [{ data: branding }, { data: comms }] = await Promise.all([
       serviceClient
         .from("app_branding")
-        .select("logo_url, primary_color")
+        .select("primary_color")
         .eq("id", 1)
         .maybeSingle(),
       serviceClient
@@ -178,7 +153,7 @@ serve(async (req) => {
     ]);
 
     const primaryColor = (branding?.primary_color as string | null) || "#9B63E9";
-    const logoUrl = (branding?.logo_url as string | null) || "";
+    const logoUrl = LANCE_EMAIL_LOGO_WHITE_URL;
     const headerTpl = (comms?.lance_email_header_html as string | null) || (comms?.email_header_html as string | null) || "";
     const footerTpl = (comms?.lance_email_footer_html as string | null) || (comms?.email_footer_html as string | null) || "";
     const customTpl = (comms?.announcement_custom_html as string | null) || "";
@@ -199,6 +174,7 @@ serve(async (req) => {
         announcement_body: safeBody,
         link: safeLink,
         logo_url: logoUrl,
+        logo_footer_url: LANCE_EMAIL_LOGO_BLACK_URL,
         primary_color: primaryColor,
       };
       const customHtml = customTpl.trim()
@@ -206,7 +182,7 @@ serve(async (req) => {
         : "";
       const header = headerTpl.trim()
         ? replaceTokens(headerTpl, tokens)
-        : getDefaultLanceHeader(logoUrl, primaryColor);
+        : getDefaultLanceHeader(primaryColor);
       const footer = footerTpl.trim()
         ? replaceTokens(footerTpl, tokens)
         : getDefaultLanceFooter(primaryColor);

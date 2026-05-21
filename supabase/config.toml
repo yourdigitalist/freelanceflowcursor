@@ -39,6 +39,8 @@ verify_jwt = false
 
 [functions.send-trial-reminders]
 verify_jwt = false
+[functions.send-account-deleted]
+verify_jwt = false
 [functions.send-deadline-notifications]
 verify_jwt = false
 

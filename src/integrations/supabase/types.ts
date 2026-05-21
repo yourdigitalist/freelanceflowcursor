@@ -64,6 +64,8 @@ export type Database = {
           trial_body_0d: string | null
           trial_body_1d: string | null
           trial_body_5d: string | null
+          account_deleted_subject: string | null
+          account_deleted_body: string | null
           updated_at: string
         }
         Insert: {
@@ -82,6 +84,8 @@ export type Database = {
           trial_body_0d?: string | null
           trial_body_1d?: string | null
           trial_body_5d?: string | null
+          account_deleted_subject?: string | null
+          account_deleted_body?: string | null
           updated_at?: string
         }
         Update: {
@@ -100,6 +104,8 @@ export type Database = {
           trial_body_0d?: string | null
           trial_body_1d?: string | null
           trial_body_5d?: string | null
+          account_deleted_subject?: string | null
+          account_deleted_body?: string | null
           updated_at?: string
         }
         Relationships: []

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import { getLanceSignature } from "../_shared/lance-email.ts";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
@@ -71,20 +72,6 @@ function getDefaultClientFooter(primaryColor: string, businessName: string, busi
   return `</div><div style="padding: 14px 20px; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb;">
   Sent by <span style="color: ${primaryColor}; font-weight: 600;">${safeName}</span>${safeEmail ? ` · <span>${safeEmail}</span>` : ""}
 </div></div>`;
-}
-
-function getLanceSignature(primaryColor: string): string {
-  return `<div style="text-align:center; margin: 0 auto; padding-top: 16px; font-family: Arial, sans-serif; font-size: 13px; color: #9ca3af;">
-  <div>
-    This email was sent with
-    <a href="https://getlance.app" target="_blank" rel="noopener noreferrer" style="color: ${primaryColor}; text-decoration: none; font-weight: 600;">Lance</a>
-  </div>
-  <div style="margin-top: 8px;">
-    <a href="https://getlance.app" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
-      <img src="https://getlance.app/favicon.ico" alt="Lance" width="20" height="20" style="display:inline-block; border-radius: 4px;" />
-    </a>
-  </div>
-</div>`;
 }
 
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;

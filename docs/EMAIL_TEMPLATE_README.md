@@ -4,19 +4,42 @@ Auth emails (password reset, magic link, confirm signup) are edited in **Supabas
 
 ## Do this once
 
-1. **Logo URL**  
-   In **Admin → Branding**, copy your **logo** full URL (must be `https://...`).  
-   In `EMAIL_TEMPLATE_SUPABASE.html`, replace **`REPLACE_WITH_LOGO_URL`** with that URL (same URL you’d use anywhere else).  
-   If you change the logo later, update it in **each** Supabase template that uses this file.
+Templates in `docs/` now include:
 
-2. **Paste the full HTML** into each auth template body  
-   Open **Authentication → Email Templates** and, for **Reset password**, **Magic link**, and **Confirm signup** (and any others you use), paste the full file, then **replace only the “MAIN CONTENT” block** using the snippets below.
+- **Header (purple):** white wordmark — `https://www.getlance.app/email/lance-logo-white.png` (`public/email/lance-logo-white.png`)
+- **Footer (light):** black wordmark — `https://www.getlance.app/email/lance-logo-black.svg` (`public/email/lance-logo-black.svg`)
+- **Outer margin** around the white card (`padding: 32px 20px` on the gray background) for Gmail/Apple Mail
 
-3. **Subjects (optional)**  
-   In each template, set a clear subject, e.g.  
-   - Reset: `Reset your Lance password`  
-   - Magic link: `Your Lance sign-in link`  
-   - Confirm: `Confirm your email for Lance`
+### Option A — Push from the repo (recommended)
+
+1. Create a [Supabase access token](https://supabase.com/dashboard/account/tokens).
+2. Run:
+
+```bash
+SUPABASE_ACCESS_TOKEN=your-token node scripts/push-auth-email-templates.mjs
+```
+
+This updates **Confirm signup**, **Magic link**, and **Reset password** in one step.
+
+### Option B — Paste in the dashboard
+
+Open **Authentication → Email Templates** and paste the full HTML from:
+
+| Template        | File |
+|-----------------|------|
+| Confirm signup  | [`EMAIL_TEMPLATE_CONFIRM_SIGNUP_FULL.html`](./EMAIL_TEMPLATE_CONFIRM_SIGNUP_FULL.html) |
+| Magic link      | [`EMAIL_TEMPLATE_MAGIC_LINK_FULL.html`](./EMAIL_TEMPLATE_MAGIC_LINK_FULL.html) |
+| Reset password  | [`EMAIL_TEMPLATE_RECOVERY_FULL.html`](./EMAIL_TEMPLATE_RECOVERY_FULL.html) |
+
+Subjects (if not using the script):
+
+- Reset: `Reset your Lance password`
+- Magic link: `Your Lance sign-in link`
+- Confirm: `Confirm your email for Lance`
+
+### Shared frame only
+
+For other auth templates, start from [`email-auth-frame.html`](./email-auth-frame.html) or [`EMAIL_TEMPLATE_SUPABASE.html`](./EMAIL_TEMPLATE_SUPABASE.html) and swap the **MAIN CONTENT** block using the snippets below.
 
 ## Main content blocks (swap the commented section in the HTML file)
 

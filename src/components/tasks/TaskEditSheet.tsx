@@ -224,7 +224,7 @@ export function TaskEditSheet({
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="[&_[data-highlighted]]:bg-muted [&_[data-highlighted]]:text-foreground">
                   {statuses.map((status) => (
                     <SelectItem key={status.id} value={status.id}>
                       <div className="flex items-center gap-2">
