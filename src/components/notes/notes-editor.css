@@ -14,20 +14,25 @@
   min-height: 0;
 }
 
+/* Container clips; .ql-editor scrolls (Quill scrollingContainer default) */
 .rich-text-editor-wrapper .ql-container.ql-snow {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
   border-bottom-left-radius: 0.5rem;
   border-bottom-right-radius: 0.5rem;
 }
 
 .rich-text-editor-wrapper .ql-editor {
-  flex: 1;
-  min-height: 12rem;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding-top: 8px;
   padding-bottom: 12px;
+  /* Breathing room when caret is scrolled into view (Word-like) */
+  scroll-padding-top: 12px;
+  scroll-padding-bottom: 72px;
 }
 
 /* H1–H3: light spacing below toolbar */

@@ -56,10 +56,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { PhoneInput } from '@/components/ui/phone-input';
 import { useProfileCurrency } from '@/hooks/useProfileCurrency';
-import { assertStorageCapacity } from '@/lib/userStorage';
+import { ClientAvatar } from '@/components/clients/ClientAvatar';
+import { ClientFormFields } from '@/components/clients/ClientFormFields';
+import { DEFAULT_CLIENT_AVATAR_COLOR } from '@/lib/clientAvatarColors';
+import { CLIENT_CRM_STAGES, getClientStageLabel } from '@/lib/clientCrmStages';
+import {
+  buildClientDbPayload,
+  clientToFormValues,
+  emptyClientFormValues,
+  type ClientFormValues,
+} from '@/lib/clientForm';
 import { clientLogoPublicUrl } from '@/lib/clientLogo';
+import { resolveClientLogoPath } from '@/lib/clientLogoUpload';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { HorizontalScroll } from '@/components/ui/horizontal-scroll';
 import {
@@ -76,7 +85,6 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { currencies, countryOptions } from '@/lib/locale-data';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDate, formatLocaleDateTime } from '@/lib/datetime';
 
@@ -131,39 +139,6 @@ interface ClientFollowUp {
   created_at: string;
 }
 
-const AVATAR_COLORS = [
-  '#10B981', // Green
-  '#3B82F6', // Blue
-  '#F59E0B', // Yellow
-  '#EF4444', // Red
-  '#8B5CF6', // Purple
-  '#EC4899', // Pink
-  '#06B6D4', // Cyan
-];
-
-const CRM_STAGES: Array<{ value: string; label: string }> = [
-  { value: 'lead_new', label: 'New lead' },
-  { value: 'lead_contacted', label: 'Contacted' },
-  { value: 'lead_qualified', label: 'Qualified' },
-  { value: 'proposal_sent', label: 'Proposal sent' },
-  { value: 'negotiation', label: 'Negotiation' },
-  { value: 'won', label: 'Won' },
-  { value: 'onboarding', label: 'Onboarding' },
-  { value: 'active', label: 'Active' },
-  { value: 'paused', label: 'Paused' },
-  { value: 'inactive', label: 'Inactive' },
-  { value: 'closed_lost', label: 'Closed lost' },
-];
-
-function getClientInitials(client: Client) {
-  return client.name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-}
-
 function getClientStatusColor(status: string) {
   switch (status) {
     case 'active':
@@ -184,11 +159,6 @@ function getClientStatusColor(status: string) {
     default:
       return 'bg-muted text-muted-foreground';
   }
-}
-
-function getClientStageLabel(value: string | null) {
-  const v = value || 'active';
-  return CRM_STAGES.find((s) => s.value === v)?.label || v;
 }
 
 function DraggableClientCard({
@@ -239,12 +209,7 @@ function DraggableClientCard({
             >
               <GripVertical className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-xs shrink-0"
-              style={{ backgroundColor: client.avatar_color || '#8B5CF6' }}
-            >
-              {getClientInitials(client)}
-            </div>
+            <ClientAvatar client={client} size="sm" />
             <div className="min-w-0">
               <p className="font-medium text-sm truncate leading-tight">{client.name}</p>
               {client.company && <p className="text-xs text-muted-foreground truncate mt-0.5">{client.company}</p>}
@@ -345,7 +310,7 @@ export default function Clients() {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [addWithStatus, setAddWithStatus] = useState<string | null>(null);
   const [clientPhone, setClientPhone] = useState('');
-  const [selectedColor, setSelectedColor] = useState(AVATAR_COLORS[4]);
+  const [selectedColor, setSelectedColor] = useState(DEFAULT_CLIENT_AVATAR_COLOR);
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'board'>('board');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showArchived, setShowArchived] = useState(false);
@@ -369,6 +334,9 @@ export default function Clients() {
   const { currency: profileCurrency } = useProfileCurrency();
   const [clientLogoPreview, setClientLogoPreview] = useState<string | null>(null);
   const clientLogoInputRef = useRef<HTMLInputElement>(null);
+  const [formValues, setFormValues] = useState<ClientFormValues>(() =>
+    emptyClientFormValues(profileCurrency),
+  );
 
   useEffect(() => {
     if (user) {
@@ -383,10 +351,22 @@ export default function Clients() {
   }, [viewingClient?.id]);
 
   useEffect(() => {
-    setClientPhone(editingClient?.phone || '');
-    setSelectedColor(editingClient?.avatar_color || AVATAR_COLORS[4]);
-    setClientLogoPreview(editingClient?.logo_url ? clientLogoPublicUrl(editingClient.logo_url) : null);
-  }, [editingClient]);
+    if (!isDialogOpen) return;
+    if (editingClient) {
+      setFormValues(clientToFormValues(editingClient, profileCurrency));
+      setClientPhone(editingClient.phone || '');
+      setSelectedColor(editingClient.avatar_color || DEFAULT_CLIENT_AVATAR_COLOR);
+      setClientLogoPreview(
+        editingClient.logo_url ? clientLogoPublicUrl(editingClient.logo_url) : null,
+      );
+    } else {
+      setFormValues(emptyClientFormValues(profileCurrency, addWithStatus || 'active'));
+      setClientPhone('');
+      setSelectedColor(DEFAULT_CLIENT_AVATAR_COLOR);
+      setClientLogoPreview(null);
+      if (clientLogoInputRef.current) clientLogoInputRef.current.value = '';
+    }
+  }, [isDialogOpen, editingClient, addWithStatus, profileCurrency]);
 
   // Sync view mode and status filter from URL
   useEffect(() => {
@@ -459,68 +439,25 @@ export default function Clients() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    
-    const firstName = formData.get('first_name') as string;
-    const lastName = formData.get('last_name') as string;
-    const fullName = `${firstName} ${lastName}`.trim();
-    
-    const tagsRaw = ((formData.get('tags') as string) || '').trim();
-    const tags = tagsRaw
-      ? tagsRaw
-          .split(',')
-          .map((t) => t.trim())
-          .filter(Boolean)
-      : [];
-
-    const estimatedValueRaw = (formData.get('estimated_value') as string) || '';
-    const estimatedValue = estimatedValueRaw.trim() ? Number(estimatedValueRaw) : null;
-
-    const followUpRaw = (formData.get('next_follow_up_at') as string) || '';
-    const nextFollowUpAt = followUpRaw ? new Date(followUpRaw).toISOString() : null;
-
-    let logoPath: string | null = editingClient?.logo_url || null;
-    const logoFile = clientLogoInputRef.current?.files?.[0];
-    if (!logoFile && !clientLogoPreview) {
-      logoPath = null;
-    }
-    if (logoFile && user) {
-      await assertStorageCapacity(user.id, logoFile.size);
-      const ext = logoFile.name.split('.').pop() || 'png';
-      const path = `${user.id}/client-${editingClient?.id || 'new'}-${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from('client-logos').upload(path, logoFile, { upsert: true });
-      if (uploadError) throw uploadError;
-      logoPath = path;
-    }
-
-    const clientData = {
-      name: fullName,
-      first_name: firstName || null,
-      last_name: lastName || null,
-      email: formData.get('email') as string || null,
-      phone: clientPhone || null,
-      company: formData.get('company') as string || null,
-      tax_id: formData.get('tax_id') as string || null,
-      street: formData.get('street') as string || null,
-      street2: formData.get('street2') as string || null,
-      city: formData.get('city') as string || null,
-      state: formData.get('state') as string || null,
-      postal_code: formData.get('postal_code') as string || null,
-      country: (formData.get('country') as string) === 'none' ? null : ((formData.get('country') as string) || null),
-      avatar_color: selectedColor,
-      logo_url: logoPath,
-      status: formData.get('status') as string,
-      notes: formData.get('notes') as string || null,
-      lead_source: (formData.get('lead_source') as string) || null,
-      next_action: (formData.get('next_action') as string) || null,
-      next_follow_up_at: nextFollowUpAt,
-      estimated_value: estimatedValue,
-      currency: (formData.get('currency') as string) || profileCurrency || 'USD',
-      tags,
-      user_id: user!.id,
-    };
+    if (!user) return;
 
     try {
+      const logoFile = clientLogoInputRef.current?.files?.[0];
+      const logoPath = await resolveClientLogoPath({
+        userId: user.id,
+        clientId: editingClient?.id || 'new',
+        existingLogoPath: editingClient?.logo_url || null,
+        logoFile,
+        hasPreview: !!clientLogoPreview,
+      });
+
+      const clientData = buildClientDbPayload(formValues, {
+        phone: clientPhone,
+        avatar_color: selectedColor,
+        logo_url: logoPath,
+        user_id: user.id,
+      });
+
       if (editingClient) {
         const { error } = await supabase
           .from('clients')
@@ -541,7 +478,9 @@ export default function Clients() {
       setIsDialogOpen(false);
       setEditingClient(null);
       setClientPhone('');
-      setSelectedColor(AVATAR_COLORS[4]);
+      setSelectedColor(DEFAULT_CLIENT_AVATAR_COLOR);
+      setClientLogoPreview(null);
+      if (clientLogoInputRef.current) clientLogoInputRef.current.value = '';
       fetchClients();
     } catch (error: any) {
       toast({
@@ -624,7 +563,7 @@ export default function Clients() {
   const archivedClients = clients.filter((c) => isClientArchived(c) && matchesClientFilters(c));
 
   // Sort by pipeline stage order so list/grid/board show clients grouped by status
-  const stageOrder = CRM_STAGES.map((s) => s.value);
+  const stageOrder = CLIENT_CRM_STAGES.map((s) => s.value);
   const sortedClients = [...activeClients].sort((a, b) => {
     const aStage = a.status || 'active';
     const bStage = b.status || 'active';
@@ -660,11 +599,6 @@ export default function Clients() {
     }
   };
 
-  const getStageLabel = (value: string | null) => {
-    const v = value || 'active';
-    return CRM_STAGES.find((s) => s.value === v)?.label || v;
-  };
-
   const getStatusBorderClass = (status: string | null) => {
     const s = status || 'active';
     if (['active', 'won'].includes(s)) return 'border-l-success';
@@ -695,11 +629,11 @@ export default function Clients() {
     const currentStatus = (active.data.current?.currentStatus as string) || 'active';
     // over.id can be a column (stage value) or another card (client id) when dropped on a card
     let newStatus = String(over.id);
-    if (!CRM_STAGES.some((s) => s.value === newStatus)) {
+    if (!CLIENT_CRM_STAGES.some((s) => s.value === newStatus)) {
       const targetClient = clients.find((c) => c.id === newStatus);
       newStatus = targetClient?.status || 'active';
     }
-    if (!clientId || !CRM_STAGES.some((s) => s.value === newStatus) || currentStatus === newStatus) return;
+    if (!clientId || !CLIENT_CRM_STAGES.some((s) => s.value === newStatus) || currentStatus === newStatus) return;
     try {
       const { error } = await supabase.from('clients').update({ status: newStatus }).eq('id', clientId);
       if (error) throw error;
@@ -785,9 +719,9 @@ export default function Clients() {
         const rawStatus = get('status')(row) || 'active';
         const normalizedStatus = (() => {
           const lower = rawStatus.toLowerCase();
-          const byValue = CRM_STAGES.find((s) => s.value === lower);
+          const byValue = CLIENT_CRM_STAGES.find((s) => s.value === lower);
           if (byValue) return byValue.value;
-          const byLabel = CRM_STAGES.find((s) => s.label.toLowerCase() === lower);
+          const byLabel = CLIENT_CRM_STAGES.find((s) => s.label.toLowerCase() === lower);
           if (byLabel) return byLabel.value;
           if (/^proposal/i.test(rawStatus)) return 'proposal_sent';
           if (/^in\s*progress$/i.test(rawStatus)) return 'onboarding';
@@ -811,7 +745,7 @@ export default function Clients() {
           state: get('state')(row) || null,
           postal_code: get('postal_code')(row) || null,
           country: get('country')(row) || null,
-          avatar_color: AVATAR_COLORS[4],
+          avatar_color: DEFAULT_CLIENT_AVATAR_COLOR,
           status: normalizedStatus,
           notes: get('notes')(row) || null,
           next_action: get('next_action')(row) || null,
@@ -1035,12 +969,6 @@ export default function Clients() {
     }
   };
 
-  const getInitials = (client: Client) => {
-    if (client.first_name && client.last_name) {
-      return `${client.first_name[0]}${client.last_name[0]}`.toUpperCase();
-    }
-    return client.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  };
   const fmtDate = (value: string | null | undefined) => formatLocaleDate(value, dateFormat);
   const fmtDateTime = (value: string | null | undefined) => formatLocaleDateTime(value, dateFormat, timeFormat);
 
@@ -1097,7 +1025,7 @@ export default function Clients() {
                   <p>2. Fill in your client data. <strong className="text-foreground">Email</strong> is required. Rows with an existing email will update that client.</p>
                   <p>3. In the <strong className="text-foreground">status</strong> column, use one of these values (labels like &quot;Active&quot; or &quot;Proposal sent&quot; also work):</p>
                   <ul className="list-disc pl-5 space-y-0.5 text-foreground">
-                    {CRM_STAGES.map((s) => (
+                    {CLIENT_CRM_STAGES.map((s) => (
                       <li key={s.value}><code className="text-xs bg-muted px-1 rounded">{s.value}</code> — {s.label}</li>
                     ))}
                   </ul>
@@ -1121,7 +1049,9 @@ export default function Clients() {
                 setEditingClient(null);
                 setAddWithStatus(null);
                 setClientPhone('');
-                setSelectedColor(AVATAR_COLORS[4]);
+                setSelectedColor(DEFAULT_CLIENT_AVATAR_COLOR);
+                setClientLogoPreview(null);
+                if (clientLogoInputRef.current) clientLogoInputRef.current.value = '';
               }
             }}>
               <DialogTrigger asChild>
@@ -1136,274 +1066,24 @@ export default function Clients() {
               </DialogHeader>
               <ScrollArea className="max-h-[calc(90vh-120px)]">
                 <form onSubmit={handleSubmit} className="space-y-4 py-1 pr-6 pl-1">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="first_name">First Name *</Label>
-                      <Input
-                        id="first_name"
-                        name="first_name"
-                        defaultValue={editingClient?.first_name || editingClient?.name.split(' ')[0] || ''}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="last_name">Last Name *</Label>
-                      <Input
-                        id="last_name"
-                        name="last_name"
-                        defaultValue={editingClient?.last_name || editingClient?.name.split(' ').slice(1).join(' ') || ''}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email *</Label>
-                      <Input
-                        id="email"
-                        name="email"
-                        type="email"
-                        defaultValue={editingClient?.email || ''}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company">Company</Label>
-                      <Input
-                        id="company"
-                        name="company"
-                        defaultValue={editingClient?.company || ''}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone</Label>
-                    <PhoneInput
-                      id="phone"
-                      value={clientPhone}
-                      onChange={setClientPhone}
-                      placeholder="Phone number"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="tax_id">Tax Identification Number</Label>
-                    <Input
-                      id="tax_id"
-                      name="tax_id"
-                      defaultValue={editingClient?.tax_id || ''}
-                      placeholder="Tax ID / VAT number"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Address</Label>
-                    <Input
-                      name="street"
-                      defaultValue={editingClient?.street || ''}
-                      placeholder="Street"
-                    />
-                  </div>
-                  <Input
-                    name="street2"
-                    defaultValue={editingClient?.street2 || ''}
-                    placeholder="Street 2"
+                  <ClientFormFields
+                    values={formValues}
+                    onChange={(patch) => setFormValues((prev) => ({ ...prev, ...patch }))}
+                    phone={clientPhone}
+                    onPhoneChange={setClientPhone}
+                    logoPreviewUrl={clientLogoPreview}
+                    onLogoPreviewChange={setClientLogoPreview}
+                    selectedAvatarColor={selectedColor}
+                    onSelectedAvatarColorChange={setSelectedColor}
+                    logoFileInputRef={clientLogoInputRef}
+                    fallbackName={
+                      [formValues.first_name, formValues.last_name].filter(Boolean).join(' ').trim() ||
+                      editingClient?.name ||
+                      'Client'
+                    }
+                    profileCurrency={profileCurrency}
+                    fieldIdPrefix="clients-dialog"
                   />
-                  <div className="grid grid-cols-2 gap-4">
-                    <Input
-                      name="city"
-                      defaultValue={editingClient?.city || ''}
-                      placeholder="City"
-                    />
-                    <Input
-                      name="state"
-                      defaultValue={editingClient?.state || ''}
-                      placeholder="State/Province"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <Input
-                      name="postal_code"
-                      defaultValue={editingClient?.postal_code || ''}
-                      placeholder="ZIP/Postal Code"
-                    />
-                    <Select name="country" defaultValue={editingClient?.country || 'none'}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Country" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No country</SelectItem>
-                        {countryOptions.map((country) => (
-                          <SelectItem key={country.value} value={country.value}>
-                            {country.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="status">Status</Label>
-                    <Select name="status" defaultValue={editingClient?.status || addWithStatus || 'active'}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CRM_STAGES.map((s) => (
-                          <SelectItem key={s.value} value={s.value}>
-                            {s.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="next_follow_up_at">Next follow-up</Label>
-                      <Input
-                        id="next_follow_up_at"
-                        name="next_follow_up_at"
-                        type="date"
-                        defaultValue={editingClient?.next_follow_up_at ? editingClient.next_follow_up_at.slice(0, 10) : ''}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="lead_source">Lead source</Label>
-                      <Input
-                        id="lead_source"
-                        name="lead_source"
-                        placeholder="e.g. Referral, Website, Upwork"
-                        defaultValue={editingClient?.lead_source || ''}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="next_action">Next action</Label>
-                    <Input
-                      id="next_action"
-                      name="next_action"
-                      placeholder="e.g. Send proposal, Follow up on invoice"
-                      defaultValue={editingClient?.next_action || ''}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="estimated_value">Estimated value</Label>
-                      <Input
-                        id="estimated_value"
-                        name="estimated_value"
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        defaultValue={editingClient?.estimated_value ?? ''}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="currency">Currency</Label>
-                      <Select name="currency" defaultValue={editingClient?.currency || profileCurrency || 'USD'}>
-                        <SelectTrigger id="currency">
-                          <SelectValue placeholder="Currency" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {currencies.map((currency) => (
-                            <SelectItem key={currency.value} value={currency.value}>
-                              {currency.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="tags">Tags</Label>
-                    <Input
-                      id="tags"
-                      name="tags"
-                      placeholder="e.g. retainer, agency, warm"
-                      defaultValue={(editingClient?.tags || []).join(', ')}
-                    />
-                    <p className="text-xs text-muted-foreground">Comma-separated.</p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Client logo (optional)</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Shown on proposals instead of initials. Counts toward storage.
-                    </p>
-                    <div className="flex items-center gap-3">
-                      {clientLogoPreview ? (
-                        <img src={clientLogoPreview} alt="" className="h-12 w-12 rounded-full object-cover border" />
-                      ) : (
-                        <div
-                          className="h-12 w-12 rounded-full flex items-center justify-center text-sm font-medium text-white"
-                          style={{ backgroundColor: selectedColor }}
-                        >
-                          {(editingClient?.name || 'C').charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="flex flex-col gap-1">
-                        <input
-                          ref={clientLogoInputRef}
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            setClientLogoPreview(URL.createObjectURL(file));
-                          }}
-                        />
-                        <Button type="button" variant="outline" size="sm" onClick={() => clientLogoInputRef.current?.click()}>
-                          Upload logo
-                        </Button>
-                        {clientLogoPreview ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="text-muted-foreground"
-                            onClick={() => {
-                              setClientLogoPreview(null);
-                              if (clientLogoInputRef.current) clientLogoInputRef.current.value = '';
-                            }}
-                          >
-                            Remove
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Avatar color (when no logo)</Label>
-                    <div className="flex gap-2 flex-wrap">
-                      {AVATAR_COLORS.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          className={`w-8 h-8 rounded-full transition-all ${
-                            selectedColor === color ? 'ring-2 ring-offset-2 ring-primary' : ''
-                          }`}
-                          style={{ backgroundColor: color }}
-                          onClick={() => setSelectedColor(color)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="notes">Notes</Label>
-                    <Textarea
-                      id="notes"
-                      name="notes"
-                      defaultValue={editingClient?.notes || ''}
-                      rows={3}
-                      placeholder="Internal notes about this client..."
-                    />
-                  </div>
                   <div className="flex gap-2 justify-end pt-4">
                     <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                       Cancel
@@ -1441,7 +1121,7 @@ export default function Clients() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
-                {CRM_STAGES.map((s) => (
+                {CLIENT_CRM_STAGES.map((s) => (
                   <SelectItem key={s.value} value={s.value}>
                     {s.label}
                   </SelectItem>
@@ -1525,7 +1205,7 @@ export default function Clients() {
                 onDragCancel={() => setActiveDragClient(null)}
               >
                 <HorizontalScroll className="-mx-1" contentClassName="flex gap-4 min-w-max px-1">
-                    {CRM_STAGES.map((stage) => {
+                    {CLIENT_CRM_STAGES.map((stage) => {
                       const columnClients = sortedClients.filter((c) => (c.status || 'active') === stage.value);
                       return (
                         <div
@@ -1647,12 +1327,7 @@ export default function Clients() {
                     )}
                     <div className={viewMode === 'grid' ? "space-y-3" : "flex items-center gap-4"}>
                       <div className="flex items-center gap-3">
-                        <div 
-                          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-medium text-sm shrink-0"
-                          style={{ backgroundColor: client.avatar_color || '#8B5CF6' }}
-                        >
-                          {getInitials(client)}
-                        </div>
+                        <ClientAvatar client={client} size="md" />
                         <div>
                           <p className="font-semibold">{client.name}</p>
                           {client.company && (
@@ -1683,7 +1358,7 @@ export default function Clients() {
                           )}
                           <div className="flex items-center justify-between pt-2">
                             <Badge className={getStatusColor(client.status || 'active')}>
-                              {getStageLabel(client.status)}
+                              {getClientStageLabel(client.status)}
                             </Badge>
                             <span className="text-sm text-muted-foreground">
                               {client.project_count || 0} projects
@@ -1698,7 +1373,7 @@ export default function Clients() {
                           {client.email}
                         </span>
                         <Badge className={getStatusColor(client.status)}>
-                          {getStageLabel(client.status)}
+                          {getClientStageLabel(client.status)}
                         </Badge>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -1766,19 +1441,14 @@ export default function Clients() {
                 {viewingClient && (
                   <div className="mt-6 space-y-4">
                     <div className="flex items-center gap-3">
-                      <div
-                        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-medium"
-                        style={{ backgroundColor: viewingClient.avatar_color || '#8B5CF6' }}
-                      >
-                        {getInitials(viewingClient)}
-                      </div>
+                      <ClientAvatar client={viewingClient} size="lg" />
                       <div>
                         <p className="font-semibold text-lg">{viewingClient.name}</p>
                         {viewingClient.company && (
                           <p className="text-sm text-muted-foreground">{viewingClient.company}</p>
                         )}
                         <Badge className={getStatusColor(viewingClient.status || 'active')}>
-                          {getStageLabel(viewingClient.status)}
+                          {getClientStageLabel(viewingClient.status)}
                         </Badge>
                       </div>
                     </div>

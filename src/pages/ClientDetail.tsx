@@ -1,6 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useBeforeUnload, useNavigate, useParams } from "react-router-dom";
+import { ClientAvatar } from "@/components/clients/ClientAvatar";
+import { ClientFormFields } from "@/components/clients/ClientFormFields";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { useProfileCurrency } from "@/hooks/useProfileCurrency";
+import { DEFAULT_CLIENT_AVATAR_COLOR } from "@/lib/clientAvatarColors";
+import { CLIENT_CRM_STAGES, getClientStageLabel } from "@/lib/clientCrmStages";
+import {
+  buildClientDbPayload,
+  clientFormSnapshot,
+  clientToFormValues,
+  emptyClientFormValues,
+  type ClientFormValues,
+} from "@/lib/clientForm";
+import { clientLogoPublicUrl } from "@/lib/clientLogo";
+import { resolveClientLogoPath } from "@/lib/clientLogoUpload";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -13,8 +27,6 @@ import { ArrowLeft, Check, MoreVertical, X } from "@/components/icons";
 import { addMonths, addWeeks, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, parseISO, startOfMonth, startOfWeek, subMonths, subWeeks } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { PhoneInput } from "@/components/ui/phone-input";
 import {
   Select,
   SelectContent,
@@ -22,14 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  countryFromSelectValue,
-  countryLabel,
-  countryOptions,
-  countrySelectValue,
-  currencies,
-} from "@/lib/locale-data";
+import { countryLabel } from "@/lib/locale-data";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate, formatLocaleDateTime } from "@/lib/datetime";
 import {
@@ -62,6 +67,8 @@ type Client = {
   state: string | null;
   postal_code: string | null;
   country: string | null;
+  avatar_color: string | null;
+  logo_url: string | null;
   status: string | null;
   notes: string | null;
   next_action: string | null;
@@ -99,22 +106,6 @@ type FollowUp = {
   due_at: string | null;
   completed_at: string | null;
 };
-const CRM_STAGES: Array<{ value: string; label: string }> = [
-  { value: "lead_new", label: "New lead" },
-  { value: "lead_contacted", label: "Contacted" },
-  { value: "lead_qualified", label: "Qualified" },
-  { value: "proposal_sent", label: "Proposal sent" },
-  { value: "negotiation", label: "Negotiation" },
-  { value: "won", label: "Won" },
-  { value: "onboarding", label: "Onboarding" },
-  { value: "active", label: "Active" },
-  { value: "paused", label: "Paused" },
-  { value: "inactive", label: "Inactive" },
-  { value: "closed_lost", label: "Closed lost" },
-];
-
-const getClientStageLabel = (value: string | null) => CRM_STAGES.find((s) => s.value === (value || "active"))?.label || "Active";
-
 const getClientStatusColor = (status: string | null) => {
   const value = status || "active";
   if (["active", "won"].includes(value)) return "bg-success/10 text-success border-success/20";
@@ -200,8 +191,12 @@ export default function ClientDetail() {
   const [editingFollowUpTitle, setEditingFollowUpTitle] = useState("");
   const [editingFollowUpDueAt, setEditingFollowUpDueAt] = useState("");
   const [editingInfo, setEditingInfo] = useState(false);
-  const [notesDraft, setNotesDraft] = useState("");
-  const [infoDraft, setInfoDraft] = useState<Partial<Client>>({});
+  const [formValues, setFormValues] = useState<ClientFormValues>(() => emptyClientFormValues());
+  const [formPhone, setFormPhone] = useState("");
+  const [clientLogoPreview, setClientLogoPreview] = useState<string | null>(null);
+  const [selectedAvatarColor, setSelectedAvatarColor] = useState(DEFAULT_CLIENT_AVATAR_COLOR);
+  const clientLogoInputRef = useRef<HTMLInputElement>(null);
+  const { currency: profileCurrency } = useProfileCurrency();
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [newTag, setNewTag] = useState("");
   const [loading, setLoading] = useState(true);
@@ -212,48 +207,30 @@ export default function ClientDetail() {
   const [selectedTimeDay, setSelectedTimeDay] = useState<Date>(new Date());
   const hasUnsavedChanges = useMemo(() => {
     if (!client) return false;
-    const infoDirty =
+    const formDirty =
       editingInfo &&
-      JSON.stringify({
-        first_name: infoDraft.first_name || "",
-        last_name: infoDraft.last_name || "",
-        company: infoDraft.company || "",
-        email: infoDraft.email || "",
-        phone: infoDraft.phone || "",
-        tax_id: infoDraft.tax_id || "",
-        street: infoDraft.street || "",
-        street2: infoDraft.street2 || "",
-        city: infoDraft.city || "",
-        state: infoDraft.state || "",
-        postal_code: infoDraft.postal_code || "",
-        country: countrySelectValue(infoDraft.country),
-        lead_source: infoDraft.lead_source || "",
-        estimated_value: infoDraft.estimated_value ?? null,
-        currency: infoDraft.currency || "USD",
-      }) !==
-        JSON.stringify({
-          first_name: client.first_name || "",
-          last_name: client.last_name || "",
-          company: client.company || "",
-          email: client.email || "",
-          phone: client.phone || "",
-          tax_id: client.tax_id || "",
-          street: client.street || "",
-          street2: client.street2 || "",
-          city: client.city || "",
-          state: client.state || "",
-          postal_code: client.postal_code || "",
-          country: countrySelectValue(client.country),
-          lead_source: client.lead_source || "",
-          estimated_value: client.estimated_value ?? null,
-          currency: client.currency || "USD",
-        });
-    const notesDirty = notesDraft !== (client.notes || "");
+      (clientFormSnapshot({ ...formValues, phone: formPhone }) !==
+        clientFormSnapshot(clientToFormValues(client, profileCurrency)) ||
+        clientLogoPreview !== (client.logo_url ? clientLogoPublicUrl(client.logo_url) : null) ||
+        selectedAvatarColor !== (client.avatar_color || DEFAULT_CLIENT_AVATAR_COLOR));
     const followUpDraftDirty = !!newFollowUpTitle.trim() || !!newFollowUpDueAt;
     const tagDraftDirty = isAddingTag && !!newTag.trim();
     const followUpEditDirty = !!editingFollowUpId;
-    return infoDirty || notesDirty || followUpDraftDirty || tagDraftDirty || followUpEditDirty;
-  }, [client, editingFollowUpId, editingInfo, infoDraft, isAddingTag, newFollowUpDueAt, newFollowUpTitle, newTag, notesDraft]);
+    return formDirty || followUpDraftDirty || tagDraftDirty || followUpEditDirty;
+  }, [
+    client,
+    clientLogoPreview,
+    editingFollowUpId,
+    editingInfo,
+    formPhone,
+    formValues,
+    isAddingTag,
+    newFollowUpDueAt,
+    newFollowUpTitle,
+    newTag,
+    profileCurrency,
+    selectedAvatarColor,
+  ]);
   useBeforeUnload(
     useMemo(
       () => (event) => {
@@ -282,8 +259,10 @@ export default function ClientDetail() {
         if (cErr) throw cErr;
         const loadedClient = (c as Client) || null;
         setClient(loadedClient);
-        setNotesDraft(loadedClient?.notes || "");
-        setInfoDraft(loadedClient || {});
+        if (loadedClient) {
+          setFormValues(clientToFormValues(loadedClient, profileCurrency));
+          setFormPhone(loadedClient.phone || "");
+        }
         setProjects((p || []) as Project[]);
         setInvoices((inv || []) as Invoice[]);
         setProposals((prop || []) as Proposal[]);
@@ -463,49 +442,57 @@ export default function ClientDetail() {
     }
   };
 
-  const saveClientInfo = async () => {
-    if (!client) return;
-    const firstName = (infoDraft.first_name || "").trim();
-    const lastName = (infoDraft.last_name || "").trim();
-    const fallbackName = [firstName, lastName].filter(Boolean).join(" ").trim();
-    const payload = {
-      first_name: firstName || null,
-      last_name: lastName || null,
-      name: fallbackName || infoDraft.name || client.name,
-      company: infoDraft.company || null,
-      email: infoDraft.email || null,
-      phone: infoDraft.phone || null,
-      tax_id: infoDraft.tax_id || null,
-      street: infoDraft.street || null,
-      street2: infoDraft.street2 || null,
-      city: infoDraft.city || null,
-      state: infoDraft.state || null,
-      postal_code: infoDraft.postal_code || null,
-      country: countryFromSelectValue(countrySelectValue(infoDraft.country)),
-      lead_source: infoDraft.lead_source || null,
-      estimated_value: infoDraft.estimated_value != null ? Number(infoDraft.estimated_value) : null,
-      currency: infoDraft.currency || "USD",
-    };
-    const { error, data } = await supabase.from("clients").update(payload).eq("id", client.id).select("*").single();
-    if (error) {
-      toast({ title: "Failed to save client info", description: error.message, variant: "destructive" });
-      return;
-    }
-    setClient(data as Client);
-    setInfoDraft(data as Client);
-    setEditingInfo(false);
-    toast({ title: "Client information updated" });
+  const resetLogoEditorFromClient = (c: Client) => {
+    setClientLogoPreview(c.logo_url ? clientLogoPublicUrl(c.logo_url) : null);
+    setSelectedAvatarColor(c.avatar_color || DEFAULT_CLIENT_AVATAR_COLOR);
+    if (clientLogoInputRef.current) clientLogoInputRef.current.value = "";
   };
 
-  const saveNotes = async () => {
+  const syncFormFromClient = (c: Client) => {
+    setFormValues(clientToFormValues(c, profileCurrency));
+    setFormPhone(c.phone || "");
+    resetLogoEditorFromClient(c);
+  };
+
+  const startEditingInfo = () => {
     if (!client) return;
-    const { error, data } = await supabase.from("clients").update({ notes: notesDraft || null }).eq("id", client.id).select("*").single();
-    if (error) {
-      toast({ title: "Failed to save notes", description: error.message, variant: "destructive" });
-      return;
+    syncFormFromClient(client);
+    setEditingInfo(true);
+  };
+
+  const cancelEditingInfo = () => {
+    if (!client) return;
+    syncFormFromClient(client);
+    setEditingInfo(false);
+  };
+
+  const saveClientInfo = async () => {
+    if (!client || !user) return;
+    try {
+      const logoFile = clientLogoInputRef.current?.files?.[0];
+      const logo_url = await resolveClientLogoPath({
+        userId: user.id,
+        clientId: client.id,
+        existingLogoPath: client.logo_url,
+        logoFile,
+        hasPreview: !!clientLogoPreview,
+      });
+      const payload = buildClientDbPayload(formValues, {
+        phone: formPhone,
+        avatar_color: selectedAvatarColor,
+        logo_url,
+      });
+      const { error, data } = await supabase.from("clients").update(payload).eq("id", client.id).select("*").single();
+      if (error) throw error;
+      const updated = data as Client;
+      setClient(updated);
+      syncFormFromClient(updated);
+      setEditingInfo(false);
+      toast({ title: "Client information updated" });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Could not save client.";
+      toast({ title: "Failed to save client info", description: message, variant: "destructive" });
     }
-    setClient(data as Client);
-    toast({ title: "Notes saved" });
   };
 
   const saveStage = async (stage: string) => {
@@ -515,8 +502,13 @@ export default function ClientDetail() {
       toast({ title: "Failed to update CRM stage", description: error.message, variant: "destructive" });
       return;
     }
-    setClient(data as Client);
-    setInfoDraft(data as Client);
+    const updated = data as Client;
+    setClient(updated);
+    if (editingInfo) {
+      setFormValues((prev) => ({ ...prev, status: stage }));
+    } else {
+      syncFormFromClient(updated);
+    }
     toast({ title: "CRM stage updated" });
   };
 
@@ -541,14 +533,13 @@ export default function ClientDetail() {
       return;
     }
     setClient(data as Client);
-    setInfoDraft(data as Client);
+    syncFormFromClient(data as Client);
     setIsAddingTag(false);
     setNewTag("");
   };
 
   const saveAllPending = async () => {
     if (editingInfo) await saveClientInfo();
-    if (client && notesDraft !== (client.notes || "")) await saveNotes();
     if (editingFollowUpId) await saveFollowUpEdit();
     if (isAddingTag && newTag.trim()) await saveTag();
   };
@@ -696,7 +687,7 @@ export default function ClientDetail() {
       return;
     }
     setClient(data as Client);
-    setInfoDraft(data as Client);
+    syncFormFromClient(data as Client);
   };
 
   const followUpRows = useMemo(() => {
@@ -740,7 +731,8 @@ export default function ClientDetail() {
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to clients
             </Link>
-            <div className="mt-2 flex items-center gap-2">
+            <div className="mt-2 flex items-center gap-3">
+              <ClientAvatar client={client} size="lg" />
               <h1 className="text-2xl font-bold">{client.name}</h1>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -749,7 +741,7 @@ export default function ClientDetail() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  {CRM_STAGES.map((stage) => (
+                  {CLIENT_CRM_STAGES.map((stage) => (
                     <DropdownMenuItem key={stage.value} onClick={() => void saveStage(stage.value)}>
                       {stage.label}
                     </DropdownMenuItem>
@@ -875,86 +867,41 @@ export default function ClientDetail() {
                 <CardTitle className="text-base font-semibold">Client Information</CardTitle>
                 {editingInfo ? (
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => { setEditingInfo(false); setInfoDraft(client || {}); }}>Cancel</Button>
+                    <Button variant="outline" onClick={cancelEditingInfo}>Cancel</Button>
                     <Button onClick={saveClientInfo}>Save</Button>
                   </div>
                 ) : (
-                  <Button variant="outline" onClick={() => setEditingInfo(true)}>Edit</Button>
+                  <Button variant="outline" onClick={startEditingInfo}>Edit</Button>
                 )}
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 {editingInfo ? (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="space-y-1 min-w-0"><Label>First name</Label><Input value={infoDraft.first_name || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, first_name: e.target.value }))} /></div>
-                    <div className="space-y-1 min-w-0"><Label>Last name</Label><Input value={infoDraft.last_name || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, last_name: e.target.value }))} /></div>
-                    <div className="space-y-1 min-w-0"><Label>Email</Label><Input type="email" value={infoDraft.email || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, email: e.target.value }))} /></div>
-                    <div className="space-y-1 min-w-0"><Label>Company</Label><Input value={infoDraft.company || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, company: e.target.value }))} /></div>
-                    <div className="space-y-1 min-w-0">
-                      <Label htmlFor="client-phone">Phone</Label>
-                      <PhoneInput
-                        id="client-phone"
-                        className="min-w-0 [&_button]:w-[5.5rem] [&_button]:px-2"
-                        value={infoDraft.phone || ""}
-                        onChange={(phone) => setInfoDraft((p) => ({ ...p, phone }))}
-                        placeholder="Phone number"
-                      />
-                    </div>
-                    <div className="space-y-1 min-w-0"><Label>Tax ID</Label><Input value={infoDraft.tax_id || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, tax_id: e.target.value }))} placeholder="Tax ID / VAT number" /></div>
-                    <div className="space-y-1 min-w-0 md:col-span-2"><Label>Street</Label><Input value={infoDraft.street || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, street: e.target.value }))} placeholder="Street" /></div>
-                    <div className="space-y-1 min-w-0 md:col-span-2"><Label>Street 2</Label><Input value={infoDraft.street2 || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, street2: e.target.value }))} placeholder="Street 2" /></div>
-                    <div className="space-y-1 min-w-0"><Label>City</Label><Input value={infoDraft.city || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, city: e.target.value }))} placeholder="City" /></div>
-                    <div className="space-y-1 min-w-0"><Label>State</Label><Input value={infoDraft.state || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, state: e.target.value }))} placeholder="State/Province" /></div>
-                    <div className="space-y-1 min-w-0"><Label>Postal code</Label><Input value={infoDraft.postal_code || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, postal_code: e.target.value }))} placeholder="ZIP/Postal Code" /></div>
-                    <div className="space-y-1 min-w-0">
-                      <Label>Country</Label>
-                      <Select
-                        value={countrySelectValue(infoDraft.country)}
-                        onValueChange={(value) =>
-                          setInfoDraft((p) => ({ ...p, country: countryFromSelectValue(value) }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Country" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No country</SelectItem>
-                          {countryOptions.map((country) => (
-                            <SelectItem key={country.value} value={country.value}>
-                              {country.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1 min-w-0"><Label>Lead source</Label><Input value={infoDraft.lead_source || ""} onChange={(e) => setInfoDraft((p) => ({ ...p, lead_source: e.target.value }))} placeholder="e.g. Referral, Website" /></div>
-                    <div className="space-y-1 min-w-0">
-                      <Label>Currency</Label>
-                      <Select
-                        value={infoDraft.currency || "USD"}
-                        onValueChange={(value) => setInfoDraft((p) => ({ ...p, currency: value }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Currency" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {currencies.map((currency) => (
-                            <SelectItem key={currency.value} value={currency.value}>
-                              {currency.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1 min-w-0"><Label>Estimated value</Label><Input type="number" step="0.01" value={infoDraft.estimated_value ?? ""} onChange={(e) => setInfoDraft((p) => ({ ...p, estimated_value: e.target.value ? Number(e.target.value) : null }))} placeholder="0.00" /></div>
-                  </div>
+                  <ClientFormFields
+                    values={formValues}
+                    onChange={(patch) => setFormValues((prev) => ({ ...prev, ...patch }))}
+                    phone={formPhone}
+                    onPhoneChange={setFormPhone}
+                    logoPreviewUrl={clientLogoPreview}
+                    onLogoPreviewChange={setClientLogoPreview}
+                    selectedAvatarColor={selectedAvatarColor}
+                    onSelectedAvatarColorChange={setSelectedAvatarColor}
+                    logoFileInputRef={clientLogoInputRef}
+                    fallbackName={
+                      [formValues.first_name, formValues.last_name].filter(Boolean).join(" ").trim() ||
+                      client.name
+                    }
+                    profileCurrency={profileCurrency}
+                    fieldIdPrefix="client-detail"
+                  />
                 ) : (
-                  <>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <p><strong>Name:</strong> {client.name}</p>
+                    <p><strong>Status:</strong> {getClientStageLabel(client.status)}</p>
                     <p><strong>Company:</strong> {client.company || "—"}</p>
                     <p><strong>Email:</strong> {client.email || "—"}</p>
                     <p><strong>Phone:</strong> {client.phone || "—"}</p>
                     <p><strong>Tax ID:</strong> {client.tax_id || "—"}</p>
                     <p><strong>Currency:</strong> {client.currency || "USD"}</p>
-                    <p><strong>Address:</strong> {[client.street, client.street2, client.city, client.state, client.postal_code, countryLabel(client.country)].filter(Boolean).join(", ") || "—"}</p>
                     <p><strong>Lead source:</strong> {client.lead_source || "—"}</p>
                     <p>
                       <strong>Estimated value:</strong>{" "}
@@ -966,7 +913,19 @@ export default function ClientDetail() {
                           }).format(client.estimated_value)
                         : "—"}
                     </p>
-                  </>
+                    <p><strong>Next follow-up:</strong> {client.next_follow_up_at ? formatUserDate(client.next_follow_up_at) : "—"}</p>
+                    <p><strong>Next action:</strong> {client.next_action || "—"}</p>
+                    <p className="sm:col-span-2">
+                      <strong>Address:</strong>{" "}
+                      {[client.street, client.street2, client.city, client.state, client.postal_code, countryLabel(client.country)].filter(Boolean).join(", ") || "—"}
+                    </p>
+                    <p className="sm:col-span-2">
+                      <strong>Tags:</strong> {(client.tags || []).length > 0 ? (client.tags || []).map(formatTag).join(", ") : "—"}
+                    </p>
+                    <p className="sm:col-span-2 whitespace-pre-wrap">
+                      <strong>Notes:</strong> {client.notes || "—"}
+                    </p>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -1022,15 +981,6 @@ export default function ClientDetail() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader><CardTitle className="text-base font-semibold">Notes</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <Textarea rows={5} value={notesDraft} onChange={(e) => setNotesDraft(e.target.value)} placeholder="Add notes about this client..." />
-                <div className="flex justify-end">
-                  <Button onClick={saveNotes}>Save Notes</Button>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="projects" className="space-y-3">

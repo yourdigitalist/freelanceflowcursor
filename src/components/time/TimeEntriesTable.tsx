@@ -82,7 +82,7 @@ export function TimeEntriesTable({
         {emptyTrackTimeHref && (
           <Link
             to={emptyTrackTimeHref}
-            className="mt-2 inline-block text-sm font-bold text-primary hover:underline"
+            className="mt-2 inline-block text-sm text-primary hover:underline"
           >
             + Track time
           </Link>

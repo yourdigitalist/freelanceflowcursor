@@ -1213,6 +1213,7 @@ export default function TimeTracking() {
                       onDelete={handleDelete}
                       onResume={resumeEntry}
                       emptyMessage="No entries for this week."
+                      emptyTrackTimeHref="/time/timer"
                     />
                     {timesheetTableEntries.length > 0 && (
                       <div className="flex items-center justify-end bg-muted/20 px-4 py-3 border-t">

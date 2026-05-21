@@ -41,6 +41,11 @@ const formatCurrency = (value: number, currency: string) =>
 const paymentLabel = (value: string) =>
   value.split(" ").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 
+/** Shared column layout for service rows, header, and totals */
+const SERVICE_TABLE_GRID =
+  "grid w-full grid-cols-[minmax(0,1.1fr)_minmax(0,1.6fr)_3.25rem_6.75rem] items-start gap-x-6";
+const SERVICE_TABLE_ROW = SERVICE_TABLE_GRID + " px-3";
+
 export function ProposalDocument({
   proposal,
   items,
@@ -165,44 +170,43 @@ export function ProposalDocument({
             <div className="text-base font-semibold text-[#1a1a2e]">Services</div>
           </div>
 
-          <div className="border-b border-[#e7e0f4] py-2">
-            <div className="flex justify-between">
-              <div className="text-xs text-[#888]">Service</div>
-              <div className="flex gap-6">
-                <div className="text-xs text-[#888]">Qty</div>
-                <div className="text-xs text-[#888]">Value</div>
-              </div>
-            </div>
+          <div className={SERVICE_TABLE_ROW + " border-b border-[#e7e0f4] py-2"}>
+            <div className="text-xs text-[#888]">Service</div>
+            <div className="text-xs text-[#888]">Description</div>
+            <div className="text-right text-xs text-[#888]">Qty</div>
+            <div className="text-right text-xs text-[#888]">Value</div>
           </div>
 
           {items.map((item: any) => (
-            <div key={item.id} className="flex items-center justify-between border-b border-[#e7e0f4] py-4">
-              <div>
-                <div className="text-[15px] font-medium text-[#1a1a2e]">{item.name}</div>
-                {item.description ? <div className="mt-0.5 text-[13px] text-[#888]">{item.description}</div> : null}
-              </div>
-              <div className="flex items-center gap-6">
-                <div className="text-[15px] text-[#888]">{item.quantity}</div>
-                <div className="text-[15px] font-medium" style={{ color: proposalMainColor }}>{formatCurrency(item.line_total, item.currency || primaryCurrency)}</div>
+            <div key={item.id} className={SERVICE_TABLE_ROW + " border-b border-[#e7e0f4] py-4"}>
+              <div className="text-[15px] font-medium leading-snug text-[#1a1a2e]">{item.name}</div>
+              <div className="text-[13px] leading-relaxed text-[#888]">{item.description || "—"}</div>
+              <div className="pt-0.5 text-right text-[15px] tabular-nums text-[#888]">{item.quantity}</div>
+              <div className="pt-0.5 text-right text-[15px] font-medium tabular-nums" style={{ color: proposalMainColor }}>
+                {formatCurrency(item.line_total, item.currency || primaryCurrency)}
               </div>
             </div>
           ))}
 
-          <div className="pt-2.5">
-            <div className="flex justify-between py-1 text-xs text-[#888]">
-              <span>Subtotal</span>
-              <span>{formatCurrency(proposal.subtotal, primaryCurrency)}</span>
+          <div className={SERVICE_TABLE_ROW + " border-b border-[#e7e0f4] py-2.5"}>
+            <div className="col-span-3 text-xs text-[#888]">Subtotal</div>
+            <div className="text-right text-xs tabular-nums text-[#888]">{formatCurrency(proposal.subtotal, primaryCurrency)}</div>
+          </div>
+          <div className={SERVICE_TABLE_ROW + " border-b border-[#e7e0f4] py-2.5"}>
+            <div className="col-span-3 text-xs text-[#888]">Discount</div>
+            <div className="text-right text-xs tabular-nums" style={{ color: proposalMainColor }}>
+              {formatCurrency(discountAmount, primaryCurrency)}
+              {proposal.discount_type === "percent" ? ` (${proposal.discount_value}%)` : ""}
             </div>
-            <div className="flex justify-between py-1 text-xs">
-              <span className="text-[#888]">Discount</span>
-              <span style={{ color: proposalMainColor }}>
-                {formatCurrency(discountAmount, primaryCurrency)}
-                {proposal.discount_type === "percent" ? ` (${proposal.discount_value}%)` : ""}
-              </span>
-            </div>
-            <div className="mt-1.5 flex justify-between rounded-lg px-2.5 py-2 text-[13px] font-medium" style={{ backgroundColor: rgba(proposalMainColor, 0.14), color: proposalMainColor }}>
-              <span>Total</span>
-              <span>{formatCurrency(total, primaryCurrency)}</span>
+          </div>
+          <div className="w-full rounded-lg" style={{ backgroundColor: rgba(proposalMainColor, 0.14) }}>
+            <div className={SERVICE_TABLE_ROW + " py-2.5"}>
+              <div className="col-span-3 text-[13px] font-medium" style={{ color: proposalMainColor }}>
+                Total
+              </div>
+              <div className="text-right text-[13px] font-medium tabular-nums" style={{ color: proposalMainColor }}>
+                {formatCurrency(total, primaryCurrency)}
+              </div>
             </div>
           </div>
         </section>

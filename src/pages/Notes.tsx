@@ -90,6 +90,24 @@ function excerptFromHtml(html: string | null, maxLen = NOTE_EXCERPT_LEN): string
   return text.length <= maxLen ? text : text.slice(0, maxLen) + '…';
 }
 
+function isQuillContentEmpty(html: string): boolean {
+  const t = html.trim();
+  if (!t) return true;
+  return t === '<p><br></p>' || t === '<p></p>' || t === '<p><br/></p>';
+}
+
+function noteDraftDirty(
+  note: Note,
+  draft: { title: string; content: string; tags: string[]; folder_id: string | null },
+): boolean {
+  return (
+    draft.title !== note.title ||
+    draft.content !== (note.content || '') ||
+    JSON.stringify(draft.tags) !== JSON.stringify(note.tags || []) ||
+    draft.folder_id !== (note.folder_id ?? null)
+  );
+}
+
 export default function Notes() {
   const [searchParams] = useSearchParams();
   const { dateFormat, timeFormat } = useLocalePreferences();
@@ -176,24 +194,38 @@ export default function Notes() {
   const notesRef = useRef(notes);
   notesRef.current = notes;
 
-  // Sync from selected note only when switching notes (prevents reset when autosave updates the list)
-  useEffect(() => {
-    if (selectedId !== prevSelectedIdRef.current) {
-      prevSelectedIdRef.current = selectedId;
-      const note = selectedId ? notesRef.current.find((n) => n.id === selectedId) : null;
-      if (note) {
-        setTitle(note.title);
-        setContent(note.content || '');
-        setTags(note.tags || []);
-        setFolderIdInNote(note.folder_id ?? null);
-      } else {
-        setTitle('');
-        setContent('');
-        setTags([]);
-        setFolderIdInNote(null);
-      }
-    }
-  }, [selectedId]);
+  const patchNoteInList = useCallback(
+    (noteId: string, patch: Partial<Pick<Note, 'folder_id'>>) => {
+      setNotes((prev) => prev.map((n) => (n.id === noteId ? { ...n, ...patch } : n)));
+    },
+    [],
+  );
+
+  const handleTitleChange = useCallback((value: string) => {
+    setTitle(value);
+  }, []);
+
+  const handleContentChange = useCallback((value: string) => {
+    setContent(value);
+  }, []);
+
+  const handleTagsChange = useCallback((value: string[]) => {
+    setTags(value);
+  }, []);
+
+  /** Sidebar reflects in-progress edits for the open note without mutating the saved list copy */
+  const noteCardTitle = useCallback(
+    (note: Note) => (note.id === selectedId ? title.trim() || 'Untitled' : note.title?.trim() || 'Untitled'),
+    [selectedId, title],
+  );
+
+  const noteCardExcerpt = useCallback(
+    (note: Note) => {
+      const html = note.id === selectedId ? content : note.content;
+      return excerptFromHtml(isQuillContentEmpty(html || '') ? null : html, NOTE_EXCERPT_LEN);
+    },
+    [selectedId, content],
+  );
 
   const persistNote = useCallback(async (noteId: string, payload: { title: string; content: string; tags: string[]; folder_id?: string | null }) => {
     setSaving(true);
@@ -233,18 +265,45 @@ export default function Notes() {
     }
   }, [user, toast]);
 
+  // Save previous note then load the newly selected one (draft state still belongs to previous note on this render)
+  useEffect(() => {
+    const prevId = prevSelectedIdRef.current;
+    if (prevId && prevId !== selectedId && user) {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      const note = notesRef.current.find((n) => n.id === prevId);
+      const draft = { title, content, tags, folder_id: folderIdInNote };
+      if (note && noteDraftDirty(note, draft)) {
+        persistNote(prevId, { title, content, tags, folder_id: folderIdInNote });
+      }
+    }
+
+    if (prevId !== selectedId) {
+      prevSelectedIdRef.current = selectedId;
+      const note = selectedId ? notesRef.current.find((n) => n.id === selectedId) : null;
+      if (note) {
+        setTitle(note.title);
+        setContent(note.content || '');
+        setTags(note.tags || []);
+        setFolderIdInNote(note.folder_id ?? null);
+      } else {
+        setTitle('');
+        setContent('');
+        setTags([]);
+        setFolderIdInNote(null);
+      }
+    }
+  }, [selectedId, user, persistNote]); // eslint-disable-line react-hooks/exhaustive-deps -- title/content are intentionally from the render when selectedId changed
+
   useEffect(() => {
     if (!selectedId || !user) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       const note = notesRef.current.find((n) => n.id === selectedId);
-      if (
-        note &&
-        (title !== note.title ||
-          content !== (note.content || '') ||
-          JSON.stringify(tags) !== JSON.stringify(note.tags || []) ||
-          folderIdInNote !== (note.folder_id ?? null))
-      ) {
+      const draft = { title, content, tags, folder_id: folderIdInNote };
+      if (note && noteDraftDirty(note, draft)) {
         persistNote(selectedId, { title, content, tags, folder_id: folderIdInNote });
       }
       saveTimeoutRef.current = null;
@@ -439,7 +498,7 @@ export default function Notes() {
 
   return (
     <AppLayout>
-      <div className="flex flex-1 min-h-0 -mx-4 -my-4 lg:-mx-8 lg:-my-8 min-h-[calc(100svh-4.5rem)] lg:min-h-[calc(100svh-4rem)]">
+      <div className="flex flex-1 min-h-0 -mx-4 -mb-4 lg:-mx-8 lg:-mb-8 pt-4 lg:pt-8 min-h-[calc(100svh-4.5rem)] lg:min-h-[calc(100svh-4rem)]">
         {/* Sidebar — full-bleed panel bg to main content edges */}
         <aside className="w-80 border-r bg-muted/50 flex flex-col shrink-0 self-stretch">
           <div className="px-3 py-3 border-b space-y-2">
@@ -507,7 +566,7 @@ export default function Notes() {
               ) : (
                 filteredNotes.map((note) => {
                   const folder = note.folder_id ? folders.find((f) => f.id === note.folder_id) : null;
-                  const excerpt = excerptFromHtml(note.content, NOTE_EXCERPT_LEN);
+                  const excerpt = noteCardExcerpt(note);
                   return (
                     <div
                       key={note.id}
@@ -524,7 +583,7 @@ export default function Notes() {
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="font-medium text-sm truncate">{note.title || 'Untitled'}</p>
+                          <p className="font-medium text-sm truncate">{noteCardTitle(note)}</p>
                           {excerpt ? (
                             <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 min-h-[2rem]">{excerpt}</p>
                           ) : (
@@ -572,7 +631,7 @@ export default function Notes() {
 
         {/* Editor */}
         <main className="flex-1 flex flex-col min-h-0 overflow-hidden bg-background">
-          <div className="flex flex-1 flex-col min-h-0 max-w-3xl w-full mx-auto px-4 py-5 lg:px-5">
+          <div className="flex flex-1 flex-col min-h-0 max-w-3xl w-full mx-auto px-4 pb-5 lg:px-8 lg:pb-8">
             {selectedNote ? (
               <div className="flex flex-1 flex-col min-h-0">
                 {/* Saving indicator + Folder + Download as doc */}
@@ -581,7 +640,14 @@ export default function Notes() {
                     {saving && (
                       <p className="text-xs text-muted-foreground">Saving…</p>
                     )}
-                    <Select value={folderIdInNote || 'none'} onValueChange={(v) => setFolderIdInNote(v === 'none' ? null : v)}>
+                    <Select
+                      value={folderIdInNote || 'none'}
+                      onValueChange={(v) => {
+                        const next = v === 'none' ? null : v;
+                        setFolderIdInNote(next);
+                        if (selectedId) patchNoteInList(selectedId, { folder_id: next });
+                      }}
+                    >
                       <SelectTrigger className="w-[180px] h-8 text-xs">
                         <SelectValue placeholder="Folder" />
                       </SelectTrigger>
@@ -599,13 +665,14 @@ export default function Notes() {
                   </Button>
                 </div>
                 <DocumentEditor
+                  key={selectedId}
                   noteId={selectedId}
                   title={title}
-                  onTitleChange={setTitle}
+                  onTitleChange={handleTitleChange}
                   content={content}
-                  onContentChange={setContent}
+                  onContentChange={handleContentChange}
                   tags={tags}
-                  onTagsChange={setTags}
+                  onTagsChange={handleTagsChange}
                   suggestedTags={allTagsFromNotes}
                   onRequestCreateTask={handleRequestCreateTask}
                   onUploadImage={handleUploadNoteImage}

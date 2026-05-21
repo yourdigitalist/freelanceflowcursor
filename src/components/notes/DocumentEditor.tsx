@@ -268,7 +268,6 @@ export function DocumentEditor({
   const navigate = useNavigate();
   const quillRef = useRef<ReactQuillType>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
-  const [localTitle, setLocalTitle] = useState(title);
   const atMentionIndexRef = useRef<number | null>(null);
   const [showAtPopover, setShowAtPopover] = useState(false);
   const [atPopoverPosition, setAtPopoverPosition] = useState({ top: 0, left: 0 });
@@ -287,27 +286,12 @@ export function DocumentEditor({
   const linkDialogOpenRef = useRef(false);
   const handleLinkApplyRef = useRef<() => void>(() => {});
 
-  const prevNoteIdRef = useRef(noteId);
-  // Only reset title field when switching notes (avoids glitch while typing)
   useEffect(() => {
-    if (prevNoteIdRef.current !== noteId) {
-      prevNoteIdRef.current = noteId;
-      setLocalTitle(title);
-      setIsAddingTag(false);
-      setNewTag('');
-    }
-  }, [noteId, title]);
+    setIsAddingTag(false);
+    setNewTag('');
+  }, [noteId]);
 
   const modules = useMemo(() => buildQuillModules(), []);
-
-  const handleTitleInput = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const v = e.target.value;
-      setLocalTitle(v);
-      onTitleChange(v);
-    },
-    [onTitleChange],
-  );
 
   const handleEditorClick = useCallback(
     (e: React.MouseEvent) => {
@@ -558,14 +542,17 @@ export function DocumentEditor({
 
     const handler = (_delta: unknown, _old: unknown, source: string) => {
       if (source !== 'user') return;
-      requestAnimationFrame(openAtPopoverIfNeeded);
+      requestAnimationFrame(() => {
+        q.scrollIntoView();
+        openAtPopoverIfNeeded();
+      });
     };
 
     q.on('text-change', handler);
     return () => {
       q.off('text-change', handler);
     };
-  }, []);
+  }, [noteId]);
 
   // Selection change: show "Create task" when text is selected
   useEffect(() => {
@@ -650,8 +637,8 @@ export function DocumentEditor({
           <input
             ref={titleInputRef}
             type="text"
-            value={localTitle}
-            onChange={handleTitleInput}
+            value={title}
+            onChange={(e) => onTitleChange(e.target.value)}
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             placeholder="Untitled"
@@ -779,6 +766,12 @@ export function DocumentEditor({
             theme="snow"
             value={content}
             onChange={onContentChange}
+            onChangeSelection={(range, source) => {
+              if (source === 'user' && range) {
+                const editor = quillRef.current?.getEditor();
+                if (editor) requestAnimationFrame(() => editor.scrollIntoView());
+              }
+            }}
             modules={modules}
             formats={QUILL_FORMATS}
             placeholder={placeholder}
