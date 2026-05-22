@@ -91,7 +91,7 @@ const content = nunjucks.renderString(variables["HTML Template"], {
   bankDetails: input.bankDetails || "",
   showLineDate: input.showLineDate === "true" || input.showLineDate === true,
   showQuantity: input.showQuantity !== "false" && input.showQuantity !== false,
-  showRate: input.showRate === "true" || input.showRate === true,
+  showRate: input.showRate !== "false" && input.showRate !== false,
   showLineDescription: input.showLineDescription === "true" || input.showLineDescription === true
 });
 

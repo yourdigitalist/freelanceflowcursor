@@ -7,6 +7,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import { getLanceSignature } from "../_shared/lance-email.ts";
+import { formatLocaleDate } from "../_shared/format-locale-date.ts";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
@@ -235,7 +236,7 @@ serve(async (req) => {
     // Fetch user profile with business details, logo, currency, number_format, bank, and invoice display options
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display, number_format, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, bank_name, bank_account_number, bank_routing_number, payment_instructions, client_email_primary_color, client_email_header_html, client_email_footer_html")
+      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display, number_format, date_format, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, bank_name, bank_account_number, bank_routing_number, payment_instructions, client_email_primary_color, client_email_header_html, client_email_footer_html")
       .eq("user_id", user.id)
       .single();
 
@@ -292,10 +293,12 @@ serve(async (req) => {
       [profile?.bank_name, profile?.bank_account_number != null && `Account: ${profile.bank_account_number}`, profile?.bank_routing_number != null && `Routing: ${profile.bank_routing_number}`, profile?.payment_instructions].filter(Boolean).join("\n").trim() ||
       "";
 
+    const dateFormat = profile?.date_format?.trim() || "DD/MM/YYYY";
+
     const customJsPayload = {
       invoiceNumber: invoice.invoice_number,
-      createdDate: invoice.issue_date ? String(invoice.issue_date).slice(0, 10) : "",
-      dueDate: invoice.due_date ? String(invoice.due_date).slice(0, 10) : "",
+      createdDate: formatLocaleDate(invoice.issue_date, dateFormat),
+      dueDate: formatLocaleDate(invoice.due_date, dateFormat),
       clientName: client?.name || "",
       clientAddress1: receiverAddress1,
       clientAddress2: receiverAddress2.trim() || (client?.company || ""),
@@ -321,7 +324,7 @@ serve(async (req) => {
       items: (items || []).map((item) => ({
         description: item.description || "Item",
         price: Number(item.amount),
-        line_date: item.line_date ? String(item.line_date).slice(0, 10) : "",
+        line_date: item.line_date ? formatLocaleDate(item.line_date, dateFormat) : "",
         quantity: Number(item.quantity) || 1,
         unit_price: Number(item.unit_price) ?? Number(item.amount),
         line_description: item.line_description != null ? String(item.line_description) : "",

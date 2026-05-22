@@ -1,6 +1,7 @@
 // @ts-nocheck
 /** Generate invoice PDF via CustomJS (shared by send-invoice and view-invoice-pdf). */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { formatLocaleDate } from "./format-locale-date.ts";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: "$", EUR: "€", GBP: "£", JPY: "¥", CAD: "C$", AUD: "A$", CHF: "CHF",
@@ -31,7 +32,7 @@ export async function generateInvoicePdfBase64(
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display, number_format, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, bank_name, bank_account_number, bank_routing_number, payment_instructions",
+      "full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display, number_format, date_format, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, bank_name, bank_account_number, bank_routing_number, payment_instructions",
     )
     .eq("user_id", invoice.user_id)
     .maybeSingle();
@@ -71,10 +72,12 @@ export async function generateInvoicePdfBase64(
       .trim() ||
     "";
 
+  const dateFormat = profile?.date_format?.trim() || "DD/MM/YYYY";
+
   const customJsPayload = {
     invoiceNumber: invoice.invoice_number,
-    createdDate: invoice.issue_date ? String(invoice.issue_date).slice(0, 10) : "",
-    dueDate: invoice.due_date ? String(invoice.due_date).slice(0, 10) : "",
+    createdDate: formatLocaleDate(invoice.issue_date, dateFormat),
+    dueDate: formatLocaleDate(invoice.due_date, dateFormat),
     clientName: client?.name || "",
     clientAddress1: receiverAddress1,
     clientAddress2: receiverAddress2.trim() || (client?.company || ""),
@@ -100,7 +103,7 @@ export async function generateInvoicePdfBase64(
     items: (items || []).map((item: Record<string, unknown>) => ({
       description: item.description || "Item",
       price: Number(item.amount),
-      line_date: item.line_date ? String(item.line_date).slice(0, 10) : "",
+      line_date: item.line_date ? formatLocaleDate(item.line_date, dateFormat) : "",
       quantity: Number(item.quantity) || 1,
       unit_price: Number(item.unit_price) ?? Number(item.amount),
       line_description: item.line_description != null ? String(item.line_description) : "",

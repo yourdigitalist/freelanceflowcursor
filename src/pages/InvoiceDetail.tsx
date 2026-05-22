@@ -12,7 +12,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Trash2, Send, Loader2, ListTodo, Wallet, Download } from '@/components/icons';
+import { ArrowLeft, Plus, Trash2, Send, Loader2, ListTodo, Wallet, Download, Save } from '@/components/icons';
+import { useLocalePreferences } from '@/hooks/useLocalePreferences';
+import { formatLocaleDate } from '@/lib/datetime';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { endOfMonth, endOfWeek, format, startOfMonth, startOfWeek, subMonths } from 'date-fns';
 import { formatCurrency, currencies } from '@/lib/locale-data';
@@ -236,6 +238,7 @@ const pickEmailTemplate = (...candidates: (string | null | undefined)[]) => {
 export default function InvoiceDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { dateFormat } = useLocalePreferences();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -1187,14 +1190,24 @@ export default function InvoiceDetail() {
     }
   };
 
+  const updateInvoicePaidStatus = async () => {
+    const paidAt = new Date().toISOString();
+    const { error: withPaidDate } = await supabase
+      .from('invoices')
+      .update({ status: 'paid', paid_date: paidAt })
+      .eq('id', id);
+    if (!withPaidDate) return;
+    if (/paid_date/i.test(withPaidDate.message)) {
+      const { error: statusOnly } = await supabase.from('invoices').update({ status: 'paid' }).eq('id', id);
+      if (statusOnly) throw statusOnly;
+      return;
+    }
+    throw withPaidDate;
+  };
+
   const markAsPaid = async () => {
     try {
-      const { error: invoiceError } = await supabase
-        .from('invoices')
-        .update({ status: 'paid', paid_date: new Date().toISOString() })
-        .eq('id', id);
-
-      if (invoiceError) throw invoiceError;
+      await updateInvoicePaidStatus();
 
       // Update linked time entries to paid
       const { error: entriesError } = await supabase
@@ -1264,7 +1277,7 @@ export default function InvoiceDetail() {
       if (!session) throw new Error('Not authenticated');
 
       if (sendModalMode === 'receipt') {
-        await supabase.from('invoices').update({ status: 'paid', paid_date: new Date().toISOString() }).eq('id', id);
+        await updateInvoicePaidStatus();
         await fetchInvoice();
       }
 
@@ -1348,7 +1361,7 @@ export default function InvoiceDetail() {
       .replace(/\{\{client_name\}\}/gi, invoice?.clients?.name ?? '')
       .replace(/\{\{invoice_number\}\}/gi, invoice?.invoice_number ?? '')
       .replace(/\{\{total\}\}/gi, totalVal > 0 || invoice?.total != null ? fmt(totalVal || Number(invoice?.total ?? 0)) : '')
-      .replace(/\{\{due_date\}\}/gi, invoice?.due_date ? format(new Date(invoice.due_date), 'MMMM d, yyyy') : '')
+      .replace(/\{\{due_date\}\}/gi, invoice?.due_date ? formatLocaleDate(invoice.due_date, dateFormat) : '')
       .replace(/\{\{business_name\}\}/gi, profile?.business_name || profile?.company_name || profile?.full_name || '')
       .replace(/\{\{project_name\}\}/gi, invoice?.projects?.name ?? '');
   };
@@ -1460,15 +1473,16 @@ export default function InvoiceDetail() {
     phone: client?.phone || '',
     tax: client?.tax_id || '',
   };
-  const createdDate = invoice?.issue_date ? String(invoice.issue_date).slice(0, 10) : '';
-  const dueDate = invoice?.due_date ? String(invoice.due_date).slice(0, 10) : '';
+  const createdDate = formatLocaleDate(invoice?.issue_date, dateFormat);
+  const dueDate = formatLocaleDate(invoice?.due_date, dateFormat);
+  const formatDisplayDate = (value: string | null | undefined) => formatLocaleDate(value, dateFormat);
   const companyLogo = profile?.business_logo && typeof profile.business_logo === 'string' ? profile.business_logo : '';
   const previewItems = items.map((it) => ({
     description: it.description || '',
     price: Number(it.amount),
     unit_price: Number(it.unit_price) || Number(it.amount),
     quantity: Number(it.quantity) || 1,
-    line_date: it.line_date ? String(it.line_date).slice(0, 10) : '',
+    line_date: it.line_date ? formatLocaleDate(it.line_date, dateFormat) : '',
     line_description: it.line_description != null ? String(it.line_description) : '',
   }));
   const amt = (n: number) => `${currencySymbol}${Number(n).toFixed(2)}`;
@@ -1581,7 +1595,13 @@ export default function InvoiceDetail() {
                   }}
                   title={isEditMode ? 'Save invoice' : 'Edit invoice'}
                 >
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <SlotIcon slot="action_edit" className="h-4 w-4" />}
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : isEditMode ? (
+                    <Save className="h-4 w-4" />
+                  ) : (
+                    <SlotIcon slot="action_edit" className="h-4 w-4" />
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{isEditMode ? 'Save invoice' : 'Edit invoice'}</TooltipContent>
@@ -1594,6 +1614,10 @@ export default function InvoiceDetail() {
                 size="sm"
                 onClick={async () => {
                   if (isEditMode) {
+                    const shouldSave = window.confirm(
+                      'Save your invoice before sending? Your latest changes are not saved yet.',
+                    );
+                    if (!shouldSave) return;
                     const ok = await saveInvoice();
                     if (!ok) return;
                   }
@@ -1762,11 +1786,11 @@ export default function InvoiceDetail() {
                 <div className="flex flex-wrap gap-6 text-sm">
                   <div>
                     <span className="text-muted-foreground">Issue Date:</span>{' '}
-                    <span className="font-medium">{invoice.issue_date ? format(new Date(invoice.issue_date), 'MMM d, yyyy') : '—'}</span>
+                    <span className="font-medium">{formatDisplayDate(invoice.issue_date) || '—'}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Due Date:</span>{' '}
-                    <span className="font-medium">{invoice.due_date ? format(new Date(invoice.due_date), 'MMM d, yyyy') : '—'}</span>
+                    <span className="font-medium">{formatDisplayDate(invoice.due_date) || '—'}</span>
                   </div>
                 </div>
               )}
@@ -1817,7 +1841,7 @@ export default function InvoiceDetail() {
                 <Table className="min-w-[560px] w-full">
                   <TableHeader>
                     <TableRow className="border-b hover:bg-transparent">
-                      <TableHead className="w-[110px] min-w-[110px]">
+                      <TableHead className="w-[128px] min-w-[128px]">
                         <div className="flex items-center gap-2">
                           Date
                           {isEditMode && (
@@ -1844,8 +1868,8 @@ export default function InvoiceDetail() {
                           )}
                         </div>
                       </TableHead>
-                      <TableHead className="w-[72px] min-w-[72px] text-center">
-                        <div className="flex items-center gap-2 justify-center">
+                      <TableHead className="w-[96px] min-w-[96px]">
+                        <div className="flex items-center justify-center gap-2">
                           Qty
                           {isEditMode && (
                             <Switch
@@ -1857,8 +1881,8 @@ export default function InvoiceDetail() {
                           )}
                         </div>
                       </TableHead>
-                      <TableHead className="w-[90px] min-w-[90px] text-right">
-                        <div className="flex items-center gap-2 justify-end">
+                      <TableHead className="w-[104px] min-w-[104px]">
+                        <div className="flex items-center justify-center gap-2">
                           Rate
                           {isEditMode && (
                             <Switch
@@ -1883,10 +1907,10 @@ export default function InvoiceDetail() {
                               type="date"
                               value={item.line_date ? format(new Date(item.line_date), 'yyyy-MM-dd') : ''}
                               onChange={(e) => updateItem(item.id, 'line_date', e.target.value || '')}
-                              className="h-8 text-sm"
+                              className="relative h-8 w-full min-w-0 pl-3 pr-10 text-sm [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-2 [&::-webkit-calendar-picker-indicator]:top-1/2 [&::-webkit-calendar-picker-indicator]:h-4 [&::-webkit-calendar-picker-indicator]:w-4 [&::-webkit-calendar-picker-indicator]:-translate-y-1/2 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                             />
                           ) : (
-                            <span className="text-sm">{item.line_date ? format(new Date(item.line_date), 'MMM d, yyyy') : '—'}</span>
+                            <span className="text-sm">{item.line_date ? formatDisplayDate(item.line_date) : '—'}</span>
                           )}
                         </TableCell>
                         <TableCell className="py-2 align-middle min-w-[140px]">
@@ -1913,7 +1937,8 @@ export default function InvoiceDetail() {
                             <span className="text-sm text-muted-foreground break-words">{item.line_description || '—'}</span>
                           )}
                         </TableCell>
-                        <TableCell className="py-2 align-middle text-center">
+                        <TableCell className="py-2 align-middle">
+                          <div className="flex justify-center">
                           {isEditMode ? (
                             <Input
                               type="number"
@@ -1921,13 +1946,15 @@ export default function InvoiceDetail() {
                               onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
                               min="0"
                               step="0.01"
-                              className="h-8 w-14 text-center mx-auto"
+                              className="h-8 w-[4.5rem] min-w-[4.5rem] px-2 text-center tabular-nums"
                             />
                           ) : (
-                            <span className="text-sm">{item.quantity}</span>
+                            <span className="text-sm tabular-nums">{item.quantity}</span>
                           )}
+                          </div>
                         </TableCell>
-                        <TableCell className="py-2 align-middle text-right">
+                        <TableCell className="py-2 align-middle">
+                          <div className="flex justify-center">
                           {isEditMode ? (
                             <Input
                               type="number"
@@ -1935,11 +1962,12 @@ export default function InvoiceDetail() {
                               onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
                               min="0"
                               step="0.01"
-                              className="h-8 w-20 text-right ml-auto"
+                              className="h-8 w-[5.5rem] min-w-[5.5rem] px-2 text-center tabular-nums"
                             />
                           ) : (
-                            <span className="text-sm">{fmt(Number(item.unit_price))}</span>
+                            <span className="text-sm tabular-nums">{fmt(Number(item.unit_price))}</span>
                           )}
+                          </div>
                         </TableCell>
                         <TableCell className="py-2 align-middle text-right font-medium">
                           {fmt(Number(item.quantity) * Number(item.unit_price))}
@@ -2086,8 +2114,16 @@ export default function InvoiceDetail() {
                 <SlotIcon slot="action_print" className="mr-2 h-4 w-4" />
                 Print
               </Button>
-              <Button size="sm" onClick={() => {
+              <Button size="sm" onClick={async () => {
                 setIsPreviewOpen(false);
+                if (isEditMode) {
+                  const shouldSave = window.confirm(
+                    'Save your invoice before sending? Your latest changes are not saved yet.',
+                  );
+                  if (!shouldSave) return;
+                  const ok = await saveInvoice();
+                  if (!ok) return;
+                }
                 setSendModalMode('send');
                 setCcEmails([]);
                 setIsSendModalOpen(true);
@@ -2218,14 +2254,9 @@ export default function InvoiceDetail() {
         <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
           <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
             <DialogTitle>Import Time Entries</DialogTitle>
-            <DialogDescription>
-              Filters update automatically. Grouped merges hours into one line per project, task, and rate.
-              Detailed creates one invoice line per time entry.
-            </DialogDescription>
           </DialogHeader>
           <div className="px-6 pb-3 space-y-3 shrink-0">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs text-muted-foreground">Filters apply as you change them</p>
+          <div className="flex justify-end">
             <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={resetImportFilters}>
               Reset filters
             </Button>
@@ -2355,7 +2386,7 @@ export default function InvoiceDetail() {
                                 <span className="ml-2 text-xs text-muted-foreground">(not importable)</span>
                               ) : null}
                             </p>
-                            <p className="text-xs text-muted-foreground">{entry.description || 'No notes'} • {format(new Date(entry.start_time), 'MMM d, yyyy')}</p>
+                            <p className="text-xs text-muted-foreground">{entry.description || 'No notes'} • {formatDisplayDate(entry.start_time)}</p>
                             <p className="text-xs text-muted-foreground capitalize">
                               {(entry.billing_status || 'unbilled').replace('_', ' ')} • {entry.billable ? 'billable' : 'non-billable'}
                             </p>
@@ -2550,7 +2581,7 @@ export default function InvoiceDetail() {
               <p>Invoice: {invoice.invoice_number}</p>
               <p>Amount: {fmt(total)}</p>
               {invoice.due_date && (
-                <p>Due: {format(new Date(invoice.due_date), 'MMM d, yyyy')}</p>
+                <p>Due: {formatDisplayDate(invoice.due_date)}</p>
               )}
             </div>
           </div>
