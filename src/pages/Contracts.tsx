@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Trash2 } from "@/components/icons";
 import { SlotIcon } from "@/contexts/IconSlotContext";
+import { applyProposalImportToContract } from "@/lib/contractProposalImport";
 import { contractClientSnapshotFromClient } from "@/lib/clientForm";
 import { DEFAULT_CONTRACT_TEMPLATE_CONTENT } from "@/lib/contractTemplate";
 
@@ -243,42 +244,11 @@ export default function Contracts() {
     }
 
     if (selectedProposalId !== "none") {
-      const [{ data: proposal }, { data: proposalItems }] = await Promise.all([
-        supabase.from("proposals").select("*").eq("id", selectedProposalId).single(),
-        supabase.from("proposal_services").select("*").eq("proposal_id", selectedProposalId).order("position"),
-      ]);
-
-      if (proposal) {
-        await supabase
-          .from("contracts")
-          .update({
-            proposal_id: proposal.id,
-            timeline_days: proposal.timeline_days,
-            immediate_availability: proposal.availability_required,
-            payment_structure: proposal.payment_structure,
-            installment_description: proposal.installment_description,
-            payment_methods: proposal.payment_methods,
-            additional_clause: proposal.conditions_notes,
-            subtotal: proposal.subtotal,
-            discount: proposal.discount_value,
-            discount_type: proposal.discount_type === "amount" ? "fixed" : proposal.discount_type,
-            total: proposal.total,
-          } as never)
-          .eq("id", contract.id);
-      }
-
-      if (proposalItems?.length) {
-        await supabase.from("contract_services").insert(
-          proposalItems.map((item, index) => ({
-            contract_id: contract.id,
-            service_id: item.service_id,
-            name: item.name,
-            description: item.description,
-            price: item.price,
-            quantity: Math.round(Number(item.quantity || 1)),
-            sort_order: index,
-          })) as never,
-        );
+      try {
+        await applyProposalImportToContract(contract.id, selectedProposalId);
+      } catch (importError: unknown) {
+        const message = importError instanceof Error ? importError.message : "Could not import proposal";
+        toast({ title: "Proposal import failed", description: message, variant: "destructive" });
       }
     }
 

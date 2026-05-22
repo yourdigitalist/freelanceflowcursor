@@ -4,7 +4,12 @@ import DOMPurify from "dompurify";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { AppLayout } from "@/components/layout/AppLayout";
+import {
+  applyProposalImportToContract,
+  fetchAcceptedProposalsForContract,
+} from "@/lib/contractProposalImport";
 import { composeStructuredAddress } from "@/lib/clientForm";
+import { normalizeProposalPaymentMethods } from "@/lib/proposalDefaults";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -18,6 +23,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ArrowLeft, CheckCircle, Plus, Trash2 } from "@/components/icons";
@@ -67,6 +82,12 @@ export default function ContractDetail() {
   const [newProjectName, setNewProjectName] = useState("");
   const [creatingProject, setCreatingProject] = useState(false);
   const [showCreateProject, setShowCreateProject] = useState(false);
+  const [acceptedProposals, setAcceptedProposals] = useState<Array<{ id: string; identifier: string; project_id?: string | null }>>([]);
+  const [importClientResolved, setImportClientResolved] = useState(false);
+  const [importProposalId, setImportProposalId] = useState<string>("");
+  const [importConfirmOpen, setImportConfirmOpen] = useState(false);
+  const [pendingImportProposalId, setPendingImportProposalId] = useState<string | null>(null);
+  const [importingProposal, setImportingProposal] = useState(false);
   const { dateFormat, timeFormat } = useLocalePreferences();
   const saveInFlightRef = useRef(false);
   const pdfOpenInFlightRef = useRef(false);
@@ -116,9 +137,13 @@ export default function ContractDetail() {
       tax_id?: string | null;
       address?: string | null;
     } | null;
+    const paymentFields = normalizeProposalPaymentMethods(
+      (c?.payment_methods as string[] | undefined) || [],
+    );
     const mergedContract = c
       ? {
           ...c,
+          ...paymentFields,
           client_company: c.client_company || linkedClient?.company || null,
           client_street: c.client_street || linkedClient?.street || null,
           client_street2: c.client_street2 || linkedClient?.street2 || null,
@@ -172,6 +197,30 @@ export default function ContractDetail() {
   useEffect(() => {
     void load();
   }, [id]);
+
+  useEffect(() => {
+    if (!contract?.id) return;
+    const loadAcceptedProposals = async () => {
+      try {
+        const { clientId, proposals } = await fetchAcceptedProposalsForContract({
+          clientId: contract.client_id,
+          projectId: contract.project_id,
+        });
+        setImportClientResolved(!!clientId);
+        setAcceptedProposals(proposals);
+        const preferred =
+          (contract.proposal_id && proposals.some((row) => row.id === contract.proposal_id)
+            ? contract.proposal_id
+            : null) || proposals[0]?.id || "";
+        setImportProposalId(preferred);
+      } catch {
+        setImportClientResolved(!!contract.client_id);
+        setAcceptedProposals([]);
+        setImportProposalId("");
+      }
+    };
+    void loadAcceptedProposals();
+  }, [contract?.id, contract?.client_id, contract?.project_id, contract?.proposal_id]);
 
   const isLocked = ["pending_signatures", "signed", "cancelled"].includes(contract?.status || "");
   const filteredProjects = useMemo(
@@ -703,6 +752,41 @@ export default function ContractDetail() {
         ? "Fill in all contract details, sign it, and send to your client — they won't have access until you do."
         : null;
 
+  const runProposalImport = async (proposalId: string) => {
+    if (!id || !proposalId) return;
+    setImportingProposal(true);
+    try {
+      const { proposal, itemCount } = await applyProposalImportToContract(id, proposalId);
+      toast({
+        title: "Imported from proposal",
+        description: `${proposal.identifier}: ${itemCount} service${itemCount === 1 ? "" : "s"} and payment conditions updated.`,
+      });
+      setImportConfirmOpen(false);
+      setPendingImportProposalId(null);
+      await load();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Could not import proposal";
+      toast({ title: "Import failed", description: message, variant: "destructive" });
+    } finally {
+      setImportingProposal(false);
+    }
+  };
+
+  const requestProposalImport = (proposalId: string) => {
+    const hasExistingServices = items.some((item) => Boolean(String(item.name || "").trim()));
+    const hasExistingConditions = Boolean(
+      contract?.timeline_days ||
+        contract?.additional_clause ||
+        (contract?.payment_methods || []).length > 0,
+    );
+    if (hasExistingServices || hasExistingConditions) {
+      setPendingImportProposalId(proposalId);
+      setImportConfirmOpen(true);
+      return;
+    }
+    void runProposalImport(proposalId);
+  };
+
   const createProjectInline = async () => {
     if (!user || !newProjectName.trim()) return;
     setCreatingProject(true);
@@ -859,7 +943,16 @@ export default function ContractDetail() {
                   <Label>Linked project</Label>
                   <Select
                     value={contract.project_id || "none"}
-                    onValueChange={(value) => updateContract({ project_id: value === "none" ? null : value })}
+                    onValueChange={(value) => {
+                      const projectId = value === "none" ? null : value;
+                      const linkedProject = projectId
+                        ? allProjects.find((project) => project.id === projectId)
+                        : null;
+                      updateContract({
+                        project_id: projectId,
+                        client_id: linkedProject?.client_id || contract.client_id || null,
+                      });
+                    }}
                     disabled={isLocked}
                   >
                     <SelectTrigger>
@@ -950,6 +1043,52 @@ export default function ContractDetail() {
           <TabsContent value="services">
             <Card>
               <CardContent className="space-y-4 p-6">
+                {!isLocked ? (
+                  <div className="rounded-lg border border-emerald-500/25 bg-emerald-50 p-4 text-sm text-emerald-950">
+                    <p className="font-medium">Import from accepted proposal</p>
+                    <p className="mt-1 text-emerald-900/90">
+                      Pulls line items, pricing, discount, and conditions (timeline, payment terms, and additional clauses) from the proposal into this contract.
+                    </p>
+                    {!importClientResolved ? (
+                      <p className="mt-3 text-amber-900">
+                        Link a <strong>project</strong> on the Details tab (with a client) so we can find accepted proposals for that client.
+                      </p>
+                    ) : acceptedProposals.length === 0 ? (
+                      <p className="mt-3 text-amber-900">
+                        No accepted proposals for this client yet. Accept a proposal first (e.g. from the client’s project), then return here to import it.
+                      </p>
+                    ) : (
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <Select value={importProposalId} onValueChange={setImportProposalId}>
+                          <SelectTrigger className="bg-white sm:min-w-[220px] sm:max-w-xs">
+                            <SelectValue placeholder="Choose proposal" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {acceptedProposals.map((proposal) => (
+                              <SelectItem key={proposal.id} value={proposal.id}>
+                                {proposal.identifier}
+                                {contract.project_id && proposal.project_id === contract.project_id
+                                  ? " (this project)"
+                                  : proposal.project_id
+                                    ? ""
+                                    : " (no project)"}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="border-emerald-600 text-emerald-800 hover:bg-emerald-100"
+                          disabled={!importProposalId || importingProposal}
+                          onClick={() => requestProposalImport(importProposalId)}
+                        >
+                          {importingProposal ? "Importing..." : "Import proposal data"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setCatalogOpen(true)} disabled={isLocked}>
                     Add from Service Catalog
@@ -1010,6 +1149,19 @@ export default function ContractDetail() {
           <TabsContent value="conditions">
             <Card>
               <CardContent className="space-y-4 p-6">
+                {!isLocked ? (
+                  <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                    Payment terms and clauses are imported together with services on the{" "}
+                    <button
+                      type="button"
+                      className="font-medium text-primary hover:underline"
+                      onClick={() => setActiveTab("services")}
+                    >
+                      Services
+                    </button>{" "}
+                    tab (choose an accepted proposal there).
+                  </p>
+                ) : null}
                 <div className="flex items-center gap-3">
                   <Checkbox checked={!!contract.immediate_availability} onCheckedChange={(checked) => updateContract({ immediate_availability: !!checked })} disabled={isLocked} id="availability" />
                   <Label htmlFor="availability">I have immediate availability</Label>
@@ -1085,7 +1237,6 @@ export default function ContractDetail() {
               </Button>
             </div>
             <div id="contract-content" className="rounded-xl border bg-white p-8">
-              <h1 className="mb-6 text-center text-2xl font-semibold">FREELANCE SERVICES AGREEMENT</h1>
               <div className="mb-6 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
                 This preview uses the same template and data as the client view. Empty fields appear as blue placeholders until filled.
               </div>
@@ -1214,6 +1365,29 @@ export default function ContractDetail() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <AlertDialog open={importConfirmOpen} onOpenChange={setImportConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Replace contract data from proposal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will replace current services, pricing, and conditions on this contract with data from the selected accepted proposal. This cannot be undone automatically.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={importingProposal}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={importingProposal || !pendingImportProposalId}
+              onClick={(event) => {
+                event.preventDefault();
+                if (pendingImportProposalId) void runProposalImport(pendingImportProposalId);
+              }}
+            >
+              {importingProposal ? "Importing..." : "Replace with proposal data"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={catalogOpen} onOpenChange={setCatalogOpen}>
         <DialogContent>

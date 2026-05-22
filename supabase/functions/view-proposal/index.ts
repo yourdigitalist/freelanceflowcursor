@@ -1,6 +1,11 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import {
+  escapeHtml,
+  getDefaultLanceFooter,
+  getDefaultLanceHeader,
+} from "../_shared/lance-email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,16 +13,7 @@ const corsHeaders = {
 };
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
-
-function escapeHtml(text: string | null | undefined): string {
-  if (!text) return "";
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") || "https://www.getlance.app").trim().replace(/\/$/, "");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -42,9 +38,11 @@ serve(async (req) => {
     if (!proposal) {
       return new Response(JSON.stringify({ error: "Proposal not available" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+    const { data: authUser } = await supabaseAuth.auth.getUser();
+    const isOwnerView = !!authUser?.user && authUser.user.id === proposal.user_id;
+
     if (proposal.status === "draft") {
-      const { data: authUser } = await supabaseAuth.auth.getUser();
-      const canPreviewDraft = Boolean(preview) && !!authUser?.user && authUser.user.id === proposal.user_id;
+      const canPreviewDraft = Boolean(preview) && isOwnerView;
       if (!canPreviewDraft) {
         return new Response(JSON.stringify({ error: "Proposal not available" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -66,27 +64,40 @@ serve(async (req) => {
       normalizedBusiness.business_logo = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/business-logos/${logoPath}`;
     }
 
-    if (proposal.status === "sent") {
-      await supabase.from("proposals").update({ status: "read", read_at: new Date().toISOString() }).eq("id", proposal.id);
+    // Atomically mark first client view (sent → read); only the winning request sends email.
+    const { data: firstRead } = await supabase
+      .from("proposals")
+      .update({ status: "read", read_at: new Date().toISOString() })
+      .eq("id", proposal.id)
+      .eq("status", "sent")
+      .select("id, identifier")
+      .maybeSingle();
+
+    if (firstRead) {
       proposal.status = "read";
-      if (normalizedBusiness?.business_email && Deno.env.get("RESEND_API_KEY")) {
+      proposal.read_at = new Date().toISOString();
+      const ownerEmail = (normalizedBusiness?.business_email || normalizedBusiness?.email || "").trim();
+      if (!isOwnerView && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
+        const { data: branding } = await supabase.from("app_branding").select("primary_color").eq("id", 1).maybeSingle();
+        const primaryColor = (branding?.primary_color as string | null) || "#9B63E9";
+        const proposalUrl = `${APP_BASE_URL}/proposals/${proposal.id}`;
+        const safeIdentifier = escapeHtml(firstRead.identifier || proposal.identifier);
+        const safeUrl = escapeHtml(proposalUrl);
+        const coreHtml = `
+              <h2 style="margin: 0 0 12px; color: ${primaryColor};">Proposal viewed by client</h2>
+              <p style="color: #333; margin: 0 0 20px;">Your proposal <strong>${safeIdentifier}</strong> was opened by the client.</p>
+              <p style="margin: 0;">
+                <a href="${safeUrl}" style="display: inline-block; background: ${primaryColor}; color: #ffffff !important; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">View proposal</a>
+              </p>`;
+        const html = `${getDefaultLanceHeader(primaryColor)}${coreHtml}${getDefaultLanceFooter(primaryColor)}`;
+        const text = `Your proposal ${firstRead.identifier || proposal.identifier} was opened by the client.\n\nView proposal: ${proposalUrl}`;
+
         await resend.emails.send({
-          from: `Lance <${RESEND_FROM_EMAIL}>`,
-          to: [normalizedBusiness.business_email],
-          subject: `Proposal viewed: ${proposal.identifier}`,
-          html: `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
-            <div style="padding:18px 20px;background:#9B63E9;color:white;display:flex;align-items:center;gap:8px;">
-              <img src="https://www.getlance.app/email/lance-logo-white.png" alt="Lance" width="120" height="28" style="height:28px;max-width:160px;width:auto;display:block;border:0;" />
-            </div>
-            <div style="padding:20px;">
-              <h2 style="color:#9B63E9;margin-top:0;">Proposal viewed by client</h2>
-              <p style="color:#333;">Your proposal <strong>${escapeHtml(proposal.identifier)}</strong> has just been viewed.</p>
-            </div>
-            <div style="padding: 14px 20px; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb;">
-              <img src="https://www.getlance.app/email/lance-logo-black.svg" alt="Lance" width="80" height="20" style="height:20px;max-width:100px;width:auto;display:block;margin-bottom:8px;border:0;" />
-              Sent by <span style="color: #9B63E9; font-weight: 600;">Lance</span>
-            </div>
-          </div>`,
+          from: `Get Lance <${RESEND_FROM_EMAIL}>`,
+          to: [ownerEmail],
+          subject: `Proposal viewed: ${firstRead.identifier || proposal.identifier}`,
+          text,
+          html,
         });
       }
     }

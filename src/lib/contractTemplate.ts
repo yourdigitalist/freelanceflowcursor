@@ -4,6 +4,8 @@ export type ContractTemplateService = {
   quantity: number | null;
 };
 
+import { DEFAULT_SERVICE_AGREEMENT_TEMPLATE_HTML } from "@/lib/defaultServiceAgreementTemplate.html";
+
 export type ContractTemplateData = {
   identifier: string | null;
   today: string | null;
@@ -36,35 +38,7 @@ export type ContractTemplateData = {
   total: number | null;
 };
 
-export const DEFAULT_CONTRACT_TEMPLATE_CONTENT = `FREELANCE SERVICES AGREEMENT
-
-Contract ID: {{identifier}}
-Date: {{today}}
-
-1. Parties
-{{client_identification}}
-{{freelancer_identification}}
-
-2. Scope of Services
-The Service Provider agrees to deliver the following services:
-{{services}}
-Project reference: {{project_name}}
-Estimated timeline: {{timeline_days}}
-
-3. Payment Terms
-Total amount: {{total}}
-Payment structure: {{payment_structure}}
-Accepted payment methods:
-{{payment_methods}}
-{{installment_description}}
-Payment link:
-{{payment_link}}
-
-4. Additional Clause
-{{additional_clause}}
-
-5. Signatures
-Signed on {{signed_date}}.`;
+export const DEFAULT_CONTRACT_TEMPLATE_CONTENT = DEFAULT_SERVICE_AGREEMENT_TEMPLATE_HTML;
 
 const TOKEN_REGEX = /\{\{([a-zA-Z0-9_]+)\}\}/g;
 
@@ -137,8 +111,10 @@ const buildIdentification = (
 const mapTemplateValues = (data: ContractTemplateData): Record<string, string> => {
   const services = data.services
     .map((service) => `- (${Math.max(1, Number(service.quantity || 1))}) ${service.name || ""}: ${service.description || ""}`.trim())
-    .join("\n");
-  const paymentMethods = data.payment_methods.map((method) => `- ${titleCase(method.replace("other:", "other: "))}`).join("\n");
+    .join("<br>");
+  const paymentMethods = data.payment_methods
+    .map((method) => `- ${titleCase(method.replace(/^other:\s*/i, "other: "))}`)
+    .join("<br>");
   const today = formatDate(data.today);
   const signedDate = formatDate(data.signed_date);
   return {
@@ -188,7 +164,12 @@ const mapTemplateValues = (data: ContractTemplateData): Record<string, string> =
     ),
     services,
     timeline_days: data.timeline_days != null ? `${data.timeline_days} calendar days` : "",
-    payment_structure: data.payment_structure === "installments" ? "Installments" : data.payment_structure === "upfront" ? "Upfront" : "",
+    payment_structure:
+      data.payment_structure === "installments"
+        ? "Payment structure: Installments"
+        : data.payment_structure === "upfront"
+          ? "Payment structure: Upfront (single payment)"
+          : "",
     payment_methods: paymentMethods,
     installment_description: data.installment_description || "",
     payment_link: data.payment_link || "",
@@ -197,11 +178,22 @@ const mapTemplateValues = (data: ContractTemplateData): Record<string, string> =
   };
 };
 
+const escapeTokenHtml = (value: string): string =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
 export function renderTemplate(templateContent: string, data: ContractTemplateData): string {
   const values = mapTemplateValues(data);
   return templateContent.replace(TOKEN_REGEX, (full, token: string) => {
     const value = values[token];
-    const display = typeof value === "string" && value.trim() ? value : full;
+    const display =
+      typeof value === "string" && value.trim()
+        ? escapeTokenHtml(value).replace(/\n/g, "<br>")
+        : full;
     return `<span class="contract-token">${display}</span>`;
   });
 }

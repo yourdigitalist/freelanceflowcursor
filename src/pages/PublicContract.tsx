@@ -336,7 +336,6 @@ export default function PublicContract() {
               </div>
             ) : null}
             <div id="contract-content" className="rounded-xl border bg-white p-8">
-              <h1 className="mb-6 text-center text-2xl font-semibold">FREELANCE SERVICES AGREEMENT</h1>
               {inAppMode ? (
                 <div className="mb-6 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
                   Highlighted text shows fields automatically pulled from saved records.

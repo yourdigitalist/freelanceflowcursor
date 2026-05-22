@@ -1,40 +1,11 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { DEFAULT_CONTRACT_TEMPLATE_CONTENT } from "../_shared/default-contract-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-const DEFAULT_CONTRACT_TEMPLATE_CONTENT = `FREELANCE SERVICES AGREEMENT
-
-Contract ID: {{identifier}}
-Date: {{today}}
-
-1. Parties
-{{client_identification}}
-{{freelancer_identification}}
-
-2. Scope of Services
-The Service Provider agrees to deliver the following services:
-{{services}}
-Project reference: {{project_name}}
-Estimated timeline: {{timeline_days}}
-
-3. Payment Terms
-Total amount: {{total}}
-Payment structure: {{payment_structure}}
-Accepted payment methods:
-{{payment_methods}}
-{{installment_description}}
-Payment link:
-{{payment_link}}
-
-4. Additional Clause
-{{additional_clause}}
-
-5. Signatures
-Signed on {{signed_date}}.`;
 
 type TemplateRow = { id: string; name: string; content: string; is_default?: boolean | null };
 
