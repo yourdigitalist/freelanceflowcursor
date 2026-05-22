@@ -1,6 +1,11 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import {
+  escapeHtml,
+  getDefaultLanceFooter,
+  getDefaultLanceHeader,
+} from "../_shared/lance-email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,16 +13,7 @@ const corsHeaders = {
 };
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
-
-function escapeHtml(text: string | null | undefined): string {
-  if (!text) return "";
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") || "https://www.getlance.app").trim().replace(/\/$/, "");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -34,22 +30,31 @@ serve(async (req) => {
       await supabase.from("proposals").update({ status: "accepted", accepted_at: new Date().toISOString() }).eq("id", proposal.id);
       const { data: business } = await supabase
         .from("profiles")
-        .select("business_name, business_email, email")
+        .select("business_email, email")
         .eq("user_id", proposal.user_id)
         .maybeSingle();
       const ownerEmail = business?.business_email || business?.email;
       if (ownerEmail && Deno.env.get("RESEND_API_KEY")) {
+        const { data: branding } = await supabase.from("app_branding").select("primary_color").eq("id", 1).maybeSingle();
+        const primaryColor = (branding?.primary_color as string | null) || "#9B63E9";
+        const proposalUrl = `${APP_BASE_URL}/proposals/${proposal.id}`;
+        const safeIdentifier = escapeHtml(proposal.identifier);
+        const safeUrl = escapeHtml(proposalUrl);
+        const coreHtml = `
+              <h2 style="margin: 0 0 12px; color: ${primaryColor};">Proposal accepted</h2>
+              <p style="color: #333; margin: 0 0 20px;">Great news! Your proposal <strong>${safeIdentifier}</strong> was accepted by the client.</p>
+              <p style="margin: 0;">
+                <a href="${safeUrl}" style="display: inline-block; background: ${primaryColor}; color: #ffffff !important; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">View proposal</a>
+              </p>`;
+        const html = `${getDefaultLanceHeader(primaryColor)}${coreHtml}${getDefaultLanceFooter(primaryColor)}`;
+        const text = `Great news! Your proposal ${proposal.identifier} was accepted by the client.\n\nView proposal: ${proposalUrl}`;
+
         await resend.emails.send({
-          from: `${business?.business_name || "Lance"} <${RESEND_FROM_EMAIL}>`,
+          from: `Get Lance <${RESEND_FROM_EMAIL}>`,
           to: [ownerEmail],
           subject: `Proposal accepted: ${proposal.identifier}`,
-          html: `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
-            <div style="padding:18px 20px;background:#9B63E9;color:white;"><strong>${escapeHtml(business?.business_name || "Your Business")}</strong></div>
-            <div style="padding:20px;">
-              <h2 style="color:#9B63E9;margin-top:0;">Proposal accepted</h2>
-              <p style="color:#333;">Great news! Your proposal <strong>${escapeHtml(proposal.identifier)}</strong> was accepted by the client.</p>
-            </div>
-          </div>`,
+          text,
+          html,
         });
       }
     }

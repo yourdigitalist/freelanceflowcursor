@@ -4,6 +4,7 @@ import DOMPurify from "dompurify";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { composeStructuredAddress } from "@/lib/clientForm";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -81,7 +82,11 @@ export default function ContractDetail() {
   const load = async () => {
     if (!id) return;
     const [{ data: c }, { data: lineItems }, { data: catalog }, { data: projects }, { data: profile }, { data: contractTemplates }] = await Promise.all([
-      supabase.from("contracts").select("*, clients(name, company, currency), projects(name)").eq("id", id).single(),
+      supabase
+        .from("contracts")
+        .select("*, clients(name, company, currency, street, street2, city, state, postal_code, country, email, phone, tax_id, address), projects(name)")
+        .eq("id", id)
+        .single(),
       supabase.from("contract_services").select("*").eq("contract_id", id).order("sort_order"),
       supabase.from("services").select("*").order("name"),
       supabase.from("projects").select("id, name, client_id").order("name"),
@@ -97,10 +102,44 @@ export default function ContractDetail() {
         : Promise.resolve({ data: [] }),
     ]);
     const templatesData = (contractTemplates || []) as Array<{ id: string; name: string; content: string; is_default?: boolean }>;
+    const linkedClient = c?.clients as {
+      name?: string | null;
+      company?: string | null;
+      street?: string | null;
+      street2?: string | null;
+      city?: string | null;
+      state?: string | null;
+      postal_code?: string | null;
+      country?: string | null;
+      email?: string | null;
+      phone?: string | null;
+      tax_id?: string | null;
+      address?: string | null;
+    } | null;
     const mergedContract = c
       ? {
           ...c,
-          client_company: c.client_company || c.clients?.company || null,
+          client_company: c.client_company || linkedClient?.company || null,
+          client_street: c.client_street || linkedClient?.street || null,
+          client_street2: c.client_street2 || linkedClient?.street2 || null,
+          client_city: c.client_city || linkedClient?.city || null,
+          client_state: c.client_state || linkedClient?.state || null,
+          client_zip: c.client_zip || linkedClient?.postal_code || null,
+          client_country: c.client_country || linkedClient?.country || null,
+          client_email: c.client_email || linkedClient?.email || null,
+          client_phone: c.client_phone || linkedClient?.phone || null,
+          client_tax_id: c.client_tax_id || linkedClient?.tax_id || null,
+          client_address:
+            c.client_address ||
+            composeStructuredAddress({
+              street: c.client_street || linkedClient?.street,
+              street2: c.client_street2 || linkedClient?.street2,
+              city: c.client_city || linkedClient?.city,
+              state: c.client_state || linkedClient?.state,
+              postal_code: c.client_zip || linkedClient?.postal_code,
+              country: c.client_country || linkedClient?.country,
+              address: linkedClient?.address,
+            }),
           freelancer_name: c.freelancer_name || profile?.full_name || null,
           freelancer_email: c.freelancer_email || profile?.email || null,
           freelancer_company: c.freelancer_company || profile?.business_name || null,
@@ -874,7 +913,15 @@ export default function ContractDetail() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label>Template</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>Template</Label>
+                    <Link
+                      to="/contracts?tab=templates"
+                      className="text-sm font-medium text-primary hover:underline"
+                    >
+                      Edit Templates
+                    </Link>
+                  </div>
                   <Select
                     value={contract.template_id || "default"}
                     onValueChange={(value) => {

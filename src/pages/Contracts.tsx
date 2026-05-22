@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Trash2 } from "@/components/icons";
 import { SlotIcon } from "@/contexts/IconSlotContext";
+import { contractClientSnapshotFromClient } from "@/lib/clientForm";
 import { DEFAULT_CONTRACT_TEMPLATE_CONTENT } from "@/lib/contractTemplate";
 
 type ContractRow = {
@@ -49,7 +50,7 @@ export default function Contracts() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [rows, setRows] = useState<ContractRow[]>([]);
-  const [clients, setClients] = useState<{ id: string; name: string; company: string | null; email: string | null; phone: string | null; address: string | null; city: string | null; state: string | null; postal_code: string | null; country: string | null; tax_id: string | null; currency?: string | null }[]>([]);
+  const [clients, setClients] = useState<{ id: string; name: string; company: string | null; email: string | null; phone: string | null; address: string | null; street: string | null; street2: string | null; city: string | null; state: string | null; postal_code: string | null; country: string | null; tax_id: string | null; currency?: string | null }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string; client_id: string | null }[]>([]);
   const [proposalCandidates, setProposalCandidates] = useState<ProposalCandidate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,7 +80,7 @@ export default function Contracts() {
         .from("contracts")
         .select("id, identifier, status, total, client_id, project_id, clients(name, currency), projects(name)")
         .order("created_at", { ascending: false }),
-      supabase.from("clients").select("id, name, company, email, phone, address, city, state, postal_code, country, tax_id, currency").is("archived_at", null).order("name"),
+      supabase.from("clients").select("id, name, company, email, phone, address, street, street2, city, state, postal_code, country, tax_id, currency").is("archived_at", null).order("name"),
       supabase.from("projects").select("id, name, client_id").order("name"),
       supabase.from("contract_templates").select("id, name, description, content, is_default").order("created_at"),
     ]);
@@ -208,22 +209,12 @@ export default function Contracts() {
       .eq("user_id", user.id)
       .maybeSingle();
 
+    const clientSnapshot = selectedClient ? contractClientSnapshotFromClient(selectedClient) : {};
     const payload: Record<string, unknown> = {
       user_id: user.id,
       client_id: clientId,
       project_id: projectId === "none" ? null : projectId,
-      client_name: selectedClient?.name || null,
-      client_company: selectedClient?.company || null,
-      client_email: selectedClient?.email || null,
-      client_phone: selectedClient?.phone || null,
-      client_address: selectedClient?.address || null,
-      client_city: selectedClient?.city || null,
-      client_state: selectedClient?.state || null,
-      client_zip: selectedClient?.postal_code || null,
-      client_country: selectedClient?.country || null,
-      client_tax_id: selectedClient?.tax_id || null,
-      client_street: selectedClient?.address || null,
-      client_street2: null,
+      ...clientSnapshot,
       freelancer_name: profile?.full_name || null,
       freelancer_company: profile?.business_name || null,
       freelancer_email: profile?.email || null,

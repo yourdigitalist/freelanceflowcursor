@@ -168,6 +168,72 @@ export function buildClientDbPayload(
   };
 }
 
+export type ClientAddressFields = {
+  street?: string | null;
+  street2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  address?: string | null;
+};
+
+/** Single-line address from structured client fields (falls back to legacy `address`). */
+export function composeStructuredAddress(fields: ClientAddressFields): string | null {
+  const line = [
+    fields.street,
+    fields.street2,
+    fields.city,
+    fields.state,
+    fields.postal_code,
+    fields.country,
+  ]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(', ');
+  return line || fields.address?.trim() || null;
+}
+
+/** Snapshot client fields onto a new contract row. */
+export function contractClientSnapshotFromClient(
+  client: ClientAddressFields & {
+    name?: string | null;
+    company?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    tax_id?: string | null;
+  },
+) {
+  const street = client.street?.trim() || null;
+  const street2 = client.street2?.trim() || null;
+  const city = client.city?.trim() || null;
+  const state = client.state?.trim() || null;
+  const postal_code = client.postal_code?.trim() || null;
+  const country = client.country?.trim() || null;
+  return {
+    client_name: client.name?.trim() || null,
+    client_company: client.company?.trim() || null,
+    client_email: client.email?.trim() || null,
+    client_phone: client.phone?.trim() || null,
+    client_tax_id: client.tax_id?.trim() || null,
+    client_street: street,
+    client_street2: street2,
+    client_city: city,
+    client_state: state,
+    client_zip: postal_code,
+    client_country: country,
+    client_address: composeStructuredAddress({
+      street,
+      street2,
+      city,
+      state,
+      postal_code,
+      country,
+      address: client.address,
+    }),
+  };
+}
+
 /** Stable snapshot for dirty-checking (country normalized like the save payload). */
 export function clientFormSnapshot(values: ClientFormValues) {
   return JSON.stringify({
