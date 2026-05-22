@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -36,6 +37,7 @@ export default function UserSettings() {
   const navigate = useNavigate();
   const dirtyContext = useSettingsDirty();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -59,7 +61,7 @@ export default function UserSettings() {
       last_name: lastName,
       full_name: fullName,
       email: formData.get('email') as string || null,
-      phone: formData.get('phone') as string || null,
+      phone: phone.trim() || null,
     };
     const { error } = await supabase.from('profiles').update(profileData).eq('user_id', user.id);
     if (error) throw error;
@@ -87,6 +89,7 @@ export default function UserSettings() {
 
       if (error) throw error;
       setProfile(data);
+      setPhone(data?.phone || '');
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {
@@ -291,12 +294,17 @@ export default function UserSettings() {
               defaultValue={profile?.email || ''}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             <Label htmlFor="phone">Phone Number</Label>
-            <Input
+            <PhoneInput
               id="phone"
-              name="phone"
-              defaultValue={profile?.phone || ''}
+              value={phone}
+              onChange={(value) => {
+                setPhone(value);
+                dirtyContext?.setDirty(true);
+              }}
+              placeholder="Phone number"
+              className="min-w-0"
             />
           </div>
         </CardContent>
