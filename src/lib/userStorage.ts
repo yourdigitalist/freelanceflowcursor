@@ -164,3 +164,50 @@ export async function assertStorageCapacity(userId: string, additionalBytes: num
     throw new Error('Storage limit reached. Remove files in Settings → Storage to free space.');
   }
 }
+
+/** Fast quota check for logo uploads (avoids scanning all buckets — reduces "Failed to fetch" timeouts). */
+export async function assertStorageCapacityForLogoUpload(
+  userId: string,
+  additionalBytes: number,
+): Promise<void> {
+  try {
+    const files = await listFolder('business-logos', userId);
+    const used = files.reduce((sum, file) => sum + file.size, 0);
+    if (used + additionalBytes > MAX_USER_STORAGE_BYTES) {
+      throw new Error('Storage limit reached. Remove files in Settings → Storage to free space.');
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('Storage limit')) throw err;
+    console.warn('Storage pre-check skipped:', err);
+  }
+}
+
+export function storagePathFromPublicUrl(bucket: string, publicUrl: string): string | null {
+  const trimmed = publicUrl.trim();
+  if (!trimmed) return null;
+  const marker = `/object/public/${bucket}/`;
+  const idx = trimmed.indexOf(marker);
+  if (idx >= 0) {
+    return decodeURIComponent(trimmed.slice(idx + marker.length).split('?')[0] || '');
+  }
+  const altMarker = `${bucket}/`;
+  const altIdx = trimmed.indexOf(altMarker);
+  if (altIdx >= 0) {
+    return decodeURIComponent(trimmed.slice(altIdx + altMarker.length).split('?')[0] || '');
+  }
+  return null;
+}
+
+export function formatUploadError(error: unknown): string {
+  const msg = error instanceof Error ? error.message : String(error ?? '');
+  if (/failed to fetch/i.test(msg)) {
+    return 'Network error while uploading. Check your connection and try again. If it persists, sign out and back in.';
+  }
+  if (msg.includes('row-level security') || msg.includes('violates')) {
+    return 'Storage access was denied. Ensure the business-logos bucket allows uploads for your account.';
+  }
+  if (msg.includes('Bucket not found')) {
+    return 'Create a storage bucket named "business-logos" in Supabase Storage and set it to public.';
+  }
+  return msg || 'Unknown error';
+}

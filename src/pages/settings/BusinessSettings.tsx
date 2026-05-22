@@ -10,7 +10,13 @@ import { useToast } from '@/hooks/use-toast';
 import { useSettingsDirty } from '@/contexts/SettingsDirtyContext';
 import { notifyStartGuideRefresh } from '@/components/layout/startGuideUtils';
 import { Loader2, Upload } from '@/components/icons';
+import { LogoPreviewBox } from '@/components/settings/LogoPreviewBox';
 import { PhoneInput } from '@/components/ui/phone-input';
+import {
+  assertStorageCapacityForLogoUpload,
+  formatUploadError,
+  storagePathFromPublicUrl,
+} from '@/lib/userStorage';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface BusinessProfile {
@@ -186,11 +192,16 @@ export default function BusinessSettings() {
 
   const MAX_LOGO_BYTES = 500 * 1024; // 500KB
 
-  const persistEmailCommsConfig = async (next: { secondaryLogo?: string; variant?: EmailLogoVariant }) => {
+  const persistEmailCommsConfig = async (next: {
+    secondaryLogo?: string;
+    variant?: EmailLogoVariant;
+    logoDefault?: string;
+  }) => {
     if (!user) return;
     const secondaryLogo = next.secondaryLogo ?? emailLogoSecondary;
     const variant = next.variant ?? emailLogoVariant;
-    const payload = buildEmailCommsConfig(profile?.business_logo || '', secondaryLogo, variant);
+    const logoDefault = next.logoDefault ?? profile?.business_logo ?? '';
+    const payload = buildEmailCommsConfig(logoDefault, secondaryLogo, variant);
     const { error } = await supabase
       .from('profiles')
       .update({ client_email_header_html: payload })
@@ -216,13 +227,12 @@ export default function BusinessSettings() {
     }
     setSaving(true);
     try {
-      const { assertStorageCapacity } = await import('@/lib/userStorage');
-      await assertStorageCapacity(user.id, file.size);
+      await assertStorageCapacityForLogoUpload(user.id, file.size);
       const ext = file.name.split('.').pop() || 'png';
       const path = `${user.id}/logo-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from('business-logos')
-        .upload(path, file, { upsert: true });
+        .upload(path, file, { upsert: true, contentType: file.type || 'image/png' });
       if (uploadError) throw uploadError;
       const { data: urlData } = supabase.storage.from('business-logos').getPublicUrl(path);
       const { error: updateError } = await supabase
@@ -230,23 +240,45 @@ export default function BusinessSettings() {
         .update({ business_logo: urlData.publicUrl })
         .eq('user_id', user.id);
       if (updateError) throw updateError;
+      await persistEmailCommsConfig({ logoDefault: urlData.publicUrl });
       toast({ title: 'Logo uploaded' });
-      fetchProfile();
-    } catch (error: any) {
-      const msg = error.message ?? '';
-      const isRls = msg.includes('row-level security') || msg.includes('violates');
+      await fetchProfile();
+    } catch (error: unknown) {
       toast({
         title: 'Upload failed',
-        description: isRls
-          ? 'Storage access was denied. Ensure the business-logos bucket has RLS policies for your user.'
-          : msg.includes('Bucket not found')
-            ? 'Create a storage bucket named "business-logos" in Supabase (Storage) and set it to public.'
-            : msg,
+        description: formatUploadError(error),
         variant: 'destructive',
       });
     } finally {
       setSaving(false);
       e.target.value = '';
+    }
+  };
+
+  const removeBusinessLogo = async () => {
+    if (!user || !profile?.business_logo) return;
+    setSaving(true);
+    try {
+      const storagePath = storagePathFromPublicUrl('business-logos', profile.business_logo);
+      if (storagePath) {
+        await supabase.storage.from('business-logos').remove([storagePath]);
+      }
+      const { error } = await supabase
+        .from('profiles')
+        .update({ business_logo: null })
+        .eq('user_id', user.id);
+      if (error) throw error;
+      await persistEmailCommsConfig({ logoDefault: '' });
+      toast({ title: 'Logo removed' });
+      await fetchProfile();
+    } catch (error: unknown) {
+      toast({
+        title: 'Could not remove logo',
+        description: formatUploadError(error),
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -267,13 +299,12 @@ export default function BusinessSettings() {
 
     setSaving(true);
     try {
-      const { assertStorageCapacity } = await import('@/lib/userStorage');
-      await assertStorageCapacity(user.id, file.size);
+      await assertStorageCapacityForLogoUpload(user.id, file.size);
       const ext = file.name.split('.').pop() || 'png';
       const path = `${user.id}/email-logo-secondary-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from('business-logos')
-        .upload(path, file, { upsert: true });
+        .upload(path, file, { upsert: true, contentType: file.type || 'image/png' });
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage.from('business-logos').getPublicUrl(path);
@@ -281,10 +312,34 @@ export default function BusinessSettings() {
       await persistEmailCommsConfig({ secondaryLogo: urlData.publicUrl });
       dirtyContext?.setDirty(true);
       toast({ title: 'Secondary email logo uploaded' });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Upload failed',
-        description: error.message ?? 'Unknown error',
+        description: formatUploadError(error),
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeSecondaryEmailLogo = async () => {
+    if (!user || !emailLogoSecondary) return;
+    setSaving(true);
+    try {
+      const storagePath = storagePathFromPublicUrl('business-logos', emailLogoSecondary);
+      if (storagePath) {
+        await supabase.storage.from('business-logos').remove([storagePath]);
+      }
+      setEmailLogoSecondary('');
+      setEmailLogoVariant('light');
+      await persistEmailCommsConfig({ secondaryLogo: '', variant: 'light' });
+      toast({ title: 'Secondary logo removed' });
+      dirtyContext?.setDirty(true);
+    } catch (error: unknown) {
+      toast({
+        title: 'Could not remove logo',
+        description: formatUploadError(error),
         variant: 'destructive',
       });
     } finally {
@@ -328,15 +383,12 @@ export default function BusinessSettings() {
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">Default logo</p>
               <div className="flex items-center gap-3">
-                {profile?.business_logo ? (
-                  <img
-                    src={profile.business_logo}
-                    alt="Business logo"
-                    className="h-10 w-[140px] rounded border bg-background p-1 object-contain"
-                  />
-                ) : (
-                  <div className="h-10 w-[140px] rounded border-2 border-dashed border-border bg-muted" />
-                )}
+                <LogoPreviewBox
+                  src={profile?.business_logo}
+                  alt="Business logo"
+                  onRemove={profile?.business_logo ? () => void removeBusinessLogo() : undefined}
+                  removing={saving}
+                />
                 <input
                   ref={logoInputRef}
                   type="file"
@@ -360,11 +412,12 @@ export default function BusinessSettings() {
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">Secondary logo (optional)</p>
               <div className="flex items-center gap-3">
-                {emailLogoSecondary ? (
-                  <img src={emailLogoSecondary} alt="Secondary email logo" className="h-10 w-[140px] rounded border bg-background p-1 object-contain" />
-                ) : (
-                  <div className="h-10 w-[140px] rounded border-2 border-dashed border-border bg-muted" />
-                )}
+                <LogoPreviewBox
+                  src={emailLogoSecondary}
+                  alt="Secondary email logo"
+                  onRemove={emailLogoSecondary ? () => void removeSecondaryEmailLogo() : undefined}
+                  removing={saving}
+                />
                 <input
                   ref={emailLogoDarkInputRef}
                   type="file"
