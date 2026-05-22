@@ -3,9 +3,17 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-/** Prefer legacy anon JWT — Storage uploads often fail with only `sb_publishable_*` keys. */
-export const supabaseAnonKey =
-  import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+/** Prefer JWT anon key when both legacy JWT and `sb_publishable_*` keys are configured. */
+function pickSupabaseApiKey(): string {
+  const anon = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+  const publishable = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
+  if (anon?.startsWith('eyJ')) return anon;
+  if (publishable?.startsWith('eyJ')) return publishable;
+  return anon || publishable || '';
+}
+
+export const supabaseAnonKey = pickSupabaseApiKey();
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";

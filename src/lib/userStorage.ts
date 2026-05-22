@@ -198,25 +198,39 @@ export function storagePathFromPublicUrl(bucket: string, publicUrl: string): str
   return null;
 }
 
-/** Direct Storage REST upload — avoids supabase-js client dropping the POST after CORS preflight. */
+/** Upload to business-logos; tries supabase-js first, then Storage REST if needed. */
 export async function uploadBusinessLogoFile(
   userId: string,
   file: File,
   pathPrefix = 'logo',
 ): Promise<{ publicUrl: string; path: string }> {
+  const apikey = supabaseAnonKey?.trim();
+  if (!apikey) {
+    throw new Error(
+      'Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY) in .env, then restart the dev server.',
+    );
+  }
+
+  const ext = file.name.split('.').pop() || 'png';
+  const path = `${userId}/${pathPrefix}-${Date.now()}.${ext}`;
+  const contentType = file.type || 'image/png';
+
+  const { error: uploadError } = await supabase.storage
+    .from('business-logos')
+    .upload(path, file, { upsert: true, contentType });
+
+  if (!uploadError) {
+    const { data } = supabase.storage.from('business-logos').getPublicUrl(path);
+    return { publicUrl: data.publicUrl, path };
+  }
+
+  if (!/failed to fetch|networkerror|load failed/i.test(uploadError.message)) {
+    throw uploadError;
+  }
+
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, '');
   if (!supabaseUrl) {
     throw new Error('Supabase URL is missing. Set VITE_SUPABASE_URL in your .env file.');
-  }
-
-  const apikey = supabaseAnonKey?.trim();
-  if (!apikey) {
-    throw new Error('Supabase API key is missing. Set VITE_SUPABASE_ANON_KEY in your .env file.');
-  }
-  if (apikey.startsWith('sb_publishable_') && !import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()) {
-    throw new Error(
-      'Logo uploads need the legacy anon key (JWT). In Supabase → Project Settings → API, copy the anon public key into VITE_SUPABASE_ANON_KEY in .env, then restart the dev server.',
-    );
   }
 
   const {
@@ -227,12 +241,7 @@ export async function uploadBusinessLogoFile(
     throw new Error('Your session may have expired. Sign out and sign back in, then try again.');
   }
 
-  const ext = file.name.split('.').pop() || 'png';
-  const path = `${userId}/${pathPrefix}-${Date.now()}.${ext}`;
-  const contentType = file.type || 'image/png';
-  const uploadUrl = `${supabaseUrl}/storage/v1/object/business-logos/${path}`;
-
-  const res = await fetch(uploadUrl, {
+  const res = await fetch(`${supabaseUrl}/storage/v1/object/business-logos/${path}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${session.access_token}`,
@@ -263,11 +272,8 @@ export async function uploadBusinessLogoFile(
 
 export function formatUploadError(error: unknown): string {
   const msg = error instanceof Error ? error.message : String(error ?? '');
-  if (/legacy anon key|VITE_SUPABASE_ANON_KEY/i.test(msg)) {
-    return msg;
-  }
   if (/failed to fetch|networkerror|load failed/i.test(msg)) {
-    return 'The upload did not reach the server. Add VITE_SUPABASE_ANON_KEY (JWT anon key) to .env, restart npm run dev, then try again. Also check connection, use PNG/JPG under 1 MB, and disable VPN or ad blockers.';
+    return 'The upload did not reach the server. Check your connection, use PNG or JPG under 1 MB, try disabling VPN or ad blockers, or sign out and back in.';
   }
   if (msg.includes('row-level security') || msg.includes('violates')) {
     return 'Storage access was denied. Ensure the business-logos bucket allows uploads for your account.';
