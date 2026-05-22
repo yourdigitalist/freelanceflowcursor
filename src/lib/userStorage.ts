@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, supabaseAnonKey } from '@/integrations/supabase/client';
 
 export const MAX_USER_STORAGE_BYTES = 200 * 1024 * 1024;
 
@@ -198,44 +198,76 @@ export function storagePathFromPublicUrl(bucket: string, publicUrl: string): str
   return null;
 }
 
-/** Upload to business-logos with a fresh session; retries once on transient network failures. */
+/** Direct Storage REST upload — avoids supabase-js client dropping the POST after CORS preflight. */
 export async function uploadBusinessLogoFile(
   userId: string,
   file: File,
   pathPrefix = 'logo',
 ): Promise<{ publicUrl: string; path: string }> {
-  const { error: sessionError } = await supabase.auth.refreshSession();
-  if (sessionError) {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, '');
+  if (!supabaseUrl) {
+    throw new Error('Supabase URL is missing. Set VITE_SUPABASE_URL in your .env file.');
+  }
+
+  const apikey = supabaseAnonKey?.trim();
+  if (!apikey) {
+    throw new Error('Supabase API key is missing. Set VITE_SUPABASE_ANON_KEY in your .env file.');
+  }
+  if (apikey.startsWith('sb_publishable_') && !import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()) {
+    throw new Error(
+      'Logo uploads need the legacy anon key (JWT). In Supabase → Project Settings → API, copy the anon public key into VITE_SUPABASE_ANON_KEY in .env, then restart the dev server.',
+    );
+  }
+
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+  if (sessionError || !session?.access_token) {
     throw new Error('Your session may have expired. Sign out and sign back in, then try again.');
   }
 
   const ext = file.name.split('.').pop() || 'png';
   const path = `${userId}/${pathPrefix}-${Date.now()}.${ext}`;
   const contentType = file.type || 'image/png';
+  const uploadUrl = `${supabaseUrl}/storage/v1/object/business-logos/${path}`;
 
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const { error } = await supabase.storage
-      .from('business-logos')
-      .upload(path, file, { upsert: true, contentType });
-    if (!error) {
-      const { data } = supabase.storage.from('business-logos').getPublicUrl(path);
-      return { publicUrl: data.publicUrl, path };
+  const res = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      apikey,
+      'Content-Type': contentType,
+      'x-upsert': 'true',
+    },
+    body: file,
+  });
+
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const json = (await res.json()) as { message?: string; error?: string };
+      detail = json.message || json.error || detail;
+    } catch {
+      /* ignore parse errors */
     }
-    lastError = error;
-    if (attempt === 0 && /failed to fetch/i.test(error.message)) {
-      await supabase.auth.refreshSession();
-      continue;
+    if (res.status === 401 || res.status === 403) {
+      throw new Error('Storage access was denied. Sign out and sign back in, then try again.');
     }
-    throw error;
+    throw new Error(detail || `Upload failed (${res.status})`);
   }
-  throw lastError;
+
+  const { data } = supabase.storage.from('business-logos').getPublicUrl(path);
+  return { publicUrl: data.publicUrl, path };
 }
 
 export function formatUploadError(error: unknown): string {
   const msg = error instanceof Error ? error.message : String(error ?? '');
+  if (/legacy anon key|VITE_SUPABASE_ANON_KEY/i.test(msg)) {
+    return msg;
+  }
   if (/failed to fetch|networkerror|load failed/i.test(msg)) {
-    return 'The upload did not reach the server. Check your connection, use a PNG or JPG under 500 KB, try disabling VPN or ad blockers, or sign out and back in.';
+    return 'The upload did not reach the server. Add VITE_SUPABASE_ANON_KEY (JWT anon key) to .env, restart npm run dev, then try again. Also check connection, use PNG/JPG under 500 KB, and disable VPN or ad blockers.';
   }
   if (msg.includes('row-level security') || msg.includes('violates')) {
     return 'Storage access was denied. Ensure the business-logos bucket allows uploads for your account.';
