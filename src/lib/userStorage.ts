@@ -207,7 +207,7 @@ export async function uploadBusinessLogoFile(
   const apikey = supabaseAnonKey?.trim();
   if (!apikey) {
     throw new Error(
-      'Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY) in .env, then restart the dev server.',
+      'Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment (local .env or Vercel project settings), then reload the app.',
     );
   }
 
