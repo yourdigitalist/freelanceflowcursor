@@ -1478,13 +1478,15 @@ export default function TimeTracking() {
             {/* Context: project/task first, notes optional */}
             <div className="rounded-xl border bg-card p-5 space-y-4">
               <div className="space-y-3">
-                <div className="grid gap-3 sm:grid-cols-2">
-                <div className="min-w-0 space-y-1">
+                <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+                <div className="min-w-0 space-y-1 overflow-hidden">
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Project</Label>
                   <Popover open={projectPopoverOpen} onOpenChange={setProjectPopoverOpen}>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start border-0 bg-muted/50">
-                        {selectedTimerProject?.name || 'No project'}
+                      <Button variant="outline" className="w-full min-w-0 justify-start overflow-hidden border-0 bg-muted/50">
+                        <span className="min-w-0 truncate text-left">
+                          {selectedTimerProject?.name || 'No project'}
+                        </span>
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]">
@@ -1532,12 +1534,12 @@ export default function TimeTracking() {
                     + Create project
                   </Button>
                 </div>
-                <div className="min-w-0 space-y-1">
+                <div className="min-w-0 space-y-1 overflow-hidden">
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Task</Label>
                   <Popover open={taskPopoverOpen} onOpenChange={setTaskPopoverOpen}>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full min-w-0 justify-start border-0 bg-muted/50" disabled={!timerProject}>
-                        <span className="truncate text-left">
+                      <Button variant="outline" className="w-full min-w-0 justify-start overflow-hidden border-0 bg-muted/50" disabled={!timerProject}>
+                        <span className="min-w-0 truncate text-left">
                           {selectedTimerTask?.title || (timerProject ? 'No task' : 'Select project first')}
                         </span>
                       </Button>

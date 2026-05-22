@@ -95,6 +95,8 @@ export function TimeEntryLogDialog({
   const [dialogTaskQuery, setDialogTaskQuery] = useState('');
   const [dialogProjectPopoverOpen, setDialogProjectPopoverOpen] = useState(false);
   const [dialogTaskPopoverOpen, setDialogTaskPopoverOpen] = useState(false);
+  const [createTaskDialogOpen, setCreateTaskDialogOpen] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
   const [loadingSegments, setLoadingSegments] = useState(false);
 
   const isEditing = Boolean(entry?.id);
@@ -251,6 +253,14 @@ export function TimeEntryLogDialog({
     setDialogTask(data.id);
   };
 
+  const handleCreateTaskFromDialog = async () => {
+    const trimmed = newTaskTitle.trim();
+    if (!trimmed || !dialogProject) return;
+    await createTaskInline(trimmed, dialogProject);
+    setNewTaskTitle('');
+    setCreateTaskDialogOpen(false);
+  };
+
   const addDialogStartEndRange = () => {
     setDialogStartEndRanges((prev) => [...prev, { start: '09:00', end: '17:00' }]);
   };
@@ -402,6 +412,7 @@ export function TimeEntryLogDialog({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[min(90vh,720px)] !flex flex-col gap-0 p-0 overflow-hidden sm:max-w-lg">
         <DialogHeader className="px-6 pt-6 pb-2 shrink-0 pr-12">
@@ -418,10 +429,12 @@ export function TimeEntryLogDialog({
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="w-full justify-start"
+                    className="w-full min-w-0 justify-start overflow-hidden"
                     disabled={(lockProject && !isEditing) || loadingSegments}
                   >
-                    {selectedDialogProject?.name || 'Select project'}
+                    <span className="min-w-0 truncate text-left">
+                      {selectedDialogProject?.name || 'Select project'}
+                    </span>
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]">
@@ -468,8 +481,14 @@ export function TimeEntryLogDialog({
               <Label>Task (optional)</Label>
               <Popover open={dialogTaskPopoverOpen} onOpenChange={setDialogTaskPopoverOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start" disabled={!dialogProject || loadingSegments}>
-                    {selectedDialogTask?.title || (dialogProject ? 'No task' : 'Select a project first')}
+                  <Button
+                    variant="outline"
+                    className="w-full min-w-0 justify-start overflow-hidden"
+                    disabled={!dialogProject || loadingSegments}
+                  >
+                    <span className="min-w-0 truncate text-left">
+                      {selectedDialogTask?.title || (dialogProject ? 'No task' : 'Select a project first')}
+                    </span>
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]">
@@ -511,6 +530,21 @@ export function TimeEntryLogDialog({
                   </Command>
                 </PopoverContent>
               </Popover>
+              {dialogProject ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-0 text-xs text-muted-foreground"
+                  disabled={loadingSegments}
+                  onClick={() => {
+                    setNewTaskTitle('');
+                    setCreateTaskDialogOpen(true);
+                  }}
+                >
+                  + Create task
+                </Button>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="dialog_description">Notes</Label>
@@ -647,5 +681,44 @@ export function TimeEntryLogDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <Dialog open={createTaskDialogOpen} onOpenChange={setCreateTaskDialogOpen}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Create task</DialogTitle>
+          <DialogDescription>
+            {selectedDialogProject
+              ? `Add a task to ${selectedDialogProject.name}`
+              : 'Select a project first'}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Input
+            value={newTaskTitle}
+            onChange={(e) => setNewTaskTitle(e.target.value)}
+            placeholder="Task title"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void handleCreateTaskFromDialog();
+              }
+            }}
+          />
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setCreateTaskDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleCreateTaskFromDialog()}
+              disabled={!newTaskTitle.trim() || !dialogProject}
+            >
+              Create
+            </Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
