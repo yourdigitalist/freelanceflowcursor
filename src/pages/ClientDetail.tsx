@@ -25,6 +25,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ArrowLeft, Check, MoreVertical, X } from "@/components/icons";
 import { addMonths, addWeeks, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, parseISO, startOfMonth, startOfWeek, subMonths, subWeeks } from "date-fns";
+import { timeMonthCalendarDayClassName, timeMonthCalendarDurationClassName } from "@/lib/time";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import {
@@ -1131,16 +1132,24 @@ export default function ClientDetail() {
                     const key = format(d, "yyyy-MM-dd");
                     const inMonth = d >= monthStart && d <= monthEnd;
                     const total = monthDayTotals[key] || 0;
+                    const hasEntries = total > 0;
+                    const isSelected = isSameDay(d, selectedTimeDay);
+                    const isToday = isSameDay(d, new Date());
                     return (
                       <button
                         key={key}
                         onClick={() => setSelectedTimeDay(d)}
-                        className={`rounded-md border min-h-[88px] p-2 text-left ${
-                          inMonth ? "bg-card" : "bg-muted/30 text-muted-foreground"
-                        } ${isSameDay(d, selectedTimeDay) ? "border-primary bg-primary/5" : ""}`}
+                        className={timeMonthCalendarDayClassName({
+                          inMonth,
+                          totalSeconds: total,
+                          isSelected,
+                          isToday,
+                        })}
                       >
                         <p className="text-xs">{format(d, "d")}</p>
-                        <p className="mt-2 text-xs font-mono">{total ? formatHm(total) : "0:00"}</p>
+                        <p className={timeMonthCalendarDurationClassName(hasEntries)}>
+                          {total ? formatHm(total) : "0:00"}
+                        </p>
                       </button>
                     );
                   })}

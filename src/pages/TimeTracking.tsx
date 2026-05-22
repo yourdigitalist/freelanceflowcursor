@@ -65,7 +65,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { formatDuration } from '@/lib/time';
+import {
+  formatDuration,
+  timeMonthCalendarDayClassName,
+  timeMonthCalendarDurationClassName,
+} from '@/lib/time';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDate } from '@/lib/datetime';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -1240,6 +1244,8 @@ export default function TimeTracking() {
                   const key = format(d, 'yyyy-MM-dd');
                   const inMonth = d >= monthStart && d <= monthEnd;
                   const total = calendarDayTotals[key] || 0;
+                  const hasEntries = total > 0;
+                  const isSelected = isSameDay(d, selectedDay);
                   return (
                     <button
                       key={key}
@@ -1248,14 +1254,17 @@ export default function TimeTracking() {
                         setTimesheetMode('day');
                         setWeekStart(startOfWeek(d, { weekStartsOn: 1 }));
                       }}
-                      className={cn(
-                        'rounded-md border min-h-[88px] p-2 text-left',
-                        inMonth ? 'bg-card' : 'bg-muted/30 text-muted-foreground',
-                        isTodayVisible(d) && todayHighlightClass,
-                      )}
+                      className={timeMonthCalendarDayClassName({
+                        inMonth,
+                        totalSeconds: total,
+                        isSelected,
+                        isToday: isTodayVisible(d),
+                      })}
                     >
                       <p className="text-xs">{format(d, 'd')}</p>
-                      <p className="text-xs font-mono mt-2">{total ? formatHm(total) : '0:00'}</p>
+                      <p className={timeMonthCalendarDurationClassName(hasEntries)}>
+                        {total ? formatHm(total) : '0:00'}
+                      </p>
                     </button>
                   );
                 })}
