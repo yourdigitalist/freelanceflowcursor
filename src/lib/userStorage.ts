@@ -267,7 +267,7 @@ export function formatUploadError(error: unknown): string {
     return msg;
   }
   if (/failed to fetch|networkerror|load failed/i.test(msg)) {
-    return 'The upload did not reach the server. Add VITE_SUPABASE_ANON_KEY (JWT anon key) to .env, restart npm run dev, then try again. Also check connection, use PNG/JPG under 500 KB, and disable VPN or ad blockers.';
+    return 'The upload did not reach the server. Add VITE_SUPABASE_ANON_KEY (JWT anon key) to .env, restart npm run dev, then try again. Also check connection, use PNG/JPG under 1 MB, and disable VPN or ad blockers.';
   }
   if (msg.includes('row-level security') || msg.includes('violates')) {
     return 'Storage access was denied. Ensure the business-logos bucket allows uploads for your account.';

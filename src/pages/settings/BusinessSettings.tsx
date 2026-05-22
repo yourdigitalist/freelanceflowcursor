@@ -9,7 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useSettingsDirty } from '@/contexts/SettingsDirtyContext';
 import { notifyStartGuideRefresh } from '@/components/layout/startGuideUtils';
-import { Loader2, Upload } from '@/components/icons';
+import { HelpCircle, Loader2, Upload } from '@/components/icons';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { LogoPreviewBox } from '@/components/settings/LogoPreviewBox';
 import { PhoneInput } from '@/components/ui/phone-input';
 import {
@@ -191,7 +192,8 @@ export default function BusinessSettings() {
     }
   };
 
-  const MAX_LOGO_BYTES = 500 * 1024; // 500KB
+  const MAX_LOGO_BYTES = 1024 * 1024; // 1 MB
+  const MAX_LOGO_LABEL = '1 MB';
 
   const persistEmailCommsConfig = async (next: {
     secondaryLogo?: string;
@@ -220,7 +222,7 @@ export default function BusinessSettings() {
     if (file.size > MAX_LOGO_BYTES) {
       toast({
         title: 'File too large',
-        description: `Max size is 500 KB. Your file is ${(file.size / 1024).toFixed(1)} KB.`,
+        description: `Max size is ${MAX_LOGO_LABEL}. Your file is ${(file.size / 1024).toFixed(1)} KB.`,
         variant: 'destructive',
       });
       e.target.value = '';
@@ -286,7 +288,7 @@ export default function BusinessSettings() {
     if (file.size > MAX_LOGO_BYTES) {
       toast({
         title: 'File too large',
-        description: `Max size is 500 KB. Your file is ${(file.size / 1024).toFixed(1)} KB.`,
+        description: `Max size is ${MAX_LOGO_LABEL}. Your file is ${(file.size / 1024).toFixed(1)} KB.`,
         variant: 'destructive',
       });
       return;
@@ -363,8 +365,31 @@ export default function BusinessSettings() {
     <form ref={formRef} onSubmit={handleSubmit} onInput={() => dirtyContext?.setDirty(true)} className="space-y-6">
       <Card className="border-0 shadow-sm">
         <CardHeader>
-          <CardTitle>Business Logo</CardTitle>
-          <CardDescription>Upload your default business logo and an optional secondary logo for client emails. Max file size: 500 KB each.</CardDescription>
+          <div className="flex items-center gap-1.5">
+            <CardTitle>Business Logo</CardTitle>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+                    aria-label="Logo file requirements"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="top"
+                  className="max-w-[200px] border-border/60 px-2 py-1 text-[11px] font-normal text-muted-foreground shadow-sm"
+                >
+                  PNG or JPG recommended. Max {MAX_LOGO_LABEL} per file.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <CardDescription>
+            Upload your default business logo and an optional secondary logo for client emails.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid gap-4 md:grid-cols-2">
