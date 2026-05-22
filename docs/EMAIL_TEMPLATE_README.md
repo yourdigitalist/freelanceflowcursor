@@ -7,7 +7,7 @@ Auth emails (password reset, magic link, confirm signup) are edited in **Supabas
 Templates in `docs/` now include:
 
 - **Header (purple):** white wordmark — `https://www.getlance.app/email/lance-logo-white.png` (`public/email/lance-logo-white.png`)
-- **Footer (light):** black wordmark — `https://www.getlance.app/email/lance-logo-black.svg` (`public/email/lance-logo-black.svg`)
+- **Footer (light):** black wordmark — `https://www.getlance.app/email/lance-logo-black.png` (`public/email/lance-logo-black.png`; use PNG in emails — SVG is blocked on mobile)
 - **Outer margin** around the white card (`padding: 32px 20px` on the gray background) for Gmail/Apple Mail
 
 ### Option A — Push from the repo (recommended)

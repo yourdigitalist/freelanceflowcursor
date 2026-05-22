@@ -108,7 +108,7 @@ export function EntityLinkPopover({
   );
 
   const pickClient = (c: { id: string; name: string }) => {
-    onSelect({ type: 'client', id: c.id, label: c.name, href: `/clients?open=${c.id}` });
+    onSelect({ type: 'client', id: c.id, label: c.name, href: `/clients/${c.id}` });
     setOpen(false);
   };
   const pickProject = (p: { id: string; name: string; icon_emoji?: string | null }) => {
@@ -278,7 +278,7 @@ export function EntityLinkPickerContent({
       <ScrollArea className="h-[240px]">
         <TabsContent value="client" className="mt-0 p-1">
           {loading ? <p className="text-sm text-muted-foreground p-2">Loading...</p> : filteredClients.length === 0 ? <p className="text-sm text-muted-foreground p-2">No clients match</p> : filteredClients.map((c) => (
-            <button key={c.id} type="button" className="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-muted flex items-center gap-2" onClick={() => pick({ type: 'client', id: c.id, label: c.name, href: `/clients?open=${c.id}` })}><span className="truncate">{c.name}</span></button>
+            <button key={c.id} type="button" className="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-muted flex items-center gap-2" onClick={() => pick({ type: 'client', id: c.id, label: c.name, href: `/clients/${c.id}` })}><span className="truncate">{c.name}</span></button>
           ))}
         </TabsContent>
         <TabsContent value="project" className="mt-0 p-1">

@@ -25,7 +25,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, MoreVertical, Trash2, Send, Download, Upload } from '@/components/icons';
+import { Plus, Search, MoreVertical, Trash2, Send, Download, Upload, RotateCcw } from '@/components/icons';
+import { reopenPaidInvoice } from '@/lib/invoiceStatus';
+import { formatLocaleDate } from '@/lib/datetime';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import {
   DropdownMenu,
@@ -52,7 +54,6 @@ import {
 } from '@/lib/csv';
 import { formatCurrency } from '@/lib/locale-data';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
-import { formatLocaleDate } from '@/lib/datetime';
 
 interface Client {
   id: string;
@@ -439,7 +440,7 @@ export default function Invoices() {
       const currentStatus = invoices.find((inv) => inv.id === id)?.status;
       const { error } = await supabase
         .from('invoices')
-        .update({ status })
+        .update({ status, ...(currentStatus === 'paid' && status !== 'paid' ? { paid_date: null } : {}) })
         .eq('id', id);
       if (error) throw error;
       if (status === 'paid') {
@@ -459,6 +460,25 @@ export default function Invoices() {
     } catch (error: any) {
       toast({
         title: 'Error updating invoice',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleReopenInvoice = async (inv: (typeof invoices)[0]) => {
+    const paidOn = formatLocaleDate(inv.paid_date ?? undefined, dateFormat);
+    const msg = paidOn
+      ? `Reopen invoice ${inv.invoice_number}? It was marked paid on ${paidOn}.`
+      : `Reopen invoice ${inv.invoice_number}? It will show as sent again.`;
+    if (!window.confirm(msg)) return;
+    try {
+      await reopenPaidInvoice(supabase, inv.id);
+      toast({ title: 'Invoice reopened' });
+      fetchInvoices();
+    } catch (error: any) {
+      toast({
+        title: 'Could not reopen invoice',
         description: error.message,
         variant: 'destructive',
       });
@@ -1140,6 +1160,12 @@ export default function Invoices() {
                               <DropdownMenuItem onClick={() => handleStatusChange(invoice.id, 'paid')}>
                                 <SlotIcon slot="invoice_stat_paid" className="mr-2 h-4 w-4" />
                                 Mark as Paid
+                              </DropdownMenuItem>
+                            )}
+                            {invoice.status === 'paid' && (
+                              <DropdownMenuItem onClick={() => handleReopenInvoice(invoice)}>
+                                <RotateCcw className="mr-2 h-4 w-4" />
+                                Reopen invoice
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuItem

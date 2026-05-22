@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { currencies } from "@/lib/locale-data";
 import type { Service } from "@/types/services";
+import { mapServiceRow } from "@/lib/serviceUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -44,7 +45,8 @@ type ServiceFormValues = z.infer<typeof serviceSchema>;
 type Props = {
   open: boolean;
   onClose: () => void;
-  onSaved: () => void;
+  /** Called after save; receives the created/updated service when available. */
+  onSaved: (saved?: Service) => void;
   service?: Service | null;
 };
 
@@ -109,19 +111,24 @@ export function ServiceFormModal({ open, onClose, onSaved, service }: Props) {
     };
 
     try {
+      let saved: Service | undefined;
       if (isEdit && service) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("services")
           .update(payload)
-          .eq("id", service.id);
+          .eq("id", service.id)
+          .select()
+          .single();
         if (error) throw error;
+        if (data) saved = mapServiceRow(data as Record<string, unknown>);
       } else {
-        const { error } = await supabase.from("services").insert(payload);
+        const { data, error } = await supabase.from("services").insert(payload).select().single();
         if (error) throw error;
+        if (data) saved = mapServiceRow(data as Record<string, unknown>);
       }
 
       toast({ title: isEdit ? "Service updated" : "Service created" });
-      onSaved();
+      onSaved(saved);
       onClose();
     } catch (error: unknown) {
       toast({

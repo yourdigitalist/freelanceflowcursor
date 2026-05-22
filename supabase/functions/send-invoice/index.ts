@@ -294,6 +294,11 @@ serve(async (req) => {
       "";
 
     const dateFormat = profile?.date_format?.trim() || "DD/MM/YYYY";
+    const isPaidReceipt = receipt === true;
+    const paidDateRaw = isPaidReceipt ? (invoice.paid_date ?? invoice.updated_at) : null;
+    const paidDateFormatted = paidDateRaw
+      ? formatLocaleDate(String(paidDateRaw).slice(0, 10), dateFormat)
+      : "";
 
     const customJsPayload = {
       invoiceNumber: invoice.invoice_number,
@@ -338,6 +343,9 @@ serve(async (req) => {
       showQuantity: profile?.invoice_show_quantity !== false,
       showRate: profile?.invoice_show_rate !== false,
       showLineDescription: profile?.invoice_show_line_description === true,
+      isPaidReceipt,
+      balanceDue: isPaidReceipt ? 0 : Number(invoice.total) || 0,
+      paidDate: paidDateFormatted,
     };
 
     const customJsUrl = Deno.env.get("CUSTOMJS_ENDPOINT_URL");

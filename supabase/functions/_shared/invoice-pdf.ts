@@ -73,6 +73,11 @@ export async function generateInvoicePdfBase64(
     "";
 
   const dateFormat = profile?.date_format?.trim() || "DD/MM/YYYY";
+  const isPaidReceipt = invoice.status === "paid";
+  const paidDateRaw = invoice.paid_date ?? (isPaidReceipt ? invoice.updated_at : null);
+  const paidDateFormatted = paidDateRaw
+    ? formatLocaleDate(String(paidDateRaw).slice(0, 10), dateFormat)
+    : "";
 
   const customJsPayload = {
     invoiceNumber: invoice.invoice_number,
@@ -117,6 +122,9 @@ export async function generateInvoicePdfBase64(
     showQuantity: profile?.invoice_show_quantity !== false,
     showRate: profile?.invoice_show_rate !== false,
     showLineDescription: profile?.invoice_show_line_description === true,
+    isPaidReceipt,
+    balanceDue: isPaidReceipt ? 0 : Number(invoice.total) || 0,
+    paidDate: paidDateFormatted,
   };
 
   const customJsUrl = Deno.env.get("CUSTOMJS_ENDPOINT_URL");

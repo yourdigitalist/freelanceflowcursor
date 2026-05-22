@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import Onboarding from "./pages/Onboarding";
@@ -274,7 +274,22 @@ function AppRoutes() {
   );
 }
 
-const App = () => (
+const App = () => {
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-8 bg-background text-foreground">
+        <div className="max-w-md space-y-3 text-center">
+          <h1 className="text-xl font-semibold">App configuration missing</h1>
+          <p className="text-sm text-muted-foreground">
+            Set <code className="text-foreground">VITE_SUPABASE_URL</code> and{' '}
+            <code className="text-foreground">VITE_SUPABASE_ANON_KEY</code> in your <code>.env</code> file, then restart the dev server.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -295,6 +310,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
-);
+  );
+};
 
 export default App;

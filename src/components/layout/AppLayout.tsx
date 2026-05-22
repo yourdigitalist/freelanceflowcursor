@@ -294,13 +294,6 @@ export function AppLayout({
             </Collapsible>
           )}
           <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>
-            {location.pathname === '/notes' && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-            <Link to="/notes" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/notes' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-              <SlotIcon slot="sidebar_notes" className={cn("h-4 w-4 shrink-0", location.pathname === '/notes' && "text-primary")} />
-              {!sidebarCollapsed && 'Notes'}
-            </Link>
-          </span>
-          <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>
             {location.pathname === '/invoices' && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
             <Link to="/invoices" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/invoices' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
               <SlotIcon slot="sidebar_invoices" className={cn("h-4 w-4 shrink-0", location.pathname === '/invoices' && "text-primary")} />

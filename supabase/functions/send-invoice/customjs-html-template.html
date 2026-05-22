@@ -31,6 +31,11 @@
     .totals { margin-top: 16px; text-align: right; }
     .totals p { margin: 0 0 4px 0; font-size: 12px; }
     .totals .total-line { font-size: 13px; font-weight: bold; color: #333; margin-top: 6px; }
+    .paid-badge { display: inline-block; margin-left: 10px; padding: 4px 12px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: #fff; background: #10B981; border-radius: 4px; vertical-align: middle; }
+    .totals .balance-due-line { font-size: 13px; font-weight: 700; margin-top: 8px; color: #10B981; }
+    .totals .balance-due-line .zero { color: #10B981; }
+    .totals .amount-paid-line { font-size: 12px; color: #666; margin-top: 4px; }
+    .header-right .paid-on { color: #10B981; font-weight: 600; }
     .footer { margin-top: 16px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 11px; color: #777; }
     @media print { body { padding: 0; } }
   </style>
@@ -39,12 +44,12 @@
   <div class="header">
     <div class="header-left">
       {% if companyLogo %}<img src="{{ companyLogo }}" alt="Logo" class="logo" />{% endif %}
-      <h1 class="invoice-title">INVOICE</h1>
-      <p class="invoice-number">{{ invoiceNumber }}</p>
+      <h1 class="invoice-title">{% if isPaidReceipt %}RECEIPT{% else %}INVOICE{% endif %}</h1>
+      <p class="invoice-number">{{ invoiceNumber }}{% if isPaidReceipt %} <span class="paid-badge">PAID</span>{% endif %}</p>
     </div>
     <div class="header-right">
       <p>Issue Date: {{ createdDate }}</p>
-      <p>Due Date: {{ dueDate }}</p>
+      {% if isPaidReceipt and paidDate %}<p class="paid-on">Paid on: {{ paidDate }}</p>{% else %}<p>Due Date: {{ dueDate }}</p>{% endif %}
     </div>
   </div>
   <div class="from-to">
@@ -93,6 +98,10 @@
     <p>Subtotal: {{ subtotal.toFixed(2) }} {{ currency }}</p>
     {% if taxRate > 0 %}<p>Tax ({{ taxRate }}%): {{ taxAmount.toFixed(2) }} {{ currency }}</p>{% endif %}
     <p class="total-line">Total: {{ total.toFixed(2) }} {{ currency }}</p>
+    {% if isPaidReceipt %}
+    <p class="amount-paid-line">Amount paid: {{ total.toFixed(2) }} {{ currency }}</p>
+    <p class="balance-due-line">Balance due: <span class="zero">{{ balanceDue.toFixed(2) }} {{ currency }}</span></p>
+    {% endif %}
   </div>
   {% if footerText %}<div class="footer">{{ footerText }}</div>{% endif %}
 </body>

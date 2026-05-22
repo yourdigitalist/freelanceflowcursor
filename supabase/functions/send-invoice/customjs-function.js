@@ -92,7 +92,10 @@ const content = nunjucks.renderString(variables["HTML Template"], {
   showLineDate: input.showLineDate === "true" || input.showLineDate === true,
   showQuantity: input.showQuantity !== "false" && input.showQuantity !== false,
   showRate: input.showRate !== "false" && input.showRate !== false,
-  showLineDescription: input.showLineDescription === "true" || input.showLineDescription === true
+  showLineDescription: input.showLineDescription === "true" || input.showLineDescription === true,
+  isPaidReceipt: input.isPaidReceipt === "true" || input.isPaidReceipt === true,
+  balanceDue: Number(input.balanceDue) || 0,
+  paidDate: input.paidDate || ""
 });
 
 return await HTML2PDF(content);

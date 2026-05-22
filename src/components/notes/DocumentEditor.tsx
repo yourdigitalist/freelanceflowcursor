@@ -4,6 +4,37 @@ import ReactQuill from 'react-quill';
 import type ReactQuillType from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import './notes-editor.css';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  CheckSquare,
+  X,
+  Bold,
+  Italic,
+  Underline,
+  Strikethrough,
+  List,
+  ListOrdered,
+  Square,
+  Link,
+  Image,
+  Quote,
+  RemoveFormatting,
+  SeparatorHorizontal,
+  type LucideIcon,
+} from 'lucide-react';
+import { EntityLinkPickerContent } from './EntityLinkPopover';
+import type { EntityOption } from './EntityLinkPopover';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 export type EntityMentionValue = {
   type: 'client' | 'project' | 'task';
@@ -70,37 +101,6 @@ try {
 } catch {
   // Custom blot registration failed; editor still works without divider/entity pills
 }
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import {
-  CheckSquare,
-  X,
-  Bold,
-  Italic,
-  Underline,
-  Strikethrough,
-  List,
-  ListOrdered,
-  Square,
-  Link,
-  Image,
-  Quote,
-  RemoveFormatting,
-  SeparatorHorizontal,
-  type LucideIcon,
-} from 'lucide-react';
-import { EntityLinkPickerContent } from './EntityLinkPopover';
-import type { EntityOption } from './EntityLinkPopover';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
 
 const tagColorClass = (tag: string) => {
   const palette = [
@@ -299,7 +299,10 @@ export function DocumentEditor({
       if (pill) {
         e.preventDefault();
         const href = pill.getAttribute('data-href');
-        if (href) navigate(href);
+        if (href) {
+          const legacyClient = href.match(/^\/clients\?open=([^&]+)/);
+          navigate(legacyClient ? `/clients/${legacyClient[1]}` : href);
+        }
         return;
       }
       const a = (e.target as HTMLElement).closest?.('a[href]');

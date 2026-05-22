@@ -9,7 +9,7 @@ export default defineConfig({
     port: 5173,
     strictPort: false,
     open: false,
-    hmr: { overlay: false },
+    hmr: { overlay: true },
     watch: {
       ignored: [
         "**/docs/**",

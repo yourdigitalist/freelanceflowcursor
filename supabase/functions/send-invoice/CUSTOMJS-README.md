@@ -28,7 +28,11 @@ In Supabase: Project → Edge Functions → send-invoice → Secrets, set:
 
 You can remove **BROWSERLESS_API_KEY** if you no longer use it.
 
-## 5. Response format
+## 5. Receipt / paid invoices
+
+When sending a receipt (`receipt: true` from the app), the payload includes `isPaidReceipt`, `balanceDue: 0`, and `paidDate`. The HTML template shows a green **PAID** badge, **RECEIPT** title, **Balance due: 0.00**, and **Paid on** instead of due date. Re-paste `customjs-html-template.html` and `customjs-function.js` after pulling updates.
+
+## 6. Response format
 
 The Edge Function expects the CustomJS response to be JSON containing the PDF as base64, e.g. one of:
 

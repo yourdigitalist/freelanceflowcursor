@@ -14,7 +14,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ServiceFormModal } from "@/components/services/ServiceFormModal";
 import { ArrowLeft, CheckCircle, Plus, Trash2, Upload } from "@/components/icons";
 import { useProfileCurrency } from "@/hooks/useProfileCurrency";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
@@ -78,6 +79,7 @@ export default function ProposalDetail() {
   const [proposal, setProposal] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [createServiceOpen, setCreateServiceOpen] = useState(false);
   const [services, setServices] = useState<any[]>([]);
   const [clients, setClients] = useState<{ id: string; name: string; company: string | null; currency?: string | null; archived_at?: string | null }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string; client_id: string | null }[]>([]);
@@ -904,44 +906,76 @@ export default function ProposalDetail() {
       </div>
 
       <Dialog open={catalogOpen} onOpenChange={setCatalogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Select services</DialogTitle></DialogHeader>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Select services</DialogTitle>
+            <DialogDescription>Choose from your catalog or create a new service without leaving this proposal.</DialogDescription>
+          </DialogHeader>
           <div className="max-h-96 space-y-2 overflow-auto">
-            {services.map((s) => (
-              <button
-                key={s.id}
-                className="w-full rounded-lg border p-3 text-left hover:bg-muted/50"
-                onClick={() =>
-                  setItems((prev) => {
-                    const alreadyAdded = prev.some((item) => item.service_id === s.id);
-                    if (alreadyAdded) {
-                      toast({ title: "Service already added", description: "Edit quantity in the list if needed." });
-                      return prev;
-                    }
-                    return [
-                      ...prev,
-                      {
-                        id: createTempItemId(),
-                        service_id: s.id,
-                        name: s.name,
-                        description: s.description,
-                        price: Number(s.price || 0),
-                        quantity: 1,
-                        line_total: Number(s.price || 0),
-                        currency: resolvedCurrency,
-                        is_recurring: !!s.is_recurring,
-                        recurrence_period: s.recurrence_period || "monthly",
-                      },
-                    ];
-                  })
-                }
-              >
-                <p className="font-medium">{s.name}</p><p className="text-sm text-muted-foreground">{s.description || "No description"}</p>
-              </button>
-            ))}
+            {services.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No services in your catalog yet. Create one below.</p>
+            ) : (
+              services.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className="w-full rounded-lg border p-3 text-left hover:bg-muted/50"
+                  onClick={() =>
+                    setItems((prev) => {
+                      const alreadyAdded = prev.some((item) => item.service_id === s.id);
+                      if (alreadyAdded) {
+                        toast({ title: "Service already added", description: "Edit quantity in the list if needed." });
+                        return prev;
+                      }
+                      return [
+                        ...prev,
+                        {
+                          id: createTempItemId(),
+                          service_id: s.id,
+                          name: s.name,
+                          description: s.description,
+                          price: Number(s.price || 0),
+                          quantity: 1,
+                          line_total: Number(s.price || 0),
+                          currency: resolvedCurrency,
+                          is_recurring: !!s.is_recurring,
+                          recurrence_period: s.recurrence_period || "monthly",
+                        },
+                      ];
+                    })
+                  }
+                >
+                  <p className="font-medium">{s.name}</p>
+                  <p className="text-sm text-muted-foreground">{s.description || "No description"}</p>
+                </button>
+              ))
+            )}
           </div>
+          <DialogFooter className="sm:justify-between gap-2">
+            <Button type="button" variant="outline" onClick={() => setCreateServiceOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              New service
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setCatalogOpen(false)}>
+              Done
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ServiceFormModal
+        open={createServiceOpen}
+        onClose={() => setCreateServiceOpen(false)}
+        onSaved={(saved) => {
+          if (!saved) return;
+          setServices((prev) => {
+            if (prev.some((s) => s.id === saved.id)) {
+              return prev.map((s) => (s.id === saved.id ? saved : s));
+            }
+            return [...prev, saved].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+          });
+        }}
+      />
     </AppLayout>
   );
 }

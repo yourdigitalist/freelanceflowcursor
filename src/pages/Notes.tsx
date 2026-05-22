@@ -498,22 +498,25 @@ export default function Notes() {
 
   return (
     <AppLayout>
-      <div className="flex flex-1 min-h-0 -mx-4 -mb-4 lg:-mx-8 lg:-mb-8 pt-4 lg:pt-8 min-h-[calc(100svh-4.5rem)] lg:min-h-[calc(100svh-4rem)]">
+      <div className="flex flex-col min-h-[calc(100svh-4.5rem)] lg:min-h-[calc(100svh-4rem)] space-y-4">
+        <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Notes</h1>
+          </div>
+          <Button onClick={handleCreateQuickNote}>
+            <Plus className="mr-2 h-4 w-4" />
+            New note
+          </Button>
+        </div>
+
+        <div className="flex flex-1 min-h-0 -mx-4 -mb-4 lg:-mx-8 lg:-mb-8">
         {/* Sidebar — full-bleed panel bg to main content edges */}
         <aside className="w-80 border-r bg-muted/50 flex flex-col shrink-0 self-stretch">
-          <div className="px-3 py-3 border-b space-y-2">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-sm">Notes</h2>
-              <div className="flex gap-1">
-                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => { resetFolderForm(); setFolderDialogOpen(true); }} title="Create folder">
-                  <FolderPlus className="h-4 w-4" />
-                </Button>
-                <Button size="sm" onClick={handleCreateQuickNote}>
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+          <div className="px-3 py-3 border-b">
             <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 shrink-0" onClick={() => { resetFolderForm(); setFolderDialogOpen(true); }} title="Create folder">
+                <FolderPlus className="h-4 w-4" />
+              </Button>
               <Select value={folderFilter} onValueChange={setFolderFilter}>
                 <SelectTrigger className="h-8 text-xs w-[140px]">
                   <SelectValue placeholder="Folder" />
@@ -702,6 +705,7 @@ export default function Notes() {
             )}
           </div>
         </main>
+        </div>
       </div>
 
       <Dialog open={createTaskOpen} onOpenChange={setCreateTaskOpen}>

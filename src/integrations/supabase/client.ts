@@ -2,7 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL?.trim() || '';
 
 /** Prefer JWT anon key when both legacy JWT and `sb_publishable_*` keys are configured. */
 function pickSupabaseApiKey(): string {
@@ -15,13 +15,20 @@ function pickSupabaseApiKey(): string {
 
 export const supabaseAnonKey = pickSupabaseApiKey();
 
+/** False when VITE_SUPABASE_URL is missing — app shows a setup message instead of a blank screen. */
+export const isSupabaseConfigured = Boolean(SUPABASE_URL && supabaseAnonKey);
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, supabaseAnonKey, {
-  auth: {
-    storage: localStorage,
-    persistSession: true,
-    autoRefreshToken: true,
-  }
-});
+export const supabase = createClient<Database>(
+  SUPABASE_URL || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.placeholder',
+  {
+    auth: {
+      storage: localStorage,
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+  },
+);

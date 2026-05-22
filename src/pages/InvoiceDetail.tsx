@@ -12,7 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Trash2, Send, Loader2, ListTodo, Wallet, Download, Save } from '@/components/icons';
+import { ArrowLeft, Plus, Trash2, Send, Loader2, ListTodo, Wallet, Download, Save, RotateCcw } from '@/components/icons';
+import { reopenPaidInvoice } from '@/lib/invoiceStatus';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDate } from '@/lib/datetime';
 import { SlotIcon } from '@/contexts/IconSlotContext';
@@ -183,6 +184,10 @@ const INVOICE_PREVIEW_STYLES = `
   .invoice-preview-root .invoice-body .flex-table .flex-column .table-subtotal tbody tr td:nth-child(2) { text-align: right; font-weight: 500; }
   .invoice-preview-root .invoice-body .invoice-total-amount { margin-top: 12px; text-align: right; }
   .invoice-preview-root .invoice-body .invoice-total-amount p { font-weight: 700; color: #0F172A; font-size: 18px; }
+  .invoice-preview-root .paid-badge { display: inline-block; margin-left: 8px; padding: 3px 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: #fff; background: #10B981; border-radius: 4px; vertical-align: middle; }
+  .invoice-preview-root .invoice-information .paid-on { color: #10B981; font-weight: 600; }
+  .invoice-preview-root .invoice-body .balance-due-paid { margin-top: 8px; font-size: 15px; font-weight: 700; color: #10B981; }
+  .invoice-preview-root .invoice-body .amount-paid-line { margin-top: 6px; font-size: 13px; font-weight: 500; color: #666; }
   .invoice-preview-root .invoice-notes, .invoice-preview-root .invoice-bank-details { margin-top: 30px; padding: 16px; background-color: #f8f9fa; border-left: 3px solid #0F172A; }
   .invoice-preview-root .invoice-notes h3, .invoice-preview-root .invoice-bank-details h3 { font-size: 13px; color: #0F172A; margin-bottom: 8px; font-weight: 600; }
   .invoice-preview-root .invoice-notes p, .invoice-preview-root .invoice-bank-details p { font-size: 13px; color: #555; line-height: 1.6; white-space: pre-wrap; }
@@ -1475,6 +1480,26 @@ export default function InvoiceDetail() {
   };
   const createdDate = formatLocaleDate(invoice?.issue_date, dateFormat);
   const dueDate = formatLocaleDate(invoice?.due_date, dateFormat);
+  const isPaidReceipt = invoice?.status === 'paid';
+  const paidDateDisplay = formatLocaleDate(invoice?.paid_date ?? undefined, dateFormat);
+  const handleReopenInvoice = async () => {
+    if (!id) return;
+    const msg = paidDateDisplay
+      ? `Reopen this invoice? It was marked paid on ${paidDateDisplay}. It will show as sent again; any receipt already emailed stays with your client.`
+      : 'Reopen this invoice? It will show as sent again; any receipt already emailed stays with your client.';
+    if (!window.confirm(msg)) return;
+    try {
+      await reopenPaidInvoice(supabase, id);
+      toast({ title: 'Invoice reopened' });
+      fetchInvoice();
+    } catch (error: any) {
+      toast({
+        title: 'Could not reopen invoice',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
   const formatDisplayDate = (value: string | null | undefined) => formatLocaleDate(value, dateFormat);
   const companyLogo = profile?.business_logo && typeof profile.business_logo === 'string' ? profile.business_logo : '';
   const previewItems = items.map((it) => ({
@@ -1538,7 +1563,17 @@ export default function InvoiceDetail() {
   }
 
   if (!invoice) {
-    return null;
+    return (
+      <AppLayout>
+        <div className="space-y-4 max-w-lg">
+          <p className="text-muted-foreground">Invoice not found.</p>
+          <Button variant="outline" onClick={() => navigate('/invoices')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to invoices
+          </Button>
+        </div>
+      </AppLayout>
+    );
   }
 
   return (
@@ -1662,6 +1697,12 @@ export default function InvoiceDetail() {
                   <DropdownMenuItem onClick={markAsPaid}>
                     <SlotIcon slot="invoice_stat_paid" className="mr-2 h-4 w-4" />
                     Mark as Paid
+                  </DropdownMenuItem>
+                )}
+                {invoice.status === 'paid' && (
+                  <DropdownMenuItem onClick={handleReopenInvoice}>
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Reopen invoice
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
@@ -2142,9 +2183,16 @@ export default function InvoiceDetail() {
                 <section className="wrapper-invoice">
                   <div className="invoice">
                     <div className="invoice-information">
-                      <p><b>Invoice #</b> {invoice.invoice_number}</p>
+                      <p>
+                        <b>Invoice #</b> {invoice.invoice_number}
+                        {isPaidReceipt ? <span className="paid-badge">PAID</span> : null}
+                      </p>
                       <p><b>Date</b> {createdDate}</p>
-                      <p><b>Due Date</b> {dueDate}</p>
+                      {isPaidReceipt && paidDateDisplay ? (
+                        <p className="paid-on"><b>Paid on</b> {paidDateDisplay}</p>
+                      ) : (
+                        <p><b>Due Date</b> {dueDate}</p>
+                      )}
                     </div>
                     <div className="invoice-logo-brand">
                       {companyLogo ? <img src={companyLogo} alt="Company Logo" /> : null}
@@ -2216,6 +2264,12 @@ export default function InvoiceDetail() {
                       </div>
                       <div className="invoice-total-amount">
                         <p>Total: {amt(total)}</p>
+                        {isPaidReceipt ? (
+                          <>
+                            <p className="amount-paid-line">Amount paid: {amt(total)}</p>
+                            <p className="balance-due-paid">Balance due: {amt(0)}</p>
+                          </>
+                        ) : null}
                       </div>
                     </div>
                     {previewNotes ? (

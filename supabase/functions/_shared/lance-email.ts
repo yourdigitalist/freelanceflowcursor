@@ -9,10 +9,10 @@ const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") || "").trim().replace(/\/$/, 
 /** White wordmark for purple email headers (Lance → user). */
 export const LANCE_EMAIL_LOGO_WHITE_URL = "https://www.getlance.app/email/lance-logo-white.png";
 
-/** Black wordmark for light footers (all email types). */
-export const LANCE_EMAIL_LOGO_BLACK_URL = "https://www.getlance.app/email/lance-logo-black.svg";
+/** Black wordmark for light footers (PNG — SVG is blocked in Gmail/Outlook mobile). */
+export const LANCE_EMAIL_LOGO_BLACK_URL = "https://www.getlance.app/email/lance-logo-black.png";
 
-/** lance-logo-black.svg viewBox 573.64×116.19 — width/height must match or email clients stretch the image. */
+/** lance-logo-black.png is 300×61 — display size must preserve aspect ratio. */
 const LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX = 20;
 const LANCE_EMAIL_LOGO_BLACK_WIDTH_PX = 99;
 
@@ -53,17 +53,16 @@ export function getDefaultLanceFooter(primaryColor: string): string {
 /** “Sent with Lance” block below client emails (light background → black logo). */
 export function getLanceSignature(primaryColor: string): string {
   const safeLogo = escapeHtml(LANCE_EMAIL_LOGO_BLACK_URL);
-  return `<div style="text-align:center; margin: 0 auto; padding-top: 16px; font-family: Arial, sans-serif; font-size: 13px; color: #9ca3af;">
-  <div>
-    This email was sent with
-    <a href="https://getlance.app" target="_blank" rel="noopener noreferrer" style="color: ${primaryColor}; text-decoration: none; font-weight: 600;">Lance</a>
-  </div>
-  <div style="margin-top: 8px;">
-    <a href="https://getlance.app" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
-      <img src="${safeLogo}" alt="Lance" width="${LANCE_EMAIL_LOGO_BLACK_WIDTH_PX}" height="${LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX}" style="height: ${LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX}px; width: ${LANCE_EMAIL_LOGO_BLACK_WIDTH_PX}px; display: block; margin: 0 auto; border: 0;" />
-    </a>
-  </div>
-</div>`;
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:640px;margin:16px auto 0;font-family:Arial,Helvetica,sans-serif;">
+  <tr>
+    <td align="center" style="padding-top:16px;font-size:13px;line-height:1.5;color:#9ca3af;">
+      <p style="margin:0 0 10px 0;">This email was sent with <a href="https://getlance.app" target="_blank" rel="noopener noreferrer" style="color:${primaryColor};text-decoration:none;font-weight:600;">Lance</a></p>
+      <a href="https://getlance.app" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">
+        <img src="${safeLogo}" alt="Lance" width="${LANCE_EMAIL_LOGO_BLACK_WIDTH_PX}" height="${LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX}" style="height:${LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX}px;width:${LANCE_EMAIL_LOGO_BLACK_WIDTH_PX}px;display:block;margin:0 auto;border:0;outline:none;text-decoration:none;" />
+      </a>
+    </td>
+  </tr>
+</table>`;
 }
 
 export type AccountDeletedEmailInput = {
