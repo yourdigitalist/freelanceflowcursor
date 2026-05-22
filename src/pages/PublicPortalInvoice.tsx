@@ -4,22 +4,10 @@ import { PortalBackLink } from "@/components/clients/PortalBackLink";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { getClientPortalUrl } from "@/lib/clientPortal";
+import { getClientPortalPath } from "@/lib/clientPortal";
 import { loadClientPortalData } from "@/lib/loadClientPortal";
 import { ArrowLeft } from "@/components/icons";
-
-const statusClass = (status?: string | null) => {
-  switch (status) {
-    case "paid":
-      return "bg-success/10 text-success border-success/20";
-    case "sent":
-      return "bg-warning/10 text-warning border-warning/20";
-    case "overdue":
-      return "bg-destructive/10 text-destructive border-destructive/20";
-    default:
-      return "bg-muted text-muted-foreground border-muted";
-  }
-};
+import { formatStatusLabel, getStatusBadgeClass } from "@/lib/statusDisplay";
 
 export default function PublicPortalInvoice() {
   const { portalToken, invoiceId } = useParams<{ portalToken: string; invoiceId: string }>();
@@ -88,7 +76,7 @@ export default function PublicPortalInvoice() {
     setDownloading(false);
   };
 
-  const backHref = portalFromQuery ? getClientPortalUrl(portalFromQuery) : undefined;
+  const backHref = portalFromQuery ? getClientPortalPath(portalFromQuery) : undefined;
 
   if (loading) {
     return (
@@ -123,8 +111,8 @@ export default function PublicPortalInvoice() {
           )}
           <span className="font-medium">{invoiceNumber}</span>
           {status ? (
-            <Badge variant="outline" className={statusClass(status)}>
-              {status.charAt(0).toUpperCase() + status.slice(1)}
+            <Badge variant="outline" className={getStatusBadgeClass(status)}>
+              {formatStatusLabel(status)}
             </Badge>
           ) : null}
         </div>

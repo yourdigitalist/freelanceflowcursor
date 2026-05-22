@@ -9,6 +9,7 @@ import {
   fetchAcceptedProposalsForContract,
 } from "@/lib/contractProposalImport";
 import { composeStructuredAddress } from "@/lib/clientForm";
+import { formatStatusLabel, getStatusBadgeClass } from "@/lib/statusDisplay";
 import { normalizeProposalPaymentMethods } from "@/lib/proposalDefaults";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -36,7 +37,14 @@ import {
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ArrowLeft, CheckCircle, Plus, Trash2 } from "@/components/icons";
-import { DEFAULT_CONTRACT_TEMPLATE_CONTENT, renderTemplate } from "@/lib/contractTemplate";
+import { LanceServiceAgreementDisclaimerDialog } from "@/components/contracts/LanceServiceAgreementDisclaimerDialog";
+import {
+  CONTRACT_DOCUMENT_STYLES,
+  DEFAULT_CONTRACT_TEMPLATE_CONTENT,
+  renderTemplate,
+} from "@/lib/contractTemplate";
+import { useLanceServiceAgreementDisclaimer } from "@/hooks/useLanceServiceAgreementDisclaimer";
+import { resolveDefaultServiceAgreementTemplate } from "@/lib/lanceServiceAgreementTemplate";
 import { resolveContractTemplateContent } from "@/lib/resolveContractTemplate";
 import type { Contract, ContractService } from "@/types/contracts";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
@@ -89,6 +97,12 @@ export default function ContractDetail() {
   const [pendingImportProposalId, setPendingImportProposalId] = useState<string | null>(null);
   const [importingProposal, setImportingProposal] = useState(false);
   const { dateFormat, timeFormat } = useLocalePreferences();
+  const {
+    disclaimerOpen,
+    onDisclaimerOpenChange,
+    onDisclaimerConfirm,
+    requestAcceptance,
+  } = useLanceServiceAgreementDisclaimer();
   const saveInFlightRef = useRef(false);
   const pdfOpenInFlightRef = useRef(false);
   const clientViewOpenInFlightRef = useRef(false);
@@ -242,7 +256,9 @@ export default function ContractDetail() {
   const total = Math.max(0, subtotal - discountAmount);
   const renderedTemplate = useMemo(() => {
     if (!contract) return "";
-    return renderTemplate(templateContent, {
+    return renderTemplate(
+      templateContent,
+      {
       identifier: contract.identifier,
       today: null,
       signed_date: contract.client_signed_at || contract.freelancer_signed_at || null,
@@ -274,6 +290,7 @@ export default function ContractDetail() {
         name: service.name,
         description: service.description,
         quantity: service.quantity,
+        price: service.price,
       })),
       timeline_days: contract.timeline_days,
       payment_structure: contract.payment_structure,
@@ -282,8 +299,10 @@ export default function ContractDetail() {
       payment_link: contract.payment_link,
       additional_clause: contract.additional_clause,
       total: Number(contract.total || 0),
-    });
-  }, [contract, items, templateContent]);
+      },
+      { mode: "preview", currency: resolvedCurrency },
+    );
+  }, [contract, items, templateContent, resolvedCurrency]);
   const sanitizedTemplateHtml = useMemo(() => DOMPurify.sanitize(renderedTemplate), [renderedTemplate]);
   const fmtDate = (value: string | Date | null | undefined) => formatLocaleDate(value, dateFormat);
   const fmtDateTime = (value: string | Date | null | undefined) => formatLocaleDateTime(value, dateFormat, timeFormat);
@@ -472,6 +491,7 @@ export default function ContractDetail() {
       updateContract({
         client_name: partyForm.name || null,
         client_company: partyForm.company || null,
+        client_company_name: partyForm.company || null,
         client_email: partyForm.email || null,
         client_phone: partyForm.phone || null,
         client_address: composedAddress || null,
@@ -681,21 +701,6 @@ export default function ContractDetail() {
     }, 2000);
   };
 
-  const statusBadgeClass = (status: string) => {
-    switch (status) {
-      case "signed":
-        return "bg-success/10 text-success border-success/20";
-      case "pending_signatures":
-        return "bg-amber-50 text-amber-700 border-amber-200";
-      case "cancelled":
-        return "bg-destructive/10 text-destructive border-destructive/20";
-      default:
-        return "bg-muted text-muted-foreground border-border";
-    }
-  };
-
-  const formatStatus = (status: string) =>
-    status === "pending_signatures" ? "Pending signatures" : status.charAt(0).toUpperCase() + status.slice(1);
 
   const hasRequiredClientData = Boolean(
     contract?.client_name &&
@@ -839,8 +844,8 @@ export default function ContractDetail() {
             </Link>
             <div className="mt-2 flex items-center gap-2">
               <h1 className="text-2xl font-bold">{contract.identifier}</h1>
-              <Badge variant="outline" className={statusBadgeClass(contract.status)}>
-                {formatStatus(contract.status)}
+              <Badge variant="outline" className={getStatusBadgeClass(contract.status)}>
+                {formatStatusLabel(contract.status)}
               </Badge>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -1018,10 +1023,20 @@ export default function ContractDetail() {
                   <Select
                     value={contract.template_id || "default"}
                     onValueChange={(value) => {
-                      const selected = value === "default" ? null : templates.find((t) => t.id === value) || null;
-                      updateContract({ template_id: selected?.id || null });
-                      setTemplateName(selected?.name || "Default template");
-                      setTemplateContent(selected?.content || DEFAULT_CONTRACT_TEMPLATE_CONTENT);
+                      void (async () => {
+                        const selected =
+                          value === "default"
+                            ? resolveDefaultServiceAgreementTemplate(templates)
+                            : templates.find((t) => t.id === value) || null;
+                        const templateForDisclaimer =
+                          selected ||
+                          (value === "default" ? resolveDefaultServiceAgreementTemplate(templates) : null);
+                        const accepted = await requestAcceptance(templateForDisclaimer);
+                        if (!accepted) return;
+                        updateContract({ template_id: selected?.id || null });
+                        setTemplateName(selected?.name || "Default template");
+                        setTemplateContent(selected?.content || DEFAULT_CONTRACT_TEMPLATE_CONTENT);
+                      })();
                     }}
                     disabled={isLocked}
                   >
@@ -1241,7 +1256,7 @@ export default function ContractDetail() {
                 This preview uses the same template and data as the client view. Empty fields appear as blue placeholders until filled.
               </div>
               <section
-                className="mb-6 text-[15px] leading-relaxed text-zinc-800 [&_h1]:mb-3 [&_h1]:text-3xl [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:text-2xl [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:text-xl [&_h3]:font-semibold [&_h4]:mb-2 [&_h4]:text-lg [&_h4]:font-semibold [&_p]:mb-2 [&_ul]:mb-2 [&_ol]:mb-2 [&_li]:ml-5"
+                className="contract-document mb-6"
                 dangerouslySetInnerHTML={{ __html: sanitizedTemplateHtml }}
               />
               <section className="mt-10 border-t pt-6">
@@ -1366,6 +1381,11 @@ export default function ContractDetail() {
         </Tabs>
       </div>
 
+      <LanceServiceAgreementDisclaimerDialog
+        open={disclaimerOpen}
+        onOpenChange={onDisclaimerOpenChange}
+        onConfirm={onDisclaimerConfirm}
+      />
       <AlertDialog open={importConfirmOpen} onOpenChange={setImportConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1534,15 +1554,7 @@ export default function ContractDetail() {
       </Sheet>
 
       <style>{`
-        .contract-token {
-          display: inline-block;
-          padding: 1px 6px;
-          border-radius: 9999px;
-          background: #e0ecff;
-          color: #1d4ed8;
-          font-weight: 600;
-          font-size: 0.86em;
-        }
+        ${CONTRACT_DOCUMENT_STYLES}
         @media print {
           body * {
             visibility: hidden;

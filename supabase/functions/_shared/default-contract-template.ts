@@ -2,8 +2,14 @@
 export const DEFAULT_CONTRACT_TEMPLATE_CONTENT = `<h1>SERVICE AGREEMENT</h1>
 <p><br></p>
 <h2>IDENTIFICATION OF THE CONTRACTING PARTIES</h2>
-<p><strong>CLIENT:</strong> {{client_identification}}</p>
-<p><strong>SERVICE PROVIDER:</strong> {{freelancer_identification}}</p>
+<div class="contract-party-block">
+<p class="contract-party-title"><strong>CLIENT</strong></p>
+{{client_identification}}
+</div>
+<div class="contract-party-block">
+<p class="contract-party-title"><strong>SERVICE PROVIDER</strong></p>
+{{freelancer_identification}}
+</div>
 <p>The parties identified above agree to the following Service Agreement, which shall be governed by the clauses and conditions described in this document.</p>
 <p><br></p>
 <p><br></p>

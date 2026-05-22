@@ -2,8 +2,14 @@ UPDATE public.contract_templates
 SET content = $tpl$<h1>SERVICE AGREEMENT</h1>
 <p><br></p>
 <h2>IDENTIFICATION OF THE CONTRACTING PARTIES</h2>
-<p><strong>CLIENT:</strong> {{client_identification}}</p>
-<p><strong>SERVICE PROVIDER:</strong> {{freelancer_identification}}</p>
+<div class="contract-party-block">
+<p class="contract-party-title"><strong>CLIENT</strong></p>
+{{client_identification}}
+</div>
+<div class="contract-party-block">
+<p class="contract-party-title"><strong>SERVICE PROVIDER</strong></p>
+{{freelancer_identification}}
+</div>
 <p>The parties identified above agree to the following Service Agreement, which shall be governed by the clauses and conditions described in this document.</p>
 <p><br></p>
 <p><br></p>
@@ -79,8 +85,6 @@ SET content = $tpl$<h1>SERVICE AGREEMENT</h1>
 <h2>GOVERNING LAW</h2>
 <p>The courts of {{freelancer_address}} shall have exclusive jurisdiction over any disputes arising from this agreement. The parties agree that no other jurisdiction shall apply.</p>$tpl$,
     description = coalesce(description, 'Standard English template for freelance services agreements.')
-WHERE lower(trim(name)) IN ('service agreement', 'standard service agreement')
-   OR (is_default = true AND (
-     content LIKE '%FREELANCE SERVICES AGREEMENT%'
-     OR content LIKE '%Contract ID: {{identifier}}%'
-   ));
+WHERE content LIKE '%FREELANCE SERVICES AGREEMENT%'
+   OR content LIKE '%Contract ID: {{identifier}}%'
+   OR lower(trim(name)) IN ('service agreement', 'standard service agreement');

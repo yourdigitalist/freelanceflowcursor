@@ -28,6 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, MoreVertical, Trash2, Send, Download, Upload, RotateCcw } from '@/components/icons';
 import { reopenPaidInvoice } from '@/lib/invoiceStatus';
 import { formatLocaleDate } from '@/lib/datetime';
+import { formatStatusLabel, getStatusBadgeClass } from '@/lib/statusDisplay';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import {
   DropdownMenu,
@@ -164,20 +165,6 @@ export default function Invoices() {
     })();
   }, [isDialogOpen, user]);
 
-  const getInvoiceStatusBadgeStyle = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return 'bg-success/10 text-success border-success/20';
-      case 'overdue':
-        return 'bg-destructive/10 text-destructive border-destructive/20';
-      case 'sent':
-        return 'bg-warning/10 text-warning border-warning/20';
-      case 'draft':
-        return 'bg-muted text-muted-foreground border-muted';
-      default:
-        return 'bg-muted text-muted-foreground border-muted';
-    }
-  };
 
   useEffect(() => {
     if (user) {
@@ -1134,8 +1121,8 @@ export default function Invoices() {
                         {fmtForClient(Number(invoice.total), invoice.clients?.currency)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={getInvoiceStatusBadgeStyle(invoice.status || 'draft')}>
-                          {(invoice.status || 'draft').charAt(0).toUpperCase() + (invoice.status || 'draft').slice(1)}
+                        <Badge variant="outline" className={getStatusBadgeClass(invoice.status || 'draft')}>
+                          {formatStatusLabel(invoice.status || 'draft')}
                         </Badge>
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>

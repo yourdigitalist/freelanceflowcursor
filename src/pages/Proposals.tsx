@@ -19,6 +19,7 @@ import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate } from "@/lib/datetime";
 import { proposalSnapshotsFromClientId } from "@/lib/clientLifecycle";
 import { displayProposalClientName } from "@/lib/proposalClientDisplay";
+import { formatStatusLabel, getStatusBadgeClass } from "@/lib/statusDisplay";
 
 type ProposalRow = {
   id: string;
@@ -68,22 +69,6 @@ export default function Proposals() {
   const [newProjectName, setNewProjectName] = useState("");
   const { dateFormat } = useLocalePreferences();
 
-  const formatStatus = (status: string) =>
-    status ? status.charAt(0).toUpperCase() + status.slice(1) : "Draft";
-
-  const statusBadgeClass = (status: string) => {
-    switch (status) {
-      case "accepted":
-        return "bg-success/10 text-success border-success/20";
-      case "read":
-        return "bg-blue-50 text-blue-700 border-blue-200";
-      case "sent":
-        return "bg-warning/10 text-warning border-warning/20";
-      case "draft":
-      default:
-        return "bg-warning/10 text-warning border-warning/20";
-    }
-  };
 
   const load = async () => {
     const [{ data: proposals }, { data: allClients }, { data: allProjects }, { data: profileDefaults }] = await Promise.all([
@@ -377,8 +362,8 @@ export default function Proposals() {
                       <TableCell>{displayProposalClientName(row)}</TableCell>
                       <TableCell>{row.projects?.name || "—"}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={statusBadgeClass(row.status)}>
-                          {formatStatus(row.status)}
+                        <Badge variant="outline" className={getStatusBadgeClass(row.status)}>
+                          {formatStatusLabel(row.status)}
                         </Badge>
                       </TableCell>
                       <TableCell>{formatMoney(row.total || 0, row.clients?.currency)}</TableCell>

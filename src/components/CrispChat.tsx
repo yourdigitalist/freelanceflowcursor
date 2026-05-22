@@ -12,7 +12,7 @@ declare global {
 const CRISP_WEBSITE_ID =
   import.meta.env.VITE_CRISP_WEBSITE_ID || 'dfd412fb-fc85-4788-b95e-72fa04284f19';
 
-const HIDE_ON_PREFIXES = ['/auth', '/reset-password', '/onboarding', '/review/'];
+const HIDE_ON_PREFIXES = ['/auth', '/reset-password', '/onboarding', '/review/', '/contract/', '/portal/', '/proposal/'];
 const HIDE_ON_EXACT = ['/terms', '/privacy'];
 
 export function CrispChat() {

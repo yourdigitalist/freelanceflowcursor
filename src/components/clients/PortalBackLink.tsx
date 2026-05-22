@@ -1,21 +1,35 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft } from "@/components/icons";
-import { getClientPortalUrl } from "@/lib/clientPortal";
+import { getClientPortalPath } from "@/lib/clientPortal";
 
-export function PortalBackLink({ portalToken }: { portalToken: string | null | undefined }) {
-  if (!portalToken?.trim()) return null;
+type PortalBackLinkProps = {
+  portalToken: string | null | undefined;
+  label?: string;
+  className?: string;
+};
+
+export function PortalBackLink({
+  portalToken,
+  label = "Back to client area",
+  className,
+}: PortalBackLinkProps) {
+  const trimmed = portalToken?.trim();
+  if (!trimmed) return null;
   return (
     <Link
-      to={getClientPortalUrl(portalToken)}
-      className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4"
+      to={getClientPortalPath(trimmed)}
+      className={
+        className ??
+        "relative z-30 mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+      }
     >
       <ArrowLeft className="h-4 w-4" />
-      Back to client portal
+      {label}
     </Link>
   );
 }
 
 export function usePortalTokenFromSearch(): string | null {
-  if (typeof window === "undefined") return null;
-  return new URLSearchParams(window.location.search).get("portal");
+  const [searchParams] = useSearchParams();
+  return searchParams.get("portal");
 }

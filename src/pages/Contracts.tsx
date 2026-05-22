@@ -19,7 +19,10 @@ import { Plus, Trash2 } from "@/components/icons";
 import { SlotIcon } from "@/contexts/IconSlotContext";
 import { applyProposalImportToContract } from "@/lib/contractProposalImport";
 import { contractClientSnapshotFromClient } from "@/lib/clientForm";
+import { formatStatusLabel, getStatusBadgeClass } from "@/lib/statusDisplay";
+import { LanceServiceAgreementDisclaimerDialog } from "@/components/contracts/LanceServiceAgreementDisclaimerDialog";
 import { DEFAULT_CONTRACT_TEMPLATE_CONTENT } from "@/lib/contractTemplate";
+import { useLanceServiceAgreementDisclaimer } from "@/hooks/useLanceServiceAgreementDisclaimer";
 
 type ContractRow = {
   id: string;
@@ -51,7 +54,7 @@ export default function Contracts() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [rows, setRows] = useState<ContractRow[]>([]);
-  const [clients, setClients] = useState<{ id: string; name: string; company: string | null; email: string | null; phone: string | null; address: string | null; street: string | null; street2: string | null; city: string | null; state: string | null; postal_code: string | null; country: string | null; tax_id: string | null; currency?: string | null }[]>([]);
+  const [clients, setClients] = useState<{ id: string; name: string; company: string | null; company_name: string | null; entity_type: string | null; company_registration: string | null; email: string | null; phone: string | null; address: string | null; street: string | null; street2: string | null; city: string | null; state: string | null; postal_code: string | null; country: string | null; tax_id: string | null; currency?: string | null }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string; client_id: string | null }[]>([]);
   const [proposalCandidates, setProposalCandidates] = useState<ProposalCandidate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,6 +77,12 @@ export default function Contracts() {
   const [newClientEmail, setNewClientEmail] = useState("");
   const [newClientCompany, setNewClientCompany] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
+  const {
+    disclaimerOpen,
+    onDisclaimerOpenChange,
+    onDisclaimerConfirm,
+    requestAcceptance,
+  } = useLanceServiceAgreementDisclaimer();
 
   const load = async () => {
     const [{ data: contracts }, { data: allClients }, { data: allProjects }, { data: allTemplates }] = await Promise.all([
@@ -81,7 +90,7 @@ export default function Contracts() {
         .from("contracts")
         .select("id, identifier, status, total, client_id, project_id, clients(name, currency), projects(name)")
         .order("created_at", { ascending: false }),
-      supabase.from("clients").select("id, name, company, email, phone, address, street, street2, city, state, postal_code, country, tax_id, currency").is("archived_at", null).order("name"),
+      supabase.from("clients").select("id, name, company, company_name, entity_type, company_registration, email, phone, address, street, street2, city, state, postal_code, country, tax_id, currency").is("archived_at", null).order("name"),
       supabase.from("projects").select("id, name, client_id").order("name"),
       supabase.from("contract_templates").select("id, name, description, content, is_default").order("created_at"),
     ]);
@@ -182,27 +191,21 @@ export default function Contracts() {
   const formatMoney = (amount: number, currencyCode?: string | null) =>
     new Intl.NumberFormat(undefined, { style: "currency", currency: currencyCode || "USD" }).format(amount || 0);
 
-  const statusBadgeClass = (status: string) => {
-    switch (status) {
-      case "signed":
-        return "bg-success/10 text-success border-success/20";
-      case "pending_signatures":
-        return "bg-amber-50 text-amber-700 border-amber-200";
-      case "cancelled":
-        return "bg-destructive/10 text-destructive border-destructive/20";
-      case "draft":
-      default:
-        return "bg-muted text-muted-foreground border-border";
-    }
-  };
+  const statusBadgeClass = getStatusBadgeClass;
+  const formatStatus = formatStatusLabel;
 
-  const formatStatus = (status: string) =>
-    status === "pending_signatures"
-      ? "Pending signatures"
-      : status.charAt(0).toUpperCase() + status.slice(1);
+  const handleCreateTemplateChange = async (nextTemplateId: string) => {
+    const selected = templateRows.find((t) => t.id === nextTemplateId) || templates.find((t) => t.id === nextTemplateId);
+    const accepted = await requestAcceptance(selected);
+    if (!accepted) return;
+    setTemplateId(nextTemplateId);
+  };
 
   const createContract = async () => {
     if (!user || !clientId || templateId === "none") return;
+    const selectedTemplate = templateRows.find((t) => t.id === templateId) || templates.find((t) => t.id === templateId);
+    const accepted = await requestAcceptance(selectedTemplate);
+    if (!accepted) return;
     const selectedClient = clients.find((client) => client.id === clientId);
     const { data: profile } = await supabase
       .from("profiles")
@@ -695,7 +698,7 @@ export default function Contracts() {
                   Add new template
                 </Button>
               </div>
-              <Select value={templateId} onValueChange={setTemplateId}>
+              <Select value={templateId} onValueChange={(value) => void handleCreateTemplateChange(value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select template" />
                 </SelectTrigger>
@@ -768,6 +771,11 @@ Example 2: Breach of Clause 9."
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <LanceServiceAgreementDisclaimerDialog
+        open={disclaimerOpen}
+        onOpenChange={onDisclaimerOpenChange}
+        onConfirm={onDisclaimerConfirm}
+      />
       <AlertDialog open={!!templateDeleteId} onOpenChange={(open) => !open && setTemplateDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

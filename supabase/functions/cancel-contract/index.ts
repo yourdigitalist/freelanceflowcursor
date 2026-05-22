@@ -2,6 +2,12 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import { getLanceSignature } from "../_shared/lance-email.ts";
+import {
+  channelEnabled,
+  getContractPrefs,
+  type NotificationPreferences,
+  upsertUserNotification,
+} from "../_shared/user-notification.ts";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
@@ -132,7 +138,7 @@ serve(async (req) => {
 
     const { data: contract, error: contractError } = await supabase
       .from("contracts")
-      .select("id, user_id, identifier, public_token, status, client_email, client_name, freelancer_email, freelancer_name")
+      .select("id, user_id, identifier, public_token, status, client_signed_at, client_email, client_name, freelancer_email, freelancer_name")
       .eq("id", contractId)
       .single();
 
@@ -175,11 +181,31 @@ serve(async (req) => {
       });
     }
 
+    const hadClientSignature = !!contract.client_signed_at;
+
     const { data: profile } = await supabase
       .from("profiles")
-      .select("business_name, business_email, email, full_name, business_logo, client_email_primary_color, client_email_header_html, client_email_footer_html")
+      .select("business_name, business_email, email, full_name, business_logo, client_email_primary_color, client_email_header_html, client_email_footer_html, notification_preferences")
       .eq("user_id", auth.user.id)
       .maybeSingle();
+
+    const contractPrefs = getContractPrefs(
+      (profile?.notification_preferences as NotificationPreferences | null) || null,
+    );
+    const contractLabel = contract.identifier ? `Contract ${contract.identifier}` : "Contract";
+    const cancelBody = hadClientSignature
+      ? `${contractLabel} was cancelled after the client had signed.`
+      : `${contractLabel} was cancelled.`;
+    if (channelEnabled(contractPrefs?.cancelled, "inApp")) {
+      await upsertUserNotification(supabase, {
+        user_id: auth.user.id,
+        type: "contract",
+        title: "Contract cancelled",
+        body: cancelBody,
+        link: `/contracts/${contract.id}`,
+        event_key: `contract_cancelled:${contract.id}:${cancelledAt}`,
+      });
+    }
 
     const primaryColor = (profile?.client_email_primary_color || "#9B63E9").trim();
     const fromDisplayName = (profile?.business_name || profile?.full_name || "Your Business").trim();
@@ -229,7 +255,7 @@ serve(async (req) => {
       .map((x) => (x || "").trim())
       .filter(Boolean);
     const uniqueRecipients = Array.from(new Set(recipients));
-    if (uniqueRecipients.length > 0) {
+    if (channelEnabled(contractPrefs?.cancelled, "email") && uniqueRecipients.length > 0) {
       await resend.emails.send({
         from: `${fromDisplayName} <${RESEND_FROM_EMAIL}>`,
         to: uniqueRecipients,

@@ -6,6 +6,12 @@ import {
   getDefaultLanceFooter,
   getDefaultLanceHeader,
 } from "../_shared/lance-email.ts";
+import {
+  channelEnabled,
+  getProposalPrefs,
+  type NotificationPreferences,
+  upsertUserNotification,
+} from "../_shared/user-notification.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,11 +36,30 @@ serve(async (req) => {
       await supabase.from("proposals").update({ status: "accepted", accepted_at: new Date().toISOString() }).eq("id", proposal.id);
       const { data: business } = await supabase
         .from("profiles")
-        .select("business_email, email")
+        .select("business_email, email, notification_preferences")
         .eq("user_id", proposal.user_id)
         .maybeSingle();
-      const ownerEmail = business?.business_email || business?.email;
-      if (ownerEmail && Deno.env.get("RESEND_API_KEY")) {
+      const prefs = getProposalPrefs(
+        (business?.notification_preferences as NotificationPreferences | null) || null,
+      );
+      const title = "Proposal accepted";
+      const body = `Your proposal ${proposal.identifier} was accepted by the client.`;
+      const link = `/proposals/${proposal.id}`;
+      const eventKey = `proposal_accepted:${proposal.id}`;
+
+      if (channelEnabled(prefs?.accepted, "inApp")) {
+        await upsertUserNotification(supabase, {
+          user_id: proposal.user_id,
+          type: "proposal",
+          title,
+          body,
+          link,
+          event_key: eventKey,
+        });
+      }
+
+      const ownerEmail = (business?.business_email || business?.email || "").trim();
+      if (channelEnabled(prefs?.accepted, "email") && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
         const { data: branding } = await supabase.from("app_branding").select("primary_color").eq("id", 1).maybeSingle();
         const primaryColor = (branding?.primary_color as string | null) || "#9B63E9";
         const proposalUrl = `${APP_BASE_URL}/proposals/${proposal.id}`;
@@ -47,7 +72,7 @@ serve(async (req) => {
                 <a href="${safeUrl}" style="display: inline-block; background: ${primaryColor}; color: #ffffff !important; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">View proposal</a>
               </p>`;
         const html = `${getDefaultLanceHeader(primaryColor)}${coreHtml}${getDefaultLanceFooter(primaryColor)}`;
-        const text = `Great news! Your proposal ${proposal.identifier} was accepted by the client.\n\nView proposal: ${proposalUrl}`;
+        const text = `${body}\n\nView proposal: ${proposalUrl}`;
 
         await resend.emails.send({
           from: `Get Lance <${RESEND_FROM_EMAIL}>`,

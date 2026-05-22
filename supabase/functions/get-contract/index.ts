@@ -75,6 +75,18 @@ serve(async (req) => {
       }
     }
 
+    let client_portal_token: string | null = null;
+    if (contract.client_id) {
+      const { data: clientRow } = await supabase
+        .from("clients")
+        .select("portal_token, portal_enabled")
+        .eq("id", contract.client_id)
+        .maybeSingle();
+      if (clientRow?.portal_enabled && clientRow.portal_token) {
+        client_portal_token = clientRow.portal_token;
+      }
+    }
+
     const [{ data: services }, { data: profile }, { data: templates }] = await Promise.all([
       supabase.from("contract_services").select("*").eq("contract_id", contract.id).order("sort_order"),
       supabase
@@ -93,6 +105,7 @@ serve(async (req) => {
 
     const mergedContract = {
       ...contract,
+      client_portal_token,
       freelancer_name: contract.freelancer_name || profile?.full_name || null,
       freelancer_email: contract.freelancer_email || profile?.email || null,
       freelancer_company: contract.freelancer_company || profile?.business_name || null,

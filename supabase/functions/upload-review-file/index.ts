@@ -47,6 +47,23 @@ function getFileExtension(filename: string): string {
   return parts.length > 1 ? parts.pop()!.toLowerCase() : '';
 }
 
+const EXTENSION_TO_MIME: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+};
+
+function resolveMimeType(declaredType: string, extension: string): string | null {
+  if (declaredType && ALLOWED_TYPES[declaredType]) return declaredType;
+  const inferred = extension ? EXTENSION_TO_MIME[extension] : undefined;
+  return inferred && ALLOWED_TYPES[inferred] ? inferred : null;
+}
+
 async function verifyMagicBytes(file: ArrayBuffer, mimeType: string): Promise<boolean> {
   const signatures = MAGIC_BYTES[mimeType];
   if (!signatures) return true; // Skip check for types without magic bytes (doc, docx)
@@ -101,28 +118,20 @@ serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Verify user with anon key (respects RLS)
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
-    
-    if (claimsError || !claimsData?.claims) {
+    if (authError || !user) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const userId = claimsData.claims.sub as string;
-
-    // Use service role for all operations
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const userId = user.id;
 
     // Rate limiting check
     const rateLimitKey = `upload:${userId}`;
@@ -179,22 +188,22 @@ serve(async (req) => {
       );
     }
 
-    // 2. Check MIME type
-    const mimeType = file.type;
-    if (!ALLOWED_TYPES[mimeType]) {
+    // 2. Sanitize and validate filename
+    const sanitizedName = sanitizeFilename(file.name);
+    const extension = getFileExtension(sanitizedName);
+
+    if (!extension) {
       return new Response(
-        JSON.stringify({ error: `File type not allowed. Allowed types: images (JPEG, PNG, GIF, WebP), PDF, Word documents` }),
+        JSON.stringify({ error: 'File must have an extension' }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // 3. Sanitize and validate filename
-    const sanitizedName = sanitizeFilename(file.name);
-    const extension = getFileExtension(sanitizedName);
-    
-    if (!extension) {
+    // 3. Resolve MIME type (some browsers omit file.type)
+    const mimeType = resolveMimeType(file.type, extension);
+    if (!mimeType) {
       return new Response(
-        JSON.stringify({ error: 'File must have an extension' }),
+        JSON.stringify({ error: `File type not allowed. Allowed types: images (JPEG, PNG, GIF, WebP), PDF, Word documents` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

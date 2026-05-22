@@ -53,7 +53,19 @@ export default function Notifications() {
   };
 
   useEffect(() => {
-    if (user) fetchNotifications();
+    if (!user) return;
+    fetchNotifications();
+    const channel = supabase
+      .channel(`notifications-list-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        () => { fetchNotifications(); },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   const unreadCount = list.filter((n) => !n.read_at).length;

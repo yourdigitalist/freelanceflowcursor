@@ -32,6 +32,24 @@ function ChannelRow({
   );
 }
 
+function CategorySection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <h3 className="text-sm font-medium mb-1">{title}</h3>
+      {description && <p className="text-xs text-muted-foreground mb-3">{description}</p>}
+      <div className="space-y-0 pl-2 border-l border-muted">{children}</div>
+    </div>
+  );
+}
+
 export default function NotificationSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -71,7 +89,6 @@ export default function NotificationSettings() {
         load();
       } else {
         toast({ title: 'Preferences saved' });
-        // Push marketing preference to Resend so unsubscribes take effect immediately
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         supabase.auth.getSession().then(({ data: { session } }) => {
           if (!supabaseUrl || !session?.access_token || !user?.id) return;
@@ -133,109 +150,177 @@ export default function NotificationSettings() {
         <h1 className="text-2xl font-bold tracking-tight">Notification settings</h1>
         <p className="text-muted-foreground">Manage how and when you receive in-app and email notifications.</p>
       </div>
-      {saving && (
-        <p className="text-sm text-muted-foreground">Saving…</p>
-      )}
+      {saving && <p className="text-sm text-muted-foreground">Saving…</p>}
       <Card>
         <CardHeader>
           <CardTitle>Preferences</CardTitle>
-          <CardDescription>Configure in-app and email notifications per category. Email is only sent for invoices and reviews.</CardDescription>
+          <CardDescription>
+            Configure in-app and email notifications per category. Email is sent for invoices, approvals, proposals, and contracts where enabled below.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
-          {/* Invoices */}
-          <div>
-            <h3 className="text-sm font-medium mb-3">Invoices</h3>
-            <div className="space-y-0 pl-2 border-l border-muted">
-              <ChannelRow
-                label="Due soon – In-app"
-                checked={getChannel('invoices', 'dueSoon', 'inApp')}
-                onCheckedChange={(v) => setChannel('invoices', 'dueSoon', 'inApp', v)}
-              />
-              <ChannelRow
-                label="Due soon – Email"
-                checked={getChannel('invoices', 'dueSoon', 'email')}
-                onCheckedChange={(v) => setChannel('invoices', 'dueSoon', 'email', v)}
-              />
-              <ChannelRow
-                label="Overdue – In-app"
-                checked={getChannel('invoices', 'overdue', 'inApp')}
-                onCheckedChange={(v) => setChannel('invoices', 'overdue', 'inApp', v)}
-              />
-              <ChannelRow
-                label="Overdue – Email"
-                checked={getChannel('invoices', 'overdue', 'email')}
-                onCheckedChange={(v) => setChannel('invoices', 'overdue', 'email', v)}
-              />
-            </div>
-          </div>
+          <CategorySection title="Invoices">
+            <ChannelRow
+              label="Due soon – In-app"
+              checked={getChannel('invoices', 'dueSoon', 'inApp')}
+              onCheckedChange={(v) => setChannel('invoices', 'dueSoon', 'inApp', v)}
+            />
+            <ChannelRow
+              label="Due soon – Email"
+              checked={getChannel('invoices', 'dueSoon', 'email')}
+              onCheckedChange={(v) => setChannel('invoices', 'dueSoon', 'email', v)}
+            />
+            <ChannelRow
+              label="Overdue – In-app"
+              checked={getChannel('invoices', 'overdue', 'inApp')}
+              onCheckedChange={(v) => setChannel('invoices', 'overdue', 'inApp', v)}
+            />
+            <ChannelRow
+              label="Overdue – Email"
+              checked={getChannel('invoices', 'overdue', 'email')}
+              onCheckedChange={(v) => setChannel('invoices', 'overdue', 'email', v)}
+            />
+          </CategorySection>
 
-          {/* Reviews */}
-          <div>
-            <h3 className="text-sm font-medium mb-3">Reviews</h3>
-            <div className="space-y-0 pl-2 border-l border-muted">
-              <ChannelRow
-                label="New comment – In-app"
-                checked={getChannel('reviews', 'comment', 'inApp')}
-                onCheckedChange={(v) => setChannel('reviews', 'comment', 'inApp', v)}
-              />
-              <ChannelRow
-                label="New comment – Email"
-                checked={getChannel('reviews', 'comment', 'email')}
-                onCheckedChange={(v) => setChannel('reviews', 'comment', 'email', v)}
-              />
-              <ChannelRow
-                label="Approved/Rejected – In-app"
-                checked={getChannel('reviews', 'status', 'inApp')}
-                onCheckedChange={(v) => setChannel('reviews', 'status', 'inApp', v)}
-              />
-              <ChannelRow
-                label="Approved/Rejected – Email"
-                checked={getChannel('reviews', 'status', 'email')}
-                onCheckedChange={(v) => setChannel('reviews', 'status', 'email', v)}
-              />
-              <ChannelRow
-                label="Due soon – In-app"
-                checked={getChannel('reviews', 'dueSoon', 'inApp')}
-                onCheckedChange={(v) => setChannel('reviews', 'dueSoon', 'inApp', v)}
-              />
-              <ChannelRow
-                label="Due soon – Email"
-                checked={getChannel('reviews', 'dueSoon', 'email')}
-                onCheckedChange={(v) => setChannel('reviews', 'dueSoon', 'email', v)}
-              />
-              <ChannelRow
-                label="Overdue – In-app"
-                checked={getChannel('reviews', 'overdue', 'inApp')}
-                onCheckedChange={(v) => setChannel('reviews', 'overdue', 'inApp', v)}
-              />
-              <ChannelRow
-                label="Overdue – Email"
-                checked={getChannel('reviews', 'overdue', 'email')}
-                onCheckedChange={(v) => setChannel('reviews', 'overdue', 'email', v)}
-              />
-            </div>
-          </div>
+          <CategorySection title="Approvals" description="Client feedback and approval requests (formerly Reviews).">
+            <ChannelRow
+              label="New comment – In-app"
+              checked={getChannel('reviews', 'comment', 'inApp')}
+              onCheckedChange={(v) => setChannel('reviews', 'comment', 'inApp', v)}
+            />
+            <ChannelRow
+              label="New comment – Email"
+              checked={getChannel('reviews', 'comment', 'email')}
+              onCheckedChange={(v) => setChannel('reviews', 'comment', 'email', v)}
+            />
+            <ChannelRow
+              label="Approved/Rejected – In-app"
+              checked={getChannel('reviews', 'status', 'inApp')}
+              onCheckedChange={(v) => setChannel('reviews', 'status', 'inApp', v)}
+            />
+            <ChannelRow
+              label="Approved/Rejected – Email"
+              checked={getChannel('reviews', 'status', 'email')}
+              onCheckedChange={(v) => setChannel('reviews', 'status', 'email', v)}
+            />
+            <ChannelRow
+              label="Due soon – In-app"
+              checked={getChannel('reviews', 'dueSoon', 'inApp')}
+              onCheckedChange={(v) => setChannel('reviews', 'dueSoon', 'inApp', v)}
+            />
+            <ChannelRow
+              label="Due soon – Email"
+              checked={getChannel('reviews', 'dueSoon', 'email')}
+              onCheckedChange={(v) => setChannel('reviews', 'dueSoon', 'email', v)}
+            />
+            <ChannelRow
+              label="Overdue – In-app"
+              checked={getChannel('reviews', 'overdue', 'inApp')}
+              onCheckedChange={(v) => setChannel('reviews', 'overdue', 'inApp', v)}
+            />
+            <ChannelRow
+              label="Overdue – Email"
+              checked={getChannel('reviews', 'overdue', 'email')}
+              onCheckedChange={(v) => setChannel('reviews', 'overdue', 'email', v)}
+            />
+          </CategorySection>
 
-          {/* Marketing */}
-          <div>
-            <h3 className="text-sm font-medium mb-3">Marketing</h3>
-            <div className="space-y-0 pl-2 border-l border-muted">
-              <ChannelRow
-                label="Product updates and tips – Email"
-                checked={prefs.marketing?.email ?? true}
-                onCheckedChange={(v) =>
-                  updateAndSave((prev) => ({
-                    ...prev,
-                    marketing: { ...prev.marketing, email: v },
-                  }))
-                }
-              />
-            </div>
-            <p className="text-xs text-muted-foreground mt-1 pl-2">
+          <CategorySection title="Proposals">
+            <ChannelRow
+              label="Viewed by client – In-app"
+              checked={getChannel('proposals', 'viewed', 'inApp')}
+              onCheckedChange={(v) => setChannel('proposals', 'viewed', 'inApp', v)}
+            />
+            <ChannelRow
+              label="Viewed by client – Email"
+              checked={getChannel('proposals', 'viewed', 'email')}
+              onCheckedChange={(v) => setChannel('proposals', 'viewed', 'email', v)}
+            />
+            <ChannelRow
+              label="Accepted by client – In-app"
+              checked={getChannel('proposals', 'accepted', 'inApp')}
+              onCheckedChange={(v) => setChannel('proposals', 'accepted', 'inApp', v)}
+            />
+            <ChannelRow
+              label="Accepted by client – Email"
+              checked={getChannel('proposals', 'accepted', 'email')}
+              onCheckedChange={(v) => setChannel('proposals', 'accepted', 'email', v)}
+            />
+          </CategorySection>
+
+          <CategorySection title="Contracts">
+            <ChannelRow
+              label="You signed – In-app"
+              checked={getChannel('contracts', 'freelancerSigned', 'inApp')}
+              onCheckedChange={(v) => setChannel('contracts', 'freelancerSigned', 'inApp', v)}
+            />
+            <ChannelRow
+              label="Client signed – In-app"
+              checked={getChannel('contracts', 'clientSigned', 'inApp')}
+              onCheckedChange={(v) => setChannel('contracts', 'clientSigned', 'inApp', v)}
+            />
+            <ChannelRow
+              label="Client signed – Email"
+              checked={getChannel('contracts', 'clientSigned', 'email')}
+              onCheckedChange={(v) => setChannel('contracts', 'clientSigned', 'email', v)}
+            />
+            <ChannelRow
+              label="Fully signed (both parties) – In-app"
+              checked={getChannel('contracts', 'fullySigned', 'inApp')}
+              onCheckedChange={(v) => setChannel('contracts', 'fullySigned', 'inApp', v)}
+            />
+            <ChannelRow
+              label="Fully signed (both parties) – Email"
+              checked={getChannel('contracts', 'fullySigned', 'email')}
+              onCheckedChange={(v) => setChannel('contracts', 'fullySigned', 'email', v)}
+            />
+            <ChannelRow
+              label="Cancelled – In-app"
+              checked={getChannel('contracts', 'cancelled', 'inApp')}
+              onCheckedChange={(v) => setChannel('contracts', 'cancelled', 'inApp', v)}
+            />
+            <ChannelRow
+              label="Cancelled – Email"
+              checked={getChannel('contracts', 'cancelled', 'email')}
+              onCheckedChange={(v) => setChannel('contracts', 'cancelled', 'email', v)}
+            />
+            <ChannelRow
+              label="Due soon – In-app"
+              checked={getChannel('contracts', 'dueSoon', 'inApp')}
+              onCheckedChange={(v) => setChannel('contracts', 'dueSoon', 'inApp', v)}
+            />
+            <ChannelRow
+              label="Due soon – Email"
+              checked={getChannel('contracts', 'dueSoon', 'email')}
+              onCheckedChange={(v) => setChannel('contracts', 'dueSoon', 'email', v)}
+            />
+            <ChannelRow
+              label="Overdue – In-app"
+              checked={getChannel('contracts', 'overdue', 'inApp')}
+              onCheckedChange={(v) => setChannel('contracts', 'overdue', 'inApp', v)}
+            />
+            <ChannelRow
+              label="Overdue – Email"
+              checked={getChannel('contracts', 'overdue', 'email')}
+              onCheckedChange={(v) => setChannel('contracts', 'overdue', 'email', v)}
+            />
+          </CategorySection>
+
+          <CategorySection title="Marketing">
+            <ChannelRow
+              label="Product updates and tips – Email"
+              checked={prefs.marketing?.email ?? true}
+              onCheckedChange={(v) =>
+                updateAndSave((prev) => ({
+                  ...prev,
+                  marketing: { ...prev.marketing, email: v },
+                }))
+              }
+            />
+            <p className="text-xs text-muted-foreground mt-1">
               You can also unsubscribe via the link in any marketing email. See our Terms for details.
             </p>
-          </div>
-
+          </CategorySection>
         </CardContent>
       </Card>
     </div>

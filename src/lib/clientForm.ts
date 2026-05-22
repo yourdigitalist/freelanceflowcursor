@@ -199,6 +199,9 @@ export function contractClientSnapshotFromClient(
   client: ClientAddressFields & {
     name?: string | null;
     company?: string | null;
+    company_name?: string | null;
+    entity_type?: string | null;
+    company_registration?: string | null;
     email?: string | null;
     phone?: string | null;
     tax_id?: string | null;
@@ -210,9 +213,13 @@ export function contractClientSnapshotFromClient(
   const state = client.state?.trim() || null;
   const postal_code = client.postal_code?.trim() || null;
   const country = client.country?.trim() || null;
+  const company = client.company?.trim() || client.company_name?.trim() || null;
   return {
     client_name: client.name?.trim() || null,
-    client_company: client.company?.trim() || null,
+    client_company: company,
+    client_company_name: company,
+    client_entity_type: client.entity_type === "company" ? "company" : "individual",
+    client_company_registration: client.company_registration?.trim() || null,
     client_email: client.email?.trim() || null,
     client_phone: client.phone?.trim() || null,
     client_tax_id: client.tax_id?.trim() || null,

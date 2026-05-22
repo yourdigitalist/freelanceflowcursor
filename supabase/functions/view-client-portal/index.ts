@@ -76,7 +76,7 @@ serve(async (req) => {
     const { data: client, error: clientErr } = await supabase
       .from("clients")
       .select(
-        "id, user_id, name, first_name, last_name, email, phone, company, tax_id, street, street2, city, state, postal_code, country, logo_url, avatar_color, portal_enabled, portal_sections",
+        "id, user_id, name, first_name, last_name, email, phone, company, tax_id, street, street2, city, state, postal_code, country, currency, logo_url, avatar_color, portal_enabled, portal_sections",
       )
       .eq("portal_token", token)
       .maybeSingle();
@@ -107,7 +107,7 @@ serve(async (req) => {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("business_name, business_logo, business_email, email, client_email_primary_color, date_format")
+      .select("business_name, business_logo, business_email, email, client_email_primary_color, date_format, currency")
       .eq("user_id", client.user_id)
       .maybeSingle();
 
@@ -120,12 +120,18 @@ serve(async (req) => {
       clientLogo = `${supabaseUrl.replace(/\/$/, "")}/storage/v1/object/public/client-logos/${clientLogo.replace(/^\/+/, "")}`;
     }
 
+    const profileCurrency = (profile?.currency as string | null)?.trim() || null;
+    const clientCurrency = (client.currency as string | null)?.trim() || null;
+    const resolvedCurrency = clientCurrency || profileCurrency || "USD";
+
     const business = {
       business_name: profile?.business_name || null,
       business_logo: businessLogo || null,
       business_email: profile?.business_email || profile?.email || null,
       primary_color: (profile?.client_email_primary_color || "#9B63E9").trim(),
       date_format: profile?.date_format || "DD/MM/YYYY",
+      currency: resolvedCurrency,
+      profile_currency: profileCurrency,
     };
 
     const clientDetails = {
@@ -142,6 +148,7 @@ serve(async (req) => {
       state: client.state,
       postal_code: client.postal_code,
       country: client.country,
+      currency: resolvedCurrency,
       logo_url: clientLogo || null,
       avatar_color: client.avatar_color,
     };

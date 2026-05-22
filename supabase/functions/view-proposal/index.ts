@@ -6,6 +6,12 @@ import {
   getDefaultLanceFooter,
   getDefaultLanceHeader,
 } from "../_shared/lance-email.ts";
+import {
+  channelEnabled,
+  getProposalPrefs,
+  type NotificationPreferences,
+  upsertUserNotification,
+} from "../_shared/user-notification.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -73,15 +79,35 @@ serve(async (req) => {
       .select("id, identifier")
       .maybeSingle();
 
-    if (firstRead) {
+    if (firstRead && !isOwnerView) {
       proposal.status = "read";
       proposal.read_at = new Date().toISOString();
+      const prefs = getProposalPrefs(
+        (normalizedBusiness?.notification_preferences as NotificationPreferences | null) || null,
+      );
+      const identifier = firstRead.identifier || proposal.identifier;
+      const title = "Proposal viewed by client";
+      const body = `Your proposal ${identifier} was opened by the client.`;
+      const link = `/proposals/${proposal.id}`;
+      const eventKey = `proposal_viewed:${proposal.id}`;
+
+      if (channelEnabled(prefs?.viewed, "inApp")) {
+        await upsertUserNotification(supabase, {
+          user_id: proposal.user_id,
+          type: "proposal",
+          title,
+          body,
+          link,
+          event_key: eventKey,
+        });
+      }
+
       const ownerEmail = (normalizedBusiness?.business_email || normalizedBusiness?.email || "").trim();
-      if (!isOwnerView && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
+      if (channelEnabled(prefs?.viewed, "email") && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
         const { data: branding } = await supabase.from("app_branding").select("primary_color").eq("id", 1).maybeSingle();
         const primaryColor = (branding?.primary_color as string | null) || "#9B63E9";
         const proposalUrl = `${APP_BASE_URL}/proposals/${proposal.id}`;
-        const safeIdentifier = escapeHtml(firstRead.identifier || proposal.identifier);
+        const safeIdentifier = escapeHtml(identifier);
         const safeUrl = escapeHtml(proposalUrl);
         const coreHtml = `
               <h2 style="margin: 0 0 12px; color: ${primaryColor};">Proposal viewed by client</h2>
@@ -90,12 +116,12 @@ serve(async (req) => {
                 <a href="${safeUrl}" style="display: inline-block; background: ${primaryColor}; color: #ffffff !important; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">View proposal</a>
               </p>`;
         const html = `${getDefaultLanceHeader(primaryColor)}${coreHtml}${getDefaultLanceFooter(primaryColor)}`;
-        const text = `Your proposal ${firstRead.identifier || proposal.identifier} was opened by the client.\n\nView proposal: ${proposalUrl}`;
+        const text = `${body}\n\nView proposal: ${proposalUrl}`;
 
         await resend.emails.send({
           from: `Get Lance <${RESEND_FROM_EMAIL}>`,
           to: [ownerEmail],
-          subject: `Proposal viewed: ${firstRead.identifier || proposal.identifier}`,
+          subject: `Proposal viewed: ${identifier}`,
           text,
           html,
         });

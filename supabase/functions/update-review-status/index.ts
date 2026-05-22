@@ -1,6 +1,12 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import {
+  channelEnabled,
+  getReviewPrefs,
+  type NotificationPreferences,
+  upsertUserNotification,
+} from "../_shared/user-notification.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -159,41 +165,41 @@ serve(async (req) => {
         .select("email, full_name, notification_preferences")
         .eq("user_id", request.user_id)
         .maybeSingle();
-      const prefs = (ownerProfile?.notification_preferences || {}) as any;
-      const inAppEnabled = prefs?.reviews?.status?.inApp !== false;
-      const emailEnabled = prefs?.reviews?.status?.email !== false;
+      const prefs = getReviewPrefs(
+        (ownerProfile?.notification_preferences as NotificationPreferences | null) || null,
+      );
       const ownerEmail = (ownerProfile?.email || "").trim();
       const ownerName = (ownerProfile?.full_name || "there").trim() || "there";
       const eventKey = `review_status:${request.id}:${status}:${commenter_email.trim().toLowerCase()}`;
       let title = "";
       let body = "";
-      let link = "/review-requests";
+      let link = `/reviews/${request.id}`;
 
       if (status === "approved") {
-        link = request.project_id
-          ? `/invoices?project_id=${request.project_id}&from_review=1`
-          : "/review-requests";
+        if (request.project_id) {
+          link = `/invoices?project_id=${request.project_id}&from_review=1`;
+        }
         body = request.project_id
           ? "Create an invoice for this project?"
-          : "A client approved your review request.";
-        title = "Review approved";
+          : "A client approved your approval request.";
+        title = "Approval approved";
       } else {
-        title = "Review rejected";
-        body = "A client rejected your review request.";
+        title = "Approval rejected";
+        body = "A client rejected your approval request.";
       }
 
-      if (inAppEnabled) {
-        await supabase.from("notifications").upsert({
+      if (channelEnabled(prefs?.status, "inApp")) {
+        await upsertUserNotification(supabase, {
           user_id: request.user_id,
           type: "review",
           title,
           body,
           link,
           event_key: eventKey,
-        }, { onConflict: "user_id,event_key", ignoreDuplicates: true });
+        });
       }
 
-      if (emailEnabled && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
+      if (channelEnabled(prefs?.status, "email") && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
         const reviewsUrl = `${APP_BASE_URL || "https://getlance.app"}${link.startsWith("/") ? link : "/reviews"}`;
         await resend.emails.send({
           from: `Lance <${RESEND_FROM_EMAIL}>`,

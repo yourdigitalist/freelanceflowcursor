@@ -1164,11 +1164,6 @@ export default function TimeTracking() {
                   Week total: <span className="font-mono font-medium text-foreground">{formatHm(weekTotalSeconds)}</span>
                 </span>
               )}
-              {timesheetView === 'month' && (
-                <span className="text-sm text-muted-foreground">
-                  Month total: <span className="font-mono font-medium text-foreground">{formatHm(monthTotalSeconds)}</span>
-                </span>
-              )}
             </div>
             {renderFilterPopover()}
           </div>
@@ -1263,15 +1258,23 @@ export default function TimeTracking() {
                     >
                       <p className="text-xs">{format(d, 'd')}</p>
                       <p className={timeMonthCalendarDurationClassName(hasEntries)}>
-                        {total ? formatHm(total) : '0:00'}
+                        {hasEntries ? formatHm(total) : '0:00'}
                       </p>
                     </button>
                   );
                 })}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Summary only. Click a day to open Day view and edit entries.
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                <p className="text-xs text-muted-foreground">
+                  Summary only. Click a day to open Day view and edit entries.
+                </p>
+                <p className="text-sm font-medium text-foreground">
+                  Month total:{' '}
+                  <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">
+                    {formatDuration(monthTotalSeconds)}
+                  </span>
+                </p>
+              </div>
             </div>
           )}
           {renderTimeEntryLogDialog()}

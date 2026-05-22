@@ -260,17 +260,17 @@ serve(async (req) => {
           notifications.push({
             user_id: userId,
             type: "review",
-            title: "Review request due soon",
-            body: `${row.title || "Review request"} is due in ${rDays} day${rDays === 1 ? "" : "s"}.`,
-            link: "/reviews",
+            title: "Approval due soon",
+            body: `${row.title || "Approval request"} is due in ${rDays} day${rDays === 1 ? "" : "s"}.`,
+            link: `/reviews/${row.id}`,
             event_key: `review_dueSoon:${row.id}:${todayYmd}`,
           });
         }
         if (prefs.reviews?.dueSoon?.email && userEmail) {
           emailQueue.push({
             to: userEmail,
-            subject: "Review request due soon",
-            text: `Hi ${userName},\n\n${row.title || "Review request"} is due in ${rDays} day${rDays === 1 ? "" : "s"}.\n\nOpen approvals: ${(Deno.env.get("APP_BASE_URL") || "").replace(/\/$/, "")}/reviews`,
+            subject: "Approval due soon",
+            text: `Hi ${userName},\n\n${row.title || "Approval request"} is due in ${rDays} day${rDays === 1 ? "" : "s"}.\n\nOpen approvals: ${(Deno.env.get("APP_BASE_URL") || "").replace(/\/$/, "")}/reviews/${row.id}`,
           });
         }
       }
@@ -279,17 +279,17 @@ serve(async (req) => {
           notifications.push({
             user_id: userId,
             type: "review",
-            title: "Review request overdue",
-            body: `${row.title || "Review request"} is overdue.`,
-            link: "/reviews",
+            title: "Approval overdue",
+            body: `${row.title || "Approval request"} is overdue.`,
+            link: `/reviews/${row.id}`,
             event_key: `review_overdue:${row.id}:${todayYmd}`,
           });
         }
         if (prefs.reviews?.overdue?.email && userEmail) {
           emailQueue.push({
             to: userEmail,
-            subject: "Review request overdue",
-            text: `Hi ${userName},\n\n${row.title || "Review request"} is overdue.\n\nOpen approvals: ${(Deno.env.get("APP_BASE_URL") || "").replace(/\/$/, "")}/reviews`,
+            subject: "Approval overdue",
+            text: `Hi ${userName},\n\n${row.title || "Approval request"} is overdue.\n\nOpen approvals: ${(Deno.env.get("APP_BASE_URL") || "").replace(/\/$/, "")}/reviews/${row.id}`,
           });
         }
       }
@@ -307,7 +307,7 @@ serve(async (req) => {
             type: "contract",
             title: "Contract due soon",
             body: `${contractLabel} is due in ${cDays} day${cDays === 1 ? "" : "s"}.`,
-            link: "/contracts",
+            link: `/contracts/${row.id}`,
             event_key: `contract_dueSoon:${row.id}:${todayYmd}`,
           });
         }
@@ -326,7 +326,7 @@ serve(async (req) => {
             type: "contract",
             title: "Contract overdue",
             body: `${contractLabel} is overdue.`,
-            link: "/contracts",
+            link: `/contracts/${row.id}`,
             event_key: `contract_overdue:${row.id}:${todayYmd}`,
           });
         }
@@ -373,7 +373,11 @@ serve(async (req) => {
     const { error } = await supabase
       .from("notifications")
       .upsert(notifications, { onConflict: "user_id,event_key", ignoreDuplicates: true });
-    if (!error) inAppCreated = notifications.length;
+    if (error) {
+      console.error("notifications upsert failed:", error.message);
+    } else {
+      inAppCreated = notifications.length;
+    }
   }
 
   let emailsSent = 0;

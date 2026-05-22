@@ -15,8 +15,20 @@ import type ReactQuillType from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate } from "@/lib/datetime";
+import {
+  LanceServiceAgreementDisclaimerBanner,
+  LanceServiceAgreementDisclaimerDialog,
+} from "@/components/contracts/LanceServiceAgreementDisclaimerDialog";
+import { isLanceProvidedServiceAgreementTemplate } from "@/lib/lanceServiceAgreementTemplate";
+import { CONTRACT_DOCUMENT_STYLES } from "@/lib/contractTemplate";
 
-type Row = { id: string; name: string; description: string | null; content: string };
+type Row = {
+  id: string;
+  name: string;
+  description: string | null;
+  content: string;
+  is_default?: boolean | null;
+};
 
 export default function ContractTemplateDetail() {
   const { id } = useParams<{ id: string }>();
@@ -24,8 +36,10 @@ export default function ContractTemplateDetail() {
   const navigate = useNavigate();
   const [tab, setTab] = useState("data");
   const [row, setRow] = useState<Row | null>(null);
+  const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const quillRef = useRef<ReactQuillType>(null);
   const { dateFormat } = useLocalePreferences();
+  const isLanceTemplate = row ? isLanceProvidedServiceAgreementTemplate(row) : false;
 
   const quillModules = useMemo(
     () => ({
@@ -48,14 +62,30 @@ export default function ContractTemplateDetail() {
 
   const load = async () => {
     if (!id) return;
-    const { data } = await supabase.from("contract_templates").select("id,name,description,content").eq("id", id).single();
+    const { data } = await supabase
+      .from("contract_templates")
+      .select("id, name, description, content, is_default")
+      .eq("id", id)
+      .single();
     setRow(data as Row);
+    setDisclaimerAccepted(false);
   };
 
   useEffect(() => { void load(); }, [id]);
 
+  const requireDisclaimerAccepted = (actionLabel: string) => {
+    if (!isLanceTemplate || disclaimerAccepted) return true;
+    toast({
+      title: "Accept the template notice first",
+      description: `Please read the notice at the top and check the agreement box before you ${actionLabel}.`,
+      variant: "destructive",
+    });
+    return false;
+  };
+
   const save = async () => {
     if (!id || !row) return;
+    if (!requireDisclaimerAccepted("save")) return;
     await supabase.from("contract_templates").update({ name: row.name, description: row.description, content: row.content } as never).eq("id", id);
     toast({ title: "Template saved" });
   };
@@ -83,6 +113,7 @@ export default function ContractTemplateDetail() {
 
   const insertVariableAtCursor = (tag: string) => {
     if (!row) return;
+    if (!requireDisclaimerAccepted("edit this template")) return;
     const editor = quillRef.current?.getEditor();
     if (!editor) {
       setRow((prev) => (prev ? { ...prev, content: `${prev.content || ""}${tag}` } : prev));
@@ -114,7 +145,20 @@ export default function ContractTemplateDetail() {
             <Button onClick={() => void save()}>Save template</Button>
           </div>
         </div>
-        <Tabs value={tab} onValueChange={setTab} className="space-y-4 rounded-xl border bg-white p-6 shadow-sm">
+        {isLanceTemplate ? (
+          <LanceServiceAgreementDisclaimerBanner
+            agreed={disclaimerAccepted}
+            onAgreedChange={setDisclaimerAccepted}
+          />
+        ) : null}
+        <Tabs
+          value={tab}
+          onValueChange={(value) => {
+            if ((value === "content" || value === "preview") && !requireDisclaimerAccepted("edit this template")) return;
+            setTab(value);
+          }}
+          className="space-y-4 rounded-xl border bg-white p-6 shadow-sm"
+        >
           <TabsList className="h-auto w-full justify-start rounded-none border-b bg-transparent p-0">
             <TabsTrigger value="data" className="rounded-none border-b-2 border-transparent px-4 pb-3 pt-0 data-[state=active]:border-primary data-[state=active]:bg-transparent">Data</TabsTrigger>
             <TabsTrigger value="content" className="rounded-none border-b-2 border-transparent px-4 pb-3 pt-0 data-[state=active]:border-primary data-[state=active]:bg-transparent">Content</TabsTrigger>
@@ -148,7 +192,11 @@ export default function ContractTemplateDetail() {
                     ref={quillRef}
                     theme="snow"
                     value={row.content}
-                    onChange={(value) => setRow((prev) => (prev ? { ...prev, content: value } : prev))}
+                    onChange={(value) => {
+                      if (!requireDisclaimerAccepted("edit this template")) return;
+                      setRow((prev) => (prev ? { ...prev, content: value } : prev));
+                    }}
+                    readOnly={isLanceTemplate && !disclaimerAccepted}
                     modules={quillModules}
                     formats={quillFormats}
                     style={{ minHeight: "600px" }}
@@ -189,7 +237,7 @@ export default function ContractTemplateDetail() {
             </div>
             <div id="contract-template-print-root" className="rounded-xl border bg-white p-8">
               <div
-                className="text-[15px] leading-relaxed [&_h1]:mb-3 [&_h1]:text-3xl [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:text-2xl [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:text-xl [&_h3]:font-semibold [&_h4]:mb-2 [&_h4]:text-lg [&_h4]:font-semibold [&_p]:mb-2 [&_ul]:mb-2 [&_ol]:mb-2 [&_li]:ml-5 [&_li]:list-disc"
+                className="contract-document"
                 dangerouslySetInnerHTML={{ __html: preview }}
               />
               <section className="mt-10 border-t pt-6">
@@ -221,7 +269,14 @@ export default function ContractTemplateDetail() {
           </TabsContent>
         </Tabs>
       </div>
-      <style>{`@media print { body *{visibility:hidden;} #contract-template-print-root,#contract-template-print-root *{visibility:visible;} #contract-template-print-root{position:absolute;inset:0;background:#fff;} }`}</style>
+      <style>{`
+        ${CONTRACT_DOCUMENT_STYLES}
+        @media print {
+          body * { visibility: hidden; }
+          #contract-template-print-root, #contract-template-print-root * { visibility: visible; }
+          #contract-template-print-root { position: absolute; inset: 0; background: #fff; }
+        }
+      `}</style>
     </AppLayout>
   );
 }

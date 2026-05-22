@@ -2,6 +2,14 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import { getLanceSignature } from "../_shared/lance-email.ts";
+import {
+  escapeHtml,
+  getDefaultClientFooter,
+  getDefaultClientHeader,
+  normalizeLogoUrl,
+  parseEmailCommsConfig,
+  replaceTokens,
+} from "../_shared/client-email-comms.ts";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
@@ -13,66 +21,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-function escapeHtml(text: string | null | undefined): string {
-  if (!text) return "";
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function replaceTokens(template: string, tokens: Record<string, string>): string {
-  return Object.entries(tokens).reduce((out, [key, value]) => {
-    const re = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "gi");
-    return out.replace(re, value);
-  }, template);
-}
-
-const EMAIL_COMMS_CONFIG_PREFIX = "LANCE_EMAIL_CONFIG::";
-function parseEmailCommsConfig(raw: string | null | undefined): { logoLight: string; logoDark: string; logoVariant: "light" | "dark" } {
-  const fallback = { logoLight: "", logoDark: "", logoVariant: "light" as const };
-  const text = (raw || "").trim();
-  if (!text.startsWith(EMAIL_COMMS_CONFIG_PREFIX)) return fallback;
-  try {
-    const parsed = JSON.parse(text.slice(EMAIL_COMMS_CONFIG_PREFIX.length));
-    const logoLight = typeof parsed?.logoDefault === "string"
-      ? parsed.logoDefault
-      : typeof parsed?.logoLight === "string"
-        ? parsed.logoLight
-        : "";
-    const logoDark = typeof parsed?.logoSecondary === "string"
-      ? parsed.logoSecondary
-      : typeof parsed?.logoDark === "string"
-        ? parsed.logoDark
-        : "";
-    return {
-      logoLight,
-      logoDark,
-      logoVariant: parsed?.logoVariant === "dark" ? "dark" : "light",
-    };
-  } catch {
-    return fallback;
-  }
-}
-
-function getDefaultClientHeader(logoUrl: string, businessName: string, primaryColor: string): string {
-  return `<div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
-  <div style="padding: 18px 20px; background: ${primaryColor}; color: white;">
-    ${logoUrl ? `<img src="${logoUrl}" alt="${escapeHtml(businessName)}" style="height: 28px; max-width: 160px; object-fit: contain;" />` : `<strong style="font-size: 18px;">${escapeHtml(businessName)}</strong>`}
-  </div>
-  <div style="padding: 20px;">`;
-}
-
-function getDefaultClientFooter(primaryColor: string, businessName: string, businessEmail: string): string {
-  const safeName = escapeHtml(businessName || "Your Business");
-  const safeEmail = escapeHtml(businessEmail || "");
-  return `</div><div style="padding: 14px 20px; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb;">
-  Sent by <span style="color: ${primaryColor}; font-weight: 600;">${safeName}</span>${safeEmail ? ` · <span>${safeEmail}</span>` : ""}
-</div></div>`;
-}
 
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const RATE_LIMIT_MAX_EMAILS = 30;
@@ -178,7 +126,7 @@ serve(async (req) => {
       .eq("review_request_id", reviewRequestId);
 
     if (recipientsError || !recipients?.length) {
-      return new Response(JSON.stringify({ error: "No recipients for this review request" }), {
+      return new Response(JSON.stringify({ error: "No recipients for this review request. Add at least one email recipient first." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -193,13 +141,8 @@ serve(async (req) => {
     const primaryColor = (profile?.client_email_primary_color || "#9B63E9").trim();
     const fromDisplayName = (profile?.business_name || profile?.full_name || "Your Business").trim();
     const replyToEmail = (profile?.business_email || profile?.email || "").trim();
-    // Ensure logo URL is absolute so it loads in email clients (storage paths may be stored as relative)
-    const rawLogo = (profile?.business_logo || "").trim();
-    const logoUrl = rawLogo
-      ? rawLogo.startsWith("http://") || rawLogo.startsWith("https://")
-        ? rawLogo
-        : `${(Deno.env.get("SUPABASE_URL") || "").replace(/\/$/, "")}${rawLogo.startsWith("/") ? rawLogo : `/${rawLogo}`}`
-      : "";
+    const logoUrl = normalizeLogoUrl(profile?.business_logo || "", supabaseUrl);
+
     const coreHtml = `
         <h2 style="color: ${primaryColor}; margin-top: 0;">Review request: ${safeTitle}</h2>
         <p style="color: #333;">You've been asked to review <strong>${safeTitle}</strong> (v${escapeHtml(request.version)}).</p>
@@ -218,10 +161,11 @@ serve(async (req) => {
       review_url: escapeHtml(reviewUrl),
     };
     const commsConfig = parseEmailCommsConfig(profile?.client_email_header_html);
-    const selectedRawLogo = commsConfig.logoVariant === "dark"
-      ? (commsConfig.logoDark || profile?.business_logo || commsConfig.logoLight || "")
-      : (profile?.business_logo || commsConfig.logoLight || commsConfig.logoDark || "");
-    const selectedLogoUrl = normalizeLogoUrl(selectedRawLogo, Deno.env.get("SUPABASE_URL") || "");
+    const selectedRawLogo =
+      commsConfig.logoVariant === "dark"
+        ? commsConfig.logoDark || profile?.business_logo || commsConfig.logoLight || ""
+        : profile?.business_logo || commsConfig.logoLight || commsConfig.logoDark || "";
+    const selectedLogoUrl = normalizeLogoUrl(selectedRawLogo, supabaseUrl);
     const header = getDefaultClientHeader(selectedLogoUrl || logoUrl, fromDisplayName, primaryColor);
     const footer = (profile?.client_email_footer_html || "").trim()
       ? replaceTokens(profile.client_email_footer_html, tokens)

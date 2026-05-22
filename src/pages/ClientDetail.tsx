@@ -25,7 +25,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ArrowLeft, Check, MoreVertical, X } from "@/components/icons";
 import { addMonths, addWeeks, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, parseISO, startOfMonth, startOfWeek, subMonths, subWeeks } from "date-fns";
-import { timeMonthCalendarDayClassName, timeMonthCalendarDurationClassName } from "@/lib/time";
+import {
+  formatDuration,
+  sumMonthSecondsFromDayTotals,
+  timeMonthCalendarDayClassName,
+  timeMonthCalendarDurationClassName,
+} from "@/lib/time";
+import { formatPortalMoney, resolveMoneyCurrency } from "@/lib/clientPortal";
+import { formatStatusLabel, getStatusBadgeClass } from "@/lib/statusDisplay";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import {
@@ -121,26 +128,6 @@ const getClientStatusColor = (status: string | null) => {
   return "bg-muted text-muted-foreground border-muted";
 };
 
-const statusClass = (status?: string | null) => {
-  switch (status) {
-    case "active":
-    case "accepted":
-    case "approved":
-      return "bg-success/10 text-success border-success/20";
-    case "sent":
-    case "pending":
-    case "pending_signatures":
-      return "bg-warning/10 text-warning border-warning/20";
-    case "read":
-      return "bg-blue-50 text-blue-700 border-blue-200";
-    case "cancelled":
-    case "rejected":
-      return "bg-destructive/10 text-destructive border-destructive/20";
-    default:
-      return "bg-muted text-muted-foreground border-muted";
-  }
-};
-
 const toSeconds = (entry: TimeEntry) => {
   if (entry.total_duration_seconds != null && entry.total_duration_seconds > 0) return entry.total_duration_seconds;
   if (entry.duration_minutes != null) return entry.duration_minutes * 60;
@@ -202,6 +189,9 @@ export default function ClientDetail() {
   const [selectedAvatarColor, setSelectedAvatarColor] = useState(DEFAULT_CLIENT_AVATAR_COLOR);
   const clientLogoInputRef = useRef<HTMLInputElement>(null);
   const { currency: profileCurrency } = useProfileCurrency();
+  const clientMoneyCurrency = resolveMoneyCurrency(client?.currency, profileCurrency);
+  const formatClientMoney = (amount: number | null | undefined) =>
+    formatPortalMoney(amount, clientMoneyCurrency);
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [newTag, setNewTag] = useState("");
   const [loading, setLoading] = useState(true);
@@ -356,6 +346,11 @@ export default function ClientDetail() {
     });
     return out;
   }, [timeEntries, monthStart, monthEnd]);
+
+  const monthTotalSeconds = useMemo(
+    () => sumMonthSecondsFromDayTotals(monthDayTotals, monthStart, monthEnd),
+    [monthDayTotals, monthStart, monthEnd],
+  );
 
   const selectedDayEntries = useMemo(
     () =>
@@ -906,17 +901,11 @@ export default function ClientDetail() {
                     <p><strong>Email:</strong> {client.email || "—"}</p>
                     <p><strong>Phone:</strong> {client.phone || "—"}</p>
                     <p><strong>Tax ID:</strong> {client.tax_id || "—"}</p>
-                    <p><strong>Currency:</strong> {client.currency || "USD"}</p>
+                    <p><strong>Currency:</strong> {clientMoneyCurrency}</p>
                     <p><strong>Lead source:</strong> {client.lead_source || "—"}</p>
                     <p>
                       <strong>Estimated value:</strong>{" "}
-                      {client.estimated_value != null
-                        ? new Intl.NumberFormat("en-US", {
-                            style: "currency",
-                            currency: client.currency || "USD",
-                            maximumFractionDigits: 2,
-                          }).format(client.estimated_value)
-                        : "—"}
+                      {formatClientMoney(client.estimated_value)}
                     </p>
                     <p><strong>Next follow-up:</strong> {client.next_follow_up_at ? formatUserDate(client.next_follow_up_at) : "—"}</p>
                     <p><strong>Next action:</strong> {client.next_action || "—"}</p>
@@ -1000,9 +989,9 @@ export default function ClientDetail() {
                   {projects.map((p) => (
                     <TableRow key={p.id} className="cursor-pointer" onClick={() => navigate(`/projects/${p.id}`)}>
                       <TableCell className="font-medium">{p.name}</TableCell>
-                      <TableCell><Badge variant="outline" className={statusClass(p.status)}>{p.status || "active"}</Badge></TableCell>
+                      <TableCell><Badge variant="outline" className={getStatusBadgeClass(p.status)}>{formatStatusLabel(p.status || "active")}</Badge></TableCell>
                       <TableCell>{p.due_date ? formatUserDate(p.due_date) : "—"}</TableCell>
-                      <TableCell>{p.budget ?? "—"}</TableCell>
+                      <TableCell className="tabular-nums">{formatClientMoney(p.budget)}</TableCell>
                     </TableRow>
                   ))}
                   {projects.length === 0 ? <TableRow><TableCell colSpan={4} className="text-muted-foreground">No projects yet.</TableCell></TableRow> : null}
@@ -1059,7 +1048,7 @@ export default function ClientDetail() {
                   }}
                 />
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button variant={timeView === "week" ? "default" : "outline"} onClick={() => setTimeView("week")}>Week</Button>
                 <Button variant={timeView === "month" ? "default" : "outline"} onClick={() => setTimeView("month")}>Month</Button>
               </div>
@@ -1148,11 +1137,19 @@ export default function ClientDetail() {
                       >
                         <p className="text-xs">{format(d, "d")}</p>
                         <p className={timeMonthCalendarDurationClassName(hasEntries)}>
-                          {total ? formatHm(total) : "0:00"}
+                          {hasEntries ? formatHm(total) : "0:00"}
                         </p>
                       </button>
                     );
                   })}
+                </div>
+                <div className="mt-4 flex items-center justify-end border-t pt-3">
+                  <p className="text-sm font-medium text-foreground">
+                    Month total:{" "}
+                    <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">
+                      {formatDuration(monthTotalSeconds)}
+                    </span>
+                  </p>
                 </div>
               </CardContent></Card>
             )}
@@ -1225,8 +1222,8 @@ export default function ClientDetail() {
                 {invoices.map((row) => (
                   <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/invoices/${row.id}`)}>
                     <TableCell className="font-medium">{row.invoice_number}</TableCell>
-                    <TableCell><Badge variant="outline" className={statusClass(row.status)}>{row.status}</Badge></TableCell>
-                    <TableCell>{row.total}</TableCell>
+                    <TableCell><Badge variant="outline" className={getStatusBadgeClass(row.status)}>{formatStatusLabel(row.status)}</Badge></TableCell>
+                    <TableCell className="tabular-nums">{formatClientMoney(row.total)}</TableCell>
                     <TableCell>{row.due_date ? formatUserDate(row.due_date) : "—"}</TableCell>
                   </TableRow>
                 ))}
@@ -1246,8 +1243,8 @@ export default function ClientDetail() {
                 {proposals.map((row) => (
                   <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/proposals/${row.id}`)}>
                     <TableCell className="font-medium">{row.identifier}</TableCell>
-                    <TableCell><Badge variant="outline" className={statusClass(row.status)}>{row.status}</Badge></TableCell>
-                    <TableCell>{row.total ?? "—"}</TableCell>
+                    <TableCell><Badge variant="outline" className={getStatusBadgeClass(row.status)}>{formatStatusLabel(row.status)}</Badge></TableCell>
+                    <TableCell className="tabular-nums">{formatClientMoney(row.total)}</TableCell>
                     <TableCell>{row.expires_at ? formatUserDate(row.expires_at) : "—"}</TableCell>
                   </TableRow>
                 ))}
@@ -1267,8 +1264,8 @@ export default function ClientDetail() {
                 {contracts.map((row) => (
                   <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/contracts/${row.id}`)}>
                     <TableCell className="font-medium">{row.identifier}</TableCell>
-                    <TableCell><Badge variant="outline" className={statusClass(row.status)}>{row.status}</Badge></TableCell>
-                    <TableCell>{row.total ?? "—"}</TableCell>
+                    <TableCell><Badge variant="outline" className={getStatusBadgeClass(row.status)}>{formatStatusLabel(row.status)}</Badge></TableCell>
+                    <TableCell className="tabular-nums">{formatClientMoney(row.total)}</TableCell>
                   </TableRow>
                 ))}
                 {contracts.length === 0 ? <TableRow><TableCell colSpan={3} className="text-muted-foreground">No contracts yet.</TableCell></TableRow> : null}
@@ -1287,7 +1284,7 @@ export default function ClientDetail() {
                 {approvals.map((row) => (
                   <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/reviews/${row.id}`)}>
                     <TableCell className="font-medium">{row.title}</TableCell>
-                    <TableCell><Badge variant="outline" className={statusClass(row.status)}>{row.status}</Badge></TableCell>
+                    <TableCell><Badge variant="outline" className={getStatusBadgeClass(row.status)}>{formatStatusLabel(row.status)}</Badge></TableCell>
                     <TableCell>{row.projects?.name || "—"}</TableCell>
                     <TableCell>{formatUserDate(row.created_at)}</TableCell>
                   </TableRow>

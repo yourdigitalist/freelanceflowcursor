@@ -28,6 +28,7 @@ import {
   normalizeProposalPaymentMethods,
   type ProposalProfileDefaults,
 } from "@/lib/proposalDefaults";
+import { formatStatusLabel, getStatusBadgeClass } from "@/lib/statusDisplay";
 import { ProposalDocument } from "@/components/proposals/ProposalDocument";
 
 const MAX_COVER_SIZE = 10 * 1024 * 1024;
@@ -528,22 +529,6 @@ export default function ProposalDetail() {
     );
   }
 
-  const formatStatus = (status: string) =>
-    status ? status.charAt(0).toUpperCase() + status.slice(1) : "Draft";
-  const statusBadgeClass = (status: string) => {
-    switch (status) {
-      case "accepted":
-        return "bg-success/10 text-success border-success/20";
-      case "read":
-        return "bg-blue-50 text-blue-700 border-blue-200";
-      case "sent":
-        return "bg-warning/10 text-warning border-warning/20";
-      case "draft":
-      default:
-        return "bg-warning/10 text-warning border-warning/20";
-    }
-  };
-
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -555,8 +540,8 @@ export default function ProposalDetail() {
             </Link>
             <div className="mt-2 flex items-center gap-2">
               <h1 className="text-2xl font-bold">{proposal.identifier || "Draft proposal"}</h1>
-              <Badge variant="outline" className={statusBadgeClass(proposal.status)}>
-                {formatStatus(proposal.status)}
+              <Badge variant="outline" className={getStatusBadgeClass(proposal.status)}>
+                {formatStatusLabel(proposal.status)}
               </Badge>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import DOMPurify from "dompurify";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -12,14 +12,20 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CheckCircle } from "@/components/icons";
 import { PortalBackLink, usePortalTokenFromSearch } from "@/components/clients/PortalBackLink";
-import { DEFAULT_CONTRACT_TEMPLATE_CONTENT, renderTemplate } from "@/lib/contractTemplate";
+import {
+  CONTRACT_DOCUMENT_STYLES,
+  DEFAULT_CONTRACT_TEMPLATE_CONTENT,
+  renderTemplate,
+} from "@/lib/contractTemplate";
 import type { Contract, ContractService } from "@/types/contracts";
 
 type Step = "view" | "details" | "agree" | "otp" | "done";
 
 export default function PublicContract() {
   const { token } = useParams<{ token: string }>();
-  const portalToken = usePortalTokenFromSearch();
+  const portalTokenFromUrl = usePortalTokenFromSearch();
+  const [searchParams] = useSearchParams();
+  const [clientPortalToken, setClientPortalToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [contract, setContract] = useState<(Contract & { projects?: { name: string } | null }) | null>(null);
@@ -49,8 +55,8 @@ export default function PublicContract() {
     client_country: "",
     client_tax_id: "",
   });
-  const searchParams = new URLSearchParams(window.location.search);
   const inAppMode = searchParams.get("inapp") === "1";
+  const effectivePortalToken = portalTokenFromUrl || clientPortalToken;
   const composeFullAddress = (parts: Array<string | null | undefined>, fallback?: string | null) => {
     const structured = parts
       .map((value) => String(value || "").trim())
@@ -172,6 +178,9 @@ export default function PublicContract() {
       return;
     }
     setContract(data.contract);
+    setClientPortalToken(
+      (data.contract as { client_portal_token?: string | null }).client_portal_token?.trim() || null,
+    );
     setServices(data.services || []);
     setTemplateContent(data.template_content || DEFAULT_CONTRACT_TEMPLATE_CONTENT);
     setClientData({
@@ -207,7 +216,10 @@ export default function PublicContract() {
 
   const renderedTemplate = useMemo(() => {
     if (!contract) return "";
-    return renderTemplate(templateContent, {
+    const currency = (contract as { clients?: { currency?: string | null } | null }).clients?.currency || "USD";
+    return renderTemplate(
+      templateContent,
+      {
       identifier: contract.identifier,
       today: null,
       signed_date: contract.client_signed_at || contract.freelancer_signed_at || null,
@@ -229,7 +241,12 @@ export default function PublicContract() {
       freelancer_phone: contract.freelancer_phone,
       freelancer_address: composeFullAddress([contract.freelancer_street, contract.freelancer_street2, contract.freelancer_city, contract.freelancer_state, contract.freelancer_zip, contract.freelancer_country], contract.freelancer_address),
       freelancer_complement: (contract as any).freelancer_complement || null,
-      services: services.map((service) => ({ name: service.name, description: service.description, quantity: service.quantity })),
+      services: services.map((service) => ({
+        name: service.name,
+        description: service.description,
+        quantity: service.quantity,
+        price: service.price,
+      })),
       timeline_days: contract.timeline_days,
       payment_structure: contract.payment_structure,
       payment_methods: contract.payment_methods || [],
@@ -237,8 +254,10 @@ export default function PublicContract() {
       payment_link: contract.payment_link,
       additional_clause: contract.additional_clause,
       total: Number(contract.total || 0),
-    });
-  }, [contract, services, templateContent]);
+      },
+      { mode: inAppMode ? "preview" : "final", currency },
+    );
+  }, [contract, services, templateContent, inAppMode]);
   const sanitizedTemplateHtml = useMemo(() => DOMPurify.sanitize(renderedTemplate), [renderedTemplate]);
 
   const submitDetails = async () => {
@@ -320,13 +339,7 @@ export default function PublicContract() {
   return (
     <div className="min-h-screen bg-background py-8 px-4">
       <div className="mx-auto max-w-4xl space-y-4">
-        {portalToken ? (
-          <PortalBackLink portalToken={portalToken} />
-        ) : (
-          <button type="button" className="text-sm text-muted-foreground hover:text-foreground" onClick={() => history.back()}>
-            ← Back to Client Area
-          </button>
-        )}
+        {effectivePortalToken ? <PortalBackLink portalToken={effectivePortalToken} /> : null}
 
         {(step === "view" || bothSigned) && (
           <>
@@ -342,7 +355,7 @@ export default function PublicContract() {
                 </div>
               ) : null}
               <section
-                className="mb-6 text-[15px] leading-relaxed text-zinc-800 [&_h1]:mb-3 [&_h1]:text-3xl [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:text-2xl [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:text-xl [&_h3]:font-semibold [&_h4]:mb-2 [&_h4]:text-lg [&_h4]:font-semibold [&_p]:mb-2 [&_ul]:mb-2 [&_ol]:mb-2 [&_li]:ml-5"
+                className="contract-document mb-6"
                 dangerouslySetInnerHTML={{ __html: sanitizedTemplateHtml }}
               />
               <section className="mt-10 border-t pt-6">
@@ -553,6 +566,7 @@ export default function PublicContract() {
       </div>
 
       <style>{`
+        ${CONTRACT_DOCUMENT_STYLES}
         ${inAppMode ? `
         #crisp-chatbox, .crisp-client, [id*="crisp"], [class*="crisp"] {
           display: none !important;

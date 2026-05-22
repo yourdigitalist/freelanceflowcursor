@@ -16,6 +16,7 @@ import { ArrowLeft, Plus, Trash2, Send, Loader2, ListTodo, Wallet, Download, Sav
 import { reopenPaidInvoice } from '@/lib/invoiceStatus';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDate } from '@/lib/datetime';
+import { formatStatusLabel, getStatusBadgeClass } from '@/lib/statusDisplay';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { endOfMonth, endOfWeek, format, startOfMonth, startOfWeek, subMonths } from 'date-fns';
 import { formatCurrency, currencies } from '@/lib/locale-data';
@@ -429,21 +430,6 @@ export default function InvoiceDetail() {
     }
     preloadedDefaultsRef.current = invoice.id;
   }, [invoice?.id, invoice?.notes, (invoice as Invoice)?.invoice_footer, (invoice as Invoice)?.bank_details, profile?.invoice_notes_default, profile?.invoice_footer, profile?.invoice_bank_details_default]);
-
-  const getInvoiceStatusBadgeStyle = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return 'bg-success/10 text-success border-success/20';
-      case 'overdue':
-        return 'bg-destructive/10 text-destructive border-destructive/20';
-      case 'sent':
-        return 'bg-warning/10 text-warning border-warning/20';
-      case 'draft':
-        return 'bg-muted text-muted-foreground border-muted';
-      default:
-        return 'bg-muted text-muted-foreground border-muted';
-    }
-  };
 
   const fetchProfile = async () => {
     const columnsWithBankDefault = 'full_name, email, company_name, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, currency, currency_display, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, invoice_footer, invoice_bank_details_default, invoice_notes_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_subject_default, reminder_body_default, hourly_rate';
@@ -1597,14 +1583,14 @@ export default function InvoiceDetail() {
               ) : (
                 <div className="flex items-center gap-2">
                   <h1 className="text-2xl font-bold truncate">{invoice.invoice_number}</h1>
-                  <Badge variant="outline" className={getInvoiceStatusBadgeStyle(invoice.status || 'draft')}>
-                    {(invoice.status || 'draft').charAt(0).toUpperCase() + (invoice.status || 'draft').slice(1)}
+                  <Badge variant="outline" className={getStatusBadgeClass(invoice.status || 'draft')}>
+                    {formatStatusLabel(invoice.status || 'draft')}
                   </Badge>
                 </div>
               )}
               {isEditMode && (
-                <Badge variant="outline" className={getInvoiceStatusBadgeStyle(invoice.status || 'draft')}>
-                  {(invoice.status || 'draft').charAt(0).toUpperCase() + (invoice.status || 'draft').slice(1)}
+                <Badge variant="outline" className={getStatusBadgeClass(invoice.status || 'draft')}>
+                  {formatStatusLabel(invoice.status || 'draft')}
                 </Badge>
               )}
             </div>

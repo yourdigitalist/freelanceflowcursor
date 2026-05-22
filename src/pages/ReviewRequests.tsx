@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -62,6 +62,8 @@ import { EmojiPicker } from '@/components/ui/emoji-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { getSiteUrl } from '@/lib/site-url';
+import { uploadReviewFile } from '@/lib/reviewFileUpload';
+import { sendReviewRequestEmail } from '@/lib/sendReviewRequest';
 
 interface ReviewFolder {
   id: string;
@@ -96,6 +98,7 @@ interface Client {
 interface Project {
   id: string;
   name: string;
+  client_id: string | null;
 }
 
 function FileThumbnail({ file }: { file: File }) {
@@ -116,6 +119,7 @@ const FOLDER_COLORS = [
 export default function ReviewRequests() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   
   const [folders, setFolders] = useState<ReviewFolder[]>([]);
@@ -147,6 +151,16 @@ export default function ReviewRequests() {
   const [requestRecipients, setRequestRecipients] = useState<string[]>([]);
   const [recipientInput, setRecipientInput] = useState('');
   const [uploading, setUploading] = useState(false);
+
+  const [showCreateFolderInline, setShowCreateFolderInline] = useState(false);
+  const [inlineFolderName, setInlineFolderName] = useState('');
+  const [inlineFolderEmoji, setInlineFolderEmoji] = useState('📁');
+  const [inlineFolderColor, setInlineFolderColor] = useState('#9B63E9');
+  const [creatingFolderInline, setCreatingFolderInline] = useState(false);
+
+  const [showCreateProjectInline, setShowCreateProjectInline] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [creatingProjectInline, setCreatingProjectInline] = useState(false);
   
   // Filters (like Projects)
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -180,7 +194,7 @@ export default function ReviewRequests() {
         projects(name)
       `).eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase.from('clients').select('id, name, email').eq('user_id', user.id).is('archived_at', null).order('name'),
-      supabase.from('projects').select('id, name').eq('user_id', user.id).order('name'),
+      supabase.from('projects').select('id, name, client_id').eq('user_id', user.id).order('name'),
     ]);
     
     setFolders(foldersRes.data || []);
@@ -193,6 +207,29 @@ export default function ReviewRequests() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    const client = searchParams.get('client');
+    if (!client || clients.length === 0) return;
+    if (!clients.some((c) => c.id === client)) return;
+    setRequestClientId(client);
+    setRequestProjectId('');
+    setRequestDialogOpen(true);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, clients, setSearchParams]);
+
+  const filteredProjects = useMemo(
+    () => projects.filter((p) => !requestClientId || p.client_id === requestClientId),
+    [projects, requestClientId],
+  );
+
+  useEffect(() => {
+    if (!requestProjectId) return;
+    const project = projects.find((p) => p.id === requestProjectId);
+    if (requestClientId && project?.client_id && project.client_id !== requestClientId) {
+      setRequestProjectId('');
+    }
+  }, [requestClientId, requestProjectId, projects]);
 
   const resetFolderForm = () => {
     setFolderName('');
@@ -213,6 +250,86 @@ export default function ReviewRequests() {
     setRequestRecipients([]);
     setRecipientInput('');
     setEditingRequest(null);
+    setShowCreateFolderInline(false);
+    setInlineFolderName('');
+    setInlineFolderEmoji('📁');
+    setInlineFolderColor('#9B63E9');
+    setShowCreateProjectInline(false);
+    setNewProjectName('');
+  };
+
+  const createFolderInline = async () => {
+    if (!user || !inlineFolderName.trim()) {
+      toast({ title: 'Folder name is required', variant: 'destructive' });
+      return;
+    }
+    setCreatingFolderInline(true);
+    try {
+      const { data, error } = await supabase
+        .from('review_folders')
+        .insert({
+          user_id: user.id,
+          name: inlineFolderName.trim(),
+          emoji: inlineFolderEmoji,
+          color: inlineFolderColor,
+        })
+        .select('id, name, emoji, color')
+        .single();
+      if (error) throw error;
+      if (!data) throw new Error('Folder was not created');
+      setFolders((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+      setRequestFolderId(data.id);
+      setShowCreateFolderInline(false);
+      setInlineFolderName('');
+      setInlineFolderEmoji('📁');
+      setInlineFolderColor('#9B63E9');
+      toast({ title: 'Folder created' });
+    } catch (err: any) {
+      toast({ title: 'Could not create folder', description: err?.message, variant: 'destructive' });
+    } finally {
+      setCreatingFolderInline(false);
+    }
+  };
+
+  const createProjectInline = async () => {
+    if (!user) return;
+    const name = newProjectName.trim();
+    if (!name) {
+      toast({ title: 'Project name is required', variant: 'destructive' });
+      return;
+    }
+    if (!requestClientId) {
+      toast({ title: 'Select a client first', variant: 'destructive' });
+      return;
+    }
+    const existing = projects.find(
+      (p) => p.name.toLowerCase() === name.toLowerCase() && p.client_id === requestClientId,
+    );
+    if (existing) {
+      setRequestProjectId(existing.id);
+      setShowCreateProjectInline(false);
+      setNewProjectName('');
+      return;
+    }
+    setCreatingProjectInline(true);
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .insert({ user_id: user.id, name, client_id: requestClientId })
+        .select('id, name, client_id')
+        .single();
+      if (error) throw error;
+      if (!data) throw new Error('Project was not created');
+      setProjects((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+      setRequestProjectId(data.id);
+      setShowCreateProjectInline(false);
+      setNewProjectName('');
+      toast({ title: 'Project created' });
+    } catch (err: any) {
+      toast({ title: 'Could not create project', description: err?.message, variant: 'destructive' });
+    } finally {
+      setCreatingProjectInline(false);
+    }
   };
 
   const handleSaveFolder = async () => {
@@ -317,28 +434,7 @@ export default function ReviewRequests() {
       if (!editingRequest && requestFiles.length > 0 && requestId) {
         try {
           for (const file of requestFiles) {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('review_request_id', requestId);
-
-            const { data: session } = await supabase.auth.getSession();
-
-            const response = await fetch(
-              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-review-file`,
-              {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${session?.session?.access_token}`,
-                },
-                body: formData,
-              }
-            );
-
-            const result = await response.json();
-
-            if (!response.ok || result.error) {
-              throw new Error(result.error || 'Failed to upload file');
-            }
+            await uploadReviewFile(file, requestId);
           }
         } catch (e) {
           // Roll back: avoid creating an unsent approval with no files
@@ -359,16 +455,16 @@ export default function ReviewRequests() {
       // Send approval email when creating (same as "Send to client" on detail page)
       if (!editingRequest && requestId) {
         try {
-          const { data, error } = await supabase.functions.invoke('send-review-request', {
-            body: { reviewRequestId: requestId, origin: getSiteUrl() || window.location.origin },
-          });
-          if (error) throw error;
-          if (data?.error) throw new Error(data.error);
+          await sendReviewRequestEmail(requestId, getSiteUrl() || window.location.origin);
           toast({ title: 'Approval sent', description: 'Recipients have been emailed the review link.' });
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const message =
+            err instanceof Error
+              ? err.message
+              : 'The request was created, but email could not be sent. You can still share the link from the approval page.';
           toast({
             title: 'Email failed to send',
-            description: err?.message || 'The request was created, but email could not be sent. You can still share the link from the approval page.',
+            description: message,
             variant: 'destructive',
           });
         }
@@ -410,17 +506,13 @@ export default function ReviewRequests() {
 
   const handleSendRequest = async (request: ReviewRequest) => {
     try {
-      const { data, error } = await supabase.functions.invoke('send-review-request', {
-        body: { reviewRequestId: request.id, origin: getSiteUrl() || window.location.origin },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      await sendReviewRequestEmail(request.id, getSiteUrl() || window.location.origin);
       toast({ title: 'Review request sent', description: 'Recipients have been emailed the review link.' });
       fetchData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: 'Error sending',
-        description: err?.message || 'Could not send email. You can still copy/share the link.',
+        description: err instanceof Error ? err.message : 'Could not send email. You can still copy/share the link.',
         variant: 'destructive',
       });
     }
@@ -448,8 +540,26 @@ export default function ReviewRequests() {
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   ];
+  const EXT_TO_MIME: Record<string, string> = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    pdf: 'application/pdf',
+    doc: 'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  };
   const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB (images and documents)
   const MAX_FILE_SIZE_MB = 5;
+
+  const fileMatchesTypes = (file: File, allowedTypes: string[]) => {
+    if (allowedTypes.includes(file.type)) return true;
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!ext) return false;
+    const inferred = EXT_TO_MIME[ext];
+    return !!inferred && allowedTypes.includes(inferred);
+  };
 
   const [wordWarningOpen, setWordWarningOpen] = useState(false);
   const pendingWordFilesRef = useRef<File[]>([]);
@@ -466,7 +576,7 @@ export default function ReviewRequests() {
         errors.push(`${file.name}: too large (max ${MAX_FILE_SIZE_MB}MB)`);
         continue;
       }
-      if (!allowedTypes.includes(file.type)) {
+      if (!fileMatchesTypes(file, allowedTypes)) {
         errors.push(`${file.name}: not a valid ${typeLabel} type`);
         continue;
       }
@@ -501,7 +611,7 @@ export default function ReviewRequests() {
         errors.push(`${file.name}: too large (max ${MAX_FILE_SIZE_MB}MB)`);
         continue;
       }
-      if (!WORD_TYPES.includes(file.type)) {
+      if (!fileMatchesTypes(file, WORD_TYPES)) {
         errors.push(`${file.name}: not a valid Word document`);
         continue;
       }
@@ -1069,7 +1179,15 @@ export default function ReviewRequests() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Client *</Label>
-              <Select value={requestClientId} onValueChange={setRequestClientId}>
+              <Select
+                value={requestClientId}
+                onValueChange={(v) => {
+                  setRequestClientId(v);
+                  setRequestProjectId('');
+                  setShowCreateProjectInline(false);
+                  setNewProjectName('');
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a client" />
                 </SelectTrigger>
@@ -1091,18 +1209,52 @@ export default function ReviewRequests() {
             </div>
             
             <div className="space-y-2">
-              <Label>Project (optional)</Label>
+              <div className="flex items-center justify-between">
+                <Label>Project (optional)</Label>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto p-0 text-sm"
+                  disabled={!requestClientId}
+                  onClick={() => setShowCreateProjectInline((prev) => !prev)}
+                >
+                  {showCreateProjectInline ? 'Cancel' : 'Create new project'}
+                </Button>
+              </div>
               <Select value={requestProjectId || 'none'} onValueChange={v => setRequestProjectId(v === 'none' ? '' : v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a project" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No project</SelectItem>
-                  {projects.map(project => (
+                  {filteredProjects.map(project => (
                     <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {!requestClientId ? (
+                <p className="text-xs text-muted-foreground">Select a client to filter projects or create a new one.</p>
+              ) : null}
+              {showCreateProjectInline ? (
+                <div className="rounded-lg border p-3 space-y-2">
+                  <Input
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    placeholder="Project name *"
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), void createProjectInline())}
+                  />
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={creatingProjectInline || !newProjectName.trim()}
+                      onClick={() => void createProjectInline()}
+                    >
+                      {creatingProjectInline ? 'Adding…' : 'Add project'}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
             
             <div className="grid grid-cols-2 gap-4">
@@ -1112,7 +1264,17 @@ export default function ReviewRequests() {
                 <p className="text-xs text-muted-foreground">Display: v{requestVersion}</p>
               </div>
               <div className="space-y-2">
-                <Label>Folder</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Folder</Label>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto p-0 text-sm"
+                    onClick={() => setShowCreateFolderInline((prev) => !prev)}
+                  >
+                    {showCreateFolderInline ? 'Cancel' : 'Create new folder'}
+                  </Button>
+                </div>
                 <Select value={requestFolderId || 'none'} onValueChange={v => setRequestFolderId(v === 'none' ? '' : v)}>
                   <SelectTrigger>
                     <SelectValue placeholder="No folder" />
@@ -1126,6 +1288,48 @@ export default function ReviewRequests() {
                     ))}
                   </SelectContent>
                 </Select>
+                {showCreateFolderInline ? (
+                  <div className="rounded-lg border p-3 space-y-3">
+                    <Input
+                      value={inlineFolderName}
+                      onChange={(e) => setInlineFolderName(e.target.value)}
+                      placeholder="Folder name *"
+                    />
+                    <div className="flex gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Emoji</Label>
+                        <EmojiPicker value={inlineFolderEmoji} onChange={setInlineFolderEmoji} />
+                      </div>
+                      <div className="space-y-1 flex-1">
+                        <Label className="text-xs">Color</Label>
+                        <div className="flex gap-1.5 flex-wrap">
+                          {FOLDER_COLORS.map((color) => (
+                            <button
+                              key={color}
+                              type="button"
+                              className={cn(
+                                'h-6 w-6 rounded-full border-2 transition-transform',
+                                inlineFolderColor === color ? 'scale-110 border-foreground' : 'border-transparent',
+                              )}
+                              style={{ backgroundColor: color }}
+                              onClick={() => setInlineFolderColor(color)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={creatingFolderInline || !inlineFolderName.trim()}
+                        onClick={() => void createFolderInline()}
+                      >
+                        {creatingFolderInline ? 'Adding…' : 'Add folder'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
             

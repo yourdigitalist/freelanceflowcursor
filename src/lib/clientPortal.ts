@@ -38,9 +38,14 @@ export function parsePortalSections(raw: unknown): ClientPortalSections {
 
 import { getSiteUrl } from "@/lib/site-url";
 
+/** In-app route for React Router (always relative). */
+export function getClientPortalPath(portalToken: string): string {
+  return `/portal/${encodeURIComponent(portalToken.trim())}`;
+}
+
 export function getClientPortalUrl(portalToken: string): string {
   const base = getSiteUrl() || (typeof window !== "undefined" ? window.location.origin : "");
-  return `${base}/portal/${portalToken.trim()}`;
+  return `${base}${getClientPortalPath(portalToken)}`;
 }
 
 export function portalQueryParam(portalToken: string | null | undefined): string {
@@ -52,4 +57,41 @@ export function appendPortalParam(url: string, portalToken: string | null | unde
   if (!portalToken) return url;
   const sep = url.includes("?") ? "&" : "?";
   return `${url}${sep}portal=${encodeURIComponent(portalToken)}`;
+}
+
+/**
+ * Currency for displaying money: per-client first, then your profile default (Settings → Locale).
+ */
+export function resolveMoneyCurrency(
+  clientCurrency?: string | null,
+  profileCurrency?: string | null,
+): string {
+  const client = String(clientCurrency || "").trim().toUpperCase();
+  const profile = String(profileCurrency || "").trim().toUpperCase();
+  if (client) return client;
+  if (profile) return profile;
+  return "USD";
+}
+
+/** Format money for client portal and client detail tabs. */
+export function formatPortalMoney(
+  amount: number | null | undefined,
+  clientCurrency?: string | null,
+  profileCurrency?: string | null,
+): string {
+  if (amount == null || Number.isNaN(Number(amount))) return "—";
+  const code = resolveMoneyCurrency(clientCurrency, profileCurrency);
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: code,
+      maximumFractionDigits: 2,
+    }).format(Number(amount));
+  } catch {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 2,
+    }).format(Number(amount));
+  }
 }

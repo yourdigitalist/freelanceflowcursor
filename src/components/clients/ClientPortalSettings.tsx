@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ClientAvatar } from "@/components/clients/ClientAvatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import {
   DEFAULT_PORTAL_SECTIONS,
   getClientPortalUrl,
@@ -111,7 +111,7 @@ export function ClientPortalSettings({
           .update({
             portal_enabled: patch.portal_enabled,
             portal_token: patch.portal_token,
-            portal_sections: patch.portal_sections as unknown as Record<string, unknown>,
+            portal_sections: patch.portal_sections as unknown as Json,
           })
           .eq("id", client.id)
           .select("portal_enabled, portal_token, portal_sections")
@@ -454,27 +454,6 @@ export function ClientPortalSettings({
           </Button>
         </CardContent>
       </Card>
-
-      {enabled && portalToken ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">Portal preview</CardTitle>
-          </CardHeader>
-          <CardContent className="flex items-center gap-3">
-            <ClientAvatar
-              client={{
-                name: client.name,
-                logo_url: client.logo_url,
-                avatar_color: client.avatar_color,
-              }}
-              size="md"
-            />
-            <p className="text-sm text-muted-foreground">
-              Use Preview on the link above to open the portal as your client will see it.
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
     </div>
   );
 }

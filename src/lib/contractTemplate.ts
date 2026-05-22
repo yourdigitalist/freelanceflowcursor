@@ -2,6 +2,7 @@ export type ContractTemplateService = {
   name: string | null;
   description: string | null;
   quantity: number | null;
+  price?: number | null;
 };
 
 import { DEFAULT_SERVICE_AGREEMENT_TEMPLATE_HTML } from "@/lib/defaultServiceAgreementTemplate.html";
@@ -38,9 +39,161 @@ export type ContractTemplateData = {
   total: number | null;
 };
 
+export type RenderTemplateOptions = {
+  /** preview = highlighted placeholders for drafting; final = clean document for clients/PDF */
+  mode?: "preview" | "final";
+  currency?: string;
+};
+
 export const DEFAULT_CONTRACT_TEMPLATE_CONTENT = DEFAULT_SERVICE_AGREEMENT_TEMPLATE_HTML;
 
+export const CONTRACT_DOCUMENT_STYLES = `
+  .contract-document {
+    font-size: 15px;
+    line-height: 1.6;
+    color: #27272a;
+  }
+  .contract-document h1 {
+    margin: 0 0 10px;
+    font-size: 1.875rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: #1a1a2e;
+  }
+  .contract-document h2 {
+    margin: 22px 0 10px;
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: #1a1a2e;
+  }
+  .contract-document h2:first-child {
+    margin-top: 0;
+  }
+  .contract-document h3 {
+    margin: 16px 0 8px;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1a1a2e;
+  }
+  .contract-document h4 {
+    margin: 14px 0 6px;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1a1a2e;
+  }
+  .contract-document p {
+    margin: 0 0 8px;
+  }
+  .contract-document p:empty {
+    display: none;
+  }
+  .contract-document ul,
+  .contract-document ol {
+    margin: 0 0 10px;
+    padding-left: 1.25rem;
+  }
+  .contract-document li {
+    margin-bottom: 3px;
+  }
+  .contract-token {
+    display: inline;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: #e8f0fe;
+    color: #1d4ed8;
+    font-weight: 600;
+    font-size: 0.92em;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  .contract-token-line {
+    display: inline-block;
+    margin-bottom: 2px;
+  }
+  .contract-services-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 14px;
+    font-size: 14px;
+  }
+  .contract-services-table th {
+    text-align: left;
+    font-size: 12px;
+    font-weight: 500;
+    color: #888;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e7e0f4;
+  }
+  .contract-services-table th:nth-child(3),
+  .contract-services-table th:nth-child(4),
+  .contract-services-table td:nth-child(3),
+  .contract-services-table td:nth-child(4) {
+    text-align: right;
+  }
+  .contract-services-table td {
+    padding: 14px 12px;
+    vertical-align: top;
+    border-bottom: 1px solid #e7e0f4;
+    color: #333;
+  }
+  .contract-services-table td:first-child {
+    font-weight: 500;
+    color: #1a1a2e;
+  }
+  .contract-services-table td:nth-child(2) {
+    color: #888;
+    font-size: 13px;
+  }
+  .contract-services-table td:nth-child(4) {
+    font-weight: 500;
+    color: #9b63e9;
+    font-variant-numeric: tabular-nums;
+  }
+  .contract-party-block {
+    margin: 0 0 12px;
+  }
+  .contract-party-title {
+    margin: 0 0 5px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a1a2e;
+  }
+  .contract-party-details {
+    margin: 0;
+    padding: 0 0 0 1.1rem;
+    list-style: none;
+  }
+  .contract-party-details li {
+    margin: 0 0 5px;
+    padding: 0;
+    line-height: 1.45;
+    font-size: 14px;
+    color: #333;
+  }
+  .contract-party-field-label {
+    display: inline-block;
+    min-width: 6.5rem;
+    font-weight: 600;
+    color: #555;
+  }
+  .contract-party-field-value {
+    color: #1a1a2e;
+  }
+  .contract-party-details .contract-token {
+    padding: 1px 4px;
+  }
+  .contract-party-empty {
+    margin: 0;
+    font-size: 14px;
+    color: #888;
+    font-style: italic;
+  }
+`;
+
 const TOKEN_REGEX = /\{\{([a-zA-Z0-9_]+)\}\}/g;
+
+const HIDDEN_WHEN_EMPTY_TOKENS = new Set(["payment_link"]);
 
 const formatDate = (input?: string | null): string => {
   const date = input ? new Date(input) : new Date();
@@ -82,39 +235,162 @@ const numberToWords = (value: number): string => {
   return String(value);
 };
 
-const formatTotal = (total: number | null): string => {
+const formatTotal = (total: number | null, currency: string): string => {
   if (total == null) return "";
   const amount = Number.isFinite(total) ? total : 0;
   const integerPart = Math.floor(Math.abs(amount));
-  const formatted = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(amount);
+  const formatted = new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
   return `${formatted} (${numberToWords(integerPart)} dollars)`;
 };
 
-const buildIdentification = (
-  entityType: "individual" | "company" | null,
-  name: string | null,
-  companyName: string | null,
-  taxId: string | null,
-  companyRegistration: string | null,
-  email: string | null,
-  phone: string | null,
-  address: string | null,
-  complement: string | null,
-  role: string,
-): string => {
-  if (entityType === "company") {
-    return `${role}: ${companyName || ""}, represented by ${name || ""}, Tax ID ${taxId || ""}, Registration ${companyRegistration || ""}, email ${email || ""}, phone ${phone || ""}, address ${[address, complement].filter(Boolean).join(" ")}`;
-  }
-  return `${role}: ${name || ""}, Tax ID ${taxId || ""}, email ${email || ""}, phone ${phone || ""}, address ${[address, complement].filter(Boolean).join(" ")}`;
+const formatMoney = (amount: number, currency: string) =>
+  new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount || 0);
+
+const escapeHtml = (text: string): string =>
+  text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+export type PartyIdentificationFields = {
+  entityType: "individual" | "company" | null;
+  name: string | null;
+  companyName: string | null;
+  taxId: string | null;
+  companyRegistration: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  complement?: string | null;
 };
 
-const mapTemplateValues = (data: ContractTemplateData): Record<string, string> => {
-  const services = data.services
-    .map((service) => `- (${Math.max(1, Number(service.quantity || 1))}) ${service.name || ""}: ${service.description || ""}`.trim())
+const pushPartyRow = (
+  rows: Array<{ label: string; value: string }>,
+  label: string,
+  value: string | null | undefined,
+) => {
+  const trimmed = String(value || "").trim();
+  if (trimmed) rows.push({ label, value: trimmed });
+};
+
+/** Structured party block (template supplies CLIENT / SERVICE PROVIDER heading). */
+export function buildPartyIdentificationHtml(
+  fields: PartyIdentificationFields,
+  mode: "preview" | "final" = "final",
+): string {
+  const addressLine = [fields.address, fields.complement]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(", ");
+
+  const rows: Array<{ label: string; value: string }> = [];
+  const companyName = String(fields.companyName || "").trim();
+  const personName = String(fields.name || "").trim();
+
+  if (fields.entityType === "company") {
+    const company = companyName || personName;
+    pushPartyRow(rows, "Company", company);
+    if (personName && personName !== company) {
+      pushPartyRow(rows, "Representative", personName);
+    }
+    pushPartyRow(rows, "Registration", fields.companyRegistration);
+  } else {
+    pushPartyRow(rows, "Name", fields.name);
+    pushPartyRow(rows, "Company", companyName);
+  }
+
+  pushPartyRow(rows, "Tax ID", fields.taxId);
+  pushPartyRow(rows, "Email", fields.email);
+  pushPartyRow(rows, "Phone", fields.phone);
+  pushPartyRow(rows, "Address", addressLine);
+
+  if (!rows.length) {
+    return `<p class="contract-party-empty">Not provided</p>`;
+  }
+
+  const valueClass =
+    mode === "preview" ? "contract-party-field-value contract-token" : "contract-party-field-value";
+
+  const items = rows
+    .map(
+      ({ label, value }) =>
+        `<li><span class="contract-party-field-label">${escapeHtml(label)}</span> <span class="${valueClass}">${escapeHtml(value)}</span></li>`,
+    )
+    .join("");
+
+  return `<ul class="contract-party-details">${items}</ul>`;
+};
+
+export function buildContractServicesTableHtml(
+  services: ContractTemplateService[],
+  currency = "USD",
+): string {
+  const rows = services
+    .filter((service) => Boolean(String(service.name || "").trim()))
+    .map((service) => {
+      const qty = Math.max(1, Math.round(Number(service.quantity || 1)));
+      const unitPrice = Number(service.price || 0);
+      const lineTotal = qty * unitPrice;
+      return `<tr>
+        <td>${escapeHtml(service.name || "")}</td>
+        <td>${escapeHtml(service.description || "—")}</td>
+        <td>${qty}</td>
+        <td>${escapeHtml(formatMoney(lineTotal, currency))}</td>
+      </tr>`;
+    })
+    .join("");
+
+  if (!rows) {
+    return `<p class="text-sm text-muted-foreground">No services listed.</p>`;
+  }
+
+  return `<table class="contract-services-table">
+    <thead>
+      <tr>
+        <th>Service</th>
+        <th>Description</th>
+        <th>Qty</th>
+        <th>Value</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+const wrapPreviewToken = (value: string): string => {
+  const normalized = value.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return "";
+
+  const lines = normalized
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length <= 1) {
+    return `<span class="contract-token">${escapeHtml(normalized)}</span>`;
+  }
+
+  return lines
+    .map((line) => `<span class="contract-token contract-token-line">${escapeHtml(line)}</span>`)
     .join("<br>");
+};
+
+const wrapFinalToken = (value: string): string => {
+  const normalized = value.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return "";
+  return escapeHtml(normalized).replace(/\n/g, "<br>");
+};
+
+/** Remove paragraphs left empty after merge tags; keep Quill spacer lines (`<p><br></p>`). */
+const stripEmptyParagraphs = (html: string): string =>
+  html.replace(/<p[^>]*>\s*<\/p>/gi, "");
+
+const mapTemplateValues = (data: ContractTemplateData, currency: string): Record<string, string> => {
   const paymentMethods = data.payment_methods
     .map((method) => `- ${titleCase(method.replace(/^other:\s*/i, "other: "))}`)
-    .join("<br>");
+    .join("\n");
   const today = formatDate(data.today);
   const signedDate = formatDate(data.signed_date);
   return {
@@ -138,31 +414,9 @@ const mapTemplateValues = (data: ContractTemplateData): Record<string, string> =
     freelancer_phone: data.freelancer_phone || "",
     freelancer_address: data.freelancer_address || "",
     freelancer_complement: data.freelancer_complement || "",
-    client_identification: buildIdentification(
-      data.client_entity_type,
-      data.client_name,
-      data.client_company_name,
-      data.client_tax_id,
-      data.client_company_registration,
-      data.client_email,
-      data.client_phone,
-      data.client_address,
-      data.client_complement,
-      "CLIENT",
-    ),
-    freelancer_identification: buildIdentification(
-      data.freelancer_company_name ? "company" : "individual",
-      data.freelancer_name,
-      data.freelancer_company_name,
-      data.freelancer_tax_id,
-      data.freelancer_company_registration,
-      data.freelancer_email,
-      data.freelancer_phone,
-      data.freelancer_address,
-      data.freelancer_complement,
-      "SERVICE PROVIDER",
-    ),
-    services,
+    client_identification: "",
+    freelancer_identification: "",
+    services: "",
     timeline_days: data.timeline_days != null ? `${data.timeline_days} calendar days` : "",
     payment_structure:
       data.payment_structure === "installments"
@@ -172,30 +426,76 @@ const mapTemplateValues = (data: ContractTemplateData): Record<string, string> =
           : "",
     payment_methods: paymentMethods,
     installment_description: data.installment_description || "",
-    payment_link: data.payment_link || "",
+    payment_link: data.payment_link?.trim() || "",
     additional_clause: data.additional_clause || "",
-    total: formatTotal(data.total),
+    total: formatTotal(data.total, currency),
   };
 };
 
-const escapeTokenHtml = (value: string): string =>
-  value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+export function renderTemplate(
+  templateContent: string,
+  data: ContractTemplateData,
+  options: RenderTemplateOptions = {},
+): string {
+  const mode = options.mode ?? "preview";
+  const currency = options.currency || "USD";
+  const values = mapTemplateValues(data, currency);
+  const wrap = mode === "final" ? wrapFinalToken : wrapPreviewToken;
 
-export function renderTemplate(templateContent: string, data: ContractTemplateData): string {
-  const values = mapTemplateValues(data);
-  return templateContent.replace(TOKEN_REGEX, (full, token: string) => {
+  let html = templateContent.replace(TOKEN_REGEX, (full, token: string) => {
+    if (token === "services") {
+      return buildContractServicesTableHtml(data.services, currency);
+    }
+
+    if (token === "client_identification") {
+      return buildPartyIdentificationHtml(
+        {
+          entityType: data.client_entity_type || "individual",
+          name: data.client_name,
+          companyName: data.client_company_name,
+          taxId: data.client_tax_id,
+          companyRegistration: data.client_company_registration,
+          email: data.client_email,
+          phone: data.client_phone,
+          address: data.client_address,
+          complement: data.client_complement,
+        },
+        mode,
+      );
+    }
+
+    if (token === "freelancer_identification") {
+      return buildPartyIdentificationHtml(
+        {
+          entityType: data.freelancer_company_name ? "company" : "individual",
+          name: data.freelancer_name,
+          companyName: data.freelancer_company_name,
+          taxId: data.freelancer_tax_id,
+          companyRegistration: data.freelancer_company_registration,
+          email: data.freelancer_email,
+          phone: data.freelancer_phone,
+          address: data.freelancer_address,
+          complement: data.freelancer_complement,
+        },
+        mode,
+      );
+    }
+
     const value = values[token];
-    const display =
-      typeof value === "string" && value.trim()
-        ? escapeTokenHtml(value).replace(/\n/g, "<br>")
-        : full;
-    return `<span class="contract-token">${display}</span>`;
+    const trimmed = typeof value === "string" ? value.trim() : "";
+
+    if (!trimmed) {
+      if (mode === "final" || HIDDEN_WHEN_EMPTY_TOKENS.has(token)) {
+        return "";
+      }
+      return full;
+    }
+
+    return wrap(value);
   });
+
+  html = stripEmptyParagraphs(html);
+  return html;
 }
 
 export type ContractSection = {

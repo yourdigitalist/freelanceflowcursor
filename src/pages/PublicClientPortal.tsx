@@ -5,8 +5,15 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { appendPortalParam, parsePortalSections } from "@/lib/clientPortal";
+import { appendPortalParam, formatPortalMoney, parsePortalSections, resolveMoneyCurrency } from "@/lib/clientPortal";
 import { loadClientPortalData } from "@/lib/loadClientPortal";
+import { formatStatusLabel, getStatusBadgeClass } from "@/lib/statusDisplay";
+import {
+  formatDuration,
+  sumMonthSecondsFromDayTotals,
+  timeMonthCalendarDayClassName,
+  timeMonthCalendarDurationClassName,
+} from "@/lib/time";
 import { countryLabel } from "@/lib/locale-data";
 import { DEFAULT_DATE_FORMAT, formatLocaleDate } from "@/lib/datetime";
 import {
@@ -31,6 +38,8 @@ type PortalData = {
     business_logo: string | null;
     primary_color: string;
     date_format?: string | null;
+    currency?: string | null;
+    profile_currency?: string | null;
   };
   client: Record<string, string | null>;
   sections: ReturnType<typeof parsePortalSections>;
@@ -53,29 +62,6 @@ type TimeEntryRow = {
   duration_minutes: number | null;
   projects?: { name: string } | null;
   tasks?: { title: string } | null;
-};
-
-const statusClass = (status?: string | null) => {
-  switch (status) {
-    case "active":
-    case "accepted":
-    case "approved":
-    case "paid":
-      return "bg-success/10 text-success border-success/20";
-    case "sent":
-    case "pending":
-    case "pending_signatures":
-      return "bg-warning/10 text-warning border-warning/20";
-    case "read":
-      return "bg-blue-50 text-blue-700 border-blue-200";
-    case "overdue":
-      return "bg-destructive/10 text-destructive border-destructive/20";
-    case "cancelled":
-    case "rejected":
-      return "bg-destructive/10 text-destructive border-destructive/20";
-    default:
-      return "bg-muted text-muted-foreground border-muted";
-  }
 };
 
 const toSeconds = (entry: TimeEntryRow) => {
@@ -156,6 +142,11 @@ function PortalTimeSection({ entries, dateFormat }: { entries: TimeEntryRow[]; d
     });
     return out;
   }, [entries, monthStart, monthEnd]);
+
+  const monthTotalSeconds = useMemo(
+    () => sumMonthSecondsFromDayTotals(monthDayTotals, monthStart, monthEnd),
+    [monthDayTotals, monthStart, monthEnd],
+  );
 
   const selectedDayEntries = useMemo(() => {
     const key = format(selectedTimeDay, "yyyy-MM-dd");
@@ -261,20 +252,36 @@ function PortalTimeSection({ entries, dateFormat }: { entries: TimeEntryRow[]; d
                 const key = format(d, "yyyy-MM-dd");
                 const inMonth = d >= monthStart && d <= monthEnd;
                 const total = monthDayTotals[key] || 0;
+                const hasEntries = total > 0;
+                const isSelected = isSameDay(d, selectedTimeDay);
+                const isToday = isSameDay(d, new Date());
                 return (
                   <button
                     key={key}
                     type="button"
                     onClick={() => setSelectedTimeDay(d)}
-                    className={`rounded-md border min-h-[88px] p-2 text-left ${
-                      inMonth ? "bg-card" : "bg-muted/30 text-muted-foreground"
-                    } ${isSameDay(d, selectedTimeDay) ? "border-primary bg-primary/5" : ""}`}
+                    className={timeMonthCalendarDayClassName({
+                      inMonth,
+                      totalSeconds: total,
+                      isSelected,
+                      isToday,
+                    })}
                   >
                     <p className="text-xs">{format(d, "d")}</p>
-                    <p className="mt-2 text-xs font-mono">{total ? formatHm(total) : "0:00"}</p>
+                    <p className={timeMonthCalendarDurationClassName(hasEntries)}>
+                      {hasEntries ? formatHm(total) : "0:00"}
+                    </p>
                   </button>
                 );
               })}
+            </div>
+            <div className="mt-4 flex items-center justify-end border-t pt-3">
+              <p className="text-sm font-medium text-foreground">
+                Month total:{" "}
+                <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">
+                  {formatDuration(monthTotalSeconds)}
+                </span>
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -367,6 +374,12 @@ export default function PublicClientPortal() {
   const pt = data.portal_token;
   const primary = data.business.primary_color || "#9B63E9";
   const c = data.client;
+  const portalCurrency = resolveMoneyCurrency(
+    c.currency,
+    data.business.profile_currency || data.business.currency,
+  );
+  const fmtMoney = (amount: number | null | undefined) =>
+    formatPortalMoney(amount, portalCurrency);
 
   const tabDefs: { value: string; label: string; show: boolean }[] = [
     { value: "details", label: "Your details", show: sections.details },
@@ -486,11 +499,11 @@ export default function PublicClientPortal() {
                               </Link>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline" className={statusClass(row.status)}>
-                                {row.status}
+                              <Badge variant="outline" className={getStatusBadgeClass(row.status)}>
+                                {formatStatusLabel(row.status)}
                               </Badge>
                             </TableCell>
-                            <TableCell>{row.total}</TableCell>
+                            <TableCell className="tabular-nums">{fmtMoney(row.total)}</TableCell>
                             <TableCell>
                               {row.due_date ? formatLocaleDate(row.due_date, portalDateFormat) : "—"}
                             </TableCell>
@@ -536,11 +549,11 @@ export default function PublicClientPortal() {
                               </a>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline" className={statusClass(row.status)}>
-                                {row.status}
+                              <Badge variant="outline" className={getStatusBadgeClass(row.status)}>
+                                {formatStatusLabel(row.status)}
                               </Badge>
                             </TableCell>
-                            <TableCell>{row.total ?? "—"}</TableCell>
+                            <TableCell className="tabular-nums">{fmtMoney(row.total)}</TableCell>
                           </TableRow>
                         ))}
                         {(data.proposals || []).length === 0 ? (
@@ -583,11 +596,11 @@ export default function PublicClientPortal() {
                               </a>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline" className={statusClass(row.status)}>
-                                {row.status?.replace(/_/g, " ")}
+                              <Badge variant="outline" className={getStatusBadgeClass(row.status)}>
+                                {formatStatusLabel(row.status)}
                               </Badge>
                             </TableCell>
-                            <TableCell>{row.total ?? "—"}</TableCell>
+                            <TableCell className="tabular-nums">{fmtMoney(row.total)}</TableCell>
                           </TableRow>
                         ))}
                         {(data.contracts || []).length === 0 ? (
@@ -631,8 +644,8 @@ export default function PublicClientPortal() {
                               </a>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline" className={statusClass(row.status)}>
-                                {row.status}
+                              <Badge variant="outline" className={getStatusBadgeClass(row.status)}>
+                                {formatStatusLabel(row.status)}
                               </Badge>
                             </TableCell>
                             <TableCell>{row.projects?.name || "—"}</TableCell>

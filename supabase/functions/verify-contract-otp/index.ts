@@ -2,6 +2,12 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import { getLanceSignature } from "../_shared/lance-email.ts";
+import {
+  channelEnabled,
+  getContractPrefs,
+  type NotificationPreferences,
+  upsertUserNotification,
+} from "../_shared/user-notification.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -236,8 +242,77 @@ serve(async (req) => {
       await supabase.from("clients").update({ status: "Active" } as never).eq("id", contract.client_id);
     }
 
+    const contractLabel = contract.identifier ? `Contract ${contract.identifier}` : "Contract";
+    const contractLink = `/contracts/${contract.id}`;
+    const { data: ownerProfile } = await supabase
+      .from("profiles")
+      .select("email, business_email, notification_preferences")
+      .eq("user_id", contract.user_id)
+      .maybeSingle();
+    const contractPrefs = getContractPrefs(
+      (ownerProfile?.notification_preferences as NotificationPreferences | null) || null,
+    );
+    const ownerNotifyEmail = (ownerProfile?.business_email || ownerProfile?.email || "").trim();
+
+    if (updatePayload.status === "signed") {
+      if (channelEnabled(contractPrefs?.fullySigned, "inApp")) {
+        await upsertUserNotification(supabase, {
+          user_id: contract.user_id,
+          type: "contract",
+          title: "Contract fully signed",
+          body: `${contractLabel} has been signed by both parties.`,
+          link: contractLink,
+          event_key: `contract_fully_signed:${contract.id}`,
+        });
+      }
+    } else if (signerType === "freelancer") {
+      if (channelEnabled(contractPrefs?.freelancerSigned, "inApp")) {
+        await upsertUserNotification(supabase, {
+          user_id: contract.user_id,
+          type: "contract",
+          title: "You signed the contract",
+          body: `${contractLabel}: awaiting client signature.`,
+          link: contractLink,
+          event_key: `contract_freelancer_signed:${contract.id}`,
+        });
+      }
+    } else if (signerType === "client") {
+      if (channelEnabled(contractPrefs?.clientSigned, "inApp")) {
+        await upsertUserNotification(supabase, {
+          user_id: contract.user_id,
+          type: "contract",
+          title: "Client signed contract",
+          body: `${contractLabel}: the client has signed. Complete your signature if required.`,
+          link: contractLink,
+          event_key: `contract_client_signed:${contract.id}`,
+        });
+      }
+      if (
+        channelEnabled(contractPrefs?.clientSigned, "email") &&
+        ownerNotifyEmail &&
+        Deno.env.get("RESEND_API_KEY") &&
+        RESEND_FROM_EMAIL.includes("@")
+      ) {
+        try {
+          await resend.emails.send({
+            from: `Lance <${RESEND_FROM_EMAIL}>`,
+            to: ownerNotifyEmail,
+            subject: `Client signed: ${contract.identifier || "Contract"}`,
+            text: `${contractLabel} was signed by the client.\n\nOpen: ${APP_BASE_URL}${contractLink}`,
+          });
+        } catch (e) {
+          console.error("client signed email failed:", e);
+        }
+      }
+    }
+
     // Notify both parties when contract is fully signed (uses standard client email template).
-    if (updatePayload.status === "signed" && Deno.env.get("RESEND_API_KEY") && RESEND_FROM_EMAIL.includes("@")) {
+    if (
+      updatePayload.status === "signed" &&
+      channelEnabled(contractPrefs?.fullySigned, "email") &&
+      Deno.env.get("RESEND_API_KEY") &&
+      RESEND_FROM_EMAIL.includes("@")
+    ) {
       try {
         const { data: fresh } = await supabase
           .from("contracts")

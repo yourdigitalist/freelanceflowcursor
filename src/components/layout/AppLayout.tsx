@@ -86,6 +86,8 @@ export function AppLayout({
     });
   };
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
   useEffect(() => {
     const fetchProfile = async () => {
       if (!user) return;
@@ -97,6 +99,33 @@ export function AppLayout({
     if (user) {
       fetchProfile();
     }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) {
+      setUnreadNotifications(0);
+      return;
+    }
+    const fetchUnread = async () => {
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .is('read_at', null);
+      if (!error) setUnreadNotifications(count ?? 0);
+    };
+    fetchUnread();
+    const channel = supabase
+      .channel(`notifications-unread-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        () => { fetchUnread(); },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
   useEffect(() => {
     if (location.pathname.startsWith('/clients')) setClientsOpen(true);
@@ -353,7 +382,14 @@ export function AppLayout({
           <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>
             {location.pathname === '/notifications' && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
             <Link to="/notifications" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/notifications' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <SlotIcon slot="nav_bell" className={cn("h-4 w-4 shrink-0", location.pathname === '/notifications' && "text-primary")} />
+            <span className="relative shrink-0">
+              <SlotIcon slot="nav_bell" className={cn("h-4 w-4", location.pathname === '/notifications' && "text-primary")} />
+              {unreadNotifications > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                  {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                </span>
+              )}
+            </span>
             {!sidebarCollapsed && 'Notifications'}
           </Link>
           </span>
@@ -442,9 +478,14 @@ export function AppLayout({
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
             <Menu className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="ml-auto" asChild>
+          <Button variant="ghost" size="icon" className="ml-auto relative" asChild>
             <Link to="/notifications">
               <SlotIcon slot="nav_bell" className="h-4 w-4" />
+              {unreadNotifications > 0 && (
+                <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                  {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                </span>
+              )}
             </Link>
           </Button>
         </header>

@@ -1,6 +1,12 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import {
+  channelEnabled,
+  getReviewPrefs,
+  type NotificationPreferences,
+  upsertUserNotification,
+} from "../_shared/user-notification.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -197,28 +203,28 @@ serve(async (req) => {
         .select("email, full_name, notification_preferences")
         .eq("user_id", request.user_id)
         .maybeSingle();
-      const prefs = (ownerProfile?.notification_preferences || {}) as any;
-      const inAppEnabled = prefs?.reviews?.comment?.inApp !== false;
-      const emailEnabled = prefs?.reviews?.comment?.email !== false;
+      const prefs = getReviewPrefs(
+        (ownerProfile?.notification_preferences as NotificationPreferences | null) || null,
+      );
       const ownerEmail = (ownerProfile?.email || "").trim();
       const ownerName = (ownerProfile?.full_name || "there").trim() || "there";
-      const title = "New review comment";
-      const body = `${commenter_name.trim()} left a comment on ${request.title || "your review request"}.`;
-      const link = "/reviews";
+      const title = "New approval comment";
+      const body = `${commenter_name.trim()} left a comment on ${request.title || "your approval request"}.`;
+      const link = `/reviews/${request.id}`;
       const eventKey = `review_comment:${request.id}:${comment.id}`;
 
-      if (inAppEnabled) {
-        await supabase.from("notifications").upsert({
+      if (channelEnabled(prefs?.comment, "inApp")) {
+        await upsertUserNotification(supabase, {
           user_id: request.user_id,
           type: "review",
           title,
           body,
           link,
           event_key: eventKey,
-        }, { onConflict: "user_id,event_key", ignoreDuplicates: true });
+        });
       }
 
-      if (emailEnabled && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
+      if (channelEnabled(prefs?.comment, "email") && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
         const reviewsUrl = `${APP_BASE_URL || "https://getlance.app"}/reviews`;
         await resend.emails.send({
           from: `Lance <${RESEND_FROM_EMAIL}>`,

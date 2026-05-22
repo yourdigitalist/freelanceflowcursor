@@ -24,6 +24,8 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { getSiteUrl } from '@/lib/site-url';
+import { uploadReviewFile } from '@/lib/reviewFileUpload';
+import { sendReviewRequestEmail } from '@/lib/sendReviewRequest';
 import { format } from 'date-fns';
 import {
   ArrowLeft,
@@ -198,20 +200,16 @@ export default function ReviewRequestDetail() {
     if (!request) return;
     setSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke('send-review-request', {
-        body: { reviewRequestId: request.id, origin: getSiteUrl() || window.location.origin },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      await sendReviewRequestEmail(request.id, getSiteUrl() || window.location.origin);
       toast({
         title: request.sent_at ? 'Reminder sent' : 'Review request sent',
         description: 'Recipients have been emailed.',
       });
       fetchData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: 'Error sending',
-        description: err?.message || 'Could not send email. You can still share the link.',
+        description: err instanceof Error ? err.message : 'Could not send email. You can still share the link.',
         variant: 'destructive',
       });
     } finally {
@@ -227,28 +225,8 @@ export default function ReviewRequestDetail() {
 
     setUploadingFiles(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      if (!accessToken || !import.meta.env.VITE_SUPABASE_URL) {
-        throw new Error('Session not available');
-      }
-
       for (const file of selectedFiles) {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('review_request_id', request.id);
-
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-review-file`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: formData,
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(json?.error || `Upload failed for ${file.name}`);
-        }
+        await uploadReviewFile(file, request.id);
       }
 
       toast({ title: 'Files added', description: `${selectedFiles.length} file${selectedFiles.length === 1 ? '' : 's'} uploaded.` });
