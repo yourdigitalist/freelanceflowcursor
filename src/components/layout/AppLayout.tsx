@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Menu, ChevronDown, ChevronLeft, ArrowRight, ChevronUp, ShieldCheck, Briefcase } from '@/components/icons';
+import { Menu, ChevronDown, ChevronLeft, ChevronUp, ShieldCheck, Briefcase } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { canAccessContracts } from '@/lib/features';
 import { cn } from '@/lib/utils';
@@ -33,8 +33,24 @@ interface Profile {
   email: string | null;
   avatar_url: string | null;
   subscription_status: string | null;
+  plan_type: string | null;
   trial_end_date: string | null;
   is_admin: boolean | null;
+}
+
+function getPlanBadgeLabel(
+  status: string | null | undefined,
+  planType: string | null | undefined,
+  trialEnd: Date | null,
+): string {
+  if (status === 'trial' && trialEnd && trialEnd >= new Date()) return 'Free trial';
+  if (status === 'active') {
+    if (planType === 'pro_annual') return 'Pro Annual';
+    if (planType === 'pro_monthly') return 'Pro Monthly';
+    return 'Pro';
+  }
+  if (status === 'past_due') return 'Past due';
+  return 'Free';
 }
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', slot: 'sidebar_dashboard' as const },
@@ -75,7 +91,7 @@ export function AppLayout({
       if (!user) return;
       const {
         data
-      } = await supabase.from('profiles').select('first_name, last_name, full_name, email, avatar_url, subscription_status, trial_end_date, is_admin').eq('user_id', user.id).single();
+      } = await supabase.from('profiles').select('first_name, last_name, full_name, email, avatar_url, subscription_status, plan_type, trial_end_date, is_admin').eq('user_id', user.id).single();
       setProfile(data);
     };
     if (user) {
@@ -106,7 +122,7 @@ export function AppLayout({
   const isTimeActive = location.pathname.startsWith('/time');
   const trialEndDate = profile?.trial_end_date ? new Date(profile.trial_end_date) : null;
   const isOnTrial = profile?.subscription_status === 'trial' && !!trialEndDate && trialEndDate >= new Date();
-  const isPro = profile?.subscription_status === 'active';
+  const planBadgeLabel = getPlanBadgeLabel(profile?.subscription_status, profile?.plan_type, trialEndDate);
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(() => {
     try { return localStorage.getItem('trial_banner_dismissed') === 'true'; } catch { /* ignore */ return false; }
   });
@@ -126,23 +142,36 @@ export function AppLayout({
       {sidebarOpen && <div className={cn("fixed inset-0 z-40 bg-black/50 lg:hidden", showTrialBanner && "top-[40px]")} onClick={() => setSidebarOpen(false)} />}
 
       {/* Sidebar */}
-      <aside className={cn("fixed left-0 z-50 bg-sidebar border-r border-sidebar-border transform transition-all duration-200 lg:translate-x-0 flex flex-col", showTrialBanner ? "top-[40px] h-[calc(100vh-40px)]" : "top-0 h-screen", sidebarOpen ? "translate-x-0" : "-translate-x-full", sidebarCollapsed ? "w-16" : "w-64")}>
-        {/* Logo Header: when collapsed = logo on top, expand arrow below; when expanded = row */}
-        <div className={cn("border-b border-sidebar-border pt-4", sidebarCollapsed ? "flex flex-col items-center gap-1 pb-2 px-1.5" : "flex h-[5rem] items-center justify-between px-4")}>
+      <aside className={cn("fixed left-0 z-50 flex flex-col border-r border-sidebar-border bg-sidebar transition-all duration-200 transform lg:translate-x-0", showTrialBanner ? "top-[40px] h-[calc(100vh-40px)]" : "top-0 h-screen", sidebarOpen ? "translate-x-0" : "-translate-x-full", sidebarCollapsed ? "w-16 overflow-visible" : "w-64")}>
+        {/* Logo Header: collapsed = centered logo + edge toggle; expanded = row */}
+        <div
+          className={cn(
+            'border-b border-sidebar-border',
+            sidebarCollapsed
+              ? 'relative overflow-visible p-2 pb-3'
+              : 'flex h-[5rem] items-center justify-between px-4 pt-4',
+          )}
+        >
           {(() => {
             const size = branding?.logo_size === 'sm' || branding?.logo_size === 'lg' ? branding.logo_size : 'md';
-            const iconSize = sidebarCollapsed ? 'h-7 w-7' : { sm: 'h-7 w-7', md: 'h-9 w-9', lg: 'h-11 w-11' }[size];
+            const iconSize = sidebarCollapsed ? 'h-7 w-7 min-h-7 min-w-7 shrink-0' : { sm: 'h-7 w-7', md: 'h-9 w-9', lg: 'h-11 w-11' }[size];
             const logoWidthPx = branding?.logo_width != null && branding.logo_width >= 24 && branding.logo_width <= 400
               ? branding.logo_width
               : 120;
             return sidebarCollapsed ? (
-              <Link to="/dashboard" className="flex shrink-0 justify-center" onClick={() => setSidebarOpen(false)}>
-                {branding?.icon_url ? (
-                  <img src={branding.icon_url} alt="Lance" className={cn('rounded-lg object-contain', iconSize)} />
-                ) : (
-                  <Briefcase className={cn('text-primary', iconSize)} />
-                )}
-              </Link>
+              <span className="relative block">
+                <Link
+                  to="/dashboard"
+                  className="flex items-center justify-center rounded-xl px-2 py-2.5"
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  {branding?.icon_url ? (
+                    <img src={branding.icon_url} alt="Lance" className={cn('rounded-lg object-contain', iconSize)} />
+                  ) : (
+                    <Briefcase className={cn('text-primary', iconSize)} />
+                  )}
+                </Link>
+              </span>
             ) : (
               <Link to="/dashboard" className="flex items-center gap-2 min-w-0 h-full flex-1" onClick={() => setSidebarOpen(false)}>
                 {branding?.logo_url ? (
@@ -161,8 +190,18 @@ export function AppLayout({
               </Link>
             );
           })()}
-          <Button variant="ghost" size="icon" className={cn("text-sidebar-foreground/60 hover:text-sidebar-foreground shrink-0", sidebarCollapsed ? "h-6 w-6 lg:flex" : "h-8 w-8 hidden lg:flex")} onClick={toggleSidebarCollapsed}>
-            <ChevronLeft className={cn("transition-transform", sidebarCollapsed ? "h-3 w-3 rotate-180" : "h-4 w-4")} />
+          <Button
+            variant={sidebarCollapsed ? 'outline' : 'ghost'}
+            size="icon"
+            className={cn(
+              'shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground',
+              sidebarCollapsed
+                ? 'absolute right-0 top-1/2 z-10 hidden h-6 w-6 -translate-y-1/2 translate-x-1/2 rounded-full border-sidebar-border bg-background shadow-sm hover:bg-muted lg:inline-flex'
+                : 'hidden h-8 w-8 lg:flex',
+            )}
+            onClick={toggleSidebarCollapsed}
+          >
+            <ChevronLeft className={cn('transition-transform', sidebarCollapsed ? 'h-3 w-3 rotate-180' : 'h-4 w-4')} />
           </Button>
         </div>
 
@@ -326,21 +365,6 @@ export function AppLayout({
           </Link>
           </span>
 
-          {/* Billing / Free trial / Pro – show for trial (with arrow) or pro (badge only) */}
-          {!sidebarCollapsed && (isOnTrial || isPro) && (
-            <Link to="/settings/subscription" className={cn("rounded-lg p-3 block transition-opacity", isOnTrial && "upgrade-gradient hover:opacity-90")}>
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center shrink-0", isOnTrial ? "bg-primary/20" : "bg-primary/10")}>
-                    <SlotIcon slot="nav_billing" className={cn("h-4 w-4", isOnTrial ? "text-primary" : "text-primary")} />
-                  </div>
-                  <span className="text-sm font-semibold text-sidebar-foreground truncate">{isOnTrial ? 'Free trial' : 'Pro'}</span>
-                </div>
-                {isOnTrial && <ArrowRight className="h-4 w-4 text-primary shrink-0" />}
-              </div>
-            </Link>
-          )}
-
           {/* User Profile */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -363,9 +387,12 @@ export function AppLayout({
               <div className="p-3 space-y-2">
                 <p className="text-sm font-semibold leading-none">{userName}</p>
                 <p className="text-xs text-muted-foreground truncate">{profile?.email || user?.email}</p>
-                <span className="inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 text-xs font-medium px-2.5 py-0.5">
-                  {profile?.subscription_status === 'active' ? 'Business' : profile?.subscription_status === 'trial' ? 'Trial' : 'Free Plan'}
-                </span>
+                <Link
+                  to="/settings/subscription"
+                  className="inline-flex items-center rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+                >
+                  {planBadgeLabel}
+                </Link>
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
