@@ -2,7 +2,7 @@
 
 ## Daily deadline job (Supabase Cron)
 
-The `send-deadline-notifications` Edge Function runs daily via **pg_cron** (migration `20260522100000_send_deadline_notifications_cron.sql`).
+The `send-deadline-notifications` Edge Function runs daily via **pg_cron** (migration `20260529100000_send_deadline_notifications_cron.sql`).
 
 ### One-time setup
 
