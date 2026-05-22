@@ -114,8 +114,8 @@ serve(async (req) => {
 
     const safeClientName = escapeHtml(client.name);
     const coreHtml = `
-      <h2 style="color: ${primaryColor}; margin-top: 0;">Your client portal</h2>
-      <p style="color: #333;">Hi ${safeClientName}, you can view your documents and information with ${escapeHtml(fromDisplayName)} in one place.</p>
+      <h2 style="color: ${primaryColor}; margin-top: 0;">Your portal is ready</h2>
+      <p style="color: #333;">Hi ${safeClientName}, your portal is ready. ${escapeHtml(fromDisplayName)} has set up a dedicated space for you — open it to get started.</p>
       <p style="margin: 24px 0;">
         <a href="${escapeHtml(portalUrl)}" style="display: inline-block; background: ${primaryColor}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px;">Open client portal</a>
       </p>

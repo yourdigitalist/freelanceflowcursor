@@ -5,8 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { GripVertical } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { Task, ProjectStatus, PRIORITY_OPTIONS } from './types';
-import { format } from 'date-fns';
 import { formatDuration } from '@/lib/time';
+import { formatLocaleDate } from '@/lib/datetime';
+import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 
 interface TaskCardProps {
   task: Task;
@@ -18,6 +19,7 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, status, commentCount = 0, trackedSeconds = 0, onClick, isDragging }: TaskCardProps) {
+  const { dateFormat } = useLocalePreferences();
   const {
     attributes,
     listeners,
@@ -67,7 +69,7 @@ export function TaskCard({ task, status, commentCount = 0, trackedSeconds = 0, o
           {task.due_date && (
             <span className="text-xs text-muted-foreground flex items-center gap-1">
               <SlotIcon slot="task_calendar" className="h-3 w-3" />
-              {format(new Date(task.due_date), 'MMM d')}
+              {formatLocaleDate(task.due_date, dateFormat)}
             </span>
           )}
 

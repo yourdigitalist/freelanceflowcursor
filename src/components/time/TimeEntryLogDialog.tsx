@@ -98,8 +98,10 @@ export function TimeEntryLogDialog({
   const [createTaskDialogOpen, setCreateTaskDialogOpen] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [loadingSegments, setLoadingSegments] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const isEditing = Boolean(entry?.id);
+  const isBusy = loadingSegments || deleting;
   const selectedDialogProject = projects.find((p) => p.id === dialogProject);
   const selectedDialogTask = tasks.find((t) => t.id === dialogTask);
 
@@ -411,6 +413,28 @@ export function TimeEntryLogDialog({
     }
   };
 
+  const handleDelete = async () => {
+    if (!entry?.id) return;
+    if (!confirm('Delete this time entry?')) return;
+
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from('time_entries').delete().eq('id', entry.id);
+      if (error) throw error;
+      toast({ title: 'Time entry deleted' });
+      onOpenChange(false);
+      onSaved?.();
+    } catch (error: unknown) {
+      toast({
+        title: 'Error deleting entry',
+        description: getErrorMessage(error),
+        variant: 'destructive',
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -430,7 +454,7 @@ export function TimeEntryLogDialog({
                   <Button
                     variant="outline"
                     className="w-full min-w-0 justify-start overflow-hidden"
-                    disabled={(lockProject && !isEditing) || loadingSegments}
+                    disabled={(lockProject && !isEditing) || isBusy}
                   >
                     <span className="min-w-0 truncate text-left">
                       {selectedDialogProject?.name || 'Select project'}
@@ -484,7 +508,7 @@ export function TimeEntryLogDialog({
                   <Button
                     variant="outline"
                     className="w-full min-w-0 justify-start overflow-hidden"
-                    disabled={!dialogProject || loadingSegments}
+                    disabled={!dialogProject || isBusy}
                   >
                     <span className="min-w-0 truncate text-left">
                       {selectedDialogTask?.title || (dialogProject ? 'No task' : 'Select a project first')}
@@ -536,7 +560,7 @@ export function TimeEntryLogDialog({
                   variant="ghost"
                   size="sm"
                   className="h-7 px-0 text-xs text-muted-foreground"
-                  disabled={loadingSegments}
+                  disabled={isBusy}
                   onClick={() => {
                     setNewTaskTitle('');
                     setCreateTaskDialogOpen(true);
@@ -554,7 +578,7 @@ export function TimeEntryLogDialog({
                 onChange={(e) => setDialogDescription(e.target.value)}
                 placeholder="Optional notes for this task"
                 rows={3}
-                disabled={loadingSegments}
+                disabled={isBusy}
               />
             </div>
             <div className="space-y-2">
@@ -567,7 +591,7 @@ export function TimeEntryLogDialog({
                     checked={dialogTimeMode === 'start_end'}
                     onChange={() => setDialogTimeMode('start_end')}
                     className="rounded-full border-primary text-primary"
-                    disabled={loadingSegments}
+                    disabled={isBusy}
                   />
                   <span className="text-sm">Start & end time</span>
                 </label>
@@ -578,7 +602,7 @@ export function TimeEntryLogDialog({
                     checked={dialogTimeMode === 'manual'}
                     onChange={() => setDialogTimeMode('manual')}
                     className="rounded-full border-primary text-primary"
-                    disabled={loadingSegments}
+                    disabled={isBusy}
                   />
                   <span className="text-sm">Enter hours</span>
                 </label>
@@ -592,7 +616,7 @@ export function TimeEntryLogDialog({
                 value={dialogDate}
                 onChange={(e) => setDialogDate(e.target.value)}
                 required
-                disabled={loadingSegments}
+                disabled={isBusy}
               />
             </div>
             {dialogTimeMode === 'start_end' ? (
@@ -606,7 +630,7 @@ export function TimeEntryLogDialog({
                         type="time"
                         value={range.start}
                         onChange={(e) => updateDialogStartEndRange(i, 'start', e.target.value)}
-                        disabled={loadingSegments}
+                        disabled={isBusy}
                       />
                     </div>
                     <div className="flex-1 min-w-[120px] space-y-1">
@@ -615,7 +639,7 @@ export function TimeEntryLogDialog({
                         type="time"
                         value={range.end}
                         onChange={(e) => updateDialogStartEndRange(i, 'end', e.target.value)}
-                        disabled={loadingSegments}
+                        disabled={isBusy}
                       />
                     </div>
                     <Button
@@ -624,14 +648,14 @@ export function TimeEntryLogDialog({
                       size="icon"
                       className="shrink-0 text-muted-foreground hover:text-destructive"
                       onClick={() => removeDialogStartEndRange(i)}
-                      disabled={dialogStartEndRanges.length <= 1 || loadingSegments}
+                      disabled={dialogStartEndRanges.length <= 1 || isBusy}
                       title="Remove range"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
-                <Button type="button" variant="outline" size="sm" onClick={addDialogStartEndRange} disabled={loadingSegments}>
+                <Button type="button" variant="outline" size="sm" onClick={addDialogStartEndRange} disabled={isBusy}>
                   <Plus className="mr-2 h-4 w-4" />
                   Add another range
                 </Button>
@@ -653,7 +677,7 @@ export function TimeEntryLogDialog({
                   onChange={(e) => setDialogHours(e.target.value)}
                   placeholder="e.g. 1.5 or 2.25"
                   required={dialogTimeMode === 'manual'}
-                  disabled={loadingSegments}
+                  disabled={isBusy}
                 />
                 <p className="text-xs text-muted-foreground">Enter any decimal (e.g. 0.25, 1.5, 2.75).</p>
               </div>
@@ -666,18 +690,36 @@ export function TimeEntryLogDialog({
                 id="dialog_billable"
                 checked={dialogBillable}
                 onCheckedChange={setDialogBillable}
-                disabled={loadingSegments}
+                disabled={isBusy}
               />
             </div>
           </form>
         </div>
-        <DialogFooter className="px-6 py-4 border-t shrink-0 bg-card">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button type="submit" form="time-entry-log-form" disabled={loadingSegments}>
-            {isEditing ? 'Update' : 'Save'}
-          </Button>
+        <DialogFooter
+          className={cn(
+            'px-6 py-4 border-t shrink-0 bg-card gap-2',
+            isEditing ? 'sm:justify-between' : 'sm:justify-end',
+          )}
+        >
+          {isEditing ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+              onClick={() => void handleDelete()}
+              disabled={isBusy}
+            >
+              Delete
+            </Button>
+          ) : null}
+          <div className="flex gap-2 sm:ml-auto">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button type="submit" form="time-entry-log-form" disabled={isBusy}>
+              {isEditing ? 'Update' : 'Save'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

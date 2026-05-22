@@ -1059,7 +1059,7 @@ export default function TimeTracking() {
               <h1 className="text-2xl font-bold tracking-tight">Timesheet</h1>
               {(timesheetView === 'day' || timesheetView === 'week') && (
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  Week of {format(weekStart, 'd')}–{format(weekEnd, 'd MMM yyyy')}
+                  Week of {formatUserDate(weekStart)} – {formatUserDate(weekEnd)}
                 </p>
               )}
               {timesheetView === 'month' && (

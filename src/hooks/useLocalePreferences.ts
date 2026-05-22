@@ -24,8 +24,8 @@ export function useLocalePreferences(): LocalePreferences {
         .maybeSingle();
       if (cancelled) return;
       const prefs = data as { date_format?: string | null; time_format?: string | null } | null;
-      setDateFormat(prefs?.date_format || DEFAULT_DATE_FORMAT);
-      setTimeFormat(prefs?.time_format || DEFAULT_TIME_FORMAT);
+      setDateFormat(prefs?.date_format?.trim() || DEFAULT_DATE_FORMAT);
+      setTimeFormat(prefs?.time_format?.trim() || DEFAULT_TIME_FORMAT);
     };
     void load();
     return () => {

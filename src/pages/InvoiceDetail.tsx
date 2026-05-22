@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { FunctionsHttpError } from '@supabase/supabase-js';
@@ -215,7 +215,23 @@ interface ImportTimeEntry {
   task_id?: string | null;
   task_name?: string | null;
   start_time: string;
+  linkedOnThisInvoice?: boolean;
 }
+
+const DEFAULT_INVOICE_EMAIL_SUBJECT = 'Invoice {{invoice_number}} from {{business_name}}';
+const DEFAULT_INVOICE_EMAIL_MESSAGE =
+  'Hi {{client_name}}, please find attached invoice {{invoice_number}} for {{total}}. Due by {{due_date}}.';
+const DEFAULT_REMINDER_SUBJECT = 'Reminder: Invoice {{invoice_number}} Due Soon';
+const DEFAULT_REMINDER_BODY =
+  'Hi {{client_name}}, this is a reminder that invoice {{invoice_number}} is due on {{due_date}}.';
+
+const pickEmailTemplate = (...candidates: (string | null | undefined)[]) => {
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim();
+    if (trimmed) return trimmed;
+  }
+  return '';
+};
 
 export default function InvoiceDetail() {
   const { id } = useParams<{ id: string }>();
@@ -275,6 +291,88 @@ export default function InvoiceDetail() {
   const [unlinkingImports, setUnlinkingImports] = useState(false);
   const [clientProjectsForImport, setClientProjectsForImport] = useState<Array<{ id: string; name: string }>>([]);
   const preloadedDefaultsRef = useRef<string | null>(null);
+  const sendModalDefaultsAppliedRef = useRef(false);
+  const importFetchSkipRef = useRef(true);
+
+  const getDefaultImportFilters = useCallback(
+    () => ({
+      status: 'unbilled' as const,
+      billable: 'billable' as const,
+      project: 'all',
+      search: '',
+      from: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+      to: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
+      grouping: 'grouped' as const,
+    }),
+    [],
+  );
+
+  const resetImportFilters = useCallback(() => {
+    const defaults = getDefaultImportFilters();
+    setImportStatusFilter(defaults.status);
+    setImportBillableFilter(defaults.billable);
+    setImportProjectFilter(defaults.project);
+    setImportSearch(defaults.search);
+    setImportFromDate(defaults.from);
+    setImportToDate(defaults.to);
+    setImportGrouping(defaults.grouping);
+  }, [getDefaultImportFilters]);
+
+  /** Keeps invoice↔time links aligned after line deletes or legacy imports. */
+  const syncInvoiceTimeEntryLinks = useCallback(async (invoiceId: string) => {
+    const { data: items } = await supabase.from('invoice_items').select('id').eq('invoice_id', invoiceId);
+    const validItemIds = new Set((items ?? []).map((row) => row.id));
+
+    const { data: allLinks } = await supabase
+      .from('invoice_time_entry_links')
+      .select('id, time_entry_id, invoice_item_id')
+      .eq('invoice_id', invoiceId);
+
+    const staleLinkEntryIds = new Set<string>();
+    for (const link of allLinks ?? []) {
+      const brokenItem =
+        link.invoice_item_id != null && !validItemIds.has(link.invoice_item_id);
+      const legacyOrphan = link.invoice_item_id == null;
+      if (brokenItem || legacyOrphan) {
+        staleLinkEntryIds.add(link.time_entry_id);
+      }
+    }
+
+    if (staleLinkEntryIds.size > 0) {
+      await supabase
+        .from('invoice_time_entry_links')
+        .delete()
+        .eq('invoice_id', invoiceId)
+        .in('time_entry_id', Array.from(staleLinkEntryIds));
+      await supabase
+        .from('time_entries')
+        .update({ billing_status: 'unbilled', invoice_id: null })
+        .in('id', Array.from(staleLinkEntryIds))
+        .neq('billing_status', 'paid');
+    }
+
+    const { data: freshLinks } = await supabase
+      .from('invoice_time_entry_links')
+      .select('time_entry_id')
+      .eq('invoice_id', invoiceId);
+    const linkedIds = new Set((freshLinks ?? []).map((row) => row.time_entry_id));
+
+    const { data: attachedEntries } = await supabase
+      .from('time_entries')
+      .select('id')
+      .eq('invoice_id', invoiceId);
+    const orphanedEntryIds = (attachedEntries ?? [])
+      .map((row) => row.id)
+      .filter((entryId) => !linkedIds.has(entryId));
+
+    if (orphanedEntryIds.length > 0) {
+      await supabase
+        .from('time_entries')
+        .update({ billing_status: 'unbilled', invoice_id: null })
+        .in('id', orphanedEntryIds)
+        .neq('billing_status', 'paid');
+    }
+  }, []);
 
   useEffect(() => {
     if (user && id) {
@@ -471,7 +569,7 @@ export default function InvoiceDetail() {
     setImportToDate(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
   };
 
-  const fetchImportEntries = async () => {
+  const fetchImportEntries = async (options?: { preserveSelection?: boolean }) => {
     if (!invoice?.client_id) {
       toast({
         title: 'No client selected',
@@ -483,6 +581,7 @@ export default function InvoiceDetail() {
 
     try {
       setImportLoading(true);
+      if (id) await syncInvoiceTimeEntryLinks(id);
       // Get projects for this client
       const { data: clientProjects, error: projectsError } = await supabase
         .from('projects')
@@ -520,16 +619,27 @@ export default function InvoiceDetail() {
 
       if (entriesError) throw entriesError;
 
-      const entriesWithProjects = ((entries || []) as Array<ImportTimeEntry & { tasks?: { title: string } | null }>).map(e => ({
+      const { data: existingLinks } = await supabase
+        .from('invoice_time_entry_links')
+        .select('time_entry_id')
+        .eq('invoice_id', id);
+      const linkedOnInvoice = new Set((existingLinks || []).map((row) => row.time_entry_id));
+
+      const entriesWithProjects = ((entries || []) as Array<ImportTimeEntry & { tasks?: { title: string } | null }>).map((e) => ({
         ...e,
         project_name: projectMap[e.project_id!] || 'Unknown',
         task_name: e.tasks?.title || null,
+        linkedOnThisInvoice: linkedOnInvoice.has(e.id) && e.invoice_id === id,
       }));
       const filtered = entriesWithProjects.filter((entry) => {
         const date = format(new Date(entry.start_time), 'yyyy-MM-dd');
         if (importFromDate && date < importFromDate) return false;
         if (importToDate && date > importToDate) return false;
-        if (importStatusFilter !== 'all' && (entry.billing_status || 'unbilled') !== importStatusFilter) return false;
+        const status = entry.billing_status || 'unbilled';
+        if (importStatusFilter !== 'all' && status !== importStatusFilter) {
+          const onThisInvoice = entry.invoice_id === id || entry.linkedOnThisInvoice;
+          if (!onThisInvoice) return false;
+        }
         if (importBillableFilter === 'billable' && !entry.billable) return false;
         if (importBillableFilter === 'non_billable' && entry.billable) return false;
         if (importSearch.trim()) {
@@ -541,8 +651,25 @@ export default function InvoiceDetail() {
       });
 
       setImportEntries(filtered);
-      const eligible = filtered.filter((e) => e.billable && (e.billing_status || 'unbilled') === 'unbilled' && !e.invoice_id);
-      setSelectedEntries(new Set(eligible.map((e) => e.id)));
+      if (profile) {
+        setImportIncludeNotes(profile.invoice_show_line_description ?? true);
+        setImportIncludeLineDate(profile.invoice_show_line_date ?? false);
+      }
+      const isEligible = (e: ImportTimeEntry) =>
+        e.billable && (e.billing_status || 'unbilled') === 'unbilled' && !e.linkedOnThisInvoice;
+
+      if (options?.preserveSelection) {
+        setSelectedEntries((prev) => {
+          const next = new Set<string>();
+          for (const entryId of prev) {
+            const entry = filtered.find((e) => e.id === entryId);
+            if (entry && isEligible(entry)) next.add(entryId);
+          }
+          return next;
+        });
+      } else {
+        setSelectedEntries(new Set(filtered.filter(isEligible).map((e) => e.id)));
+      }
       setIsImportModalOpen(true);
     } catch (error: any) {
       toast({
@@ -594,7 +721,11 @@ export default function InvoiceDetail() {
 
       const eligibleIds = new Set(
         (freshEligibleEntries ?? [])
-          .filter((entry) => entry.billing_status === 'unbilled' && entry.invoice_id == null)
+          .filter(
+            (entry) =>
+              entry.billing_status === 'unbilled' &&
+              (entry.invoice_id == null || entry.invoice_id === id),
+          )
           .map((entry) => entry.id),
       );
       const finalEntries = dedupedEntries.filter((entry) => eligibleIds.has(entry.id));
@@ -608,7 +739,7 @@ export default function InvoiceDetail() {
         return;
       }
 
-      const newItems: Array<{
+      type ImportLinePayload = {
         invoice_id: string | undefined;
         description: string;
         line_description?: string;
@@ -616,7 +747,9 @@ export default function InvoiceDetail() {
         quantity: number;
         unit_price: number;
         amount: number;
-      }> = [];
+        entryIds: string[];
+      };
+      const newItems: ImportLinePayload[] = [];
       let missingRateCount = 0;
       if (importGrouping === 'detailed') {
         for (const entry of finalEntries) {
@@ -632,6 +765,7 @@ export default function InvoiceDetail() {
             quantity: parseFloat(hours.toFixed(2)),
             unit_price: rate,
             amount: parseFloat((hours * rate).toFixed(2)),
+            entryIds: [entry.id],
           });
         }
       } else {
@@ -645,6 +779,7 @@ export default function InvoiceDetail() {
             notes: string[];
             minDate: string;
             maxDate: string;
+            entryIds: string[];
           }
         >();
         for (const entry of finalEntries) {
@@ -664,12 +799,14 @@ export default function InvoiceDetail() {
               notes,
               minDate: date,
               maxDate: date,
+              entryIds: [entry.id],
             });
           } else {
             current.hours += hours;
             current.minDate = current.minDate < date ? current.minDate : date;
             current.maxDate = current.maxDate > date ? current.maxDate : date;
             if (notes.length) current.notes.push(...notes);
+            current.entryIds.push(entry.id);
           }
         }
         grouped.forEach((group) => {
@@ -690,36 +827,38 @@ export default function InvoiceDetail() {
             quantity: parseFloat(group.hours.toFixed(2)),
             unit_price: group.rate,
             amount: parseFloat((group.hours * group.rate).toFixed(2)),
+            entryIds: group.entryIds,
           });
         });
       }
 
-      const { error: insertError } = await supabase
+      const { data: insertedItems, error: insertError } = await supabase
         .from('invoice_items')
-        .insert(newItems)
+        .insert(
+          newItems.map(({ entryIds: _entryIds, ...item }) => item),
+        )
         .select('id');
 
       if (insertError) throw insertError;
 
       const { error: updateError } = await supabase
         .from('time_entries')
-        .update({ 
-          billing_status: 'billed',
-          invoice_id: id 
-        })
+        .update({ invoice_id: id })
         .in('id', finalEntries.map((entry) => entry.id))
-        .eq('billing_status', 'unbilled')
-        .is('invoice_id', null);
+        .eq('billing_status', 'unbilled');
 
       if (updateError) throw updateError;
 
-      const { error: linkError } = await supabase.from('invoice_time_entry_links').insert(
-        finalEntries.map((entry) => ({
+      const linkRows = newItems.flatMap((item, index) => {
+        const itemId = insertedItems?.[index]?.id;
+        if (!itemId) return [];
+        return item.entryIds.map((timeEntryId) => ({
           invoice_id: id,
-          invoice_item_id: null,
-          time_entry_id: entry.id,
-        })),
-      );
+          invoice_item_id: itemId,
+          time_entry_id: timeEntryId,
+        }));
+      });
+      const { error: linkError } = await supabase.from('invoice_time_entry_links').insert(linkRows);
       if (linkError) throw linkError;
 
       const suffix = missingRateCount > 0 ? ` (${missingRateCount} entries used default rate)` : '';
@@ -913,12 +1052,32 @@ export default function InvoiceDetail() {
 
   const deleteItem = async (itemId: string) => {
     try {
+      const { data: linkedRows } = await supabase
+        .from('invoice_time_entry_links')
+        .select('time_entry_id')
+        .eq('invoice_id', id)
+        .eq('invoice_item_id', itemId);
+      const linkedEntryIds = (linkedRows || []).map((row) => row.time_entry_id);
+
+      await supabase.from('invoice_time_entry_links').delete().eq('invoice_id', id).eq('invoice_item_id', itemId);
+
       const { error } = await supabase
         .from('invoice_items')
         .delete()
         .eq('id', itemId);
 
       if (error) throw error;
+
+      if (linkedEntryIds.length > 0) {
+        await supabase
+          .from('time_entries')
+          .update({ billing_status: 'unbilled', invoice_id: null })
+          .in('id', linkedEntryIds)
+          .neq('billing_status', 'paid');
+      }
+
+      if (id) await syncInvoiceTimeEntryLinks(id);
+
       setItems(items.filter((i) => i.id !== itemId));
     } catch (error: any) {
       toast({
@@ -999,6 +1158,15 @@ export default function InvoiceDetail() {
     }
   };
 
+  const markLinkedEntriesBilled = async () => {
+    if (!id) return;
+    await supabase
+      .from('time_entries')
+      .update({ billing_status: 'billed' })
+      .eq('invoice_id', id)
+      .eq('billing_status', 'unbilled');
+  };
+
   const markAsSent = async () => {
     try {
       const { error } = await supabase
@@ -1007,6 +1175,7 @@ export default function InvoiceDetail() {
         .eq('id', id);
 
       if (error) throw error;
+      await markLinkedEntriesBilled();
       toast({ title: 'Invoice marked as sent' });
       fetchInvoice();
     } catch (error: any) {
@@ -1114,6 +1283,10 @@ export default function InvoiceDetail() {
 
       if (sendResponse.error) throw sendResponse.error;
 
+      if (sendModalMode === 'send') {
+        await markLinkedEntriesBilled();
+      }
+
       toast({ title: sendModalMode === 'receipt' ? 'Receipt sent!' : 'Invoice sent successfully!' });
       setIsSendModalOpen(false);
       setEmailMessage('');
@@ -1188,29 +1361,74 @@ export default function InvoiceDetail() {
     }
 
     if (mode === 'reminder') {
-      const subjectTpl =
-        profile?.reminder_subject_default ||
-        appCommsDefaults?.reminder_subject_default ||
-        'Reminder: Invoice {{invoice_number}} Due Soon';
-      const bodyTpl =
-        profile?.reminder_body_default ||
-        appCommsDefaults?.reminder_body_default ||
-        'Hi {{client_name}}, this is a reminder that invoice {{invoice_number}} is due on {{due_date}}.';
+      const subjectTpl = pickEmailTemplate(
+        profile?.reminder_subject_default,
+        appCommsDefaults?.reminder_subject_default,
+        DEFAULT_REMINDER_SUBJECT,
+      );
+      const bodyTpl = pickEmailTemplate(
+        profile?.reminder_body_default,
+        appCommsDefaults?.reminder_body_default,
+        DEFAULT_REMINDER_BODY,
+      );
       setEmailSubject(resolveEmailMessage(subjectTpl));
       setEmailMessage(resolveEmailMessage(bodyTpl));
       return;
     }
 
-    const subjectTpl =
-      profile?.invoice_email_subject_default ||
-      appCommsDefaults?.invoice_email_subject_default ||
-      'Invoice {{invoice_number}} from {{business_name}}';
-    const bodyTpl =
-      profile?.invoice_email_message_default ||
-      appCommsDefaults?.invoice_email_message_default ||
-      'Hi {{client_name}}, please find attached invoice {{invoice_number}} for {{total}}. Due by {{due_date}}.';
+    const subjectTpl = pickEmailTemplate(
+      profile?.invoice_email_subject_default,
+      appCommsDefaults?.invoice_email_subject_default,
+      DEFAULT_INVOICE_EMAIL_SUBJECT,
+    );
+    const bodyTpl = pickEmailTemplate(
+      profile?.invoice_email_message_default,
+      appCommsDefaults?.invoice_email_message_default,
+      DEFAULT_INVOICE_EMAIL_MESSAGE,
+    );
     setEmailSubject(resolveEmailMessage(subjectTpl));
     setEmailMessage(resolveEmailMessage(bodyTpl));
+  };
+
+  useEffect(() => {
+    if (!isSendModalOpen) {
+      sendModalDefaultsAppliedRef.current = false;
+      return;
+    }
+    if (sendModalDefaultsAppliedRef.current) return;
+    if (!profile && !appCommsDefaults) return;
+    applySendModalDefaults(sendModalMode);
+    sendModalDefaultsAppliedRef.current = true;
+  }, [isSendModalOpen, profile, appCommsDefaults, sendModalMode, invoice?.invoice_number]);
+
+  useEffect(() => {
+    if (!isImportModalOpen || !invoice?.client_id) {
+      importFetchSkipRef.current = true;
+      return;
+    }
+    if (importFetchSkipRef.current) {
+      importFetchSkipRef.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void fetchImportEntries({ preserveSelection: true });
+    }, 300);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch when filters change
+  }, [
+    isImportModalOpen,
+    invoice?.client_id,
+    importStatusFilter,
+    importBillableFilter,
+    importProjectFilter,
+    importFromDate,
+    importToDate,
+    importSearch,
+  ]);
+
+  const openImportModal = () => {
+    importFetchSkipRef.current = true;
+    void fetchImportEntries();
   };
 
   const previewNotes = notes.trim() || profile?.invoice_notes_default?.trim() || '';
@@ -1563,7 +1781,7 @@ export default function InvoiceDetail() {
             {isEditMode && (
               <div className="flex flex-wrap gap-2">
                 {invoice.client_id && (
-                  <Button variant="outline" size="sm" onClick={fetchImportEntries}>
+                  <Button variant="outline" size="sm" onClick={openImportModal}>
                     <SlotIcon slot="invoice_stat_pending" className="mr-2 h-4 w-4" />
                     Import Time
                   </Button>
@@ -1870,7 +2088,8 @@ export default function InvoiceDetail() {
               </Button>
               <Button size="sm" onClick={() => {
                 setIsPreviewOpen(false);
-                setEmailMessage(resolveEmailMessage(profile?.invoice_email_message_default ?? ''));
+                setSendModalMode('send');
+                setCcEmails([]);
                 setIsSendModalOpen(true);
               }}>
                 <SlotIcon slot="action_send" className="mr-2 h-4 w-4" />
@@ -1996,16 +2215,24 @@ export default function InvoiceDetail() {
 
       {/* Import Time Entries Modal */}
       <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh]">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
             <DialogTitle>Import Time Entries</DialogTitle>
             <DialogDescription>
-              Filter entries by billing status, date, and project. Import as grouped task totals or detailed lines.
+              Filters update automatically. Grouped merges hours into one line per project, task, and rate.
+              Detailed creates one invoice line per time entry.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="px-6 pb-3 space-y-3 shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">Filters apply as you change them</p>
+            <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={resetImportFilters}>
+              Reset filters
+            </Button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
             <Select value={importStatusFilter} onValueChange={(v) => setImportStatusFilter(v as typeof importStatusFilter)}>
-              <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full min-w-0"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="unbilled">Unbilled</SelectItem>
                 <SelectItem value="billed">Billed</SelectItem>
@@ -2014,7 +2241,7 @@ export default function InvoiceDetail() {
               </SelectContent>
             </Select>
             <Select value={importBillableFilter} onValueChange={(v) => setImportBillableFilter(v as typeof importBillableFilter)}>
-              <SelectTrigger><SelectValue placeholder="Billable" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full min-w-0"><SelectValue placeholder="Billable" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="billable">Billable</SelectItem>
                 <SelectItem value="non_billable">Non-billable</SelectItem>
@@ -2022,7 +2249,7 @@ export default function InvoiceDetail() {
               </SelectContent>
             </Select>
             <Select value={importProjectFilter} onValueChange={setImportProjectFilter}>
-              <SelectTrigger><SelectValue placeholder="Project" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full min-w-0 text-left"><SelectValue placeholder="Project" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All client projects</SelectItem>
                 {clientProjectsForImport.map((p) => (
@@ -2031,25 +2258,38 @@ export default function InvoiceDetail() {
               </SelectContent>
             </Select>
           </div>
-          <div className="grid gap-3 md:grid-cols-5">
-            <Input value={importFromDate} onChange={(e) => setImportFromDate(e.target.value)} type="date" />
-            <Input value={importToDate} onChange={(e) => setImportToDate(e.target.value)} type="date" />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Input
+              value={importFromDate}
+              onChange={(e) => setImportFromDate(e.target.value)}
+              type="date"
+              aria-label="From date"
+              className="relative h-9 w-full min-w-0 pl-3 pr-11 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-2.5 [&::-webkit-calendar-picker-indicator]:top-1/2 [&::-webkit-calendar-picker-indicator]:h-4 [&::-webkit-calendar-picker-indicator]:w-4 [&::-webkit-calendar-picker-indicator]:-translate-y-1/2 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+            />
+            <Input
+              value={importToDate}
+              onChange={(e) => setImportToDate(e.target.value)}
+              type="date"
+              aria-label="To date"
+              className="relative h-9 w-full min-w-0 pl-3 pr-11 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-2.5 [&::-webkit-calendar-picker-indicator]:top-1/2 [&::-webkit-calendar-picker-indicator]:h-4 [&::-webkit-calendar-picker-indicator]:w-4 [&::-webkit-calendar-picker-indicator]:-translate-y-1/2 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+            />
             <Select value={importGrouping} onValueChange={(v) => setImportGrouping(v as typeof importGrouping)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full min-w-0"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="grouped">Grouped by project/task</SelectItem>
-                <SelectItem value="detailed">Detailed by entry</SelectItem>
+                <SelectItem value="grouped">Grouped (project + task)</SelectItem>
+                <SelectItem value="detailed">Detailed (one line per entry)</SelectItem>
               </SelectContent>
             </Select>
             <Input
               value={importSearch}
               onChange={(e) => setImportSearch(e.target.value)}
               placeholder="Search notes/task/project"
+              className="h-9 min-w-0"
             />
-            <Button variant="outline" onClick={fetchImportEntries} disabled={importLoading}>
-              {importLoading ? 'Loading…' : 'Apply filters'}
-            </Button>
           </div>
+          {importLoading ? (
+            <p className="text-xs text-muted-foreground">Updating list…</p>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Button type="button" variant="ghost" size="sm" onClick={() => applyImportPreset('this_week')}>This week</Button>
             <Button type="button" variant="ghost" size="sm" onClick={() => applyImportPreset('this_month')}>This month</Button>
@@ -2066,7 +2306,8 @@ export default function InvoiceDetail() {
               </label>
             </div>
           </div>
-          <ScrollArea className="max-h-[calc(90vh-200px)]">
+          </div>
+          <ScrollArea className="flex-1 min-h-0 px-6 max-h-[min(50vh,420px)]">
             {importEntries.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No entries match current filters
@@ -2085,7 +2326,11 @@ export default function InvoiceDetail() {
                     {entries.map((entry) => {
                       const hours = (entry.total_duration_seconds != null ? entry.total_duration_seconds / 3600 : entry.duration_minutes / 60);
                       const rate = entry.hourly_rate || defaultHourlyRate;
-                      const eligible = entry.billable && (entry.billing_status || 'unbilled') === 'unbilled' && !entry.invoice_id;
+                      const eligible =
+                        entry.billable &&
+                        (entry.billing_status || 'unbilled') === 'unbilled' &&
+                        !entry.linkedOnThisInvoice;
+                      const alreadyOnInvoice = entry.linkedOnThisInvoice;
                       return (
                         <div key={entry.id} className="flex items-center gap-3 py-2 border-b last:border-0">
                           <Checkbox
@@ -2104,7 +2349,11 @@ export default function InvoiceDetail() {
                           <div className="flex-1">
                             <p className="text-sm font-medium">
                               {entry.task_name ? `${entry.task_name}` : 'No task'}
-                              {!eligible ? <span className="ml-2 text-xs text-muted-foreground">(not importable)</span> : null}
+                              {alreadyOnInvoice ? (
+                                <span className="ml-2 text-xs text-primary">(on this invoice)</span>
+                              ) : !eligible ? (
+                                <span className="ml-2 text-xs text-muted-foreground">(not importable)</span>
+                              ) : null}
                             </p>
                             <p className="text-xs text-muted-foreground">{entry.description || 'No notes'} • {format(new Date(entry.start_time), 'MMM d, yyyy')}</p>
                             <p className="text-xs text-muted-foreground capitalize">
@@ -2123,7 +2372,7 @@ export default function InvoiceDetail() {
               </div>
             )}
           </ScrollArea>
-          <div className="rounded-lg border bg-muted/20 p-3 text-sm">
+          <div className="mx-6 mb-3 rounded-lg border bg-muted/20 p-3 text-sm shrink-0">
             <div className="flex flex-wrap items-center gap-3">
               <span className="font-medium">Import preview</span>
               <span className="text-muted-foreground">{importSummary.entryCount} entries</span>
@@ -2139,12 +2388,15 @@ export default function InvoiceDetail() {
                 : 'Detailed import creates one invoice line per selected time entry.'}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Unlinking selected imported entries moves their billing status back to <span className="font-medium">unbilled</span>.
+              Entries stay <span className="font-medium">unbilled</span> until the invoice is sent. Unlink removes them from this invoice.
             </p>
           </div>
-          <div className="flex justify-between items-center pt-4 border-t">
+          <div className="flex justify-between items-center px-6 py-4 border-t shrink-0">
             <p className="text-sm text-muted-foreground">
-              {selectedEntries.size} entries selected ({importGrouping === 'grouped' ? 'grouped import' : 'detailed import'})
+              {selectedEntries.size} entries →{' '}
+              {importGrouping === 'grouped'
+                ? `${importSummary.groupedCount} invoice line${importSummary.groupedCount === 1 ? '' : 's'}`
+                : `${importSummary.entryCount} invoice line${importSummary.entryCount === 1 ? '' : 's'}`}
             </p>
             <div className="flex gap-2">
               <Button
@@ -2189,7 +2441,18 @@ export default function InvoiceDetail() {
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="recipient-email">Recipient Email</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="recipient-email">Recipient Email</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 shrink-0 text-xs"
+                  onClick={() => setCcEmails((prev) => [...prev, ''])}
+                >
+                  + Add CC
+                </Button>
+              </div>
               <Input
                 id="recipient-email"
                 type="email"
@@ -2198,19 +2461,8 @@ export default function InvoiceDetail() {
                 placeholder="client@example.com"
               />
             </div>
+            {ccEmails.length > 0 ? (
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>CC</Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setCcEmails((prev) => [...prev, ''])}
-                >
-                  + Add CC
-                </Button>
-              </div>
               {ccEmails.map((email, i) => (
                 <div key={i} className="flex gap-2">
                   <Input
@@ -2235,6 +2487,7 @@ export default function InvoiceDetail() {
                 </div>
               ))}
             </div>
+            ) : null}
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <Label htmlFor="email-subject">Subject</Label>

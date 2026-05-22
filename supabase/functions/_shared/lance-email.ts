@@ -12,6 +12,10 @@ export const LANCE_EMAIL_LOGO_WHITE_URL = "https://www.getlance.app/email/lance-
 /** Black wordmark for light footers (all email types). */
 export const LANCE_EMAIL_LOGO_BLACK_URL = "https://www.getlance.app/email/lance-logo-black.svg";
 
+/** lance-logo-black.svg viewBox 573.64×116.19 — width/height must match or email clients stretch the image. */
+const LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX = 20;
+const LANCE_EMAIL_LOGO_BLACK_WIDTH_PX = 99;
+
 export function escapeHtml(text: string | null | undefined): string {
   if (!text) return "";
   return String(text)
@@ -41,7 +45,7 @@ export function getDefaultLanceHeader(primaryColor: string, logoUrl: string = LA
 export function getDefaultLanceFooter(primaryColor: string): string {
   const safeLogo = escapeHtml(LANCE_EMAIL_LOGO_BLACK_URL);
   return `</div><div style="padding: 14px 20px; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb;">
-  <img src="${safeLogo}" alt="Lance" width="80" height="20" style="height: 20px; max-width: 100px; width: auto; display: block; margin-bottom: 8px; border: 0;" />
+  <img src="${safeLogo}" alt="Lance" width="${LANCE_EMAIL_LOGO_BLACK_WIDTH_PX}" height="${LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX}" style="height: ${LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX}px; width: ${LANCE_EMAIL_LOGO_BLACK_WIDTH_PX}px; display: block; margin-bottom: 8px; border: 0;" />
   Sent by <span style="color: ${primaryColor}; font-weight: 600;">Lance</span>
 </div></div>`;
 }
@@ -56,7 +60,7 @@ export function getLanceSignature(primaryColor: string): string {
   </div>
   <div style="margin-top: 8px;">
     <a href="https://getlance.app" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
-      <img src="${safeLogo}" alt="Lance" width="80" height="20" style="height: 20px; max-width: 80px; width: auto; display: inline-block; border: 0;" />
+      <img src="${safeLogo}" alt="Lance" width="${LANCE_EMAIL_LOGO_BLACK_WIDTH_PX}" height="${LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX}" style="height: ${LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX}px; width: ${LANCE_EMAIL_LOGO_BLACK_WIDTH_PX}px; display: block; margin: 0 auto; border: 0;" />
     </a>
   </div>
 </div>`;

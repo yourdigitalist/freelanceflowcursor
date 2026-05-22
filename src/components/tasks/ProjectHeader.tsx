@@ -11,8 +11,9 @@ import {
 import { ArrowLeft, MoreVertical, Trash2, Download, Upload } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { Project, Task, ProjectStatus } from './types';
-import { format } from 'date-fns';
 import { formatDuration } from '@/lib/time';
+import { formatLocaleDate } from '@/lib/datetime';
+import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 
 interface ProjectHeaderProps {
   project: Project;
@@ -41,6 +42,7 @@ export function ProjectHeader({
   onOpenImportTasks,
   exportTaskCount = 0,
 }: ProjectHeaderProps) {
+  const { dateFormat } = useLocalePreferences();
   const doneStatuses = statuses.filter(s => s.is_done_status).map(s => s.id);
   const completedTasks = tasks.filter(t => t.status_id && doneStatuses.includes(t.status_id)).length;
 
@@ -207,7 +209,7 @@ export function ProjectHeader({
               <div>
                 <p className="text-sm text-muted-foreground">Due Date</p>
                 <p className="text-xl font-semibold">
-                  {project.due_date ? format(new Date(project.due_date), 'MMM d, yyyy') : '-'}
+                  {project.due_date ? formatLocaleDate(project.due_date, dateFormat) : '-'}
                 </p>
               </div>
             </div>

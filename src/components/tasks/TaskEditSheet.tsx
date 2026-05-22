@@ -27,6 +27,8 @@ import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
 import { formatDuration } from '@/lib/time';
+import { formatLocaleDate, formatLocaleDateTime } from '@/lib/datetime';
+import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 
 export interface TaskTimeEntryRow {
   id: string;
@@ -68,6 +70,7 @@ export function TaskEditSheet({
 }: TaskEditSheetProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { dateFormat, timeFormat } = useLocalePreferences();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -277,7 +280,7 @@ export function TaskEditSheet({
                       >
                         <div className="min-w-0">
                           <p className="font-medium truncate">
-                            {format(parseISO(entry.started_at || entry.start_time), 'MMM d, yyyy')}
+                            {formatLocaleDate(entry.started_at || entry.start_time, dateFormat)}
                           </p>
                           <p className="text-xs text-muted-foreground truncate">
                             {entry.description || 'No notes'}
@@ -340,7 +343,7 @@ export function TaskEditSheet({
                   <div key={comment.id} className="rounded-lg border bg-background p-2 text-sm">
                     <p>{comment.content}</p>
                     <span className="text-xs text-muted-foreground">
-                      {format(new Date(comment.created_at), 'MMM d, h:mm a')}
+                      {formatLocaleDateTime(comment.created_at, dateFormat, timeFormat)}
                     </span>
                   </div>
                 ))}

@@ -216,8 +216,8 @@ export function formatCurrency(
 
 // Date formats
 export const dateFormats = [
-  { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY (12/31/2024)' },
   { value: 'DD/MM/YYYY', label: 'DD/MM/YYYY (31/12/2024)' },
+  { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY (12/31/2024)' },
   { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD (2024-12-31)' },
   { value: 'MMM D, YYYY', label: 'MMM D, YYYY (Dec 31, 2024)' },
   { value: 'D MMM YYYY', label: 'D MMM YYYY (31 Dec 2024)' },

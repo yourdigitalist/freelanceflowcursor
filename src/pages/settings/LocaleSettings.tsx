@@ -49,7 +49,7 @@ export default function LocaleSettings() {
   const [currency, setCurrency] = useState('USD');
   const [currencyDisplay, setCurrencyDisplay] = useState('symbol');
   const [numberFormat, setNumberFormat] = useState('1,234.56');
-  const [dateFormat, setDateFormat] = useState('MM/DD/YYYY');
+  const [dateFormat, setDateFormat] = useState('DD/MM/YYYY');
   const [timeFormat, setTimeFormat] = useState('12h');
   const [timezone, setTimezone] = useState('UTC');
   const [timezoneOpen, setTimezoneOpen] = useState(false);
@@ -98,7 +98,7 @@ export default function LocaleSettings() {
       if (data) {
         setCurrency(data.currency || getDefaultCurrency());
         setCurrencyDisplay(data.currency_display || 'symbol');
-        setDateFormat(data.date_format || 'MM/DD/YYYY');
+        setDateFormat(data.date_format || 'DD/MM/YYYY');
         setTimeFormat(data.time_format || '12h');
         setTimezone(data.timezone || getBrowserTimezone());
       } else {

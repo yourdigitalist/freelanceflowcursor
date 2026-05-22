@@ -54,6 +54,8 @@ import { TaskEditSheet, type TaskTimeEntryRow } from '@/components/tasks/TaskEdi
 import { TimeEntryLogDialog, type TimeEntryLogDialogEntry } from '@/components/time/TimeEntryLogDialog';
 import { StatusManagementModal } from '@/components/tasks/StatusManagementModal';
 import { formatDuration } from '@/lib/time';
+import { formatLocaleDate, formatLocaleDateTime } from '@/lib/datetime';
+import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { format, parseISO } from 'date-fns';
 
 interface ProjectTimeEntry {
@@ -82,6 +84,7 @@ export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { formatCurrency: fmt } = useProfileCurrency();
+  const { dateFormat, timeFormat } = useLocalePreferences();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -953,7 +956,7 @@ export default function ProjectDetail() {
                     const secs = entry.total_duration_seconds ?? (entry.duration_minutes || 0) * 60;
                     return (
                       <TableRow key={entry.id} className="cursor-pointer" onClick={() => openEntryDetails(entry)}>
-                        <TableCell>{format(parseISO(entry.start_time), 'MMM d, yyyy')}</TableCell>
+                        <TableCell>{formatLocaleDate(entry.start_time, dateFormat)}</TableCell>
                         <TableCell>{entry.tasks?.title || <span className="text-muted-foreground">—</span>}</TableCell>
                         <TableCell>{entry.description || <span className="text-muted-foreground">No description</span>}</TableCell>
                         <TableCell>{formatDuration(secs, true)}</TableCell>
@@ -1103,7 +1106,10 @@ export default function ProjectDetail() {
                   ) : (
                     selectedEntrySegments.map((segment, idx) => (
                       <div key={segment.id} className="flex items-center justify-between rounded border p-2">
-                        <span>{idx + 1}. {format(parseISO(segment.start_time), 'MMM d, yyyy HH:mm:ss')} - {format(parseISO(segment.end_time), 'MMM d, yyyy HH:mm:ss')}</span>
+                        <span>
+                          {idx + 1}. {formatLocaleDateTime(segment.start_time, dateFormat, timeFormat)} –{' '}
+                          {formatLocaleDateTime(segment.end_time, dateFormat, timeFormat)}
+                        </span>
                         <span className="font-mono">{formatDuration(segment.duration_seconds, true)}</span>
                       </div>
                     ))

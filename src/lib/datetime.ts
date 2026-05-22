@@ -1,6 +1,6 @@
 import { format, parseISO } from "date-fns";
 
-export const DEFAULT_DATE_FORMAT = "MM/DD/YYYY";
+export const DEFAULT_DATE_FORMAT = "DD/MM/YYYY";
 export const DEFAULT_TIME_FORMAT: "12h" | "24h" = "12h";
 
 export const toDateFnsPattern = (pattern: string) =>

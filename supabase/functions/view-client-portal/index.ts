@@ -107,7 +107,7 @@ serve(async (req) => {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("business_name, business_logo, business_email, email, client_email_primary_color")
+      .select("business_name, business_logo, business_email, email, client_email_primary_color, date_format")
       .eq("user_id", client.user_id)
       .maybeSingle();
 
@@ -125,6 +125,7 @@ serve(async (req) => {
       business_logo: businessLogo || null,
       business_email: profile?.business_email || profile?.email || null,
       primary_color: (profile?.client_email_primary_color || "#9B63E9").trim(),
+      date_format: profile?.date_format || "DD/MM/YYYY",
     };
 
     const clientDetails = {

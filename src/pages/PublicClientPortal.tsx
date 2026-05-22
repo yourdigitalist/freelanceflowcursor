@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { appendPortalParam, parsePortalSections } from "@/lib/clientPortal";
 import { loadClientPortalData } from "@/lib/loadClientPortal";
 import { countryLabel } from "@/lib/locale-data";
-import { formatLocaleDate } from "@/lib/datetime";
+import { DEFAULT_DATE_FORMAT, formatLocaleDate } from "@/lib/datetime";
 import {
   addMonths,
   addWeeks,
@@ -26,7 +26,12 @@ import {
 import { Button } from "@/components/ui/button";
 
 type PortalData = {
-  business: { business_name: string | null; business_logo: string | null; primary_color: string };
+  business: {
+    business_name: string | null;
+    business_logo: string | null;
+    primary_color: string;
+    date_format?: string | null;
+  };
   client: Record<string, string | null>;
   sections: ReturnType<typeof parsePortalSections>;
   portal_token: string;
@@ -86,7 +91,8 @@ const formatHm = (seconds: number) => {
   return `${h}:${m.toString().padStart(2, "0")}`;
 };
 
-function PortalTimeSection({ entries }: { entries: TimeEntryRow[] }) {
+function PortalTimeSection({ entries, dateFormat }: { entries: TimeEntryRow[]; dateFormat: string }) {
+  const fmtDate = (value: Date | string | null | undefined) => formatLocaleDate(value, dateFormat);
   const [timeView, setTimeView] = useState<"week" | "month">("week");
   const [timeAnchor, setTimeAnchor] = useState(new Date());
   const [selectedTimeDay, setSelectedTimeDay] = useState(new Date());
@@ -276,7 +282,7 @@ function PortalTimeSection({ entries }: { entries: TimeEntryRow[] }) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold">
-            Entries on {formatLocaleDate(selectedTimeDay)}
+            Entries on {fmtDate(selectedTimeDay)}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -357,6 +363,7 @@ export default function PublicClientPortal() {
   }
 
   const sections = parsePortalSections(data.sections);
+  const portalDateFormat = data.business.date_format?.trim() || DEFAULT_DATE_FORMAT;
   const pt = data.portal_token;
   const primary = data.business.primary_color || "#9B63E9";
   const c = data.client;
@@ -485,7 +492,7 @@ export default function PublicClientPortal() {
                             </TableCell>
                             <TableCell>{row.total}</TableCell>
                             <TableCell>
-                              {row.due_date ? formatLocaleDate(row.due_date) : "—"}
+                              {row.due_date ? formatLocaleDate(row.due_date, portalDateFormat) : "—"}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -629,7 +636,7 @@ export default function PublicClientPortal() {
                               </Badge>
                             </TableCell>
                             <TableCell>{row.projects?.name || "—"}</TableCell>
-                            <TableCell>{formatLocaleDate(row.created_at)}</TableCell>
+                            <TableCell>{formatLocaleDate(row.created_at, portalDateFormat)}</TableCell>
                           </TableRow>
                         ))}
                         {(data.approvals || []).length === 0 ? (
@@ -648,7 +655,7 @@ export default function PublicClientPortal() {
 
             {sections.time ? (
               <TabsContent value="time">
-                <PortalTimeSection entries={data.time_entries || []} />
+                <PortalTimeSection entries={data.time_entries || []} dateFormat={portalDateFormat} />
               </TabsContent>
             ) : null}
           </Tabs>
