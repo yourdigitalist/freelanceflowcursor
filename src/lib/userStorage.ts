@@ -198,10 +198,44 @@ export function storagePathFromPublicUrl(bucket: string, publicUrl: string): str
   return null;
 }
 
+/** Upload to business-logos with a fresh session; retries once on transient network failures. */
+export async function uploadBusinessLogoFile(
+  userId: string,
+  file: File,
+  pathPrefix = 'logo',
+): Promise<{ publicUrl: string; path: string }> {
+  const { error: sessionError } = await supabase.auth.refreshSession();
+  if (sessionError) {
+    throw new Error('Your session may have expired. Sign out and sign back in, then try again.');
+  }
+
+  const ext = file.name.split('.').pop() || 'png';
+  const path = `${userId}/${pathPrefix}-${Date.now()}.${ext}`;
+  const contentType = file.type || 'image/png';
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { error } = await supabase.storage
+      .from('business-logos')
+      .upload(path, file, { upsert: true, contentType });
+    if (!error) {
+      const { data } = supabase.storage.from('business-logos').getPublicUrl(path);
+      return { publicUrl: data.publicUrl, path };
+    }
+    lastError = error;
+    if (attempt === 0 && /failed to fetch/i.test(error.message)) {
+      await supabase.auth.refreshSession();
+      continue;
+    }
+    throw error;
+  }
+  throw lastError;
+}
+
 export function formatUploadError(error: unknown): string {
   const msg = error instanceof Error ? error.message : String(error ?? '');
-  if (/failed to fetch/i.test(msg)) {
-    return 'Network error while uploading. Check your connection and try again. If it persists, sign out and back in.';
+  if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+    return 'The upload did not reach the server. Check your connection, use a PNG or JPG under 500 KB, try disabling VPN or ad blockers, or sign out and back in.';
   }
   if (msg.includes('row-level security') || msg.includes('violates')) {
     return 'Storage access was denied. Ensure the business-logos bucket allows uploads for your account.';

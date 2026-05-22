@@ -16,6 +16,7 @@ import {
   assertStorageCapacityForLogoUpload,
   formatUploadError,
   storagePathFromPublicUrl,
+  uploadBusinessLogoFile,
 } from '@/lib/userStorage';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -228,19 +229,13 @@ export default function BusinessSettings() {
     setSaving(true);
     try {
       await assertStorageCapacityForLogoUpload(user.id, file.size);
-      const ext = file.name.split('.').pop() || 'png';
-      const path = `${user.id}/logo-${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from('business-logos')
-        .upload(path, file, { upsert: true, contentType: file.type || 'image/png' });
-      if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage.from('business-logos').getPublicUrl(path);
+      const { publicUrl } = await uploadBusinessLogoFile(user.id, file);
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ business_logo: urlData.publicUrl })
+        .update({ business_logo: publicUrl })
         .eq('user_id', user.id);
       if (updateError) throw updateError;
-      await persistEmailCommsConfig({ logoDefault: urlData.publicUrl });
+      await persistEmailCommsConfig({ logoDefault: publicUrl });
       toast({ title: 'Logo uploaded' });
       await fetchProfile();
     } catch (error: unknown) {
@@ -300,16 +295,9 @@ export default function BusinessSettings() {
     setSaving(true);
     try {
       await assertStorageCapacityForLogoUpload(user.id, file.size);
-      const ext = file.name.split('.').pop() || 'png';
-      const path = `${user.id}/email-logo-secondary-${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from('business-logos')
-        .upload(path, file, { upsert: true, contentType: file.type || 'image/png' });
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage.from('business-logos').getPublicUrl(path);
-      setEmailLogoSecondary(urlData.publicUrl);
-      await persistEmailCommsConfig({ secondaryLogo: urlData.publicUrl });
+      const { publicUrl } = await uploadBusinessLogoFile(user.id, file, 'email-logo-secondary');
+      setEmailLogoSecondary(publicUrl);
+      await persistEmailCommsConfig({ secondaryLogo: publicUrl });
       dirtyContext?.setDirty(true);
       toast({ title: 'Secondary email logo uploaded' });
     } catch (error: unknown) {
