@@ -3,7 +3,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { notifyStartGuideRefresh } from '@/components/layout/startGuideUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,14 +10,10 @@ import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -36,11 +31,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { EmojiPicker } from '@/components/ui/emoji-picker';
 import { downloadCsv, getProjectsTemplateRows, PROJECTS_CSV_HEADERS, parseCsv } from '@/lib/csv';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDate } from '@/lib/datetime';
+import { ProjectFormDialog } from '@/components/projects/ProjectFormDialog';
 
 interface Client {
   id: string;
@@ -67,10 +61,6 @@ interface Project {
   task_count?: number;
 }
 
-const ICON_COLORS = [
-  '#9B63E9', '#22C55E', '#3B82F6', '#F59E0B', '#EF4444', '#EC4899', '#06B6D4', '#8B5CF6'
-];
-
 const PROJECT_STATUSES: Array<{ value: string; label: string }> = [
   { value: 'active', label: 'Active' },
   { value: 'on_hold', label: 'On Hold' },
@@ -91,15 +81,9 @@ export default function Projects() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [dialogClientId, setDialogClientId] = useState<string>('none');
-  const [selectedEmoji, setSelectedEmoji] = useState('📁');
-  const [selectedColor, setSelectedColor] = useState('#9B63E9');
+  const [newProjectClientId, setNewProjectClientId] = useState<string | null>(null);
   const [importProjectsDialogOpen, setImportProjectsDialogOpen] = useState(false);
   const [importingProjects, setImportingProjects] = useState(false);
-  const [showCreateClientInline, setShowCreateClientInline] = useState(false);
-  const [newClientName, setNewClientName] = useState('');
-  const [newClientEmail, setNewClientEmail] = useState('');
-  const [newClientCompany, setNewClientCompany] = useState('');
   const projectsCsvInputRef = useRef<HTMLInputElement>(null);
   const { dateFormat } = useLocalePreferences();
 
@@ -115,7 +99,7 @@ export default function Projects() {
     if (searchParams.get('new') === '1') {
       setIsDialogOpen(true);
       setEditingProject(null);
-      setDialogClientId(searchParams.get('client') || 'none');
+      setNewProjectClientId(searchParams.get('client') || null);
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
@@ -127,9 +111,6 @@ export default function Projects() {
     const projectToEdit = projects.find((p) => p.id === editId);
     if (projectToEdit) {
       setEditingProject(projectToEdit);
-      setDialogClientId(projectToEdit.client_id || 'none');
-      setSelectedEmoji(projectToEdit.icon_emoji || '📁');
-      setSelectedColor(projectToEdit.icon_color || '#9B63E9');
       setIsDialogOpen(true);
       setSearchParams({}, { replace: true });
     }
@@ -195,92 +176,6 @@ export default function Projects() {
     }
   };
 
-  const createClientInline = async () => {
-    if (!user) return;
-    const trimmedName = newClientName.trim();
-    if (!trimmedName) {
-      toast({ title: 'Client name is required', variant: 'destructive' });
-      return;
-    }
-    const existing = clients.find((client) => client.name.toLowerCase() === trimmedName.toLowerCase());
-    if (existing) {
-      setDialogClientId(existing.id);
-      setShowCreateClientInline(false);
-      setNewClientName('');
-      setNewClientEmail('');
-      setNewClientCompany('');
-      return;
-    }
-    const payload = {
-      user_id: user.id,
-      name: trimmedName,
-      email: newClientEmail.trim() || null,
-      company: newClientCompany.trim() || null,
-      status: 'active',
-    };
-    const { data, error } = await supabase.from('clients').insert(payload).select('id, name, email, company').single();
-    if (error || !data) {
-      toast({ title: 'Failed to create client', description: error?.message, variant: 'destructive' });
-      return;
-    }
-    setClients((prev) => [...prev, data as Client].sort((a, b) => a.name.localeCompare(b.name)));
-    setDialogClientId(data.id);
-    setShowCreateClientInline(false);
-    setNewClientName('');
-    setNewClientEmail('');
-    setNewClientCompany('');
-    toast({ title: 'Client created' });
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    
-    const projectData = {
-      name: formData.get('name') as string,
-      description: formData.get('description') as string || null,
-      status: formData.get('status') as string,
-      budget: formData.get('budget') ? parseFloat(formData.get('budget') as string) : null,
-      hourly_rate: formData.get('hourly_rate') ? parseFloat(formData.get('hourly_rate') as string) : null,
-      start_date: formData.get('start_date') as string || null,
-      due_date: formData.get('due_date') as string || null,
-      client_id: (formData.get('client_id') as string) === 'none' ? null : (formData.get('client_id') as string) || null,
-      icon_emoji: selectedEmoji,
-      icon_color: selectedColor,
-      user_id: user!.id,
-    };
-
-    try {
-      if (editingProject) {
-        const { error } = await supabase
-          .from('projects')
-          .update(projectData)
-          .eq('id', editingProject.id);
-        if (error) throw error;
-        toast({ title: 'Project updated successfully' });
-      } else {
-        const { error } = await supabase
-          .from('projects')
-          .insert(projectData);
-        if (error) throw error;
-        toast({ title: 'Project created successfully' });
-        notifyStartGuideRefresh();
-      }
-      
-      setIsDialogOpen(false);
-      setEditingProject(null);
-      setSelectedEmoji('📁');
-      setSelectedColor('#9B63E9');
-      fetchProjects();
-    } catch (error: any) {
-      toast({
-        title: 'Error saving project',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
-  };
-
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this project?')) return;
     
@@ -329,9 +224,6 @@ export default function Projects() {
 
   const openEditDialog = (project: Project) => {
     setEditingProject(project);
-    setDialogClientId(project.client_id || 'none');
-    setSelectedEmoji(project.icon_emoji || '📁');
-    setSelectedColor(project.icon_color || '#9B63E9');
     setIsDialogOpen(true);
   };
 
@@ -498,202 +390,40 @@ export default function Projects() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          <Dialog open={isDialogOpen} onOpenChange={(open) => {
-            setIsDialogOpen(open);
-            if (!open) {
+          <Button
+            onClick={() => {
               setEditingProject(null);
-                setDialogClientId('none');
-              setSelectedEmoji('📁');
-              setSelectedColor('#9B63E9');
-              setShowCreateClientInline(false);
-              setNewClientName('');
-              setNewClientEmail('');
-              setNewClientCompany('');
-            }
-          }}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Project
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle>{editingProject ? 'Edit Project' : 'Create New Project'}</DialogTitle>
-                <DialogDescription>
-                  {editingProject ? 'Update project details' : 'Set up a new project'}
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Icon Selector */}
-                <div className="space-y-2">
-                  <Label>Project Icon</Label>
-                  <div className="flex items-center gap-3">
-                    <EmojiPicker value={selectedEmoji} onChange={setSelectedEmoji}>
-                      <button
-                        type="button"
-                        className="h-12 w-12 rounded-lg flex items-center justify-center text-xl cursor-pointer border-2 border-border hover:border-muted-foreground/40 hover:bg-muted/50 transition-colors"
-                        style={{ backgroundColor: selectedColor }}
-                      >
-                        {selectedEmoji}
-                      </button>
-                    </EmojiPicker>
-                    <div className="flex-1 space-y-2">
-                      <p className="text-sm text-muted-foreground">Click the icon to choose an emoji</p>
-                      <div className="flex gap-1">
-                        {ICON_COLORS.map((color) => (
-                          <button
-                            key={color}
-                            type="button"
-                            onClick={() => setSelectedColor(color)}
-                            className={cn(
-                              "h-6 w-6 rounded-full transition-transform",
-                              selectedColor === color && "ring-2 ring-offset-2 ring-primary scale-110"
-                            )}
-                            style={{ backgroundColor: color }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="name">Project Name *</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    defaultValue={editingProject?.name}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="client_id">Client</Label>
-                    <Button
-                      type="button"
-                      variant="link"
-                      className="h-auto p-0 text-sm"
-                      onClick={() => setShowCreateClientInline((prev) => !prev)}
-                    >
-                      {showCreateClientInline ? 'Cancel' : 'Create new client'}
-                    </Button>
-                  </div>
-                  <Select name="client_id" value={dialogClientId} onValueChange={setDialogClientId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a client" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No client</SelectItem>
-                      {clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {showCreateClientInline ? (
-                    <div className="rounded-lg border p-3 space-y-2">
-                      <Input
-                        value={newClientName}
-                        onChange={(e) => setNewClientName(e.target.value)}
-                        placeholder="Client name *"
-                      />
-                      <Input
-                        type="email"
-                        value={newClientEmail}
-                        onChange={(e) => setNewClientEmail(e.target.value)}
-                        placeholder="Email (optional)"
-                      />
-                      <Input
-                        value={newClientCompany}
-                        onChange={(e) => setNewClientCompany(e.target.value)}
-                        placeholder="Company (optional)"
-                      />
-                      <div className="flex justify-end">
-                        <Button type="button" size="sm" onClick={() => void createClientInline()}>
-                          Add client
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    name="description"
-                    defaultValue={editingProject?.description || ''}
-                    rows={3}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="budget">Budget</Label>
-                    <Input
-                      id="budget"
-                      name="budget"
-                      type="number"
-                      step="0.01"
-                      defaultValue={editingProject?.budget || ''}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="hourly_rate">Hourly Rate</Label>
-                    <Input
-                      id="hourly_rate"
-                      name="hourly_rate"
-                      type="number"
-                      step="0.01"
-                      defaultValue={editingProject?.hourly_rate || ''}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="start_date">Start Date</Label>
-                    <Input
-                      id="start_date"
-                      name="start_date"
-                      type="date"
-                      defaultValue={editingProject?.start_date || ''}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="due_date">Due Date</Label>
-                    <Input
-                      id="due_date"
-                      name="due_date"
-                      type="date"
-                      defaultValue={editingProject?.due_date || ''}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select name="status" defaultValue={editingProject?.status || 'active'}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="on_hold">On Hold</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">
-                    {editingProject ? 'Update' : 'Create'} Project
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+              setNewProjectClientId(null);
+              setIsDialogOpen(true);
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New Project
+          </Button>
+          <ProjectFormDialog
+            open={isDialogOpen}
+            onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) {
+                setEditingProject(null);
+                setNewProjectClientId(null);
+              }
+            }}
+            editingProject={editingProject}
+            clients={clients}
+            initialClientId={newProjectClientId}
+            onSaved={() => {
+              fetchProjects();
+              fetchClients();
+            }}
+            onClientSaved={(client) => {
+              setClients((prev) =>
+                [...prev.filter((item) => item.id !== client.id), client].sort((a, b) =>
+                  a.name.localeCompare(b.name),
+                ),
+              );
+            }}
+          />
           </div>
         </div>
 

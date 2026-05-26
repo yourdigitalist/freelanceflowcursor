@@ -23,6 +23,8 @@ import { formatStatusLabel, getStatusBadgeClass } from "@/lib/statusDisplay";
 import { LanceServiceAgreementDisclaimerDialog } from "@/components/contracts/LanceServiceAgreementDisclaimerDialog";
 import { DEFAULT_CONTRACT_TEMPLATE_CONTENT } from "@/lib/contractTemplate";
 import { useLanceServiceAgreementDisclaimer } from "@/hooks/useLanceServiceAgreementDisclaimer";
+import { ClientFormDialog } from "@/components/clients/ClientFormDialog";
+import { ProjectFormDialog } from "@/components/projects/ProjectFormDialog";
 
 type ContractRow = {
   id: string;
@@ -71,12 +73,8 @@ export default function Contracts() {
   const [templateRows, setTemplateRows] = useState<TemplateRow[]>([]);
   const [templateId, setTemplateId] = useState<string>("none");
   const [templateDeleteId, setTemplateDeleteId] = useState<string | null>(null);
-  const [showCreateClientInline, setShowCreateClientInline] = useState(false);
-  const [showCreateProjectInline, setShowCreateProjectInline] = useState(false);
-  const [newClientName, setNewClientName] = useState("");
-  const [newClientEmail, setNewClientEmail] = useState("");
-  const [newClientCompany, setNewClientCompany] = useState("");
-  const [newProjectName, setNewProjectName] = useState("");
+  const [createClientDialogOpen, setCreateClientDialogOpen] = useState(false);
+  const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const {
     disclaimerOpen,
     onDisclaimerOpenChange,
@@ -262,74 +260,6 @@ export default function Contracts() {
       .not("status", "in", "(Won,Active)");
 
     navigate(`/contracts/${contract.id}`);
-  };
-
-  const createClientInline = async () => {
-    if (!user) return;
-    const name = newClientName.trim();
-    if (!name) {
-      toast({ title: "Client name is required", variant: "destructive" });
-      return;
-    }
-    const existing = clients.find((c) => c.name.toLowerCase() === name.toLowerCase());
-    if (existing) {
-      setClientId(existing.id);
-      setShowCreateClientInline(false);
-      return;
-    }
-    const { data, error } = await supabase
-      .from("clients")
-      .insert({
-        user_id: user.id,
-        name,
-        email: newClientEmail.trim() || null,
-        company: newClientCompany.trim() || null,
-        status: "active",
-      })
-      .select("id, name, company, email, phone, address, city, state, postal_code, country, tax_id, currency")
-      .single();
-    if (error || !data) {
-      toast({ title: "Could not create client", description: error?.message, variant: "destructive" });
-      return;
-    }
-    setClients((prev) => [...prev, data as any].sort((a, b) => a.name.localeCompare(b.name)));
-    setClientId(data.id);
-    setShowCreateClientInline(false);
-    setNewClientName("");
-    setNewClientEmail("");
-    setNewClientCompany("");
-  };
-
-  const createProjectInline = async () => {
-    if (!user) return;
-    const name = newProjectName.trim();
-    if (!name) {
-      toast({ title: "Project name is required", variant: "destructive" });
-      return;
-    }
-    const existing = projects.find((p) => p.name.toLowerCase() === name.toLowerCase() && p.client_id === (clientId || null));
-    if (existing) {
-      setProjectId(existing.id);
-      setShowCreateProjectInline(false);
-      return;
-    }
-    const { data, error } = await supabase
-      .from("projects")
-      .insert({
-        user_id: user.id,
-        name,
-        client_id: clientId || null,
-      })
-      .select("id, name, client_id")
-      .single();
-    if (error || !data) {
-      toast({ title: "Could not create project", description: error?.message, variant: "destructive" });
-      return;
-    }
-    setProjects((prev) => [...prev, data as any].sort((a, b) => a.name.localeCompare(b.name)));
-    setProjectId(data.id);
-    setShowCreateProjectInline(false);
-    setNewProjectName("");
   };
 
   const cancelContract = async () => {
@@ -599,9 +529,9 @@ export default function Contracts() {
                   type="button"
                   variant="link"
                   className="h-auto p-0 text-sm"
-                  onClick={() => setShowCreateClientInline((prev) => !prev)}
+                  onClick={() => setCreateClientDialogOpen(true)}
                 >
-                  {showCreateClientInline ? "Cancel" : "Create new client"}
+                  Create new client
                 </Button>
               </div>
               <Select value={clientId} onValueChange={setClientId}>
@@ -616,16 +546,6 @@ export default function Contracts() {
                   ))}
                 </SelectContent>
               </Select>
-              {showCreateClientInline ? (
-                <div className="rounded-lg border p-3 space-y-2">
-                  <Input value={newClientName} onChange={(e) => setNewClientName(e.target.value)} placeholder="Client name *" />
-                  <Input value={newClientEmail} onChange={(e) => setNewClientEmail(e.target.value)} placeholder="Email (optional)" />
-                  <Input value={newClientCompany} onChange={(e) => setNewClientCompany(e.target.value)} placeholder="Company (optional)" />
-                  <div className="flex justify-end">
-                    <Button type="button" size="sm" onClick={() => void createClientInline()}>Add client</Button>
-                  </div>
-                </div>
-              ) : null}
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -634,9 +554,9 @@ export default function Contracts() {
                   type="button"
                   variant="link"
                   className="h-auto p-0 text-sm"
-                  onClick={() => setShowCreateProjectInline((prev) => !prev)}
+                  onClick={() => setCreateProjectDialogOpen(true)}
                 >
-                  {showCreateProjectInline ? "Cancel" : "Create new project"}
+                  Create new project
                 </Button>
               </div>
               <Select value={projectId} onValueChange={setProjectId}>
@@ -652,14 +572,6 @@ export default function Contracts() {
                   ))}
                 </SelectContent>
               </Select>
-              {showCreateProjectInline ? (
-                <div className="rounded-lg border p-3 space-y-2">
-                  <Input value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Project name *" />
-                  <div className="flex justify-end">
-                    <Button type="button" size="sm" onClick={() => void createProjectInline()}>Add project</Button>
-                  </div>
-                </div>
-              ) : null}
             </div>
             {proposalCandidates.length > 0 ? (
               <div className="rounded-lg border border-emerald-500/20 bg-emerald-50 p-3 text-sm text-emerald-900">
@@ -718,6 +630,44 @@ export default function Contracts() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ClientFormDialog
+        open={createClientDialogOpen}
+        onOpenChange={setCreateClientDialogOpen}
+        onSaved={(client) => {
+          setClients((prev) =>
+            [...prev.filter((item) => item.id !== client.id), client as any].sort((a, b) =>
+              a.name.localeCompare(b.name),
+            ),
+          );
+          setClientId(client.id);
+          setProjectId("none");
+        }}
+      />
+      <ProjectFormDialog
+        open={createProjectDialogOpen}
+        onOpenChange={setCreateProjectDialogOpen}
+        clients={clients}
+        initialClientId={clientId || null}
+        onSaved={(project) => {
+          setProjects((prev) =>
+            [
+              ...prev.filter((item) => item.id !== project.id),
+              { id: project.id, name: project.name, client_id: project.client_id },
+            ].sort((a, b) => a.name.localeCompare(b.name)),
+          );
+          setProjectId(project.id);
+          if (project.client_id) setClientId(project.client_id);
+        }}
+        onClientSaved={(client) => {
+          setClients((prev) =>
+            [...prev.filter((item) => item.id !== client.id), client as any].sort((a, b) =>
+              a.name.localeCompare(b.name),
+            ),
+          );
+          setClientId(client.id);
+        }}
+      />
 
       <Dialog
         open={!!cancelId}

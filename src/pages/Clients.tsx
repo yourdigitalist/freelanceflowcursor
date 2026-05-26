@@ -18,7 +18,6 @@ import {
 } from '@/lib/clientLifecycle';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { notifyStartGuideRefresh } from '@/components/layout/startGuideUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -29,7 +28,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Sheet,
@@ -56,20 +54,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useProfileCurrency } from '@/hooks/useProfileCurrency';
 import { ClientAvatar } from '@/components/clients/ClientAvatar';
-import { ClientFormFields } from '@/components/clients/ClientFormFields';
+import { ClientFormDialog } from '@/components/clients/ClientFormDialog';
 import { DEFAULT_CLIENT_AVATAR_COLOR } from '@/lib/clientAvatarColors';
 import { CLIENT_CRM_STAGES, getClientStageLabel } from '@/lib/clientCrmStages';
-import {
-  buildClientDbPayload,
-  clientToFormValues,
-  emptyClientFormValues,
-  type ClientFormValues,
-} from '@/lib/clientForm';
-import { clientLogoPublicUrl } from '@/lib/clientLogo';
-import { resolveClientLogoPath } from '@/lib/clientLogoUpload';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { HorizontalScroll } from '@/components/ui/horizontal-scroll';
 import {
   DndContext,
@@ -309,8 +297,6 @@ export default function Clients() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [addWithStatus, setAddWithStatus] = useState<string | null>(null);
-  const [clientPhone, setClientPhone] = useState('');
-  const [selectedColor, setSelectedColor] = useState(DEFAULT_CLIENT_AVATAR_COLOR);
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'board'>('board');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showArchived, setShowArchived] = useState(false);
@@ -331,12 +317,6 @@ export default function Clients() {
   const [activeDragClient, setActiveDragClient] = useState<Client | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
   const { dateFormat, timeFormat } = useLocalePreferences();
-  const { currency: profileCurrency } = useProfileCurrency();
-  const [clientLogoPreview, setClientLogoPreview] = useState<string | null>(null);
-  const clientLogoInputRef = useRef<HTMLInputElement>(null);
-  const [formValues, setFormValues] = useState<ClientFormValues>(() =>
-    emptyClientFormValues(profileCurrency),
-  );
 
   useEffect(() => {
     if (user) {
@@ -349,24 +329,6 @@ export default function Clients() {
     fetchActivities(viewingClient.id);
     fetchFollowUps(viewingClient.id);
   }, [viewingClient?.id]);
-
-  useEffect(() => {
-    if (!isDialogOpen) return;
-    if (editingClient) {
-      setFormValues(clientToFormValues(editingClient, profileCurrency));
-      setClientPhone(editingClient.phone || '');
-      setSelectedColor(editingClient.avatar_color || DEFAULT_CLIENT_AVATAR_COLOR);
-      setClientLogoPreview(
-        editingClient.logo_url ? clientLogoPublicUrl(editingClient.logo_url) : null,
-      );
-    } else {
-      setFormValues(emptyClientFormValues(profileCurrency, addWithStatus || 'active'));
-      setClientPhone('');
-      setSelectedColor(DEFAULT_CLIENT_AVATAR_COLOR);
-      setClientLogoPreview(null);
-      if (clientLogoInputRef.current) clientLogoInputRef.current.value = '';
-    }
-  }, [isDialogOpen, editingClient, addWithStatus, profileCurrency]);
 
   // Sync view mode and status filter from URL
   useEffect(() => {
@@ -382,6 +344,16 @@ export default function Clients() {
       if (statusFilter === 'active') setStatusFilter('all');
     }
   }, [location.pathname]);
+
+  // Open the canonical create dialog when linked from quick actions.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('new') !== '1') return;
+    setEditingClient(null);
+    setAddWithStatus(null);
+    setIsDialogOpen(true);
+    navigate(location.pathname, { replace: true });
+  }, [location.search, location.pathname, navigate]);
 
   // Open client sheet when ?open=<id> is in URL (e.g. from Dashboard follow-ups)
   useEffect(() => {
@@ -434,60 +406,6 @@ export default function Clients() {
       console.error('Error fetching clients:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!user) return;
-
-    try {
-      const logoFile = clientLogoInputRef.current?.files?.[0];
-      const logoPath = await resolveClientLogoPath({
-        userId: user.id,
-        clientId: editingClient?.id || 'new',
-        existingLogoPath: editingClient?.logo_url || null,
-        logoFile,
-        hasPreview: !!clientLogoPreview,
-      });
-
-      const clientData = buildClientDbPayload(formValues, {
-        phone: clientPhone,
-        avatar_color: selectedColor,
-        logo_url: logoPath,
-        user_id: user.id,
-      });
-
-      if (editingClient) {
-        const { error } = await supabase
-          .from('clients')
-          .update(clientData)
-          .eq('id', editingClient.id);
-        if (error) throw error;
-        toast({ title: 'Client updated successfully' });
-        notifyStartGuideRefresh();
-      } else {
-        const { error } = await supabase
-          .from('clients')
-          .insert(clientData);
-        if (error) throw error;
-        toast({ title: 'Client created successfully' });
-        notifyStartGuideRefresh();
-      }
-      
-      setIsDialogOpen(false);
-      setEditingClient(null);
-      setClientPhone('');
-      setSelectedColor(DEFAULT_CLIENT_AVATAR_COLOR);
-      setClientLogoPreview(null);
-      if (clientLogoInputRef.current) clientLogoInputRef.current.value = '';
-      fetchClients();
-    } catch (error: any) {
-      toast({
-        title: 'Error saving client',
-        description: error.message,
-        variant: 'destructive',
-      });
     }
   };
 
@@ -1043,59 +961,29 @@ export default function Clients() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            <Dialog open={isDialogOpen} onOpenChange={(open) => {
-              setIsDialogOpen(open);
-              if (!open) {
+            <Button
+              onClick={() => {
                 setEditingClient(null);
                 setAddWithStatus(null);
-                setClientPhone('');
-                setSelectedColor(DEFAULT_CLIENT_AVATAR_COLOR);
-                setClientLogoPreview(null);
-                if (clientLogoInputRef.current) clientLogoInputRef.current.value = '';
-              }
-            }}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Client
-                </Button>
-              </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] w-[95vw]">
-              <DialogHeader>
-                <DialogTitle>{editingClient ? 'Edit Client' : 'Add New Client'}</DialogTitle>
-              </DialogHeader>
-              <ScrollArea className="max-h-[calc(90vh-120px)]">
-                <form onSubmit={handleSubmit} className="space-y-4 py-1 pr-6 pl-1">
-                  <ClientFormFields
-                    values={formValues}
-                    onChange={(patch) => setFormValues((prev) => ({ ...prev, ...patch }))}
-                    phone={clientPhone}
-                    onPhoneChange={setClientPhone}
-                    logoPreviewUrl={clientLogoPreview}
-                    onLogoPreviewChange={setClientLogoPreview}
-                    selectedAvatarColor={selectedColor}
-                    onSelectedAvatarColorChange={setSelectedColor}
-                    logoFileInputRef={clientLogoInputRef}
-                    fallbackName={
-                      [formValues.first_name, formValues.last_name].filter(Boolean).join(' ').trim() ||
-                      editingClient?.name ||
-                      'Client'
-                    }
-                    profileCurrency={profileCurrency}
-                    fieldIdPrefix="clients-dialog"
-                  />
-                  <div className="flex gap-2 justify-end pt-4">
-                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit">
-                      {editingClient ? 'Update' : 'Add'} Client
-                    </Button>
-                  </div>
-                </form>
-              </ScrollArea>
-            </DialogContent>
-          </Dialog>
+                setIsDialogOpen(true);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Client
+            </Button>
+            <ClientFormDialog
+              open={isDialogOpen}
+              onOpenChange={(open) => {
+                setIsDialogOpen(open);
+                if (!open) {
+                  setEditingClient(null);
+                  setAddWithStatus(null);
+                }
+              }}
+              editingClient={editingClient}
+              defaultStatus={addWithStatus || 'active'}
+              onSaved={() => fetchClients()}
+            />
           </div>
         </div>
 

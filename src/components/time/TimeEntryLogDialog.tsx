@@ -23,11 +23,18 @@ import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/time';
 import { resolveEffectiveHourlyRate } from '@/lib/billing';
 import { format, parseISO, differenceInSeconds } from 'date-fns';
+import { ProjectFormDialog } from '@/components/projects/ProjectFormDialog';
 
 interface Project {
   id: string;
   name: string;
   client_id: string | null;
+  hourly_rate?: number | null;
+}
+
+interface Client {
+  id: string;
+  name: string;
 }
 
 interface Task {
@@ -82,6 +89,7 @@ export function TimeEntryLogDialog({
   const { user } = useAuth();
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [dialogProject, setDialogProject] = useState('');
   const [dialogTask, setDialogTask] = useState('');
@@ -95,6 +103,7 @@ export function TimeEntryLogDialog({
   const [dialogTaskQuery, setDialogTaskQuery] = useState('');
   const [dialogProjectPopoverOpen, setDialogProjectPopoverOpen] = useState(false);
   const [dialogTaskPopoverOpen, setDialogTaskPopoverOpen] = useState(false);
+  const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const [createTaskDialogOpen, setCreateTaskDialogOpen] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [loadingSegments, setLoadingSegments] = useState(false);
@@ -109,9 +118,15 @@ export function TimeEntryLogDialog({
     if (!open || !user) return;
     void supabase
       .from('projects')
-      .select('id, name, client_id')
+      .select('id, name, client_id, hourly_rate')
       .order('name')
       .then(({ data }) => setProjects(data || []));
+    void supabase
+      .from('clients')
+      .select('id, name')
+      .is('archived_at', null)
+      .order('name')
+      .then(({ data }) => setClients(data || []));
   }, [open, user]);
 
   useEffect(() => {
@@ -203,29 +218,6 @@ export function TimeEntryLogDialog({
 
     void loadSegments();
   }, [open, entry, defaultProjectId, defaultTaskId, defaultDate, defaultHours]);
-
-  const createProjectInline = async (name: string) => {
-    if (!user) return;
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const existing = projects.find((p) => p.name.toLowerCase() === trimmed.toLowerCase());
-    if (existing) {
-      setDialogProject(existing.id);
-      return;
-    }
-    const { data, error } = await supabase
-      .from('projects')
-      .insert({ name: trimmed, user_id: user.id, status: 'active' })
-      .select('id, name, client_id')
-      .single();
-    if (error || !data) {
-      toast({ title: 'Error creating project', description: error?.message, variant: 'destructive' });
-      return;
-    }
-    setProjects((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
-    setDialogProject(data.id);
-    setDialogTask('');
-  };
 
   const createTaskInline = async (title: string, projectId: string) => {
     if (!user || !projectId) return;
@@ -487,13 +479,13 @@ export function TimeEntryLogDialog({
                         !projects.some((p) => p.name.toLowerCase() === dialogProjectQuery.trim().toLowerCase()) && (
                           <CommandItem
                             value={`create-${dialogProjectQuery}`}
-                            onSelect={async () => {
-                              await createProjectInline(dialogProjectQuery);
+                            onSelect={() => {
                               setDialogProjectQuery('');
                               setDialogProjectPopoverOpen(false);
+                              setCreateProjectDialogOpen(true);
                             }}
                           >
-                            + Create "{dialogProjectQuery.trim()}"
+                            + Create project
                           </CommandItem>
                         )}
                     </CommandList>
@@ -723,6 +715,34 @@ export function TimeEntryLogDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <ProjectFormDialog
+      open={createProjectDialogOpen}
+      onOpenChange={setCreateProjectDialogOpen}
+      clients={clients}
+      onSaved={(project) => {
+        setProjects((prev) =>
+          [
+            ...prev.filter((item) => item.id !== project.id),
+            {
+              id: project.id,
+              name: project.name,
+              client_id: project.client_id,
+              hourly_rate: project.hourly_rate,
+            },
+          ].sort((a, b) => a.name.localeCompare(b.name)),
+        );
+        setDialogProject(project.id);
+        setDialogTask('');
+      }}
+      onClientSaved={(client) => {
+        setClients((prev) =>
+          [...prev.filter((item) => item.id !== client.id), client].sort((a, b) =>
+            a.name.localeCompare(b.name),
+          ),
+        );
+      }}
+    />
 
     <Dialog open={createTaskDialogOpen} onOpenChange={setCreateTaskDialogOpen}>
       <DialogContent className="max-w-sm">

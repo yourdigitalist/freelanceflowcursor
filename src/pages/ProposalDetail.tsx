@@ -30,6 +30,7 @@ import {
 } from "@/lib/proposalDefaults";
 import { formatStatusLabel, getStatusBadgeClass } from "@/lib/statusDisplay";
 import { ProposalDocument } from "@/components/proposals/ProposalDocument";
+import { ProjectFormDialog } from "@/components/projects/ProjectFormDialog";
 
 const MAX_COVER_SIZE = 10 * 1024 * 1024;
 const MAX_STORAGE_BYTES = 200 * 1024 * 1024;
@@ -85,7 +86,7 @@ export default function ProposalDetail() {
   const [clients, setClients] = useState<{ id: string; name: string; company: string | null; currency?: string | null; archived_at?: string | null }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string; client_id: string | null }[]>([]);
   const [projectNameInput, setProjectNameInput] = useState("");
-  const [showCreateProjectInput, setShowCreateProjectInput] = useState(false);
+  const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const [businessName, setBusinessName] = useState<string | null>(null);
   const [businessLogo, setBusinessLogo] = useState<string | null>(null);
   const [businessEmail, setBusinessEmail] = useState<string | null>(null);
@@ -644,7 +645,6 @@ export default function ProposalDetail() {
                       const nextProjectId = value === "none" ? null : value;
                       const selectedProject = filteredProjects.find((project) => project.id === nextProjectId);
                       setProjectNameInput(selectedProject?.name || "");
-                      setShowCreateProjectInput(false);
                       updateProposal({
                         project_id: nextProjectId,
                         projects: selectedProject ? { name: selectedProject.name } : null,
@@ -668,26 +668,10 @@ export default function ProposalDetail() {
                       type="button"
                       variant="ghost"
                       className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
-                      onClick={() => {
-                        setShowCreateProjectInput((prev) => !prev);
-                        updateProposal({ project_id: null });
-                      }}
+                      onClick={() => setCreateProjectDialogOpen(true)}
                     >
                       + Add project
                     </Button>
-                    {showCreateProjectInput ? (
-                      <>
-                        <p className="text-xs text-muted-foreground">Type a new project name and it will be created for this client when you save.</p>
-                        <Input
-                          value={projectNameInput}
-                          onChange={(e) => {
-                            setProjectNameInput(e.target.value);
-                            updateProposal({ project_id: null });
-                          }}
-                          placeholder="Project name"
-                        />
-                      </>
-                    ) : null}
                   </div>
                 </div>
               </div>
@@ -959,6 +943,34 @@ export default function ProposalDetail() {
             }
             return [...prev, saved].sort((a, b) => String(a.name).localeCompare(String(b.name)));
           });
+        }}
+      />
+      <ProjectFormDialog
+        open={createProjectDialogOpen}
+        onOpenChange={setCreateProjectDialogOpen}
+        clients={clients}
+        initialClientId={proposal?.client_id || null}
+        onSaved={(project) => {
+          setProjects((prev) =>
+            [
+              ...prev.filter((item) => item.id !== project.id),
+              { id: project.id, name: project.name, client_id: project.client_id },
+            ].sort((a, b) => a.name.localeCompare(b.name)),
+          );
+          setProjectNameInput(project.name);
+          updateProposal({
+            project_id: project.id,
+            projects: { name: project.name },
+            ...(project.client_id ? { client_id: project.client_id } : {}),
+          });
+        }}
+        onClientSaved={(client) => {
+          setClients((prev) =>
+            [
+              ...prev.filter((item) => item.id !== client.id),
+              { id: client.id, name: client.name, company: client.company ?? null, currency: client.currency ?? null },
+            ].sort((a, b) => a.name.localeCompare(b.name)),
+          );
         }}
       />
     </AppLayout>

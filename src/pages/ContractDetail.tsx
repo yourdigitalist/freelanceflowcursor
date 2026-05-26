@@ -49,6 +49,7 @@ import { resolveContractTemplateContent } from "@/lib/resolveContractTemplate";
 import type { Contract, ContractService } from "@/types/contracts";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate, formatLocaleDateTime } from "@/lib/datetime";
+import { ProjectFormDialog } from "@/components/projects/ProjectFormDialog";
 
 const PAYMENT_METHOD_OPTIONS = [
   "bank transfer",
@@ -87,9 +88,7 @@ export default function ContractDetail() {
   const [templateName, setTemplateName] = useState("Default template");
   const [templateContent, setTemplateContent] = useState(DEFAULT_CONTRACT_TEMPLATE_CONTENT);
   const [pdfGenerating, setPdfGenerating] = useState(false);
-  const [newProjectName, setNewProjectName] = useState("");
-  const [creatingProject, setCreatingProject] = useState(false);
-  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const [acceptedProposals, setAcceptedProposals] = useState<Array<{ id: string; identifier: string; project_id?: string | null }>>([]);
   const [importClientResolved, setImportClientResolved] = useState(false);
   const [importProposalId, setImportProposalId] = useState<string>("");
@@ -792,39 +791,6 @@ export default function ContractDetail() {
     void runProposalImport(proposalId);
   };
 
-  const createProjectInline = async () => {
-    if (!user || !newProjectName.trim()) return;
-    setCreatingProject(true);
-    try {
-      const projectData = {
-        name: newProjectName.trim(),
-        description: null,
-        status: "active",
-        budget: null,
-        hourly_rate: null,
-        start_date: null,
-        due_date: null,
-        client_id: contract.client_id || null,
-        icon_emoji: "📁",
-        icon_color: "#9B63E9",
-        user_id: user.id,
-      };
-      const { data, error } = await supabase.from("projects").insert(projectData).select("id, name, client_id").single();
-      if (error) throw error;
-      if (data) {
-        setAllProjects((prev) => [...prev, data as { id: string; name: string; client_id: string | null }]);
-        updateContract({ project_id: data.id });
-      }
-      setNewProjectName("");
-      setShowCreateProject(false);
-      toast({ title: "Project created" });
-    } catch (error: any) {
-      toast({ title: "Failed to create project", description: error.message, variant: "destructive" });
-    } finally {
-      setCreatingProject(false);
-    }
-  };
-
   if (!contract) {
     return (
       <AppLayout>
@@ -978,27 +944,10 @@ export default function ContractDetail() {
                         type="button"
                         variant="ghost"
                         className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
-                        onClick={() => setShowCreateProject((prev) => !prev)}
+                        onClick={() => setCreateProjectDialogOpen(true)}
                       >
                         + Add project
                       </Button>
-                      {showCreateProject ? (
-                        <div className="flex gap-2">
-                          <Input
-                            value={newProjectName}
-                            onChange={(e) => setNewProjectName(e.target.value)}
-                            placeholder="Project name"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => void createProjectInline()}
-                            disabled={creatingProject || !newProjectName.trim()}
-                          >
-                            Create
-                          </Button>
-                        </div>
-                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -1575,6 +1524,25 @@ export default function ContractDetail() {
           }
         }
       `}</style>
+      <ProjectFormDialog
+        open={createProjectDialogOpen}
+        onOpenChange={setCreateProjectDialogOpen}
+        clients={
+          contract?.client_id && contract.clients?.name
+            ? [{ id: contract.client_id, name: contract.clients.name }]
+            : []
+        }
+        initialClientId={contract?.client_id || null}
+        onSaved={(project) => {
+          setAllProjects((prev) =>
+            [
+              ...prev.filter((item) => item.id !== project.id),
+              { id: project.id, name: project.name, client_id: project.client_id },
+            ].sort((a, b) => a.name.localeCompare(b.name)),
+          );
+          updateContract({ project_id: project.id });
+        }}
+      />
     </AppLayout>
   );
 }

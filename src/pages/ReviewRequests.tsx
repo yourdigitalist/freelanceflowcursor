@@ -64,6 +64,7 @@ import { cn } from '@/lib/utils';
 import { getSiteUrl } from '@/lib/site-url';
 import { uploadReviewFile } from '@/lib/reviewFileUpload';
 import { sendReviewRequestEmail } from '@/lib/sendReviewRequest';
+import { ProjectFormDialog } from '@/components/projects/ProjectFormDialog';
 
 interface ReviewFolder {
   id: string;
@@ -158,9 +159,7 @@ export default function ReviewRequests() {
   const [inlineFolderColor, setInlineFolderColor] = useState('#9B63E9');
   const [creatingFolderInline, setCreatingFolderInline] = useState(false);
 
-  const [showCreateProjectInline, setShowCreateProjectInline] = useState(false);
-  const [newProjectName, setNewProjectName] = useState('');
-  const [creatingProjectInline, setCreatingProjectInline] = useState(false);
+  const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   
   // Filters (like Projects)
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -254,8 +253,7 @@ export default function ReviewRequests() {
     setInlineFolderName('');
     setInlineFolderEmoji('📁');
     setInlineFolderColor('#9B63E9');
-    setShowCreateProjectInline(false);
-    setNewProjectName('');
+    setCreateProjectDialogOpen(false);
   };
 
   const createFolderInline = async () => {
@@ -288,47 +286,6 @@ export default function ReviewRequests() {
       toast({ title: 'Could not create folder', description: err?.message, variant: 'destructive' });
     } finally {
       setCreatingFolderInline(false);
-    }
-  };
-
-  const createProjectInline = async () => {
-    if (!user) return;
-    const name = newProjectName.trim();
-    if (!name) {
-      toast({ title: 'Project name is required', variant: 'destructive' });
-      return;
-    }
-    if (!requestClientId) {
-      toast({ title: 'Select a client first', variant: 'destructive' });
-      return;
-    }
-    const existing = projects.find(
-      (p) => p.name.toLowerCase() === name.toLowerCase() && p.client_id === requestClientId,
-    );
-    if (existing) {
-      setRequestProjectId(existing.id);
-      setShowCreateProjectInline(false);
-      setNewProjectName('');
-      return;
-    }
-    setCreatingProjectInline(true);
-    try {
-      const { data, error } = await supabase
-        .from('projects')
-        .insert({ user_id: user.id, name, client_id: requestClientId })
-        .select('id, name, client_id')
-        .single();
-      if (error) throw error;
-      if (!data) throw new Error('Project was not created');
-      setProjects((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
-      setRequestProjectId(data.id);
-      setShowCreateProjectInline(false);
-      setNewProjectName('');
-      toast({ title: 'Project created' });
-    } catch (err: any) {
-      toast({ title: 'Could not create project', description: err?.message, variant: 'destructive' });
-    } finally {
-      setCreatingProjectInline(false);
     }
   };
 
@@ -1184,8 +1141,7 @@ export default function ReviewRequests() {
                 onValueChange={(v) => {
                   setRequestClientId(v);
                   setRequestProjectId('');
-                  setShowCreateProjectInline(false);
-                  setNewProjectName('');
+                  setCreateProjectDialogOpen(false);
                 }}
               >
                 <SelectTrigger>
@@ -1216,9 +1172,9 @@ export default function ReviewRequests() {
                   variant="link"
                   className="h-auto p-0 text-sm"
                   disabled={!requestClientId}
-                  onClick={() => setShowCreateProjectInline((prev) => !prev)}
+                  onClick={() => setCreateProjectDialogOpen(true)}
                 >
-                  {showCreateProjectInline ? 'Cancel' : 'Create new project'}
+                  Create new project
                 </Button>
               </div>
               <Select value={requestProjectId || 'none'} onValueChange={v => setRequestProjectId(v === 'none' ? '' : v)}>
@@ -1234,26 +1190,6 @@ export default function ReviewRequests() {
               </Select>
               {!requestClientId ? (
                 <p className="text-xs text-muted-foreground">Select a client to filter projects or create a new one.</p>
-              ) : null}
-              {showCreateProjectInline ? (
-                <div className="rounded-lg border p-3 space-y-2">
-                  <Input
-                    value={newProjectName}
-                    onChange={(e) => setNewProjectName(e.target.value)}
-                    placeholder="Project name *"
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), void createProjectInline())}
-                  />
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={creatingProjectInline || !newProjectName.trim()}
-                      onClick={() => void createProjectInline()}
-                    >
-                      {creatingProjectInline ? 'Adding…' : 'Add project'}
-                    </Button>
-                  </div>
-                </div>
               ) : null}
             </div>
             
@@ -1509,6 +1445,29 @@ export default function ReviewRequests() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ProjectFormDialog
+        open={createProjectDialogOpen}
+        onOpenChange={setCreateProjectDialogOpen}
+        clients={clients}
+        initialClientId={requestClientId || null}
+        onSaved={(project) => {
+          setProjects((prev) =>
+            [
+              ...prev.filter((item) => item.id !== project.id),
+              { id: project.id, name: project.name, client_id: project.client_id },
+            ].sort((a, b) => a.name.localeCompare(b.name)),
+          );
+          setRequestProjectId(project.id);
+          if (project.client_id) setRequestClientId(project.client_id);
+        }}
+        onClientSaved={(client) => {
+          setClients((prev) =>
+            [...prev.filter((item) => item.id !== client.id), { id: client.id, name: client.name, email: client.email ?? null }]
+              .sort((a, b) => a.name.localeCompare(b.name)),
+          );
+          setRequestClientId(client.id);
+        }}
+      />
     </AppLayout>
   );
 }

@@ -644,7 +644,7 @@ export default function Dashboard() {
                 <span className="text-sm font-medium">New note</span>
               </Link>
               <Link
-                to="/clients"
+                to="/clients?new=1"
                 className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:shadow-md transition-shadow"
               >
                 <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">

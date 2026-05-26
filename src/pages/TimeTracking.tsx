@@ -89,6 +89,7 @@ import {
 } from '@/lib/timeEntryFilters';
 import { TimeEntryLogDialog } from '@/components/time/TimeEntryLogDialog';
 import { TimeEntriesTable } from '@/components/time/TimeEntriesTable';
+import { ProjectFormDialog } from '@/components/projects/ProjectFormDialog';
 
 interface Project {
   id: string;
@@ -249,7 +250,6 @@ export default function TimeTracking() {
   const todayHighlightClass = 'border-primary bg-primary/10';
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const [createTaskDialogOpen, setCreateTaskDialogOpen] = useState(false);
-  const [newProjectName, setNewProjectName] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const { dateFormat } = useLocalePreferences();
   const handledEditEntryRef = useRef<string | null>(null);
@@ -428,29 +428,6 @@ export default function TimeTracking() {
     return client?.archived_at ? "Archived client" : null;
   };
   const selectedTimerTask = tasks.find((t) => t.id === timerTask);
-  const createProjectInline = async (name: string) => {
-    if (!user) return;
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const existing = projects.find((p) => p.name.toLowerCase() === trimmed.toLowerCase());
-    if (existing) {
-      setTimerProject(existing.id);
-      return;
-    }
-    const { data, error } = await supabase
-      .from('projects')
-      .insert({ name: trimmed, user_id: user.id, status: 'active' })
-      .select('id, name, client_id')
-      .single();
-    if (error || !data) {
-      toast({ title: 'Error creating project', description: error?.message, variant: 'destructive' });
-      return;
-    }
-    setProjects((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
-    setTimerProject(data.id);
-    setTimerTask('');
-  };
-
   const createTaskInline = async (title: string, projectId: string) => {
     if (!user || !projectId) return;
     const trimmed = title.trim();
@@ -750,14 +727,6 @@ export default function TimeTracking() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set('view', mode);
     setSearchParams(nextParams, { replace: true });
-  };
-
-  const handleCreateProjectFromTimer = async () => {
-    const trimmed = newProjectName.trim();
-    if (!trimmed) return;
-    await createProjectInline(trimmed);
-    setNewProjectName('');
-    setCreateProjectDialogOpen(false);
   };
 
   const handleCreateTaskFromTimer = async () => {
@@ -1449,25 +1418,39 @@ export default function TimeTracking() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={createProjectDialogOpen} onOpenChange={setCreateProjectDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create project</DialogTitle>
-              <DialogDescription>Add a new project and assign it to this timer.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3">
-              <Input
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                placeholder="Project name"
-              />
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setCreateProjectDialogOpen(false)}>Cancel</Button>
-                <Button onClick={handleCreateProjectFromTimer} disabled={!newProjectName.trim()}>Create</Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <ProjectFormDialog
+          open={createProjectDialogOpen}
+          onOpenChange={setCreateProjectDialogOpen}
+          clients={clients}
+          onSaved={(project) => {
+            setProjects((prev) =>
+              [
+                ...prev.filter((item) => item.id !== project.id),
+                {
+                  id: project.id,
+                  name: project.name,
+                  client_id: project.client_id,
+                  hourly_rate: project.hourly_rate,
+                },
+              ].sort((a, b) => a.name.localeCompare(b.name)),
+            );
+            setTimerProject(project.id);
+            setTimerTask('');
+            fetchProjects();
+          }}
+          onClientSaved={(client) => {
+            setClients((prev) =>
+              [
+                ...prev.filter((item) => item.id !== client.id),
+                {
+                  id: client.id,
+                  name: client.name,
+                  archived_at: null,
+                },
+              ].sort((a, b) => a.name.localeCompare(b.name)),
+            );
+          }}
+        />
 
         <Dialog open={createTaskDialogOpen} onOpenChange={setCreateTaskDialogOpen}>
           <DialogContent>
@@ -1529,13 +1512,13 @@ export default function TimeTracking() {
                           {projectQuery.trim() && !projects.some((p) => p.name.toLowerCase() === projectQuery.trim().toLowerCase()) && (
                             <CommandItem
                               value={`create-${projectQuery}`}
-                              onSelect={async () => {
-                                await createProjectInline(projectQuery);
+                              onSelect={() => {
                                 setProjectQuery('');
                                 setProjectPopoverOpen(false);
+                                setCreateProjectDialogOpen(true);
                               }}
                             >
-                              + Create "{projectQuery.trim()}"
+                              + Create project
                             </CommandItem>
                           )}
                         </CommandList>

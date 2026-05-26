@@ -55,6 +55,8 @@ import {
 } from '@/lib/csv';
 import { formatCurrency } from '@/lib/locale-data';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
+import { ClientFormDialog } from '@/components/clients/ClientFormDialog';
+import { ProjectFormDialog } from '@/components/projects/ProjectFormDialog';
 
 interface Client {
   id: string;
@@ -131,12 +133,8 @@ export default function Invoices() {
     invoice_bank_details_default: string | null;
   } | null>(null);
   const { dateFormat } = useLocalePreferences();
-  const [showCreateClientInline, setShowCreateClientInline] = useState(false);
-  const [showCreateProjectInline, setShowCreateProjectInline] = useState(false);
-  const [newClientName, setNewClientName] = useState('');
-  const [newClientEmail, setNewClientEmail] = useState('');
-  const [newClientCompany, setNewClientCompany] = useState('');
-  const [newProjectName, setNewProjectName] = useState('');
+  const [createClientDialogOpen, setCreateClientDialogOpen] = useState(false);
+  const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!isDialogOpen || !user) {
@@ -352,74 +350,6 @@ export default function Invoices() {
         variant: 'destructive',
       });
     }
-  };
-
-  const createClientInline = async () => {
-    if (!user) return;
-    const name = newClientName.trim();
-    if (!name) {
-      toast({ title: 'Client name is required', variant: 'destructive' });
-      return;
-    }
-    const existing = clients.find((c) => c.name.toLowerCase() === name.toLowerCase());
-    if (existing) {
-      setCreateClientId(existing.id);
-      setShowCreateClientInline(false);
-      return;
-    }
-    const { data, error } = await supabase
-      .from('clients')
-      .insert({
-        user_id: user.id,
-        name,
-        email: newClientEmail.trim() || null,
-        company: newClientCompany.trim() || null,
-        status: 'active',
-      })
-      .select('id, name, company, currency, email')
-      .single();
-    if (error || !data) {
-      toast({ title: 'Could not create client', description: error?.message, variant: 'destructive' });
-      return;
-    }
-    setClients((prev) => [...prev, data as Client].sort((a, b) => a.name.localeCompare(b.name)));
-    setCreateClientId(data.id);
-    setShowCreateClientInline(false);
-    setNewClientName('');
-    setNewClientEmail('');
-    setNewClientCompany('');
-  };
-
-  const createProjectInline = async () => {
-    if (!user) return;
-    const name = newProjectName.trim();
-    if (!name) {
-      toast({ title: 'Project name is required', variant: 'destructive' });
-      return;
-    }
-    const existing = projects.find((p) => p.name.toLowerCase() === name.toLowerCase() && p.client_id === (createClientId || null));
-    if (existing) {
-      setCreateProjectId(existing.id);
-      setShowCreateProjectInline(false);
-      return;
-    }
-    const { data, error } = await supabase
-      .from('projects')
-      .insert({
-        user_id: user.id,
-        name,
-        client_id: createClientId || null,
-      })
-      .select('id, name, client_id')
-      .single();
-    if (error || !data) {
-      toast({ title: 'Could not create project', description: error?.message, variant: 'destructive' });
-      return;
-    }
-    setProjects((prev) => [...prev, data as Project].sort((a, b) => a.name.localeCompare(b.name)));
-    setCreateProjectId(data.id);
-    setShowCreateProjectInline(false);
-    setNewProjectName('');
   };
 
   const handleStatusChange = async (id: string, status: string) => {
@@ -771,9 +701,9 @@ export default function Invoices() {
                       type="button"
                       variant="link"
                       className="h-auto p-0 text-sm"
-                      onClick={() => setShowCreateClientInline((prev) => !prev)}
+                      onClick={() => setCreateClientDialogOpen(true)}
                     >
-                      {showCreateClientInline ? 'Cancel' : 'Create new client'}
+                      Create new client
                     </Button>
                   </div>
                   <Select
@@ -791,16 +721,6 @@ export default function Invoices() {
                       ))}
                     </SelectContent>
                   </Select>
-                  {showCreateClientInline ? (
-                    <div className="rounded-lg border p-3 space-y-2">
-                      <Input value={newClientName} onChange={(e) => setNewClientName(e.target.value)} placeholder="Client name *" />
-                      <Input value={newClientEmail} onChange={(e) => setNewClientEmail(e.target.value)} placeholder="Email (optional)" />
-                      <Input value={newClientCompany} onChange={(e) => setNewClientCompany(e.target.value)} placeholder="Company (optional)" />
-                      <div className="flex justify-end">
-                        <Button type="button" size="sm" onClick={() => void createClientInline()}>Add client</Button>
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -809,9 +729,9 @@ export default function Invoices() {
                       type="button"
                       variant="link"
                       className="h-auto p-0 text-sm"
-                      onClick={() => setShowCreateProjectInline((prev) => !prev)}
+                      onClick={() => setCreateProjectDialogOpen(true)}
                     >
-                      {showCreateProjectInline ? 'Cancel' : 'Create new project'}
+                      Create new project
                     </Button>
                   </div>
                   <Select
@@ -836,14 +756,6 @@ export default function Invoices() {
                         : "Only projects for this client are shown. You can change a project's client in Projects."
                       : "Select a client to see their projects."}
                   </p>
-                  {showCreateProjectInline ? (
-                    <div className="rounded-lg border p-3 space-y-2">
-                      <Input value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Project name *" />
-                      <div className="flex justify-end">
-                        <Button type="button" size="sm" onClick={() => void createProjectInline()}>Add project</Button>
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="tax">Tax Rate</Label>
@@ -900,6 +812,43 @@ export default function Invoices() {
               </form>
             </DialogContent>
           </Dialog>
+          <ClientFormDialog
+            open={createClientDialogOpen}
+            onOpenChange={setCreateClientDialogOpen}
+            onSaved={(client) => {
+              setClients((prev) =>
+                [...prev.filter((item) => item.id !== client.id), client].sort((a, b) =>
+                  a.name.localeCompare(b.name),
+                ),
+              );
+              setCreateClientId(client.id);
+              setCreateProjectId('');
+            }}
+          />
+          <ProjectFormDialog
+            open={createProjectDialogOpen}
+            onOpenChange={setCreateProjectDialogOpen}
+            clients={clients}
+            initialClientId={createClientId || null}
+            onSaved={(project) => {
+              setProjects((prev) =>
+                [
+                  ...prev.filter((item) => item.id !== project.id),
+                  { id: project.id, name: project.name, client_id: project.client_id },
+                ].sort((a, b) => a.name.localeCompare(b.name)),
+              );
+              setCreateProjectId(project.id);
+              if (project.client_id) setCreateClientId(project.client_id);
+            }}
+            onClientSaved={(client) => {
+              setClients((prev) =>
+                [...prev.filter((item) => item.id !== client.id), client].sort((a, b) =>
+                  a.name.localeCompare(b.name),
+                ),
+              );
+              setCreateClientId(client.id);
+            }}
+          />
           </div>
         </div>
 
