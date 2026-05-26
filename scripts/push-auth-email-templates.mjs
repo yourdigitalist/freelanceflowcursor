@@ -28,11 +28,11 @@ function loadHtml(filename) {
 }
 
 const templates = {
-  mailer_subjects_confirmation: 'Confirm your email for Lance',
+  mailer_subjects_confirmation: 'Confirm your email for Get Lance',
   mailer_templates_confirmation_content: loadHtml('EMAIL_TEMPLATE_CONFIRM_SIGNUP_FULL.html'),
-  mailer_subjects_magic_link: 'Your Lance sign-in link',
+  mailer_subjects_magic_link: 'Your Get Lance sign-in link',
   mailer_templates_magic_link_content: loadHtml('EMAIL_TEMPLATE_MAGIC_LINK_FULL.html'),
-  mailer_subjects_recovery: 'Reset your Lance password',
+  mailer_subjects_recovery: 'Reset your Get Lance password',
   mailer_templates_recovery_content: loadHtml('EMAIL_TEMPLATE_RECOVERY_FULL.html'),
 };
 

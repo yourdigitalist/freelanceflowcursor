@@ -45,7 +45,13 @@ import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 
-import { Task, Project, ProjectStatus, DEFAULT_STATUSES } from '@/components/tasks/types';
+import { Task, Project, ProjectStatus, StatusSavePayload, DEFAULT_STATUSES } from '@/components/tasks/types';
+import {
+  buildTaskStatusMigrationMap,
+  findDeletedStatusTaskTarget,
+  pickFallbackStatusId,
+  type StatusRowRef,
+} from '@/lib/projectStatusSave';
 import { ProjectHeader } from '@/components/tasks/ProjectHeader';
 import { TaskFilters } from '@/components/tasks/TaskFilters';
 import { TaskKanbanView } from '@/components/tasks/TaskKanbanView';
@@ -553,56 +559,141 @@ export default function ProjectDetail() {
   };
 
   // Status operations
-  const handleSaveStatuses = async (newStatuses: Omit<ProjectStatus, 'id' | 'project_id' | 'user_id'>[]) => {
+  const reassignTasksToStatus = async (fromStatusId: string, toStatusId: string) => {
+    const { error: updateErr } = await supabase
+      .from('tasks')
+      .update({ status_id: toStatusId })
+      .eq('project_id', id!)
+      .eq('status_id', fromStatusId);
+    if (updateErr) throw updateErr;
+  };
+
+  const handleSaveStatuses = async (newStatuses: StatusSavePayload[]) => {
     if (!user || !id) return;
 
     try {
-      const { data: oldStatuses, error: fetchErr } = await supabase
+      const { data: oldRows, error: fetchErr } = await supabase
         .from('project_statuses')
-        .select('id, position')
+        .select('id, name, is_done_status, position')
         .eq('project_id', id)
         .order('position', { ascending: true });
       if (fetchErr) throw fetchErr;
-      const oldOrdered = oldStatuses ?? [];
+      const oldList = oldRows ?? [];
+      const oldIdSet = new Set(oldList.map((s) => s.id));
+      const keptIds = new Set(
+        newStatuses.map((s) => s.id).filter((sid): sid is string => !!sid && oldIdSet.has(sid)),
+      );
+      const usesExistingIds = newStatuses.some((s) => s.id && oldIdSet.has(s.id));
 
-      // Insert new statuses first (before deleting old), so we can reassign tasks and avoid ON DELETE SET NULL clearing status_id
-      const statusesToInsert = newStatuses.map((s, i) => ({
-        ...s,
-        project_id: id,
-        user_id: user.id,
-        position: i,
-      }));
-      const { data: insertedRows, error } = await supabase
-        .from('project_statuses')
-        .insert(statusesToInsert)
-        .select('id, position');
-      if (error) throw error;
-      const inserted = (insertedRows ?? []).slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-      const oldIdToNewId = new Map<string, string>();
-      for (let i = 0; i < oldOrdered.length && i < inserted.length; i++) {
-        const targetId = inserted[i]?.id;
-        if (targetId) oldIdToNewId.set(oldOrdered[i].id, targetId);
-      }
-
-      // Reassign tasks to new status ids before deleting old statuses (FK is ON DELETE SET NULL, so delete would clear status_id)
-      if (oldIdToNewId.size > 0) {
-        for (const [oldId, newId] of oldIdToNewId) {
-          const { error: updateErr } = await supabase
-            .from('tasks')
-            .update({ status_id: newId })
-            .eq('project_id', id)
-            .eq('status_id', oldId);
-          if (updateErr) throw updateErr;
+      if (usesExistingIds) {
+        for (const s of newStatuses) {
+          if (s.id && oldIdSet.has(s.id)) {
+            const { error: updateErr } = await supabase
+              .from('project_statuses')
+              .update({
+                name: s.name,
+                color: s.color,
+                is_done_status: s.is_done_status,
+                position: s.position,
+              })
+              .eq('id', s.id);
+            if (updateErr) throw updateErr;
+          }
         }
-      }
 
-      // Now safe to delete old statuses (only the old rows; new ones stay)
-      if (oldOrdered.length > 0) {
-        const { error: deleteErr } = await supabase
+        const toInsert = newStatuses.filter((s) => !s.id || !oldIdSet.has(s.id));
+        if (toInsert.length > 0) {
+          const { error: insertErr } = await supabase.from('project_statuses').insert(
+            toInsert.map((s) => ({
+              name: s.name,
+              color: s.color,
+              is_done_status: s.is_done_status,
+              position: s.position,
+              project_id: id,
+              user_id: user.id,
+            })),
+          );
+          if (insertErr) throw insertErr;
+        }
+
+        const deletedIds = oldList.filter((o) => !keptIds.has(o.id)).map((o) => o.id);
+        if (deletedIds.length > 0) {
+          const remaining: StatusRowRef[] = newStatuses
+            .filter((s) => s.id && keptIds.has(s.id))
+            .map((s) => ({
+              id: s.id!,
+              name: s.name,
+              is_done_status: s.is_done_status,
+              position: s.position,
+            }));
+          const fallbackId = pickFallbackStatusId(remaining);
+
+          for (const deletedId of deletedIds) {
+            const deleted = oldList.find((o) => o.id === deletedId);
+            if (!deleted) continue;
+            const targetId =
+              findDeletedStatusTaskTarget(
+                {
+                  name: deleted.name,
+                  is_done_status: deleted.is_done_status ?? false,
+                },
+                remaining,
+              ) ?? fallbackId;
+            if (targetId) await reassignTasksToStatus(deletedId, targetId);
+          }
+
+          const { error: deleteErr } = await supabase
+            .from('project_statuses')
+            .delete()
+            .in('id', deletedIds);
+          if (deleteErr) throw deleteErr;
+        }
+      } else {
+        const statusesToInsert = newStatuses.map((s) => ({
+          name: s.name,
+          color: s.color,
+          is_done_status: s.is_done_status,
+          position: s.position,
+          project_id: id,
+          user_id: user.id,
+        }));
+        const { data: insertedRows, error: insertErr } = await supabase
           .from('project_statuses')
-          .delete()
-          .in('id', oldOrdered.map((s) => s.id));
-        if (deleteErr) throw deleteErr;
+          .insert(statusesToInsert)
+          .select('id, name, is_done_status, position');
+        if (insertErr) throw insertErr;
+
+        const inserted: StatusRowRef[] = (insertedRows ?? []).map((row) => ({
+          id: row.id,
+          name: row.name,
+          is_done_status: row.is_done_status ?? false,
+          position: row.position ?? 0,
+        }));
+        const oldRefs: StatusRowRef[] = oldList.map((row) => ({
+          id: row.id,
+          name: row.name,
+          is_done_status: row.is_done_status ?? false,
+          position: row.position ?? 0,
+        }));
+
+        const migration = buildTaskStatusMigrationMap(oldRefs, inserted);
+        for (const [oldId, newId] of migration) {
+          if (oldId !== newId) await reassignTasksToStatus(oldId, newId);
+        }
+
+        const fallbackId = pickFallbackStatusId(inserted);
+        for (const old of oldRefs) {
+          if (migration.has(old.id)) continue;
+          if (fallbackId) await reassignTasksToStatus(old.id, fallbackId);
+        }
+
+        if (oldList.length > 0) {
+          const { error: deleteErr } = await supabase
+            .from('project_statuses')
+            .delete()
+            .in('id', oldList.map((s) => s.id));
+          if (deleteErr) throw deleteErr;
+        }
       }
 
       toast({ title: 'Statuses updated' });

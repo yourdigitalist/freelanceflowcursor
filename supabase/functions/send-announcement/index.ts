@@ -5,11 +5,14 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import {
+  buildLanceUserEmail,
   escapeHtml,
-  getDefaultLanceFooter,
-  getDefaultLanceHeader,
+  getLanceFromAddress,
+  getResendFromEmail,
   LANCE_EMAIL_LOGO_BLACK_URL,
   LANCE_EMAIL_LOGO_WHITE_URL,
+  LANCE_PRODUCT_NAME,
+  loadLanceEmailComms,
   replaceTokens,
 } from "../_shared/lance-email.ts";
 
@@ -135,27 +138,20 @@ serve(async (req) => {
 
   let emailsSent = 0;
   if (sendEmail) {
-    const appName = "Lance";
     const safeTitle = escapeHtml(title);
     const safeLink = link ? escapeHtml(link) : "";
 
-    const [{ data: branding }, { data: comms }] = await Promise.all([
-      serviceClient
-        .from("app_branding")
-        .select("primary_color")
-        .eq("id", 1)
-        .maybeSingle(),
+    const [{ data: comms }, lanceComms] = await Promise.all([
       serviceClient
         .from("app_comms_defaults")
-        .select("email_header_html, email_footer_html, lance_email_header_html, lance_email_footer_html, announcement_default_body, announcement_custom_html")
+        .select("announcement_default_body, announcement_custom_html")
         .eq("id", 1)
         .maybeSingle(),
+      loadLanceEmailComms(serviceClient),
     ]);
 
-    const primaryColor = (branding?.primary_color as string | null) || "#9B63E9";
+    const primaryColor = lanceComms.primaryColor;
     const logoUrl = LANCE_EMAIL_LOGO_WHITE_URL;
-    const headerTpl = (comms?.lance_email_header_html as string | null) || (comms?.email_header_html as string | null) || "";
-    const footerTpl = (comms?.lance_email_footer_html as string | null) || (comms?.email_footer_html as string | null) || "";
     const customTpl = (comms?.announcement_custom_html as string | null) || "";
     const defaultAnnouncementBody = (comms?.announcement_default_body as string | null) || "You have a new announcement.";
 
@@ -180,16 +176,11 @@ serve(async (req) => {
       const customHtml = customTpl.trim()
         ? replaceTokens(customTpl, tokens)
         : "";
-      const header = headerTpl.trim()
-        ? replaceTokens(headerTpl, tokens)
-        : getDefaultLanceHeader(primaryColor);
-      const footer = footerTpl.trim()
-        ? replaceTokens(footerTpl, tokens)
-        : getDefaultLanceFooter(primaryColor);
-      const html = customHtml || `${header}<h2 style="margin: 0 0 12px; color: ${primaryColor};">${safeTitle}</h2>${bodyBlock}${footer}`;
+      const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">${safeTitle}</h2>${bodyBlock}`;
+      const html = customHtml || buildLanceUserEmail(lanceComms, contentHtml, tokens, email);
 
       const { error: sendError } = await resend.emails.send({
-        from: `${appName} <onboarding@resend.dev>`,
+        from: getLanceFromAddress(getResendFromEmail()),
         to: email,
         subject: title,
         html,

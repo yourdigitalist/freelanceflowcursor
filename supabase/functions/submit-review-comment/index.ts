@@ -2,6 +2,12 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import {
+  buildLanceUserEmail,
+  escapeHtml,
+  getLanceFromAddress,
+  loadLanceEmailComms,
+} from "../_shared/lance-email.ts";
+import {
   channelEnabled,
   getReviewPrefs,
   type NotificationPreferences,
@@ -225,12 +231,20 @@ serve(async (req) => {
       }
 
       if (channelEnabled(prefs?.comment, "email") && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
-        const reviewsUrl = `${APP_BASE_URL || "https://getlance.app"}/reviews`;
+        const reviewUrl = `${APP_BASE_URL || "https://getlance.app"}${link}`;
+        const lanceComms = await loadLanceEmailComms(supabase);
+        const text = `Hi ${ownerName},\n\n${body}\n\nOpen approval: ${reviewUrl}`;
+        const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(lanceComms.primaryColor)};">${escapeHtml(title)}</h2>
+<p style="margin:0 0 8px;color:#374151;">Hi ${escapeHtml(ownerName)},</p>
+<p style="margin:0 0 20px;color:#374151;">${escapeHtml(body)}</p>
+<p style="margin:0;"><a href="${escapeHtml(reviewUrl)}" style="display:inline-block;background:${escapeHtml(lanceComms.primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">View approval</a></p>`;
+        const html = buildLanceUserEmail(lanceComms, contentHtml, {}, ownerEmail);
         await resend.emails.send({
-          from: `Lance <${RESEND_FROM_EMAIL}>`,
+          from: getLanceFromAddress(),
           to: ownerEmail,
           subject: title,
-          text: `Hi ${ownerName},\n\n${body}\n\nOpen approvals: ${reviewsUrl}`,
+          text,
+          html,
         });
       }
     }

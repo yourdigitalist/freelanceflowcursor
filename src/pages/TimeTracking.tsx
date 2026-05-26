@@ -627,6 +627,11 @@ export default function TimeTracking() {
     return 0;
   };
 
+  const recentTimerEntries = useMemo(
+    () => entries.filter((entry) => entry.id !== activeEntryId && entry.end_time).slice(0, 5),
+    [entries, activeEntryId],
+  );
+
   const historyStats = useMemo(() => {
     const totalSeconds = filteredEntries.reduce((sum, e) => sum + getEntrySeconds(e), 0);
     const billableSeconds = filteredEntries
@@ -1485,10 +1490,11 @@ export default function TimeTracking() {
         </Dialog>
 
         {isTimerView ? (
-          /* Timer view: centered, spacious layout */
-          <div className="max-w-2xl mx-auto space-y-8">
-            {/* Context: project/task first, notes optional */}
-            <div className="rounded-xl border bg-card p-5 space-y-4">
+          <div className="space-y-8">
+            {/* Timer view: centered, spacious layout */}
+            <div className="mx-auto max-w-5xl space-y-8">
+              {/* Context: project/task first, notes optional */}
+              <div className="rounded-xl border bg-card p-5 space-y-4">
               <div className="space-y-3">
                 <div className="grid min-w-0 gap-3 sm:grid-cols-2">
                 <div className="min-w-0 space-y-1 overflow-hidden">
@@ -1612,10 +1618,10 @@ export default function TimeTracking() {
                   className="text-base border-0 bg-muted/50 focus-visible:ring-2"
                 />
               </div>
-            </div>
+              </div>
 
-            {/* Big timer display */}
-            <div className="rounded-2xl border-2 border-border bg-card p-10 flex flex-col items-center justify-center min-h-[240px]">
+              {/* Big timer display */}
+              <div className="rounded-2xl border-2 border-border bg-card p-10 flex flex-col items-center justify-center min-h-[240px]">
               <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-2">
                 {draftSegments.length > 0 && isLocalTimerRunning ? 'Running' : draftSegments.length > 0 ? 'Paused' : 'Ready'}
               </p>
@@ -1645,46 +1651,77 @@ export default function TimeTracking() {
                   </>
                 )}
               </div>
+              </div>
+
+              {/* Draft segments list */}
+              {draftSegments.length > 0 && (
+                <Card className="border shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <List className="h-4 w-4" />
+                      Segments
+                    </CardTitle>
+                    <CardDescription>
+                      Paused and resumed chunks. Save entry to log them as one time entry. You can also save from the bar at the bottom when you're on another page.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      {draftSegments.map((seg, i) => {
+                        const endMs = seg.endMs ?? Date.now();
+                        const secs = Math.max(0, Math.round((endMs - seg.startMs) / 1000));
+                        const isRunning = seg.endMs == null;
+                        const startLabel = format(new Date(seg.startMs), 'MMM d, HH:mm');
+                        const endLabel = isRunning ? 'now' : format(new Date(endMs), 'MMM d, HH:mm');
+                        return (
+                          <li
+                            key={i}
+                            className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50 text-sm"
+                          >
+                            <span className="font-medium">
+                              {i + 1}. {startLabel} - {endLabel}
+                            </span>
+                            <span className={isRunning ? 'text-primary font-mono' : 'text-muted-foreground font-mono'}>
+                              {formatElapsed(secs)}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
-            {/* Draft segments list */}
-            {draftSegments.length > 0 && (
-              <Card className="border shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <List className="h-4 w-4" />
-                    Segments
-                  </CardTitle>
-                  <CardDescription>
-                    Paused and resumed chunks. Save entry to log them as one time entry. You can also save from the bar at the bottom when you're on another page.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2">
-                    {draftSegments.map((seg, i) => {
-                      const endMs = seg.endMs ?? Date.now();
-                      const secs = Math.max(0, Math.round((endMs - seg.startMs) / 1000));
-                      const isRunning = seg.endMs == null;
-                      const startLabel = format(new Date(seg.startMs), 'MMM d, HH:mm');
-                      const endLabel = isRunning ? 'now' : format(new Date(endMs), 'MMM d, HH:mm');
-                      return (
-                        <li
-                          key={i}
-                          className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50 text-sm"
-                        >
-                          <span className="font-medium">
-                            {i + 1}. {startLabel} - {endLabel}
-                          </span>
-                          <span className={isRunning ? 'text-primary font-mono' : 'text-muted-foreground font-mono'}>
-                            {formatElapsed(secs)}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </CardContent>
-              </Card>
-            )}
+            <Card className="mx-auto max-w-5xl border shadow-sm">
+              <CardHeader className="pb-3">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <CardTitle className="text-base">Recent entries</CardTitle>
+                    <CardDescription>
+                      Your latest saved timer and manual entries.
+                    </CardDescription>
+                  </div>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to="/time/history">View all logs</Link>
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0 overflow-x-auto">
+                <TimeEntriesTable
+                  variant="timesheetDay"
+                  entries={recentTimerEntries}
+                  clientById={clientById}
+                  formatUserDate={formatUserDate}
+                  getEntrySeconds={getEntrySeconds}
+                  getStatusBadge={getStatusBadge}
+                  onEdit={openLogDialog}
+                  onDelete={handleDelete}
+                  onResume={resumeEntry}
+                  emptyMessage="No recent entries yet."
+                />
+              </CardContent>
+            </Card>
           </div>
         ) : (
           <div className="space-y-6">

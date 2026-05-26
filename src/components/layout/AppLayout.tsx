@@ -236,33 +236,24 @@ export function AppLayout({
 
         {/* Navigation - order: Dashboard, Clients, Projects, Time, Invoices, Reviews */}
         <nav className={cn("flex-1 overflow-y-auto space-y-1", sidebarCollapsed ? "p-2" : "p-3")}>
-          <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>
-            {location.pathname === '/dashboard' && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-            <Link to="/dashboard" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/dashboard' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-              <SlotIcon slot="sidebar_dashboard" className={cn("h-4 w-4 shrink-0", location.pathname === '/dashboard' && "text-primary")} />
-              {!sidebarCollapsed && 'Dashboard'}
-            </Link>
-          </span>
+          <Link to="/dashboard" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/dashboard' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+            <SlotIcon slot="sidebar_dashboard" className={cn("h-4 w-4 shrink-0", location.pathname === '/dashboard' && "text-primary")} />
+            {!sidebarCollapsed && 'Dashboard'}
+          </Link>
           {sidebarCollapsed ? (
-            <span className="relative block mr-1">
-              {isClientsActive && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-              <Link to="/clients" onClick={() => setSidebarOpen(false)} className={cn("flex items-center justify-center px-2 py-2.5 rounded-xl text-sm font-medium transition-colors", isClientsActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-                <SlotIcon slot="sidebar_clients" className={cn("h-4 w-4 shrink-0", isClientsActive && "text-primary")} />
-              </Link>
-            </span>
+            <Link to="/clients" onClick={() => setSidebarOpen(false)} className={cn("flex items-center justify-center px-2 py-2.5 rounded-xl text-sm font-medium transition-colors", isClientsActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+              <SlotIcon slot="sidebar_clients" className={cn("h-4 w-4 shrink-0", isClientsActive && "text-primary")} />
+            </Link>
           ) : (
             <Collapsible open={clientsOpen} onOpenChange={setClientsOpen}>
               <CollapsibleTrigger asChild>
-                <span className="relative block mr-1">
-                  {isClientsActive && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-                  <button className={cn("flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", isClientsActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-                    <div className="flex items-center gap-3">
-                      <SlotIcon slot="sidebar_clients" className={cn("h-4 w-4 shrink-0", isClientsActive && "text-primary")} />
-                      Clients
-                    </div>
-                    <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", clientsOpen && "rotate-180")} />
-                  </button>
-                </span>
+                <button className={cn("flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", isClientsActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+                  <div className="flex items-center gap-3">
+                    <SlotIcon slot="sidebar_clients" className={cn("h-4 w-4 shrink-0", isClientsActive && "text-primary")} />
+                    Clients
+                  </div>
+                  <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", clientsOpen && "rotate-180")} />
+                </button>
               </CollapsibleTrigger>
               <CollapsibleContent className="pl-8 space-y-1 mt-1">
                 <Link to="/clients/list" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/clients/list' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
@@ -279,35 +270,26 @@ export function AppLayout({
           )}
 
           {/* Projects */}
-          <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>
-            {isProjectsActive && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-            <Link to="/projects" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", isProjectsActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-              <SlotIcon slot="sidebar_projects" className={cn("h-4 w-4 shrink-0", isProjectsActive && "text-primary")} />
-              {!sidebarCollapsed && 'Projects'}
-            </Link>
-          </span>
+          <Link to="/projects" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", isProjectsActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+            <SlotIcon slot="sidebar_projects" className={cn("h-4 w-4 shrink-0", isProjectsActive && "text-primary")} />
+            {!sidebarCollapsed && 'Projects'}
+          </Link>
 
           {/* Time with sub-items: Timesheet, Timer, History */}
           {sidebarCollapsed ? (
-            <span className="relative block mr-1">
-              {isTimeActive && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-              <Link to="/time" onClick={() => setSidebarOpen(false)} className={cn("flex items-center justify-center px-2 py-2.5 rounded-xl text-sm font-medium transition-colors", isTimeActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-                <SlotIcon slot="sidebar_time" className={cn("h-4 w-4 shrink-0", isTimeActive && "text-primary")} />
-              </Link>
-            </span>
+            <Link to="/time" onClick={() => setSidebarOpen(false)} className={cn("flex items-center justify-center px-2 py-2.5 rounded-xl text-sm font-medium transition-colors", isTimeActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+              <SlotIcon slot="sidebar_time" className={cn("h-4 w-4 shrink-0", isTimeActive && "text-primary")} />
+            </Link>
           ) : (
             <Collapsible open={timeOpen} onOpenChange={setTimeOpen}>
               <CollapsibleTrigger asChild>
-                <span className="relative block mr-1">
-                  {isTimeActive && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-                  <button className={cn("flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", isTimeActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-                    <div className="flex items-center gap-3">
-                      <SlotIcon slot="sidebar_time" className={cn("h-4 w-4 shrink-0", isTimeActive && "text-primary")} />
-                      Time
-                    </div>
-                    <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", timeOpen && "rotate-180")} />
-                  </button>
-                </span>
+                <button className={cn("flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", isTimeActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+                  <div className="flex items-center gap-3">
+                    <SlotIcon slot="sidebar_time" className={cn("h-4 w-4 shrink-0", isTimeActive && "text-primary")} />
+                    Time
+                  </div>
+                  <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", timeOpen && "rotate-180")} />
+                </button>
               </CollapsibleTrigger>
               <CollapsibleContent className="pl-8 space-y-1 mt-1">
                 <Link to="/time" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/time' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
@@ -322,66 +304,49 @@ export function AppLayout({
               </CollapsibleContent>
             </Collapsible>
           )}
-          <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>
-            {location.pathname === '/invoices' && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-            <Link to="/invoices" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/invoices' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-              <SlotIcon slot="sidebar_invoices" className={cn("h-4 w-4 shrink-0", location.pathname === '/invoices' && "text-primary")} />
-              {!sidebarCollapsed && 'Invoices'}
-            </Link>
-          </span>
-          <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>
-            {location.pathname.startsWith('/proposals') && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-            <Link to="/proposals" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname.startsWith('/proposals') ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-              <SlotIcon slot="sidebar_proposals" className={cn("h-4 w-4 shrink-0", location.pathname.startsWith('/proposals') && "text-primary")} />
+          <Link to="/invoices" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/invoices' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+            <SlotIcon slot="sidebar_invoices" className={cn("h-4 w-4 shrink-0", location.pathname === '/invoices' && "text-primary")} />
+            {!sidebarCollapsed && 'Invoices'}
+          </Link>
+          <Link to="/proposals" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname.startsWith('/proposals') ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+            <SlotIcon slot="sidebar_proposals" className={cn("h-4 w-4 shrink-0", location.pathname.startsWith('/proposals') && "text-primary")} />
+            {!sidebarCollapsed && (
+              <>
+                Proposals
+                <Badge className="bg-purple-600 hover:bg-purple-600 text-white text-[10px] px-1.5 py-0 font-medium shrink-0">Beta</Badge>
+              </>
+            )}
+          </Link>
+          {showContracts ? (
+            <Link to="/contracts" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname.startsWith('/contracts') ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+              <SlotIcon slot="sidebar_contracts" className={cn("h-4 w-4 shrink-0", location.pathname.startsWith('/contracts') && "text-primary")} />
               {!sidebarCollapsed && (
                 <>
-                  Proposals
+                  Contracts
                   <Badge className="bg-purple-600 hover:bg-purple-600 text-white text-[10px] px-1.5 py-0 font-medium shrink-0">Beta</Badge>
                 </>
               )}
             </Link>
-          </span>
-          {showContracts ? (
-            <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>
-              {location.pathname.startsWith('/contracts') && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-              <Link to="/contracts" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname.startsWith('/contracts') ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-                <SlotIcon slot="sidebar_contracts" className={cn("h-4 w-4 shrink-0", location.pathname.startsWith('/contracts') && "text-primary")} />
-                {!sidebarCollapsed && (
-                  <>
-                    Contracts
-                    <Badge className="bg-purple-600 hover:bg-purple-600 text-white text-[10px] px-1.5 py-0 font-medium shrink-0">Beta</Badge>
-                  </>
-                )}
-              </Link>
-            </span>
           ) : null}
-          <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>
-            {location.pathname === '/services' && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-            <Link to="/services" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/services' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-              <SlotIcon slot="sidebar_services" className={cn("h-4 w-4 shrink-0", location.pathname === '/services' && "text-primary")} />
-              {!sidebarCollapsed && 'Services'}
-            </Link>
-          </span>
-          <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>
-            {location.pathname === '/reviews' && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-            <Link to="/reviews" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/reviews' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-              <SlotIcon slot="sidebar_reviews" className={cn("h-4 w-4 shrink-0", location.pathname === '/reviews' && "text-primary")} />
+          <Link to="/services" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/services' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+            <SlotIcon slot="sidebar_services" className={cn("h-4 w-4 shrink-0", location.pathname === '/services' && "text-primary")} />
+            {!sidebarCollapsed && 'Services'}
+          </Link>
+          <Link to="/reviews" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/reviews' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+            <SlotIcon slot="sidebar_reviews" className={cn("h-4 w-4 shrink-0", location.pathname === '/reviews' && "text-primary")} />
             {!sidebarCollapsed && (
               <>
                 Approvals
                 <Badge className="bg-purple-600 hover:bg-purple-600 text-white text-[10px] px-1.5 py-0 font-medium shrink-0">Beta</Badge>
               </>
             )}
-            </Link>
-          </span>
+          </Link>
         </nav>
 
         {/* Bottom section */}
         <div className={cn("space-y-2 border-t border-sidebar-border", sidebarCollapsed ? "p-2" : "p-3")}>
           {/* Notifications */}
-          <span className={cn("relative block", !sidebarCollapsed && "mr-1")}>
-            {location.pathname === '/notifications' && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-primary" aria-hidden />}
-            <Link to="/notifications" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/notifications' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+          <Link to="/notifications" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/notifications' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
             <span className="relative shrink-0">
               <SlotIcon slot="nav_bell" className={cn("h-4 w-4", location.pathname === '/notifications' && "text-primary")} />
               {unreadNotifications > 0 && (
@@ -392,7 +357,6 @@ export function AppLayout({
             </span>
             {!sidebarCollapsed && 'Notifications'}
           </Link>
-          </span>
 
           {/* User Profile */}
           <DropdownMenu>

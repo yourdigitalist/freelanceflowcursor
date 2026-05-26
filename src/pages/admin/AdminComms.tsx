@@ -201,7 +201,7 @@ export default function AdminComms() {
               id="account_deleted_subject"
               value={form.account_deleted_subject ?? ''}
               onChange={(e) => update('account_deleted_subject', e.target.value || null)}
-              placeholder="Your Lance account has been deleted"
+              placeholder="Your Get Lance account has been deleted"
             />
           </div>
           <div className="space-y-2">

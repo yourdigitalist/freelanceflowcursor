@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select';
 import { GripVertical, Plus, Trash2 } from '@/components/icons';
 import { supabase } from '@/integrations/supabase/client';
-import { ProjectStatus, STATUS_COLORS, DEFAULT_STATUSES } from './types';
+import { ProjectStatus, StatusSavePayload, STATUS_COLORS, DEFAULT_STATUSES } from './types';
 import {
   DndContext,
   closestCenter,
@@ -42,7 +42,7 @@ interface StatusManagementModalProps {
   isOpen: boolean;
   onClose: () => void;
   statuses: ProjectStatus[];
-  onSave: (statuses: Omit<ProjectStatus, 'id' | 'project_id' | 'user_id'>[]) => void | Promise<void>;
+  onSave: (statuses: StatusSavePayload[]) => void | Promise<void>;
   projectId: string;
   userId: string;
 }
@@ -300,6 +300,7 @@ export function StatusManagementModal({
   const handleSave = () => {
     onSave(
       editableStatuses.map((s) => ({
+        ...(s.id ? { id: s.id } : {}),
         name: s.name,
         color: s.color,
         is_done_status: s.is_done_status,

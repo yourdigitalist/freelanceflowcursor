@@ -49,6 +49,15 @@ describe("client archive regression guards", () => {
     expect(source).toContain(".is(\"clients.archived_at\", null)");
   });
 
+  it("deadline notifications skip tasks in done columns", () => {
+    const source = readFileSync(
+      resolve(root, "supabase/functions/send-deadline-notifications/index.ts"),
+      "utf8",
+    );
+    expect(source).toContain("is_done_status");
+    expect(source).toContain("isTaskComplete");
+  });
+
   it("proposal document uses snapshot display helpers", () => {
     const source = readSrc("src/components/proposals/ProposalDocument.tsx");
     expect(source).toContain("displayProposalClientName");

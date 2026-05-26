@@ -5,12 +5,13 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import {
+  buildLanceUserEmail,
   escapeHtml,
-  getDefaultLanceFooter,
-  getDefaultLanceHeader,
+  getLanceFromAddress,
   LANCE_EMAIL_LOGO_BLACK_URL,
   LANCE_EMAIL_LOGO_WHITE_URL,
-  replaceTokens,
+  LANCE_PRODUCT_NAME,
+  loadLanceEmailComms,
 } from "../_shared/lance-email.ts";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
@@ -143,37 +144,31 @@ serve(async (req) => {
 
   const baseUrl = APP_BASE_URL || req.headers.get("origin") || "https://app.lance.com";
   const billingUrl = `${baseUrl}/settings/subscription`;
-  const [{ data: branding }, { data: comms }] = await Promise.all([
-    supabase
-      .from("app_branding")
-      .select("primary_color")
-      .eq("id", 1)
-      .maybeSingle(),
+  const [{ data: comms }, lanceComms] = await Promise.all([
     supabase
       .from("app_comms_defaults")
-      .select("email_header_html, email_footer_html, lance_email_header_html, lance_email_footer_html, trial_body_5d, trial_body_1d, trial_body_0d")
+      .select("trial_body_5d, trial_body_1d, trial_body_0d")
       .eq("id", 1)
       .maybeSingle(),
+    loadLanceEmailComms(supabase),
   ]);
-  const primaryColor = (branding?.primary_color as string | null) || "#9B63E9";
+  const primaryColor = lanceComms.primaryColor;
   const logoUrl = LANCE_EMAIL_LOGO_WHITE_URL;
-  const headerTpl = (comms?.lance_email_header_html as string | null) || (comms?.email_header_html as string | null) || "";
-  const footerTpl = (comms?.lance_email_footer_html as string | null) || (comms?.email_footer_html as string | null) || "";
 
   let sent = 0;
   for (const { email, name, daysLeft } of toSend) {
     const subject =
       daysLeft === 5
-        ? "Your Lance trial ends in 5 days"
+        ? `Your ${LANCE_PRODUCT_NAME} trial ends in 5 days`
         : daysLeft === 1
-          ? "Your Lance trial ends tomorrow"
-          : "Your Lance trial ends today";
+          ? `Your ${LANCE_PRODUCT_NAME} trial ends tomorrow`
+          : `Your ${LANCE_PRODUCT_NAME} trial ends today`;
     const fallbackBody =
       daysLeft === 5
-        ? `Hi ${name},\n\nYour 15-day free trial ends in 5 days. You'll keep full access until then, and we'll charge your card on the trial end date unless you cancel.\n\nManage your subscription: ${billingUrl}\n\nThanks,\nThe Lance team`
+        ? `Hi ${name},\n\nYour 15-day free trial ends in 5 days. You'll keep full access until then, and we'll charge your card on the trial end date unless you cancel.\n\nManage your subscription: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`
         : daysLeft === 1
-          ? `Hi ${name},\n\nYour free trial ends tomorrow. Your card will be charged automatically to continue your subscription.\n\nTo cancel or update payment: ${billingUrl}\n\nThanks,\nThe Lance team`
-          : `Hi ${name},\n\nYour free trial ends today. We'll charge your card automatically to continue your plan—no action needed. To update payment or cancel: ${billingUrl}\n\nThanks,\nThe Lance team`;
+          ? `Hi ${name},\n\nYour free trial ends tomorrow. Your card will be charged automatically to continue your subscription.\n\nTo cancel or update payment: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`
+          : `Hi ${name},\n\nYour free trial ends today. We'll charge your card automatically to continue your plan—no action needed. To update payment or cancel: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`;
     const customBody =
       daysLeft === 5
         ? (comms?.trial_body_5d as string | null)
@@ -192,16 +187,12 @@ serve(async (req) => {
       logo_url: logoUrl,
       logo_footer_url: LANCE_EMAIL_LOGO_BLACK_URL,
     };
-    const header = headerTpl.trim()
-      ? replaceTokens(headerTpl, tokens)
-      : getDefaultLanceHeader(primaryColor);
-    const footer = footerTpl.trim()
-      ? replaceTokens(footerTpl, tokens)
-      : getDefaultLanceFooter(primaryColor);
-    const html = `${header}<h2 style="margin: 0 0 12px; color: ${primaryColor};">${escapeHtml(subject)}</h2><p>${safeBody}</p>${footer}`;
+    const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">${escapeHtml(subject)}</h2><p style="margin:0;color:#374151;">${safeBody}</p>
+<p style="margin:16px 0 0;"><a href="${safeBilling}" style="display:inline-block;background:${escapeHtml(primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Manage subscription</a></p>`;
+    const html = buildLanceUserEmail(lanceComms, contentHtml, tokens, email);
 
     const { error: sendError } = await resend.emails.send({
-      from: `Lance <${RESEND_FROM_EMAIL}>`,
+      from: getLanceFromAddress(),
       to: email,
       subject,
       text: body,

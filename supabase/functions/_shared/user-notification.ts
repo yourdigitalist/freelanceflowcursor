@@ -55,8 +55,21 @@ export function getContractPrefs(prefs: NotificationPreferences | null | undefin
   return prefs?.contracts;
 }
 
+type SupabaseError = { code?: string; message: string };
+type InsertClient = {
+  from: (table: string) => {
+    insert: (row: unknown) => Promise<{ error: SupabaseError | null }>;
+    upsert: (row: unknown, opts: unknown) => Promise<{ error: SupabaseError | null }>;
+  };
+};
+
+function isDuplicateError(error: SupabaseError): boolean {
+  return error.code === "23505" || /duplicate key/i.test(error.message);
+}
+
+/** Insert in-app notification. Uses insert (not upsert) so PostgREST works without a named UNIQUE constraint. */
 export async function upsertUserNotification(
-  supabase: { from: (table: string) => { upsert: (row: unknown, opts: unknown) => Promise<{ error: { message: string } | null }> } },
+  supabase: InsertClient,
   row: {
     user_id: string;
     type: string;
@@ -66,13 +79,28 @@ export async function upsertUserNotification(
     event_key: string;
   },
 ): Promise<boolean> {
-  const { error } = await supabase.from("notifications").upsert(row, {
-    onConflict: "user_id,event_key",
-    ignoreDuplicates: true,
-  });
-  if (error) {
-    console.error("notification upsert failed:", error.message, row.event_key);
-    return false;
+  const { error } = await supabase.from("notifications").insert(row);
+  if (!error) return true;
+  if (isDuplicateError(error)) return true;
+  console.error("notification insert failed:", error.message, row.event_key);
+  return false;
+}
+
+/** Batch insert for scheduled jobs; skips rows that already exist for the same event_key. */
+export async function insertUserNotifications(
+  supabase: InsertClient,
+  rows: Array<{
+    user_id: string;
+    type: string;
+    title: string;
+    body: string | null;
+    link: string | null;
+    event_key: string;
+  }>,
+): Promise<number> {
+  let inserted = 0;
+  for (const row of rows) {
+    if (await upsertUserNotification(supabase, row)) inserted += 1;
   }
-  return true;
+  return inserted;
 }

@@ -578,7 +578,7 @@ export default function Dashboard() {
                           {formatStatus(project.status)}
                         </Badge>
                       </div>
-                      <h3 className="font-semibold text-primary mb-1">{project.name}</h3>
+                      <h3 className="font-semibold mb-1">{project.name}</h3>
                       <p className="text-sm text-muted-foreground mb-3">
                         {project.client_name || 'No client'}
                       </p>

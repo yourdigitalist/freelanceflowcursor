@@ -5,9 +5,15 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import {
+  buildLanceUserEmail,
+  getLanceFromAddress,
+  loadLanceEmailComms,
+  plainTextToLanceContentHtml,
+} from "../_shared/lance-email.ts";
+import { insertUserNotifications } from "../_shared/user-notification.ts";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
-const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -75,6 +81,17 @@ function addDays(base: Date, days: number): Date {
   return d;
 }
 
+/** Task is complete if legacy status says done or status_id is a user-defined "done" column. */
+function isTaskComplete(
+  task: { status?: string | null; status_id?: string | null },
+  doneStatusIds: Set<string>,
+): boolean {
+  const legacy = String(task.status || "").toLowerCase();
+  if (["done", "completed", "closed"].includes(legacy)) return true;
+  const statusId = task.status_id ? String(task.status_id) : "";
+  return statusId !== "" && doneStatusIds.has(statusId);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== "POST") {
@@ -119,10 +136,11 @@ serve(async (req) => {
   today.setUTCHours(0, 0, 0, 0);
   const todayYmd = dateYmd(today);
 
-  const [{ data: profiles }, { data: projects }, { data: tasks }, { data: invoices }, { data: reviews }, { data: contracts }, { data: clientFollowUps }] = await Promise.all([
+  const [{ data: profiles }, { data: projects }, { data: tasks }, { data: doneStatuses }, { data: invoices }, { data: reviews }, { data: contracts }, { data: clientFollowUps }] = await Promise.all([
     supabase.from("profiles").select("user_id, email, full_name, notification_preferences"),
     supabase.from("projects").select("id, user_id, name, due_date, status").not("due_date", "is", null),
-    supabase.from("tasks").select("id, user_id, title, due_date, status").not("due_date", "is", null),
+    supabase.from("tasks").select("id, user_id, title, due_date, status, status_id").not("due_date", "is", null),
+    supabase.from("project_statuses").select("id").eq("is_done_status", true),
     supabase.from("invoices").select("id, user_id, invoice_number, due_date, status").not("due_date", "is", null),
     supabase.from("review_requests").select("id, user_id, title, due_date, status").not("due_date", "is", null),
     supabase.from("contracts").select("id, user_id, identifier, timeline_days, sent_at, created_at, status, reminder_near_end").eq("reminder_near_end", true),
@@ -132,6 +150,8 @@ serve(async (req) => {
       .is("completed_at", null)
       .is("clients.archived_at", null),
   ]);
+
+  const doneStatusIds = new Set((doneStatuses || []).map((s: { id: string }) => String(s.id)));
 
   const notifications: Array<{ user_id: string; type: string; title: string; body: string | null; link: string | null; event_key: string }> = [];
   const emailQueue: Array<{ to: string; subject: string; text: string }> = [];
@@ -181,8 +201,7 @@ serve(async (req) => {
     }
 
     for (const row of (tasks || []).filter((x: any) => x.user_id === userId)) {
-      const status = String(row.status || "");
-      if (status === "done") continue;
+      if (isTaskComplete(row, doneStatusIds)) continue;
       const due = String(row.due_date);
       if (due === taskDueSoon && prefs.tasks?.dueSoon?.inApp) {
         notifications.push({
@@ -370,24 +389,21 @@ serve(async (req) => {
 
   let inAppCreated = 0;
   if (notifications.length > 0) {
-    const { error } = await supabase
-      .from("notifications")
-      .upsert(notifications, { onConflict: "user_id,event_key", ignoreDuplicates: true });
-    if (error) {
-      console.error("notifications upsert failed:", error.message);
-    } else {
-      inAppCreated = notifications.length;
-    }
+    inAppCreated = await insertUserNotifications(supabase, notifications);
   }
 
   let emailsSent = 0;
   if (Deno.env.get("RESEND_API_KEY")) {
+    const lanceComms = await loadLanceEmailComms(supabase);
     for (const msg of emailQueue) {
+      const contentHtml = plainTextToLanceContentHtml(msg.text, msg.subject, lanceComms.primaryColor);
+      const html = buildLanceUserEmail(lanceComms, contentHtml, {}, msg.to);
       const { error } = await resend.emails.send({
-        from: `Lance <${RESEND_FROM_EMAIL}>`,
+        from: getLanceFromAddress(),
         to: msg.to,
         subject: msg.subject,
         text: msg.text,
+        html,
       });
       if (!error) emailsSent++;
     }

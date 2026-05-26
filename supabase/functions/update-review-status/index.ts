@@ -2,6 +2,12 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import {
+  buildLanceUserEmail,
+  escapeHtml,
+  getLanceFromAddress,
+  loadLanceEmailComms,
+} from "../_shared/lance-email.ts";
+import {
   channelEnabled,
   getReviewPrefs,
   type NotificationPreferences,
@@ -158,6 +164,8 @@ serve(async (req) => {
       });
     }
 
+    let notificationCreated = false;
+
     // Notification for the freelancer (request owner) when client approves or rejects
     if (request.user_id) {
       const { data: ownerProfile } = await supabase
@@ -170,7 +178,8 @@ serve(async (req) => {
       );
       const ownerEmail = (ownerProfile?.email || "").trim();
       const ownerName = (ownerProfile?.full_name || "there").trim() || "there";
-      const eventKey = `review_status:${request.id}:${status}:${commenter_email.trim().toLowerCase()}`;
+      // Include timestamp so approve → reject (or retries) each produce a distinct in-app notification.
+      const eventKey = `review_status:${request.id}:${status}:${commenter_email.trim().toLowerCase()}:${Date.now()}`;
       let title = "";
       let body = "";
       let link = `/reviews/${request.id}`;
@@ -189,7 +198,7 @@ serve(async (req) => {
       }
 
       if (channelEnabled(prefs?.status, "inApp")) {
-        await upsertUserNotification(supabase, {
+        notificationCreated = await upsertUserNotification(supabase, {
           user_id: request.user_id,
           type: "review",
           title,
@@ -201,11 +210,20 @@ serve(async (req) => {
 
       if (channelEnabled(prefs?.status, "email") && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
         const reviewsUrl = `${APP_BASE_URL || "https://getlance.app"}${link.startsWith("/") ? link : "/reviews"}`;
+        const lanceComms = await loadLanceEmailComms(supabase);
+        const messageBody = body || `${request.title || "Approval request"} was ${status}.`;
+        const text = `Hi ${ownerName},\n\n${messageBody}\n\nOpen: ${reviewsUrl}`;
+        const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(lanceComms.primaryColor)};">${escapeHtml(title)}</h2>
+<p style="margin:0 0 8px;color:#374151;">Hi ${escapeHtml(ownerName)},</p>
+<p style="margin:0 0 20px;color:#374151;">${escapeHtml(messageBody)}</p>
+<p style="margin:0;"><a href="${escapeHtml(reviewsUrl)}" style="display:inline-block;background:${escapeHtml(lanceComms.primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Open approvals</a></p>`;
+        const html = buildLanceUserEmail(lanceComms, contentHtml, {}, ownerEmail);
         await resend.emails.send({
-          from: `Lance <${RESEND_FROM_EMAIL}>`,
+          from: getLanceFromAddress(),
           to: ownerEmail,
           subject: title,
-          text: `Hi ${ownerName},\n\n${body || `${request.title || "Review request"} was ${status}.`}\n\nOpen: ${reviewsUrl}`,
+          text,
+          html,
         });
       }
     }
@@ -213,7 +231,7 @@ serve(async (req) => {
     console.log(`Review ${request.id} ${status} by ${commenter_email}`);
 
     return new Response(
-      JSON.stringify({ success: true, status }),
+      JSON.stringify({ success: true, status, notification_created: notificationCreated }),
       { 
         headers: { 
           ...corsHeaders, 

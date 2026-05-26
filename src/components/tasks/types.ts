@@ -22,6 +22,9 @@ export interface ProjectStatus {
   position: number;
 }
 
+/** Saved from Manage Statuses — includes id for existing columns. */
+export type StatusSavePayload = Omit<ProjectStatus, 'id' | 'project_id' | 'user_id'> & { id?: string };
+
 export interface TaskComment {
   id: string;
   task_id: string;

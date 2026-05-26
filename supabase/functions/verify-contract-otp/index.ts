@@ -1,7 +1,13 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import { getLanceSignature } from "../_shared/lance-email.ts";
+import {
+  buildLanceUserEmail,
+  escapeHtml,
+  getLanceFromAddress,
+  getLanceSignature,
+  loadLanceEmailComms,
+} from "../_shared/lance-email.ts";
 import {
   channelEnabled,
   getContractPrefs,
@@ -17,16 +23,6 @@ const corsHeaders = {
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
 const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") || "").trim().replace(/\/$/, "");
-
-function escapeHtml(text: string | null | undefined): string {
-  if (!text) return "";
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
 
 function replaceTokens(template: string, tokens: Record<string, string>): string {
   return Object.entries(tokens).reduce((out, [key, value]) => {
@@ -294,11 +290,20 @@ serve(async (req) => {
         RESEND_FROM_EMAIL.includes("@")
       ) {
         try {
+          const lanceComms = await loadLanceEmailComms(supabase);
+          const openUrl = `${APP_BASE_URL}${contractLink}`;
+          const subject = `Client signed: ${contract.identifier || "Contract"}`;
+          const text = `${contractLabel} was signed by the client.\n\nOpen: ${openUrl}`;
+          const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(lanceComms.primaryColor)};">${escapeHtml(subject)}</h2>
+<p style="margin:0 0 20px;color:#374151;">${escapeHtml(contractLabel)} was signed by the client.</p>
+<p style="margin:0;"><a href="${escapeHtml(openUrl)}" style="display:inline-block;background:${escapeHtml(lanceComms.primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Open contract</a></p>`;
+          const html = buildLanceUserEmail(lanceComms, contentHtml, {}, ownerNotifyEmail);
           await resend.emails.send({
-            from: `Lance <${RESEND_FROM_EMAIL}>`,
+            from: getLanceFromAddress(),
             to: ownerNotifyEmail,
-            subject: `Client signed: ${contract.identifier || "Contract"}`,
-            text: `${contractLabel} was signed by the client.\n\nOpen: ${APP_BASE_URL}${contractLink}`,
+            subject,
+            text,
+            html,
           });
         } catch (e) {
           console.error("client signed email failed:", e);

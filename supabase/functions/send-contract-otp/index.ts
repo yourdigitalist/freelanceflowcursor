@@ -1,6 +1,12 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import {
+  buildLanceUserEmail,
+  escapeHtml,
+  getLanceFromAddress,
+  loadLanceEmailComms,
+} from "../_shared/lance-email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -108,16 +114,24 @@ serve(async (req) => {
       });
     }
 
+    const lanceComms = await loadLanceEmailComms(supabase);
+    const safeIdentifier = escapeHtml(contract.identifier);
+    const safeSigner = escapeHtml(signerType);
+    const safeCode = escapeHtml(code);
+    const subject = `Your ${signerType} signing code for contract ${contract.identifier}`;
+    const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(lanceComms.primaryColor)};">Contract verification code</h2>
+<p style="margin:0 0 16px;color:#374151;">Use the code below to sign contract <strong>${safeIdentifier}</strong> as ${safeSigner}. This code expires in 10 minutes.</p>
+<div style="font-size:36px;font-weight:700;letter-spacing:8px;color:#111827;margin:18px 0;">${safeCode}</div>
+<p style="margin:0;font-size:13px;color:#6b7280;">If you did not request this code, you can ignore this email.</p>`;
+    const html = buildLanceUserEmail(lanceComms, contentHtml, {}, email);
+    const text = `Your signing code for contract ${contract.identifier} is ${code}. It expires in 10 minutes.`;
+
     await resend.emails.send({
-      from: `Lance <${RESEND_FROM_EMAIL}>`,
+      from: getLanceFromAddress(),
       to: [email],
-      subject: `Your ${signerType} signing code for contract ${contract.identifier}`,
-      html: `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;">
-        <h2 style="margin-top:0;color:#1f2937;">Contract verification code</h2>
-        <p style="color:#4b5563;">Use the code below to sign contract <strong>${contract.identifier}</strong> as ${signerType}. This code expires in 10 minutes.</p>
-        <div style="font-size:36px;font-weight:700;letter-spacing:8px;color:#111827;margin:18px 0;">${code}</div>
-        <p style="font-size:12px;color:#6b7280;">If you did not request this code, ignore this email.</p>
-      </div>`,
+      subject,
+      text,
+      html,
     });
 
     return new Response(JSON.stringify({ success: true }), {

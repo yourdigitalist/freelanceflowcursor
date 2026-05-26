@@ -3,8 +3,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import {
   escapeHtml,
-  getDefaultLanceFooter,
-  getDefaultLanceHeader,
+  buildLanceUserEmail,
+  getLanceFromAddress,
+  loadLanceEmailComms,
 } from "../_shared/lance-email.ts";
 import {
   channelEnabled,
@@ -60,22 +61,22 @@ serve(async (req) => {
 
       const ownerEmail = (business?.business_email || business?.email || "").trim();
       if (channelEnabled(prefs?.accepted, "email") && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
-        const { data: branding } = await supabase.from("app_branding").select("primary_color").eq("id", 1).maybeSingle();
-        const primaryColor = (branding?.primary_color as string | null) || "#9B63E9";
+        const lanceComms = await loadLanceEmailComms(supabase);
+        const primaryColor = lanceComms.primaryColor;
         const proposalUrl = `${APP_BASE_URL}/proposals/${proposal.id}`;
         const safeIdentifier = escapeHtml(proposal.identifier);
         const safeUrl = escapeHtml(proposalUrl);
         const coreHtml = `
-              <h2 style="margin: 0 0 12px; color: ${primaryColor};">Proposal accepted</h2>
-              <p style="color: #333; margin: 0 0 20px;">Great news! Your proposal <strong>${safeIdentifier}</strong> was accepted by the client.</p>
-              <p style="margin: 0;">
-                <a href="${safeUrl}" style="display: inline-block; background: ${primaryColor}; color: #ffffff !important; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">View proposal</a>
+              <h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">Proposal accepted</h2>
+              <p style="color:#374151;margin:0 0 20px;">Great news! Your proposal <strong>${safeIdentifier}</strong> was accepted by the client.</p>
+              <p style="margin:0;">
+                <a href="${safeUrl}" style="display:inline-block;background:${escapeHtml(primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">View proposal</a>
               </p>`;
-        const html = `${getDefaultLanceHeader(primaryColor)}${coreHtml}${getDefaultLanceFooter(primaryColor)}`;
+        const html = buildLanceUserEmail(lanceComms, coreHtml, {}, ownerEmail);
         const text = `${body}\n\nView proposal: ${proposalUrl}`;
 
         await resend.emails.send({
-          from: `Get Lance <${RESEND_FROM_EMAIL}>`,
+          from: getLanceFromAddress(),
           to: [ownerEmail],
           subject: `Proposal accepted: ${proposal.identifier}`,
           text,

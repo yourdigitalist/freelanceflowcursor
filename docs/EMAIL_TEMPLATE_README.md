@@ -1,4 +1,4 @@
-# Supabase Auth emails — Lance styling
+# Supabase Auth emails — Get Lance styling
 
 Auth emails (password reset, magic link, confirm signup) are edited in **Supabase Dashboard → Authentication → Email Templates**. They are **not** sent by the app’s Resend Edge Functions, but you can make them **look the same** by using the shared HTML frame in [`EMAIL_TEMPLATE_SUPABASE.html`](./EMAIL_TEMPLATE_SUPABASE.html).
 
@@ -33,9 +33,9 @@ Open **Authentication → Email Templates** and paste the full HTML from:
 
 Subjects (if not using the script):
 
-- Reset: `Reset your Lance password`
-- Magic link: `Your Lance sign-in link`
-- Confirm: `Confirm your email for Lance`
+- Reset: `Reset your Get Lance password`
+- Magic link: `Your Get Lance sign-in link`
+- Confirm: `Confirm your email for Get Lance`
 
 ### Shared frame only
 
@@ -52,7 +52,7 @@ Use the default block already in `EMAIL_TEMPLATE_SUPABASE.html` (heading “Rese
 Replace the MAIN CONTENT block with:
 
 ```html
-      <h2 style="margin: 0 0 16px 0; font-size: 18px; color: #9B63E9;">Sign in to Lance</h2>
+      <h2 style="margin: 0 0 16px 0; font-size: 18px; color: #9B63E9;">Sign in to Get Lance</h2>
       <p style="margin: 0 0 16px 0;">Hi,</p>
       <p style="margin: 0 0 20px 0;">Click the button below to sign in to your account. This link is for one-time use.</p>
       <p style="margin: 0 0 24px 0;">
@@ -70,7 +70,7 @@ Replace the MAIN CONTENT block with:
 ```html
       <h2 style="margin: 0 0 16px 0; font-size: 18px; color: #9B63E9;">Confirm your email</h2>
       <p style="margin: 0 0 16px 0;">Hi,</p>
-      <p style="margin: 0 0 20px 0;">Thanks for signing up for Lance. Confirm your email address to get started.</p>
+      <p style="margin: 0 0 20px 0;">Thanks for signing up for Get Lance. Confirm your email address to get started.</p>
       <p style="margin: 0 0 24px 0;">
         <a href="{{ .ConfirmationURL }}" style="display: inline-block; background: #9B63E9; color: #ffffff !important; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">Confirm email</a>
       </p>
@@ -86,7 +86,7 @@ Always keep **`{{ .ConfirmationURL }}`** exactly as Supabase expects (variable n
 - **Different pipeline:** Review requests use the **Resend API** from Edge Functions. Auth mail uses **SMTP through Supabase** (even if Resend is the provider). Headers and routing can differ slightly.
 - **Content:** “Password reset” messages are filtered more aggressively by Gmail and others.
 - **Fix checklist**
-  1. In **Supabase → Authentication → SMTP**, set **Sender email** to the **same** verified domain address you use for transactional mail (e.g. `hello@getlance.app`), and **Sender name** `Lance` (or your product name).
+  1. In **Supabase → Authentication → SMTP**, set **Sender email** to the **same** verified domain address you use for transactional mail (e.g. `hello@getlance.app`), and **Sender name** `Get Lance`.
   2. Ensure **SPF/DKIM** for that domain are valid in Resend (you already verified the domain).
   3. Use the **styled HTML** above so the message looks legitimate (not bare default text).
   4. In Gmail, **“Report not spam”** once—this trains the mailbox for future messages.
