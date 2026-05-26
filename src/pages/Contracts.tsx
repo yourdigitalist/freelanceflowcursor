@@ -507,12 +507,8 @@ export default function Contracts() {
         open={createOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setShowCreateClientInline(false);
-            setShowCreateProjectInline(false);
-            setNewClientName("");
-            setNewClientEmail("");
-            setNewClientCompany("");
-            setNewProjectName("");
+            setCreateClientDialogOpen(false);
+            setCreateProjectDialogOpen(false);
           }
           setCreateOpen(open);
         }}

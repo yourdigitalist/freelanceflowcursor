@@ -653,12 +653,8 @@ export default function Invoices() {
             onOpenChange={(open) => {
               if (!open) {
                 setCreateProjectId('');
-                setShowCreateClientInline(false);
-                setShowCreateProjectInline(false);
-                setNewClientName('');
-                setNewClientEmail('');
-                setNewClientCompany('');
-                setNewProjectName('');
+                setCreateClientDialogOpen(false);
+                setCreateProjectDialogOpen(false);
               }
               setIsDialogOpen(open);
             }}
