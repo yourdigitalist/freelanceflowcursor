@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
-import { getContractsAccessMode } from '@/lib/features';
+import { canAccessNotes, getContractsAccessMode } from '@/lib/features';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { shellProfileDisplayName, useShellProfile } from '@/hooks/useShellProfile';
 import { formatLocaleDate } from '@/lib/datetime';
@@ -323,6 +323,7 @@ export default function Dashboard() {
   const firstName = displayName?.split(' ')[0] ?? null;
   const unreadNotifications = notifications.filter((n) => !n.read_at);
   const showContracts = getContractsAccessMode() === 'on';
+  const showNotes = canAccessNotes({ isAdmin: shellProfile?.is_admin === true });
 
   const statCards = [
     {
@@ -609,15 +610,17 @@ export default function Dashboard() {
                 </div>
                 <span className="text-sm font-medium">Log time</span>
               </Link>
-              <Link
-                to="/notes"
-                className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:shadow-md transition-shadow"
-              >
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                  <SlotIcon slot="sidebar_notes" className="h-5 w-5 text-primary" />
-                </div>
-                <span className="text-sm font-medium">New note</span>
-              </Link>
+              {showNotes ? (
+                <Link
+                  to="/notes"
+                  className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:shadow-md transition-shadow"
+                >
+                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <SlotIcon slot="sidebar_notes" className="h-5 w-5 text-primary" />
+                  </div>
+                  <span className="text-sm font-medium">New note</span>
+                </Link>
+              ) : null}
               <Link
                 to="/clients?new=1"
                 className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:shadow-md transition-shadow"

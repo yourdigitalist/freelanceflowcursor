@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDate } from '@/lib/datetime';
+import { canAccessNotes } from '@/lib/features';
+import { useShellProfile } from '@/hooks/useShellProfile';
 
 interface ProjectResult {
   id: string;
@@ -62,6 +64,8 @@ export default function SearchResults() {
   const { dateFormat } = useLocalePreferences();
   const q = searchParams.get('q')?.trim() || '';
   const { user } = useAuth();
+  const { data: shellProfile } = useShellProfile(user?.id);
+  const showNotes = canAccessNotes({ isAdmin: shellProfile?.is_admin === true });
   const [projects, setProjects] = useState<ProjectResult[]>([]);
   const [clients, setClients] = useState<ClientResult[]>([]);
   const [invoices, setInvoices] = useState<InvoiceResult[]>([]);
@@ -126,15 +130,17 @@ export default function SearchResults() {
         (byDesc.data || []).forEach((r) => byId.set(r.id, r as TaskResult));
         return Array.from(byId.values()).slice(0, 10);
       }),
-      Promise.all([
-        supabase.from('notes').select('id, title').eq('user_id', user.id).ilike('title', pattern).limit(10),
-        supabase.from('notes').select('id, title').eq('user_id', user.id).not('content', 'is', null).ilike('content', pattern).limit(10),
-      ]).then(([byTitle, byContent]) => {
-        const byId = new Map<string, NoteResult>();
-        (byTitle.data || []).forEach((r) => byId.set(r.id, r as NoteResult));
-        (byContent.data || []).forEach((r) => byId.set(r.id, r as NoteResult));
-        return Array.from(byId.values()).slice(0, 10);
-      }),
+      showNotes
+        ? Promise.all([
+            supabase.from('notes').select('id, title').eq('user_id', user.id).ilike('title', pattern).limit(10),
+            supabase.from('notes').select('id, title').eq('user_id', user.id).not('content', 'is', null).ilike('content', pattern).limit(10),
+          ]).then(([byTitle, byContent]) => {
+            const byId = new Map<string, NoteResult>();
+            (byTitle.data || []).forEach((r) => byId.set(r.id, r as NoteResult));
+            (byContent.data || []).forEach((r) => byId.set(r.id, r as NoteResult));
+            return Array.from(byId.values()).slice(0, 10);
+          })
+        : Promise.resolve([]),
       supabase
         .from('time_entries')
         .select('id, description, start_time, total_duration_seconds, duration_minutes, projects(name)')
@@ -160,7 +166,7 @@ export default function SearchResults() {
       setReviews((r.data as ReviewResult[]) || []);
       setLoading(false);
     });
-  }, [user, q]);
+  }, [user, q, showNotes]);
 
   const hasResults =
     projects.length > 0 ||
@@ -325,7 +331,7 @@ export default function SearchResults() {
               </Card>
             )}
 
-            {notes.length > 0 && (
+            {showNotes && notes.length > 0 && (
               <Card className="border-0 shadow-sm">
                 <CardHeader>
                   <CardTitle className="text-base font-semibold">Notes</CardTitle>

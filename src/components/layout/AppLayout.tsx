@@ -10,7 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Input } from '@/components/ui/input';
 import { Menu, ChevronDown, ChevronLeft, Search } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
-import { canAccessContracts } from '@/lib/features';
+import { canAccessContracts, canAccessNotes } from '@/lib/features';
 import { cn } from '@/lib/utils';
 import { useBranding } from '@/hooks/useBranding';
 import { shellProfileDisplayName, useShellProfile } from '@/hooks/useShellProfile';
@@ -145,6 +145,7 @@ export function AppLayout({
   const timer = useTimer();
   const showTimerBar = timer.draftSegments.length > 0;
   const showContracts = canAccessContracts({ isAdmin: profile?.is_admin === true });
+  const showNotes = canAccessNotes({ isAdmin: profile?.is_admin === true });
   const closeMobileSidebar = () => setSidebarOpen(false);
 
   const handleSearchSubmit = (e: FormEvent) => {
@@ -199,8 +200,8 @@ export function AppLayout({
       <ShellImageWithSkeleton
         src={SHELL_LOGO_FULL}
         alt="Lance"
-        className="h-5 max-w-[7rem] shrink-0"
-        skeletonClassName="h-5 w-24"
+        className="h-5 w-[85px] shrink-0"
+        skeletonClassName="h-5 w-[85px]"
       />
     );
   };
@@ -471,10 +472,12 @@ export function AppLayout({
               </Collapsible>
             )}
 
-            <Link to="/notes" onClick={closeMobileSidebar} className={shellNavLink(location.pathname === '/notes', sidebarCollapsed)}>
-              <SlotIcon slot="sidebar_notes" className={shellNavIcon(location.pathname === '/notes')} />
-              {!sidebarCollapsed && 'Notes'}
-            </Link>
+            {showNotes ? (
+              <Link to="/notes" onClick={closeMobileSidebar} className={shellNavLink(location.pathname === '/notes', sidebarCollapsed)}>
+                <SlotIcon slot="sidebar_notes" className={shellNavIcon(location.pathname === '/notes')} />
+                {!sidebarCollapsed && 'Notes'}
+              </Link>
+            ) : null}
             <Link to="/invoices" onClick={closeMobileSidebar} className={shellNavLink(location.pathname === '/invoices', sidebarCollapsed)}>
               <SlotIcon slot="sidebar_invoices" className={shellNavIcon(location.pathname === '/invoices')} />
               {!sidebarCollapsed && 'Invoices'}

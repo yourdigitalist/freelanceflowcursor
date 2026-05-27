@@ -65,7 +65,7 @@ import { RecoveryHashRedirect } from "@/components/RecoveryHashRedirect";
 import { TimerProvider } from "@/contexts/TimerContext";
 import { IconSlotProvider } from "@/contexts/IconSlotContext";
 import { CrispChat } from "@/components/CrispChat";
-import { canAccessContracts, getContractsAccessMode } from "@/lib/features";
+import { canAccessContracts, canAccessNotes, getContractsAccessMode } from "@/lib/features";
 
 const queryClient = new QueryClient();
 
@@ -152,6 +152,36 @@ function ContractsRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function NotesRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+    supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("user_id", user.id)
+      .single()
+      .then(({ data }) => setIsAdmin(data?.is_admin ?? false));
+  }, [user]);
+
+  if (loading || isAdmin === null) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
+
+  if (!user) return <Navigate to="/auth" replace />;
+
+  if (!canAccessNotes({ isAdmin })) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function PublicContractsRoute({ children }: { children: React.ReactNode }) {
   if (getContractsAccessMode() !== "on") {
     return <NotFound />;
@@ -225,7 +255,7 @@ function AppRoutes() {
       <Route path="/time/timer" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
       <Route path="/time/history" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
       <Route path="/time/logs" element={<Navigate to="/time/history" replace />} />
-      <Route path="/notes" element={<ProtectedRoute><Notes /></ProtectedRoute>} />
+      <Route path="/notes" element={<NotesRoute><ProtectedRoute><Notes /></ProtectedRoute></NotesRoute>} />
       <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
       <Route path="/services" element={<ProtectedRoute><Services /></ProtectedRoute>} />
       <Route path="/proposals" element={<ProtectedRoute><Proposals /></ProtectedRoute>} />
