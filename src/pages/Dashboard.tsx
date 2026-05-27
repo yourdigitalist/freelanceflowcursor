@@ -12,6 +12,7 @@ import { Plus } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { getContractsAccessMode } from '@/lib/features';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
+import { shellProfileDisplayName, useShellProfile } from '@/hooks/useShellProfile';
 import { formatLocaleDate } from '@/lib/datetime';
 
 interface DashboardStats {
@@ -72,7 +73,6 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { formatCurrency: fmt } = useProfileCurrency();
   const { dateFormat } = useLocalePreferences();
-  const [isAdmin, setIsAdmin] = useState(false);
   const [stats, setStats] = useState<DashboardStats>({
     totalClients: 0,
     activeProjects: 0,
@@ -91,26 +91,13 @@ export default function Dashboard() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [followUps, setFollowUps] = useState<FollowUpClient[]>([]);
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<{ full_name: string | null }>({ full_name: null });
+  const { data: shellProfile, isSuccess: profileReady } = useShellProfile(user?.id);
 
   useEffect(() => {
     if (user) {
       fetchDashboardData();
-      fetchProfile();
     }
   }, [user]);
-
-  const fetchProfile = async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('full_name, is_admin')
-      .eq('user_id', user!.id)
-      .single();
-    if (data) {
-      setProfile({ full_name: data.full_name ?? null });
-      setIsAdmin(data.is_admin ?? false);
-    }
-  };
 
   const fetchDashboardData = async () => {
     try {
@@ -332,7 +319,8 @@ export default function Dashboard() {
     }
   };
 
-  const firstName = profile.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
+  const displayName = profileReady ? shellProfileDisplayName(shellProfile) : null;
+  const firstName = displayName?.split(' ')[0] ?? null;
   const unreadNotifications = notifications.filter((n) => !n.read_at);
   const showContracts = getContractsAccessMode() === 'on';
 
@@ -468,7 +456,16 @@ export default function Dashboard() {
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="min-w-0 shrink-0">
-            <h1 className="text-2xl font-bold tracking-tight">{getGreeting()}, {firstName}!</h1>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {getGreeting()}
+              {firstName ? (
+                <>, {firstName}!</>
+              ) : (
+                <>
+                  , <Skeleton className="ml-1 inline-block h-7 w-20 align-middle" />
+                </>
+              )}
+            </h1>
             <p className="text-muted-foreground">
               Here's what's happening with your business.
             </p>

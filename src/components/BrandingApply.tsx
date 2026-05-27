@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useBranding } from '@/hooks/useBranding';
+import { brandingAssetUrl } from '@/lib/brandingUrl';
 
 /** Converts hex #RRGGBB to HSL string "H S% L%" for CSS variables. */
 function hexToHslString(hex: string): string {
@@ -52,10 +53,13 @@ const DEFAULT_FAVICON_DATA_URL =
  * Removes any existing favicon links and sets a single one so Lovable/cached icons are gone.
  */
 export function BrandingApply() {
-  const { data: branding } = useBranding();
+  const { data: branding, isSuccess } = useBranding();
 
   useEffect(() => {
-    const href = branding?.favicon_url || branding?.icon_url || DEFAULT_FAVICON_DATA_URL;
+    if (!isSuccess) return;
+    const raw = branding?.favicon_url || branding?.icon_url;
+    const href =
+      brandingAssetUrl(raw, branding?.updated_at) || raw || DEFAULT_FAVICON_DATA_URL;
     const type = href.startsWith('data:') ? 'image/svg+xml' : (href.toLowerCase().endsWith('.ico') ? 'image/x-icon' : 'image/svg+xml');
     document.querySelectorAll('link[rel="icon"]').forEach((el) => el.remove());
     const link = document.createElement('link');
@@ -63,7 +67,7 @@ export function BrandingApply() {
     link.href = href;
     link.type = type;
     document.head.appendChild(link);
-  }, [branding?.favicon_url, branding?.icon_url]);
+  }, [isSuccess, branding?.favicon_url, branding?.icon_url, branding?.updated_at]);
 
   useEffect(() => {
     const root = document.documentElement;

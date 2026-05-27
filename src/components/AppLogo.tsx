@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Briefcase } from '@/components/icons';
 import { useBranding } from '@/hooks/useBranding';
+import { brandingAssetUrl } from '@/lib/brandingUrl';
 import { cn } from '@/lib/utils';
 
 type AppLogoProps = {
@@ -27,8 +27,9 @@ function LogoPlaceholder({ className, height, full }: { className?: string; heig
  * If the logo image fails to load (404, CORS, etc.), falls back to Briefcase + "Lance".
  */
 export function AppLogo({ full = true, className, height, alt = 'Lance' }: AppLogoProps) {
-  const { data: branding, isPending } = useBranding();
-  const url = full ? branding?.logo_url : branding?.icon_url;
+  const { data: branding, isPending, isSuccess } = useBranding();
+  const rawUrl = full ? branding?.logo_url : branding?.icon_url;
+  const url = brandingAssetUrl(rawUrl, branding?.updated_at);
   const h = height ?? 32;
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgFailed, setImgFailed] = useState(false);
@@ -39,11 +40,10 @@ export function AppLogo({ full = true, className, height, alt = 'Lance' }: AppLo
     setImgFailed(false);
   }, [url]);
 
-  if (isPending) {
+  if (isPending || !isSuccess) {
     return <LogoPlaceholder className={className} height={h} full={full} />;
   }
 
-  // Show fallback if we have a URL but the image failed to load (404, CORS, etc.)
   if (url && !imgFailed) {
     return (
       <div
@@ -63,10 +63,5 @@ export function AppLogo({ full = true, className, height, alt = 'Lance' }: AppLo
     );
   }
 
-  return (
-    <div className={cn('flex items-center gap-2', className)}>
-      <Briefcase className="h-6 w-6 text-primary shrink-0" />
-      <span className="text-xl font-bold">Lance</span>
-    </div>
-  );
+  return <LogoPlaceholder className={className} height={h} full={full} />;
 }

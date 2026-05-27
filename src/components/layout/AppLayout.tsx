@@ -13,6 +13,10 @@ import { SlotIcon } from '@/contexts/IconSlotContext';
 import { canAccessContracts } from '@/lib/features';
 import { cn } from '@/lib/utils';
 import { useBranding } from '@/hooks/useBranding';
+import { shellProfileDisplayName, useShellProfile } from '@/hooks/useShellProfile';
+import { brandingAssetUrl } from '@/lib/brandingUrl';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ShellImageWithSkeleton } from '@/components/ui/shell-image-skeleton';
 import { useTimer } from '@/contexts/TimerContext';
 import { TrialBanner } from './TrialBanner';
 import { TimerBar } from './TimerBar';
@@ -36,18 +40,6 @@ const SHELL_SIDEBAR_LEFT_EXPANDED = 'lg:left-[232px]';
 /** White wordmark for expanded dark shell only (not user-uploaded sidebar logo). */
 const SHELL_LOGO_FULL = '/lance-logo-white-shell.png';
 
-interface Profile {
-  first_name: string | null;
-  last_name: string | null;
-  full_name: string | null;
-  email: string | null;
-  avatar_url: string | null;
-  subscription_status: string | null;
-  plan_type: string | null;
-  trial_end_date: string | null;
-  is_admin: boolean | null;
-}
-
 function getPlanBadgeLabel(
   status: string | null | undefined,
   planType: string | null | undefined,
@@ -68,7 +60,8 @@ export function AppLayout({
   const { user, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const { data: branding } = useBranding();
+  const { data: branding, isPending: brandingPending, isSuccess: brandingReady } = useBranding();
+  const { data: profile, isPending: profilePending, isSuccess: profileReady } = useShellProfile(user?.id);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -88,22 +81,8 @@ export function AppLayout({
       return next;
     });
   };
-  const [profile, setProfile] = useState<Profile | null>(null);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
-
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (!user) return;
-      const {
-        data
-      } = await supabase.from('profiles').select('first_name, last_name, full_name, email, avatar_url, subscription_status, plan_type, trial_end_date, is_admin').eq('user_id', user.id).single();
-      setProfile(data);
-    };
-    if (user) {
-      fetchProfile();
-    }
-  }, [user]);
 
   useEffect(() => {
     if (!user) {
@@ -143,11 +122,10 @@ export function AppLayout({
     await signOut();
     navigate('/');
   };
-  const displayName = profile?.first_name && profile?.last_name
-    ? `${profile.first_name} ${profile.last_name}`.trim()
-    : profile?.full_name || user?.email?.split('@')[0] || 'User';
-  const userInitials = displayName.slice(0, 2).toUpperCase() || 'U';
-  const userName = displayName;
+  const displayName = profileReady ? shellProfileDisplayName(profile) : null;
+  const userInitials = displayName ? displayName.slice(0, 2).toUpperCase() : '';
+  const userName = displayName ?? '';
+  const profileLoading = !!user && (profilePending || !profileReady);
   const isProjectsActive = location.pathname.startsWith('/projects');
   const isClientsActive = location.pathname.startsWith('/clients');
   const [clientsOpen, setClientsOpen] = useState(false);
@@ -192,34 +170,37 @@ export function AppLayout({
   ];
 
   const renderSidebarLogo = () => {
+    if (brandingPending || !brandingReady) {
+      return sidebarCollapsed ? (
+        <Skeleton className="h-7 w-7 shrink-0 rounded-lg bg-white/20" />
+      ) : (
+        <Skeleton className="h-5 w-24 shrink-0 rounded-md bg-white/20" />
+      );
+    }
+
     const iconSize =
       branding?.logo_size === 'sm' || branding?.logo_size === 'lg'
         ? { sm: 'h-6 w-6', lg: 'h-8 w-8' }[branding.logo_size]
         : 'h-7 w-7';
 
     if (sidebarCollapsed) {
-      if (branding?.icon_url) {
-        return (
-          <img
-            src={branding.icon_url}
-            alt="Lance"
-            className={cn('shrink-0 rounded-lg object-contain', iconSize)}
-          />
-        );
-      }
+      const iconSrc =
+        brandingAssetUrl(branding?.icon_url, branding?.updated_at) ?? SHELL_LOGO_FULL;
       return (
-        <img
-          src={SHELL_LOGO_FULL}
+        <ShellImageWithSkeleton
+          src={iconSrc}
           alt="Lance"
-          className={cn('shrink-0 rounded-lg object-contain', iconSize)}
+          className={cn('shrink-0', iconSize)}
+          skeletonClassName={iconSize}
         />
       );
     }
     return (
-      <img
+      <ShellImageWithSkeleton
         src={SHELL_LOGO_FULL}
         alt="Lance"
-        className="h-5 w-auto max-w-[7rem] shrink-0 object-contain object-left"
+        className="h-5 max-w-[7rem] shrink-0"
+        skeletonClassName="h-5 w-24"
       />
     );
   };
@@ -277,7 +258,25 @@ export function AppLayout({
     </div>
   );
 
-  const userMenu = (align: 'end' | 'start' = 'end', shell?: boolean) => (
+  const userMenuSkeleton = (shell?: boolean) => (
+    <div
+      className={cn(
+        'flex items-center gap-1.5 rounded-md px-1.5 py-1',
+        shell ? 'text-white/90' : '',
+      )}
+      aria-hidden
+    >
+      <Skeleton className={cn('h-7 w-7 shrink-0 rounded-full', shell ? 'bg-white/20' : 'bg-muted')} />
+      <Skeleton className={cn('hidden h-3 w-16 rounded md:block', shell ? 'bg-white/20' : 'bg-muted')} />
+    </div>
+  );
+
+  const userMenu = (align: 'end' | 'start' = 'end', shell?: boolean) => {
+    if (profileLoading) {
+      return userMenuSkeleton(shell);
+    }
+
+    return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
@@ -290,7 +289,7 @@ export function AppLayout({
           <Avatar className="h-7 w-7 border border-white/20">
             <AvatarImage src={profile?.avatar_url || undefined} />
             <AvatarFallback className="bg-primary text-[10px] text-primary-foreground">
-              {userInitials}
+              {userInitials || '…'}
             </AvatarFallback>
           </Avatar>
           <span className="hidden max-w-[120px] truncate text-xs font-normal md:inline">{userName}</span>
@@ -348,7 +347,8 @@ export function AppLayout({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
+    );
+  };
 
   return <div className="min-h-screen flex flex-col">
       {/* Trial Banner – when dismissed, sidebar lifts to top (no blank space) */}

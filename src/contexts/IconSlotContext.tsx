@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { IconSkeleton } from '@/components/ui/icon-skeleton';
 import {
   LayoutDashboard,
   Users,
@@ -158,6 +159,7 @@ type ContextValue = {
   uploads: Upload[];
   assignments: Record<string, SlotAssignmentValue>;
   refetch: () => void;
+  slotsReady: boolean;
 };
 
 const IconSlotContext = createContext<ContextValue | null>(null);
@@ -197,11 +199,9 @@ function CustomSvgIcon({ svgContent, className }: { svgContent: string; classNam
 function IconFromStoragePath({
   storagePath,
   className,
-  fallback,
 }: {
   storagePath: string;
   className?: string;
-  fallback?: React.ReactNode;
 }) {
   const { data: svgContent, isLoading } = useQuery({
     queryKey: ['app_icon_svg', storagePath] as const,
@@ -213,14 +213,14 @@ function IconFromStoragePath({
     },
     staleTime: 10 * 60 * 1000,
   });
-  if (isLoading || !svgContent) return <>{fallback ?? <span className={className} />}</>;
+  if (isLoading || !svgContent) return <IconSkeleton className={className} />;
   return <CustomSvgIcon svgContent={svgContent} className={className} />;
 }
 
 export function IconSlotProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
 
-  const { data: slotData, refetch: refetchSlots } = useQuery({
+  const { data: slotData, refetch: refetchSlots, isSuccess: slotsSuccess } = useQuery({
     queryKey: ICON_SLOTS_QUERY_KEY,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -230,6 +230,7 @@ export function IconSlotProvider({ children }: { children: React.ReactNode }) {
       return (data ?? []) as SlotAssignment[];
     },
     staleTime: 2 * 60 * 1000,
+    refetchOnMount: 'always',
   });
 
   // Prefetch all assigned storage URLs as soon as we have slots, so icons load in parallel and feel instant
@@ -249,7 +250,7 @@ export function IconSlotProvider({ children }: { children: React.ReactNode }) {
     });
   }, [slotData, queryClient]);
 
-  const { data: uploadData, refetch: refetchUploads } = useQuery({
+  const { data: uploadData, refetch: refetchUploads, isSuccess: uploadsSuccess } = useQuery({
     queryKey: ICON_UPLOADS_QUERY_KEY,
     queryFn: async () => {
       const { data, error } = await supabase.from('app_icon_uploads').select('id, name, svg_content, storage_path').order('name');
@@ -257,7 +258,10 @@ export function IconSlotProvider({ children }: { children: React.ReactNode }) {
       return (data ?? []) as Upload[];
     },
     staleTime: 2 * 60 * 1000,
+    refetchOnMount: 'always',
   });
+
+  const slotsReady = slotsSuccess && uploadsSuccess;
 
   const uploads = uploadData ?? [];
   const assignments = useMemo((): Record<string, SlotAssignmentValue> => {
@@ -289,11 +293,7 @@ export function IconSlotProvider({ children }: { children: React.ReactNode }) {
       if (assignment?.storagePath) {
         const path = assignment.storagePath;
         return ({ className }) => (
-          <IconFromStoragePath
-            storagePath={path}
-            className={className}
-            fallback={DefaultIcon ? <DefaultIcon className={className} /> : undefined}
-          />
+          <IconFromStoragePath storagePath={path} className={className} />
         );
       }
       const uploadId = assignment?.uploadId ?? null;
@@ -302,28 +302,29 @@ export function IconSlotProvider({ children }: { children: React.ReactNode }) {
         const svg = upload.svg_content;
         return ({ className }) => <CustomSvgIcon svgContent={svg} className={className} />;
       }
-      return DefaultIcon;
+      return DefaultIcon ?? HelpCircle;
     };
   }, [assignments, uploadsById]);
 
   const value: ContextValue = useMemo(
-    () => ({ getIcon, uploads, assignments, refetch }),
-    [getIcon, uploads, assignments, refetch]
+    () => ({ getIcon, uploads, assignments, refetch, slotsReady }),
+    [getIcon, uploads, assignments, refetch, slotsReady],
   );
 
   return <IconSlotContext.Provider value={value}>{children}</IconSlotContext.Provider>;
 }
 
+const LOADING_CONTEXT: ContextValue = {
+  getIcon: () => () => null,
+  uploads: [],
+  assignments: {},
+  refetch: () => {},
+  slotsReady: false,
+};
+
 export function useIconSlots(): ContextValue {
   const ctx = useContext(IconSlotContext);
-  if (!ctx) {
-    return {
-      getIcon: (slot: IconSlotKey) => DEFAULT_ICONS[slot],
-      uploads: [],
-      assignments: {} as Record<string, SlotAssignmentValue>,
-      refetch: () => {},
-    };
-  }
+  if (!ctx) return LOADING_CONTEXT;
   return ctx;
 }
 
@@ -334,7 +335,10 @@ export function SlotIcon({
   slot: IconSlotKey;
   className?: string;
 }) {
-  const { getIcon } = useIconSlots();
+  const { getIcon, slotsReady } = useIconSlots();
+  if (!slotsReady) {
+    return <IconSkeleton className={className} />;
+  }
   const Icon = getIcon(slot) ?? DEFAULT_ICONS[slot] ?? HelpCircle;
   return <Icon className={className} />;
 }

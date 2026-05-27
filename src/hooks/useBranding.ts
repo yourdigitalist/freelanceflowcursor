@@ -19,6 +19,8 @@ export function useBranding() {
       return data;
     },
     staleTime: 5 * 60 * 1000,
+    /** Avoid showing stale branding from a prior session on hard reload. */
+    refetchOnMount: 'always',
   });
 }
 
