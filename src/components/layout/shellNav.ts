@@ -7,7 +7,7 @@ export const shellNavLink = (active: boolean, collapsed?: boolean) =>
     collapsed ? 'min-h-[2.25rem] justify-center px-0 py-2' : 'px-3 py-2',
     active
       ? 'bg-[#4D4D4D] !text-white'
-      : 'text-white/75 hover:bg-[#4D4D4D] hover:!text-white',
+      : 'text-white/75 hover:bg-[#404040] hover:!text-white',
   );
 
 export const shellNavIcon = (active: boolean) =>
@@ -21,7 +21,7 @@ export const shellSubNavLink = (active: boolean) =>
     'block rounded-full px-3 py-1.5 text-xs transition-colors',
     active
       ? 'bg-[#4D4D4D] font-medium !text-white'
-      : 'text-white/75 hover:bg-[#4D4D4D] hover:!text-white',
+      : 'text-white/75 hover:bg-[#404040] hover:!text-white',
   );
 
 export const shellFlyoutLink = (active: boolean) =>
@@ -29,5 +29,5 @@ export const shellFlyoutLink = (active: boolean) =>
     'block rounded-full px-3 py-1.5 text-xs transition-colors',
     active
       ? 'bg-[#4D4D4D] font-medium !text-white'
-      : 'text-white/75 hover:bg-[#4D4D4D] hover:!text-white',
+      : 'text-white/75 hover:bg-[#404040] hover:!text-white',
   );
