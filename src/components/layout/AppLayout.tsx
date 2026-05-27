@@ -540,34 +540,33 @@ export function AppLayout({
           </div>
         </aside>
 
-        {/* Content column — search pl-8 matches main px-8 below */}
+        {/* Content column — dark top bar + white panel (scoop) below */}
         <div
           className={cn(
-            'flex min-h-0 min-w-0 flex-1 flex-col',
+            'flex min-h-0 min-w-0 flex-1 flex-col bg-sidebar',
             showTimerBar && 'pb-14',
           )}
         >
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-sidebar">
-            <header className="hidden h-10 shrink-0 items-center gap-3 bg-sidebar py-1.5 pl-4 pr-2 lg:flex lg:pl-8">
-              <form onSubmit={handleSearchSubmit} className="min-w-0 w-full max-w-md shrink-0">
-                <div className="relative w-full">
-                  <Search className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/50" />
-                  <Input
-                    type="search"
-                    placeholder="Search Lance…"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="h-7 w-full rounded-full border border-white/80 bg-black/15 py-1 pl-3 pr-9 text-xs text-white placeholder:text-white/45 focus-visible:ring-1 focus-visible:ring-white/60"
-                  />
-                </div>
-              </form>
-              <div className="ml-auto flex shrink-0 items-center gap-1">
-                {shellTopBarActions()}
-                {userMenu('end', true)}
+          <header className="hidden h-10 shrink-0 items-center gap-3 bg-sidebar py-1.5 pr-2 lg:flex">
+            <form onSubmit={handleSearchSubmit} className="min-w-0 max-w-md shrink-0">
+              <div className="relative w-full">
+                <Search className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/50" />
+                <Input
+                  type="search"
+                  placeholder="Search Lance…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-7 w-full min-w-[12rem] rounded-full border border-white/80 bg-black/15 py-1 pl-3 pr-9 text-xs text-white placeholder:text-white/45 focus-visible:ring-1 focus-visible:ring-white/60 sm:min-w-[16rem] lg:min-w-[20rem]"
+                />
               </div>
-            </header>
+            </form>
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+              {shellTopBarActions()}
+              {userMenu('end', true)}
+            </div>
+          </header>
 
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-tl-[20px] bg-background">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-tl-[20px] bg-background">
             <header className={cn('sticky top-0 z-30 flex h-11 shrink-0 items-center gap-2 border-b border-border bg-background/95 backdrop-blur-md lg:hidden', CONTENT_X)}>
               <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
                 <Menu className="h-4 w-4" />
@@ -584,7 +583,6 @@ export function AppLayout({
 
             <StartGuide />
             <FeedbackTab />
-            </div>
           </div>
         </div>
       </div>
