@@ -68,10 +68,6 @@ const FOLDER_COLORS = [
 
 const DEBOUNCE_MS = 800;
 
-function getDefaultNoteTitle(dateLabel: string): string {
-  return `New Note ${dateLabel}`;
-}
-
 function escapeHtmlAttr(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -401,13 +397,12 @@ export default function Notes() {
 
   const handleCreateQuickNote = useCallback(async () => {
     if (!user) return;
-    const defaultTitle = getDefaultNoteTitle(formatLocaleDateTime(new Date(), dateFormat, timeFormat));
     try {
       const { data, error } = await supabase
         .from('notes')
         .insert({
           user_id: user.id,
-          title: defaultTitle,
+          title: '',
           content: '',
           client_id: null,
           project_id: null,
