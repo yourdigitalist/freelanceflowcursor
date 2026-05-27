@@ -725,7 +725,7 @@ export default function ClientDetail() {
             <Button size="sm" onClick={() => void handleRestoreClient()}>Restore client</Button>
           </div>
         ) : null}
-        <div className="flex items-center justify-between gap-3 border-b pb-4">
+        <div className="flex items-center justify-between gap-3 pb-4">
           <div>
             <Link to="/clients" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
               <ArrowLeft className="mr-2 h-4 w-4" />

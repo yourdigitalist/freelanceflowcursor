@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
+import { ViewToggle, ViewToggleButton } from '@/components/ui/view-toggle';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -458,24 +459,22 @@ export default function Projects() {
               <SelectItem value="all">All Folders</SelectItem>
             </SelectContent>
           </Select>
-          <div className="flex gap-1 border rounded-lg p-1">
-            <Button
-              variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-              size="icon"
-              className="h-8 w-8"
+          <ViewToggle>
+            <ViewToggleButton
+              active={viewMode === 'grid'}
               onClick={() => setViewMode('grid')}
+              aria-label="Grid view"
             >
-              <LayoutGrid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-              size="icon"
-              className="h-8 w-8"
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </ViewToggleButton>
+            <ViewToggleButton
+              active={viewMode === 'list'}
               onClick={() => setViewMode('list')}
+              aria-label="List view"
             >
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
+              <List className="h-3.5 w-3.5" />
+            </ViewToggleButton>
+          </ViewToggle>
         </div>
 
         {/* Projects */}

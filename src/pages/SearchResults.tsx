@@ -221,7 +221,7 @@ export default function SearchResults() {
                               <span className="text-xs text-muted-foreground capitalize">{p.status}</span>
                             )}
                           </div>
-                          <span className="text-muted-foreground text-sm">View →</span>
+                          <span className="text-muted-foreground text-sm">View</span>
                         </Link>
                       </li>
                     ))}
@@ -253,7 +253,7 @@ export default function SearchResults() {
                               <span className="text-xs text-muted-foreground">{c.company}</span>
                             )}
                           </div>
-                          <span className="text-muted-foreground text-sm">View →</span>
+                          <span className="text-muted-foreground text-sm">View</span>
                         </Link>
                       </li>
                     ))}
@@ -287,7 +287,7 @@ export default function SearchResults() {
                               </span>
                             )}
                           </div>
-                          <span className="text-muted-foreground text-sm">View →</span>
+                          <span className="text-muted-foreground text-sm">View</span>
                         </Link>
                       </li>
                     ))}
@@ -316,7 +316,7 @@ export default function SearchResults() {
                               <span className="text-xs text-muted-foreground">{t.projects.name}</span>
                             )}
                           </div>
-                          <span className="text-muted-foreground text-sm">View →</span>
+                          <span className="text-muted-foreground text-sm">View</span>
                         </Link>
                       </li>
                     ))}
@@ -342,7 +342,7 @@ export default function SearchResults() {
                             <SlotIcon slot="sidebar_notes" className="h-4 w-4 text-muted-foreground" />
                             <span className="font-medium">{note.title || 'Untitled'}</span>
                           </div>
-                          <span className="text-muted-foreground text-sm">View →</span>
+                          <span className="text-muted-foreground text-sm">View</span>
                         </Link>
                       </li>
                     ))}
@@ -394,7 +394,7 @@ export default function SearchResults() {
                                 <span className="text-xs text-muted-foreground">{totalHours.toFixed(2)}h</span>
                               )}
                             </div>
-                            <span className="text-muted-foreground text-sm">View →</span>
+                            <span className="text-muted-foreground text-sm">View</span>
                           </Link>
                         </li>
                       );
@@ -427,7 +427,7 @@ export default function SearchResults() {
                               <span className="text-xs text-muted-foreground capitalize">{review.status}</span>
                             )}
                           </div>
-                          <span className="text-muted-foreground text-sm">View →</span>
+                          <span className="text-muted-foreground text-sm">View</span>
                         </Link>
                       </li>
                     ))}

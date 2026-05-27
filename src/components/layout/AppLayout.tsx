@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Menu, ChevronDown, ChevronLeft, ChevronUp, ShieldCheck, Briefcase } from '@/components/icons';
+import { Input } from '@/components/ui/input';
+import { Menu, ChevronDown, ChevronLeft, Search } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { canAccessContracts } from '@/lib/features';
 import { cn } from '@/lib/utils';
@@ -17,15 +18,24 @@ import { TrialBanner } from './TrialBanner';
 import { TimerBar } from './TimerBar';
 import { StartGuide } from './StartGuide';
 import { FeedbackTab } from './FeedbackTab';
+import { SidebarNavFlyout, type SidebarFlyoutLink } from './SidebarNavFlyout';
+import { shellNavIcon, shellNavLink, shellSubNavLink } from './shellNav';
+
 interface AppLayoutProps {
   children: ReactNode;
 }
-interface Project {
-  id: string;
-  name: string;
-  icon_emoji?: string;
-  icon_color?: string;
-}
+
+/** Matches main content horizontal padding. */
+const CONTENT_X = 'px-4 lg:px-8';
+
+/** Sidebar width (~24px narrower than w-64). */
+const SHELL_SIDEBAR_EXPANDED = 'w-[232px]';
+const SHELL_SIDEBAR_COLLAPSED = 'w-14';
+const SHELL_SIDEBAR_LEFT_EXPANDED = 'lg:left-[232px]';
+
+/** White wordmark for expanded dark shell only (not user-uploaded sidebar logo). */
+const SHELL_LOGO_FULL = '/lance-logo-white-shell.png';
+
 interface Profile {
   first_name: string | null;
   last_name: string | null;
@@ -52,13 +62,6 @@ function getPlanBadgeLabel(
   if (status === 'past_due') return 'Past due';
   return 'Free';
 }
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', slot: 'sidebar_dashboard' as const },
-  { name: 'Clients', href: '/clients', slot: 'sidebar_clients' as const },
-  { name: 'Time', href: '/time', slot: 'sidebar_time' as const },
-  { name: 'Invoices', href: '/invoices', slot: 'sidebar_invoices' as const },
-  { name: 'Approvals', href: '/reviews', slot: 'sidebar_reviews' as const },
-];
 export function AppLayout({
   children
 }: AppLayoutProps) {
@@ -87,6 +90,7 @@ export function AppLayout({
   };
   const [profile, setProfile] = useState<Profile | null>(null);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -163,314 +167,436 @@ export function AppLayout({
   const timer = useTimer();
   const showTimerBar = timer.draftSegments.length > 0;
   const showContracts = canAccessContracts({ isAdmin: profile?.is_admin === true });
-  return <div className="min-h-screen bg-background flex flex-col">
+  const closeMobileSidebar = () => setSidebarOpen(false);
+
+  const handleSearchSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (q) navigate(`/search?q=${encodeURIComponent(q)}`);
+  };
+
+  const clientsFlyoutLinks: SidebarFlyoutLink[] = [
+    { to: '/clients/list', label: 'All clients', isActive: location.pathname === '/clients/list' },
+    { to: '/clients/active', label: 'Active clients', isActive: location.pathname === '/clients/active' },
+    {
+      to: '/clients',
+      label: 'CRM',
+      isActive: location.pathname === '/clients' || location.pathname === '/clients/board',
+    },
+  ];
+
+  const timeFlyoutLinks: SidebarFlyoutLink[] = [
+    { to: '/time', label: 'Timesheet', isActive: location.pathname === '/time' },
+    { to: '/time/timer', label: 'Timer', isActive: location.pathname === '/time/timer' },
+    { to: '/time/history', label: 'All logs', isActive: location.pathname === '/time/history' },
+  ];
+
+  const renderSidebarLogo = () => {
+    const iconSize =
+      branding?.logo_size === 'sm' || branding?.logo_size === 'lg'
+        ? { sm: 'h-6 w-6', lg: 'h-8 w-8' }[branding.logo_size]
+        : 'h-7 w-7';
+
+    if (sidebarCollapsed) {
+      if (branding?.icon_url) {
+        return (
+          <img
+            src={branding.icon_url}
+            alt="Lance"
+            className={cn('shrink-0 rounded-lg object-contain', iconSize)}
+          />
+        );
+      }
+      return (
+        <img
+          src={SHELL_LOGO_FULL}
+          alt="Lance"
+          className={cn('shrink-0 rounded-lg object-contain', iconSize)}
+        />
+      );
+    }
+    return (
+      <img
+        src={SHELL_LOGO_FULL}
+        alt="Lance"
+        className="h-5 w-auto max-w-[7rem] shrink-0 object-contain object-left"
+      />
+    );
+  };
+
+  const shellIconBtn =
+    'h-8 w-8 text-white/80 hover:bg-[#4D4D4D] hover:text-white';
+
+  const shellTopBarActions = () => (
+    <div className="flex shrink-0 items-center gap-0.5">
+      <Button variant="ghost" size="icon" className={shellIconBtn} asChild>
+        <Link to="/settings" aria-label="Settings">
+          <SlotIcon slot="nav_settings" className="h-4 w-4" />
+        </Link>
+      </Button>
+      <Button variant="ghost" size="icon" className={cn('relative', shellIconBtn)} asChild>
+        <Link to="/notifications" aria-label="Notifications">
+          <SlotIcon slot="nav_bell" className="h-4 w-4" />
+          {unreadNotifications > 0 && (
+            <span className="absolute top-0.5 right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-semibold text-primary-foreground">
+              {unreadNotifications > 99 ? '99+' : unreadNotifications}
+            </span>
+          )}
+        </Link>
+      </Button>
+      <Button variant="ghost" size="icon" className={shellIconBtn} asChild>
+        <a href="https://get-lance.crisp.help/en/" target="_blank" rel="noopener noreferrer" aria-label="Help">
+          <SlotIcon slot="help_book" className="h-4 w-4" />
+        </a>
+      </Button>
+    </div>
+  );
+
+  const mobileTopBarActions = () => (
+    <div className="flex shrink-0 items-center gap-0.5">
+      <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+        <Link to="/settings" aria-label="Settings">
+          <SlotIcon slot="nav_settings" className="h-4 w-4" />
+        </Link>
+      </Button>
+      <Button variant="ghost" size="icon" className="relative h-8 w-8" asChild>
+        <Link to="/notifications" aria-label="Notifications">
+          <SlotIcon slot="nav_bell" className="h-4 w-4" />
+          {unreadNotifications > 0 && (
+            <span className="absolute top-0.5 right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-semibold text-primary-foreground">
+              {unreadNotifications > 99 ? '99+' : unreadNotifications}
+            </span>
+          )}
+        </Link>
+      </Button>
+      <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+        <a href="https://get-lance.crisp.help/en/" target="_blank" rel="noopener noreferrer" aria-label="Help">
+          <SlotIcon slot="help_book" className="h-4 w-4" />
+        </a>
+      </Button>
+    </div>
+  );
+
+  const userMenu = (align: 'end' | 'start' = 'end', shell?: boolean) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors',
+            shell ? 'text-white/90 hover:bg-[#4D4D4D]' : 'hover:bg-muted',
+          )}
+        >
+          <Avatar className="h-7 w-7 border border-white/20">
+            <AvatarImage src={profile?.avatar_url || undefined} />
+            <AvatarFallback className="bg-primary text-[10px] text-primary-foreground">
+              {userInitials}
+            </AvatarFallback>
+          </Avatar>
+          <span className="hidden max-w-[120px] truncate text-xs font-normal md:inline">{userName}</span>
+          <ChevronDown className="hidden h-3 w-3 shrink-0 opacity-60 md:block" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align={align} className="w-64">
+        <div className="p-3 space-y-2">
+          <p className="text-sm font-semibold leading-none">{userName}</p>
+          <p className="text-xs text-muted-foreground truncate">{profile?.email || user?.email}</p>
+          <Link
+            to="/settings/subscription"
+            className="inline-flex items-center rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+          >
+            {planBadgeLabel}
+          </Link>
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/settings" className="cursor-pointer">
+            <SlotIcon slot="nav_settings" className="mr-2 h-4 w-4" />
+            Settings
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/notifications" className="cursor-pointer">
+            <SlotIcon slot="nav_bell" className="mr-2 h-4 w-4" />
+            Notifications
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href="https://get-lance.crisp.help/en/" target="_blank" rel="noopener noreferrer" className="cursor-pointer">
+            <SlotIcon slot="help_book" className="mr-2 h-4 w-4" />
+            Help Center
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/feature-requests" className="cursor-pointer">
+            <SlotIcon slot="help_book" className="mr-2 h-4 w-4" />
+            Feature requests
+          </Link>
+        </DropdownMenuItem>
+        {profile?.is_admin === true && (
+          <DropdownMenuItem asChild>
+            <Link to="/admin" className="cursor-pointer">
+              <SlotIcon slot="admin_overview" className="mr-2 h-4 w-4" />
+              Admin
+            </Link>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive focus:text-destructive">
+          <SlotIcon slot="auth_sign_out" className="mr-2 h-4 w-4" />
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  return <div className="min-h-screen flex flex-col">
       {/* Trial Banner – when dismissed, sidebar lifts to top (no blank space) */}
       {showTrialBanner && <TrialBanner onUpgrade={() => navigate('/settings/subscription')} onDismiss={handleTrialBannerDismiss} />}
 
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && <div className={cn("fixed inset-0 z-40 bg-black/50 lg:hidden", showTrialBanner && "top-[40px]")} onClick={() => setSidebarOpen(false)} />}
 
-      {/* Sidebar */}
-      <aside className={cn("fixed left-0 z-50 flex flex-col border-r border-sidebar-border bg-sidebar transition-all duration-200 transform lg:translate-x-0", showTrialBanner ? "top-[40px] h-[calc(100vh-40px)]" : "top-0 h-screen", sidebarOpen ? "translate-x-0" : "-translate-x-full", sidebarCollapsed ? "w-16 overflow-visible" : "w-64")}>
-        {/* Logo Header: collapsed = centered logo + edge toggle; expanded = row */}
-        <div
+      <div
+        className={cn(
+          'flex min-h-0 flex-1',
+          showTrialBanner ? 'min-h-[calc(100vh-40px)]' : 'min-h-screen',
+        )}
+      >
+        {/* Sidebar */}
+        <aside
           className={cn(
-            'border-b border-sidebar-border',
-            sidebarCollapsed
-              ? 'relative overflow-visible p-2 pb-3'
-              : 'flex h-[5rem] items-center justify-between px-4 pt-4',
+            'group/sidebar z-50 flex shrink-0 flex-col bg-sidebar transition-all duration-200',
+            'fixed bottom-0 left-0 lg:sticky lg:top-0',
+            showTrialBanner ? 'top-[40px]' : 'top-0',
+            showTrialBanner ? 'h-[calc(100vh-40px)]' : 'h-screen',
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+            sidebarCollapsed ? cn(SHELL_SIDEBAR_COLLAPSED, 'overflow-visible') : SHELL_SIDEBAR_EXPANDED,
           )}
         >
-          {(() => {
-            const size = branding?.logo_size === 'sm' || branding?.logo_size === 'lg' ? branding.logo_size : 'md';
-            const iconSize = sidebarCollapsed ? 'h-7 w-7 min-h-7 min-w-7 shrink-0' : { sm: 'h-7 w-7', md: 'h-9 w-9', lg: 'h-11 w-11' }[size];
-            const logoWidthPx = branding?.logo_width != null && branding.logo_width >= 24 && branding.logo_width <= 400
-              ? branding.logo_width
-              : 120;
-            return sidebarCollapsed ? (
-              <span className="relative block">
-                <Link
-                  to="/dashboard"
-                  className="flex items-center justify-center rounded-xl px-2 py-2.5"
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  {branding?.icon_url ? (
-                    <img src={branding.icon_url} alt="Lance" className={cn('rounded-lg object-contain', iconSize)} />
-                  ) : (
-                    <Briefcase className={cn('text-primary', iconSize)} />
-                  )}
-                </Link>
-              </span>
-            ) : (
-              <Link to="/dashboard" className="flex items-center gap-2 min-w-0 h-full flex-1" onClick={() => setSidebarOpen(false)}>
-                {branding?.logo_url ? (
-                  <img
-                    src={branding.logo_url}
-                    alt="Lance"
-                    className="object-contain object-left shrink-0"
-                    style={{ height: '100%', width: `${logoWidthPx}px` }}
-                  />
-                ) : (
-                  <span className="flex items-center gap-2 font-semibold text-sidebar-foreground">
-                    <Briefcase className="h-6 w-6 text-primary shrink-0" />
-                    Lance
-                  </span>
-                )}
-              </Link>
-            );
-          })()}
-          <Button
-            variant={sidebarCollapsed ? 'outline' : 'ghost'}
-            size="icon"
+          <div
             className={cn(
-              'shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground',
-              sidebarCollapsed
-                ? 'absolute right-0 top-1/2 z-10 hidden h-6 w-6 -translate-y-1/2 translate-x-1/2 rounded-full border-sidebar-border bg-background shadow-sm hover:bg-muted lg:inline-flex'
-                : 'hidden h-8 w-8 lg:flex',
+              'shrink-0',
+              sidebarCollapsed ? 'flex justify-center px-2 py-3' : 'flex h-14 items-center pl-6 pr-3',
             )}
-            onClick={toggleSidebarCollapsed}
           >
-            <ChevronLeft className={cn('transition-transform', sidebarCollapsed ? 'h-3 w-3 rotate-180' : 'h-4 w-4')} />
-          </Button>
-        </div>
-
-        {/* Navigation - order: Dashboard, Clients, Projects, Time, Invoices, Reviews */}
-        <nav className={cn("flex-1 overflow-y-auto space-y-1", sidebarCollapsed ? "p-2" : "p-3")}>
-          <Link to="/dashboard" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/dashboard' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <SlotIcon slot="sidebar_dashboard" className={cn("h-4 w-4 shrink-0", location.pathname === '/dashboard' && "text-primary")} />
-            {!sidebarCollapsed && 'Dashboard'}
-          </Link>
-          {sidebarCollapsed ? (
-            <Link to="/clients" onClick={() => setSidebarOpen(false)} className={cn("flex items-center justify-center px-2 py-2.5 rounded-xl text-sm font-medium transition-colors", isClientsActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-              <SlotIcon slot="sidebar_clients" className={cn("h-4 w-4 shrink-0", isClientsActive && "text-primary")} />
+            <Link
+              to="/dashboard"
+              className={cn('flex w-full min-w-0 items-center', sidebarCollapsed && 'justify-center')}
+              onClick={closeMobileSidebar}
+            >
+              {renderSidebarLogo()}
             </Link>
-          ) : (
-            <Collapsible open={clientsOpen} onOpenChange={setClientsOpen}>
-              <CollapsibleTrigger asChild>
-                <button className={cn("flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", isClientsActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-                  <div className="flex items-center gap-3">
-                    <SlotIcon slot="sidebar_clients" className={cn("h-4 w-4 shrink-0", isClientsActive && "text-primary")} />
-                    Clients
-                  </div>
-                  <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", clientsOpen && "rotate-180")} />
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="pl-8 space-y-1 mt-1">
-                <Link to="/clients/list" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/clients/list' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
-                  All clients
-                </Link>
-                <Link to="/clients/active" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/clients/active' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
-                  Active clients
-                </Link>
-                <Link to="/clients" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", (location.pathname === '/clients' || location.pathname === '/clients/board') ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
-                  CRM
-                </Link>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
+          </div>
 
-          {/* Projects */}
-          <Link to="/projects" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", isProjectsActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <SlotIcon slot="sidebar_projects" className={cn("h-4 w-4 shrink-0", isProjectsActive && "text-primary")} />
-            {!sidebarCollapsed && 'Projects'}
-          </Link>
-
-          {/* Time with sub-items: Timesheet, Timer, History */}
-          {sidebarCollapsed ? (
-            <Link to="/time" onClick={() => setSidebarOpen(false)} className={cn("flex items-center justify-center px-2 py-2.5 rounded-xl text-sm font-medium transition-colors", isTimeActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-              <SlotIcon slot="sidebar_time" className={cn("h-4 w-4 shrink-0", isTimeActive && "text-primary")} />
-            </Link>
-          ) : (
-            <Collapsible open={timeOpen} onOpenChange={setTimeOpen}>
-              <CollapsibleTrigger asChild>
-                <button className={cn("flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", isTimeActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-                  <div className="flex items-center gap-3">
-                    <SlotIcon slot="sidebar_time" className={cn("h-4 w-4 shrink-0", isTimeActive && "text-primary")} />
-                    Time
-                  </div>
-                  <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", timeOpen && "rotate-180")} />
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="pl-8 space-y-1 mt-1">
-                <Link to="/time" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/time' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
-                  Timesheet
-                </Link>
-                <Link to="/time/timer" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/time/timer' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
-                  Timer
-                </Link>
-                <Link to="/time/history" onClick={() => setSidebarOpen(false)} className={cn("block px-3 py-2 rounded-lg text-sm transition-colors", location.pathname === '/time/history' ? "text-primary font-medium" : "text-sidebar-foreground/60 hover:text-sidebar-foreground")}>
-                  All logs
-                </Link>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
-          <Link to="/notes" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/notes' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <SlotIcon slot="sidebar_notes" className={cn("h-4 w-4 shrink-0", location.pathname === '/notes' && "text-primary")} />
-            {!sidebarCollapsed && 'Notes'}
-          </Link>
-          <Link to="/invoices" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/invoices' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <SlotIcon slot="sidebar_invoices" className={cn("h-4 w-4 shrink-0", location.pathname === '/invoices' && "text-primary")} />
-            {!sidebarCollapsed && 'Invoices'}
-          </Link>
-          <Link to="/proposals" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname.startsWith('/proposals') ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <SlotIcon slot="sidebar_proposals" className={cn("h-4 w-4 shrink-0", location.pathname.startsWith('/proposals') && "text-primary")} />
-            {!sidebarCollapsed && (
-              <>
-                Proposals
-                <Badge className="bg-purple-600 hover:bg-purple-600 text-white text-[10px] px-1.5 py-0 font-medium shrink-0">Beta</Badge>
-              </>
+          <nav
+            className={cn(
+              'min-h-0 flex-1 space-y-2 px-2 py-2',
+              sidebarCollapsed ? 'overflow-visible' : 'overflow-y-auto overflow-x-hidden px-3',
             )}
-          </Link>
-          {showContracts ? (
-            <Link to="/contracts" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname.startsWith('/contracts') ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-              <SlotIcon slot="sidebar_contracts" className={cn("h-4 w-4 shrink-0", location.pathname.startsWith('/contracts') && "text-primary")} />
+          >
+            <Link
+              to="/dashboard"
+              onClick={closeMobileSidebar}
+              className={shellNavLink(location.pathname === '/dashboard', sidebarCollapsed)}
+            >
+              <SlotIcon slot="sidebar_dashboard" className={shellNavIcon(location.pathname === '/dashboard')} />
+              {!sidebarCollapsed && 'Dashboard'}
+            </Link>
+
+            {sidebarCollapsed ? (
+              <SidebarNavFlyout
+                title="Clients"
+                icon={<SlotIcon slot="sidebar_clients" className={shellNavIcon(isClientsActive)} />}
+                links={clientsFlyoutLinks}
+                isSectionActive={isClientsActive}
+                onNavigate={closeMobileSidebar}
+              />
+            ) : (
+              <Collapsible open={clientsOpen} onOpenChange={setClientsOpen}>
+                <CollapsibleTrigger asChild>
+                  <button type="button" className={cn(shellNavLink(isClientsActive), 'w-full justify-between')}>
+                    <span className="flex items-center gap-3">
+                      <SlotIcon slot="sidebar_clients" className={shellNavIcon(isClientsActive)} />
+                      Clients
+                    </span>
+                    <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-white/60 transition-transform', clientsOpen && 'rotate-180')} />
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-1.5 space-y-1.5 pl-4">
+                  {clientsFlyoutLinks.map((link) => (
+                    <Link key={link.to} to={link.to} onClick={closeMobileSidebar} className={shellSubNavLink(link.isActive)}>
+                      {link.label}
+                    </Link>
+                  ))}
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+
+            <Link
+              to="/projects"
+              onClick={closeMobileSidebar}
+              className={shellNavLink(isProjectsActive, sidebarCollapsed)}
+            >
+              <SlotIcon slot="sidebar_projects" className={shellNavIcon(isProjectsActive)} />
+              {!sidebarCollapsed && 'Projects'}
+            </Link>
+
+            {sidebarCollapsed ? (
+              <SidebarNavFlyout
+                title="Time"
+                icon={<SlotIcon slot="sidebar_time" className={shellNavIcon(isTimeActive)} />}
+                links={timeFlyoutLinks}
+                isSectionActive={isTimeActive}
+                onNavigate={closeMobileSidebar}
+              />
+            ) : (
+              <Collapsible open={timeOpen} onOpenChange={setTimeOpen}>
+                <CollapsibleTrigger asChild>
+                  <button type="button" className={cn(shellNavLink(isTimeActive), 'w-full justify-between')}>
+                    <span className="flex items-center gap-3">
+                      <SlotIcon slot="sidebar_time" className={shellNavIcon(isTimeActive)} />
+                      Time
+                    </span>
+                    <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-white/60 transition-transform', timeOpen && 'rotate-180')} />
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-1.5 space-y-1.5 pl-4">
+                  {timeFlyoutLinks.map((link) => (
+                    <Link key={link.to} to={link.to} onClick={closeMobileSidebar} className={shellSubNavLink(link.isActive)}>
+                      {link.label}
+                    </Link>
+                  ))}
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+
+            <Link to="/notes" onClick={closeMobileSidebar} className={shellNavLink(location.pathname === '/notes', sidebarCollapsed)}>
+              <SlotIcon slot="sidebar_notes" className={shellNavIcon(location.pathname === '/notes')} />
+              {!sidebarCollapsed && 'Notes'}
+            </Link>
+            <Link to="/invoices" onClick={closeMobileSidebar} className={shellNavLink(location.pathname === '/invoices', sidebarCollapsed)}>
+              <SlotIcon slot="sidebar_invoices" className={shellNavIcon(location.pathname === '/invoices')} />
+              {!sidebarCollapsed && 'Invoices'}
+            </Link>
+            <Link
+              to="/proposals"
+              onClick={closeMobileSidebar}
+              className={shellNavLink(location.pathname.startsWith('/proposals'), sidebarCollapsed)}
+            >
+              <SlotIcon slot="sidebar_proposals" className={shellNavIcon(location.pathname.startsWith('/proposals'))} />
               {!sidebarCollapsed && (
                 <>
-                  Contracts
-                  <Badge className="bg-purple-600 hover:bg-purple-600 text-white text-[10px] px-1.5 py-0 font-medium shrink-0">Beta</Badge>
+                  Proposals
+                  <Badge className="shrink-0 bg-purple-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-purple-600">Beta</Badge>
                 </>
               )}
             </Link>
-          ) : null}
-          <Link to="/services" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/services' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <SlotIcon slot="sidebar_services" className={cn("h-4 w-4 shrink-0", location.pathname === '/services' && "text-primary")} />
-            {!sidebarCollapsed && 'Services'}
-          </Link>
-          <Link to="/reviews" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/reviews' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <SlotIcon slot="sidebar_reviews" className={cn("h-4 w-4 shrink-0", location.pathname === '/reviews' && "text-primary")} />
-            {!sidebarCollapsed && (
-              <>
-                Approvals
-                <Badge className="bg-purple-600 hover:bg-purple-600 text-white text-[10px] px-1.5 py-0 font-medium shrink-0">Beta</Badge>
-              </>
-            )}
-          </Link>
-        </nav>
-
-        {/* Bottom section */}
-        <div className={cn("space-y-2 border-t border-sidebar-border", sidebarCollapsed ? "p-2" : "p-3")}>
-          {/* Notifications */}
-          <Link to="/notifications" onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors", sidebarCollapsed && "justify-center px-2", location.pathname === '/notifications' ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <span className="relative shrink-0">
-              <SlotIcon slot="nav_bell" className={cn("h-4 w-4", location.pathname === '/notifications' && "text-primary")} />
-              {unreadNotifications > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-                  {unreadNotifications > 99 ? '99+' : unreadNotifications}
-                </span>
-              )}
-            </span>
-            {!sidebarCollapsed && 'Notifications'}
-          </Link>
-
-          {/* User Profile */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className={cn("flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors", sidebarCollapsed && "justify-center")}>
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={profile?.avatar_url || undefined} />
-                  <AvatarFallback className="bg-success text-success-foreground text-xs">
-                    {userInitials}
-                  </AvatarFallback>
-                </Avatar>
-                {!sidebarCollapsed && <>
-                    <div className="flex-1 text-left">
-                      <p className="text-sm font-medium truncate">{userName}</p>
-                    </div>
-                    <ChevronUp className="h-4 w-4 text-sidebar-foreground/60" />
-                  </>}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="top" className="w-64">
-              <div className="p-3 space-y-2">
-                <p className="text-sm font-semibold leading-none">{userName}</p>
-                <p className="text-xs text-muted-foreground truncate">{profile?.email || user?.email}</p>
-                <Link
-                  to="/settings/subscription"
-                  className="inline-flex items-center rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
-                >
-                  {planBadgeLabel}
-                </Link>
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link to="/settings" className="cursor-pointer">
-                  <SlotIcon slot="nav_settings" className="mr-2 h-4 w-4" />
-                  Settings
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to="/notifications" className="cursor-pointer">
-                  <SlotIcon slot="nav_bell" className="mr-2 h-4 w-4" />
-                  Notifications
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a
-                  href="https://get-lance.crisp.help/en/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="cursor-pointer"
-                >
-                  <SlotIcon slot="help_book" className="mr-2 h-4 w-4" />
-                  Help Center
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to="/feature-requests" className="cursor-pointer">
-                  <SlotIcon slot="help_book" className="mr-2 h-4 w-4" />
-                  Feature requests
-                </Link>
-              </DropdownMenuItem>
-              {profile?.is_admin === true && (
-                <DropdownMenuItem asChild>
-                  <Link to="/admin" className="cursor-pointer">
-                    <SlotIcon slot="admin_overview" className="mr-2 h-4 w-4" />
-                    Admin
-                  </Link>
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut} className="text-destructive cursor-pointer focus:text-destructive">
-                <SlotIcon slot="auth_sign_out" className="mr-2 h-4 w-4" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </aside>
-
-      {/* Main content – use margin so content sits to the right of the sidebar */}
-      <div className={cn("flex-1 min-w-0 relative transition-all duration-200", sidebarCollapsed ? "lg:ml-16" : "lg:ml-64", showTimerBar && "pb-14")}>
-        {/* Mobile top bar only - hidden on desktop */}
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-card/80 backdrop-blur-md px-4 lg:hidden">
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
-            <Menu className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="ml-auto relative" asChild>
-            <Link to="/notifications">
-              <SlotIcon slot="nav_bell" className="h-4 w-4" />
-              {unreadNotifications > 0 && (
-                <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-                  {unreadNotifications > 99 ? '99+' : unreadNotifications}
-                </span>
+            {showContracts ? (
+              <Link
+                to="/contracts"
+                onClick={closeMobileSidebar}
+                className={shellNavLink(location.pathname.startsWith('/contracts'), sidebarCollapsed)}
+              >
+                <SlotIcon slot="sidebar_contracts" className={shellNavIcon(location.pathname.startsWith('/contracts'))} />
+                {!sidebarCollapsed && (
+                  <>
+                    Contracts
+                    <Badge className="shrink-0 bg-purple-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-purple-600">Beta</Badge>
+                  </>
+                )}
+              </Link>
+            ) : null}
+            <Link to="/services" onClick={closeMobileSidebar} className={shellNavLink(location.pathname === '/services', sidebarCollapsed)}>
+              <SlotIcon slot="sidebar_services" className={shellNavIcon(location.pathname === '/services')} />
+              {!sidebarCollapsed && 'Services'}
+            </Link>
+            <Link to="/reviews" onClick={closeMobileSidebar} className={shellNavLink(location.pathname === '/reviews', sidebarCollapsed)}>
+              <SlotIcon slot="sidebar_reviews" className={shellNavIcon(location.pathname === '/reviews')} />
+              {!sidebarCollapsed && (
+                <>
+                  Approvals
+                  <Badge className="shrink-0 bg-purple-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-purple-600">Beta</Badge>
+                </>
               )}
             </Link>
-          </Button>
-        </header>
+          </nav>
 
-        {/* Page content */}
-        <main className="p-4 lg:p-8 min-h-0">
-          {children}
-        </main>
+          <div
+            className={cn(
+              'shrink-0',
+              sidebarCollapsed ? 'flex justify-center p-2' : 'flex justify-end px-3 py-2',
+            )}
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              className="inline-flex h-8 w-8 text-white/60 hover:bg-[#4D4D4D] hover:text-white"
+              onClick={toggleSidebarCollapsed}
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              <ChevronLeft className={cn('h-4 w-4 transition-transform', sidebarCollapsed && 'rotate-180')} />
+            </Button>
+          </div>
+        </aside>
 
-        {/* Floating setup guide (corner panel) */}
-        <StartGuide />
-        <FeedbackTab />
+        {/* Content column — search pl-8 matches main px-8 below */}
+        <div
+          className={cn(
+            'flex min-h-0 min-w-0 flex-1 flex-col',
+            showTimerBar && 'pb-14',
+          )}
+        >
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-sidebar">
+            <header className="hidden h-10 shrink-0 items-center gap-3 bg-sidebar py-1.5 pl-4 pr-2 lg:flex lg:pl-8">
+              <form onSubmit={handleSearchSubmit} className="min-w-0 w-full max-w-md shrink-0">
+                <div className="relative w-full">
+                  <Search className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/50" />
+                  <Input
+                    type="search"
+                    placeholder="Search Lance…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-7 w-full rounded-full border border-white/80 bg-black/15 py-1 pl-3 pr-9 text-xs text-white placeholder:text-white/45 focus-visible:ring-1 focus-visible:ring-white/60"
+                  />
+                </div>
+              </form>
+              <div className="ml-auto flex shrink-0 items-center gap-1">
+                {shellTopBarActions()}
+                {userMenu('end', true)}
+              </div>
+            </header>
+
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-tl-[20px] bg-background">
+            <header className={cn('sticky top-0 z-30 flex h-11 shrink-0 items-center gap-2 border-b border-border bg-background/95 backdrop-blur-md lg:hidden', CONTENT_X)}>
+              <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
+                <Menu className="h-4 w-4" />
+              </Button>
+              <div className="ml-auto flex shrink-0 items-center gap-1">
+                {mobileTopBarActions()}
+                {userMenu('end', false)}
+              </div>
+            </header>
+
+            <main className={cn('min-h-0 flex-1 overflow-y-auto py-4 lg:py-8', CONTENT_X)}>
+              {children}
+            </main>
+
+            <StartGuide />
+            <FeedbackTab />
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Timer bar – fixed at bottom of viewport so always visible; left offset on lg so it doesn't cover sidebar */}
+      {/* Timer bar */}
       {showTimerBar && (
-        <div className={cn("fixed bottom-0 right-0 z-[60] left-0", sidebarCollapsed ? "lg:left-16" : "lg:left-64")}>
+        <div
+          className={cn(
+            'fixed bottom-0 right-0 z-[60] left-0',
+            sidebarCollapsed ? 'lg:left-14' : SHELL_SIDEBAR_LEFT_EXPANDED,
+          )}
+        >
           <TimerBar />
         </div>
       )}

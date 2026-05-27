@@ -19,6 +19,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
+import { ViewToggle, ViewToggleButton } from '@/components/ui/view-toggle';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -1016,35 +1017,32 @@ export default function Clients() {
                 ))}
               </SelectContent>
             </Select>
-            <div className="flex border rounded-lg overflow-hidden">
-              <Button
-                variant={viewMode === 'board' ? 'secondary' : 'ghost'}
-                size="sm"
+            <ViewToggle>
+              <ViewToggleButton
+                active={viewMode === 'board'}
                 onClick={() => setViewModeAndNavigate('board')}
-                className="rounded-none"
+                aria-label="Board by status"
                 title="Board by status"
               >
-                <PanelLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-                size="sm"
+                <PanelLeft className="h-3.5 w-3.5" />
+              </ViewToggleButton>
+              <ViewToggleButton
+                active={viewMode === 'grid'}
                 onClick={() => setViewModeAndNavigate('grid')}
-                className="rounded-none"
+                aria-label="Grid view"
                 title="Grid"
               >
-                <Grid className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                size="sm"
+                <Grid className="h-3.5 w-3.5" />
+              </ViewToggleButton>
+              <ViewToggleButton
+                active={viewMode === 'list'}
                 onClick={() => setViewModeAndNavigate('list', statusFilter === 'active' ? 'active' : undefined)}
-                className="rounded-none"
+                aria-label="List view"
                 title="List"
               >
-                <List className="h-4 w-4" />
-              </Button>
-            </div>
+                <List className="h-3.5 w-3.5" />
+              </ViewToggleButton>
+            </ViewToggle>
           </div>
         </div>
 

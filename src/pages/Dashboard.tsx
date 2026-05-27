@@ -8,8 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, ArrowRight, Bell, Search } from '@/components/icons';
-import { Input } from '@/components/ui/input';
+import { Plus } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { getContractsAccessMode } from '@/lib/features';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
@@ -467,7 +466,6 @@ export default function Dashboard() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        {/* Header: greeting | search (pill) | buttons */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="min-w-0 shrink-0">
             <h1 className="text-2xl font-bold tracking-tight">{getGreeting()}, {firstName}!</h1>
@@ -475,25 +473,6 @@ export default function Dashboard() {
               Here's what's happening with your business.
             </p>
           </div>
-          <form
-            className="flex-1 flex justify-center min-w-0 max-w-sm mx-auto sm:mx-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const q = new FormData(e.currentTarget).get('q');
-              if (typeof q === 'string' && q.trim()) navigate(`/search?q=${encodeURIComponent(q.trim())}`);
-            }}
-          >
-            <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <Input
-                type="search"
-                name="q"
-                placeholder="Search"
-                className="w-full rounded-full bg-white dark:bg-card border border-input shadow-sm pl-9 pr-3 text-sm h-8 focus-visible:ring-2"
-                aria-label="Search"
-              />
-            </div>
-          </form>
           <div className="flex gap-2 shrink-0 justify-center sm:justify-end">
             <Button variant="outline" asChild>
               <Link to="/time">
@@ -501,7 +480,7 @@ export default function Dashboard() {
                 Log Time
               </Link>
             </Button>
-            <Button asChild>
+            <Button asChild className="py-1.5">
               <Link to="/projects?new=1">
                 <Plus className="mr-2 h-4 w-4" />
                 New Project
@@ -527,7 +506,9 @@ export default function Dashboard() {
                     <p className="text-sm text-muted-foreground">
                       {stat.title}
                     </p>
-                    <p className="text-2xl font-bold mt-1">{stat.value}</p>
+                    <p className="text-2xl font-bold mt-1 text-foreground dark:text-card-foreground">
+                      {stat.value}
+                    </p>
                     <p className="text-xs text-muted-foreground mt-0.5">{stat.subtitle}</p>
                   </div>
                   <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -545,10 +526,7 @@ export default function Dashboard() {
             <CardHeader className="flex flex-row items-center justify-between pb-4">
               <CardTitle className="text-base font-semibold">Active Projects</CardTitle>
               <Button variant="ghost" size="sm" asChild className="text-primary">
-                <Link to="/projects">
-                  View all
-                  <ArrowRight className="ml-1 h-4 w-4" />
-                </Link>
+                <Link to="/projects">View all</Link>
               </Button>
             </CardHeader>
             <CardContent>
@@ -578,7 +556,7 @@ export default function Dashboard() {
                           {formatStatus(project.status)}
                         </Badge>
                       </div>
-                      <h3 className="font-semibold mb-1">{project.name}</h3>
+                      <h3 className="font-semibold mb-1 text-foreground">{project.name}</h3>
                       <p className="text-sm text-muted-foreground mb-3">
                         {project.client_name || 'No client'}
                       </p>
@@ -661,7 +639,6 @@ export default function Dashboard() {
           <Card className="border-0 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <Bell className="h-4 w-4" />
                 Notifications
                 {unreadNotifications.length > 0 && (
                   <Badge variant="secondary" className="text-xs">
@@ -670,10 +647,7 @@ export default function Dashboard() {
                 )}
               </CardTitle>
               <Button variant="ghost" size="sm" asChild className="text-primary">
-                <Link to="/notifications">
-                  View all
-                  <ArrowRight className="ml-1 h-4 w-4" />
-                </Link>
+                <Link to="/notifications">View all</Link>
               </Button>
             </CardHeader>
             <CardContent>
@@ -705,10 +679,7 @@ export default function Dashboard() {
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-base font-semibold">Follow-ups</CardTitle>
               <Button variant="ghost" size="sm" asChild className="text-primary">
-                <Link to="/clients">
-                  View all
-                  <ArrowRight className="ml-1 h-4 w-4" />
-                </Link>
+                <Link to="/clients">View all</Link>
               </Button>
             </CardHeader>
             <CardContent>
@@ -772,10 +743,7 @@ export default function Dashboard() {
             <CardHeader className="flex flex-row items-center justify-between pb-4">
               <CardTitle className="text-base font-semibold">Approvals</CardTitle>
               <Button variant="ghost" size="sm" asChild className="text-primary">
-                <Link to="/reviews">
-                  View all
-                  <ArrowRight className="ml-1 h-4 w-4" />
-                </Link>
+                <Link to="/reviews">View all</Link>
               </Button>
             </CardHeader>
             <CardContent>
@@ -795,10 +763,7 @@ export default function Dashboard() {
             <CardHeader className="flex flex-row items-center justify-between pb-4">
               <CardTitle className="text-base font-semibold">Recent Invoices</CardTitle>
               <Button variant="ghost" size="sm" asChild className="text-primary">
-                <Link to="/invoices">
-                  View all
-                  <ArrowRight className="ml-1 h-4 w-4" />
-                </Link>
+                <Link to="/invoices">View all</Link>
               </Button>
             </CardHeader>
             <CardContent>
