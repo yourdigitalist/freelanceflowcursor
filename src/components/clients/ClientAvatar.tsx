@@ -1,4 +1,6 @@
 import { clientLogoPublicUrl } from '@/lib/clientLogo';
+import { CLIENT_AVATAR_SHELL, getClientAvatarAppearance } from '@/lib/clientAvatarStyles';
+import { DEFAULT_CLIENT_AVATAR_COLOR } from '@/lib/clientAvatarColors';
 import { cn } from '@/lib/utils';
 
 export type ClientAvatarClient = {
@@ -36,25 +38,27 @@ type ClientAvatarProps = {
 export function ClientAvatar({ client, size = 'md', className }: ClientAvatarProps) {
   const logoUrl = clientLogoPublicUrl(client.logo_url);
   const sizeClass = sizeClasses[size];
+  const shellClass = cn('shrink-0', CLIENT_AVATAR_SHELL, sizeClass, className);
 
   if (logoUrl) {
     return (
       <img
         src={logoUrl}
         alt=""
-        className={cn('shrink-0 rounded-full border border-border/60 bg-white object-cover', sizeClass, className)}
+        className={cn(shellClass, 'bg-white object-cover object-center')}
       />
     );
   }
 
+  const appearance = getClientAvatarAppearance(client.avatar_color || DEFAULT_CLIENT_AVATAR_COLOR);
+
   return (
     <div
       className={cn(
-        'flex shrink-0 items-center justify-center rounded-full font-semibold text-white',
-        sizeClass,
-        className,
+        'flex items-center justify-center font-medium',
+        shellClass,
       )}
-      style={{ backgroundColor: client.avatar_color || '#8B5CF6' }}
+      style={appearance}
     >
       {getClientInitials(client)}
     </div>

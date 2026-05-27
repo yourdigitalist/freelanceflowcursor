@@ -59,6 +59,7 @@ import { ClientAvatar } from '@/components/clients/ClientAvatar';
 import { ClientFormDialog } from '@/components/clients/ClientFormDialog';
 import { DEFAULT_CLIENT_AVATAR_COLOR } from '@/lib/clientAvatarColors';
 import { CLIENT_CRM_STAGES, getClientStageLabel } from '@/lib/clientCrmStages';
+import { buildClientsNavState, readClientsNavState } from '@/lib/clientsNavigation';
 import { HorizontalScroll } from '@/components/ui/horizontal-scroll';
 import {
   DndContext,
@@ -331,20 +332,27 @@ export default function Clients() {
     fetchFollowUps(viewingClient.id);
   }, [viewingClient?.id]);
 
-  // Sync view mode and status filter from URL
+  // Sync view mode and status filter from URL (and grid/board when returning from client detail)
   useEffect(() => {
     const path = location.pathname;
+    const navState = readClientsNavState(location.state);
     if (path === '/clients/active') {
       setViewMode('list');
       setStatusFilter('active');
     } else if (path === '/clients/list') {
       setViewMode('list');
       if (statusFilter === 'active') setStatusFilter('all');
-    } else if (path === '/clients' || path.startsWith('/clients/')) {
-      setViewMode('board');
+    } else if (path === '/clients') {
+      setViewMode(navState?.clientsViewMode ?? 'board');
       if (statusFilter === 'active') setStatusFilter('all');
     }
-  }, [location.pathname]);
+  }, [location.pathname, location.state]);
+
+  const openClientDetail = (clientId: string) => {
+    navigate(`/clients/${clientId}`, {
+      state: buildClientsNavState(location.pathname, viewMode),
+    });
+  };
 
   // Open the canonical create dialog when linked from quick actions.
   useEffect(() => {
@@ -1130,7 +1138,7 @@ export default function Clients() {
                                 <DraggableClientCard
                                   key={client.id}
                                   client={client}
-                                  onOpen={() => navigate(`/clients/${client.id}`)}
+                                  onOpen={() => openClientDetail(client.id)}
                                   onEdit={() => openEditDialog(client)}
                                   onArchive={() => handleArchive(client.id)}
                                   onRestore={() => handleRestore(client.id)}
@@ -1183,7 +1191,7 @@ export default function Clients() {
                 <Card
                   key={client.id}
                   className={`${viewMode === 'list' ? 'border-l-4 ' + getStatusBorderClass(client.status) : 'border-0'} shadow-sm hover:shadow-md transition-shadow cursor-pointer`}
-                  onClick={() => (viewMode === 'grid' || viewMode === 'list') && navigate(`/clients/${client.id}`)}
+                  onClick={() => (viewMode === 'grid' || viewMode === 'list') && openClientDetail(client.id)}
                 >
                   <CardContent className={viewMode === 'grid' ? "p-5 relative" : "p-4 flex items-center justify-between"}>
                     {viewMode === 'grid' && (
@@ -1298,7 +1306,7 @@ export default function Clients() {
                     <Card
                       key={client.id}
                       className="border border-dashed opacity-80 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                      onClick={() => navigate(`/clients/${client.id}`)}
+                      onClick={() => openClientDetail(client.id)}
                     >
                       <CardContent className="p-4 flex items-center justify-between gap-3">
                         <div className="min-w-0">

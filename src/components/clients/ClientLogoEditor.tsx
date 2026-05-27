@@ -1,7 +1,9 @@
 import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { CLIENT_AVATAR_COLORS } from '@/lib/clientAvatarColors';
+import { CLIENT_AVATAR_SHELL, getClientAvatarAppearance } from '@/lib/clientAvatarStyles';
 
 type ClientLogoEditorProps = {
   previewUrl: string | null;
@@ -32,11 +34,18 @@ export function ClientLogoEditor({
         </p>
         <div className="flex items-center gap-3">
           {previewUrl ? (
-            <img src={previewUrl} alt="" className="h-12 w-12 rounded-full border object-cover" />
+            <img
+              src={previewUrl}
+              alt=""
+              className={cn('h-12 w-12 object-cover object-center bg-white', CLIENT_AVATAR_SHELL)}
+            />
           ) : (
             <div
-              className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-medium text-white"
-              style={{ backgroundColor: selectedColor }}
+              className={cn(
+                'flex h-12 w-12 items-center justify-center text-sm font-medium',
+                CLIENT_AVATAR_SHELL,
+              )}
+              style={getClientAvatarAppearance(selectedColor)}
             >
               {fallbackName.charAt(0).toUpperCase()}
             </div>

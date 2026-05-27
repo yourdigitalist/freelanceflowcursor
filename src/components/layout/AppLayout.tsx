@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Menu, ChevronDown, ChevronLeft, Search } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { canAccessContracts, canAccessNotes } from '@/lib/features';
+import { isClientDetailPath } from '@/lib/clientsNavigation';
 import { cn } from '@/lib/utils';
 import { useBranding } from '@/hooks/useBranding';
 import { shellProfileDisplayName, useShellProfile } from '@/hooks/useShellProfile';
@@ -160,7 +161,10 @@ export function AppLayout({
     {
       to: '/clients',
       label: 'CRM',
-      isActive: location.pathname === '/clients' || location.pathname === '/clients/board',
+      isActive:
+        location.pathname === '/clients' ||
+        location.pathname === '/clients/board' ||
+        isClientDetailPath(location.pathname),
     },
   ];
 

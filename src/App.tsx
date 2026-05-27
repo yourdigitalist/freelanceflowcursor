@@ -246,9 +246,9 @@ function AppRoutes() {
       <Route path="/onboarding" element={<OnboardingRoute><Onboarding /></OnboardingRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
-      <Route path="/clients/:id" element={<ProtectedRoute><ClientDetail /></ProtectedRoute>} />
       <Route path="/clients/list" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
       <Route path="/clients/active" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
+      <Route path="/clients/:id" element={<ProtectedRoute><ClientDetail /></ProtectedRoute>} />
       <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
       <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
       <Route path="/time" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />

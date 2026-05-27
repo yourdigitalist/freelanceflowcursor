@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useBeforeUnload, useNavigate, useParams } from "react-router-dom";
+import { Link, useBeforeUnload, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ClientAvatar } from "@/components/clients/ClientAvatar";
 import { ClientFormFields } from "@/components/clients/ClientFormFields";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -46,6 +46,7 @@ import { countryLabel } from "@/lib/locale-data";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate, formatLocaleDateTime } from "@/lib/datetime";
 import { ClientPortalSettings } from "@/components/clients/ClientPortalSettings";
+import { readClientsNavState } from "@/lib/clientsNavigation";
 import {
   archiveClient,
   buildArchiveConfirmMessage,
@@ -168,6 +169,10 @@ export default function ClientDetail() {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+  const clientsNav = readClientsNavState(location.state);
+  const clientsReturnTo = clientsNav?.clientsReturnTo ?? "/clients";
+  const clientsReturnState = clientsNav ?? undefined;
 
   const [client, setClient] = useState<Client | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -435,7 +440,7 @@ export default function ClientDetail() {
         return;
       }
       toast({ title: "Client deleted" });
-      navigate("/clients");
+      navigate(clientsReturnTo, { state: clientsReturnState });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Could not delete client.";
       toast({ title: "Failed to delete client", description: message, variant: "destructive" });
@@ -727,9 +732,13 @@ export default function ClientDetail() {
         ) : null}
         <div className="flex items-center justify-between gap-3 pb-4">
           <div>
-            <Link to="/clients" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+            <Link
+              to={clientsReturnTo}
+              state={clientsReturnState}
+              className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
+            >
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to clients
+              {clientsReturnTo === "/clients" ? "Back to CRM" : "Back to clients"}
             </Link>
             <div className="mt-2 flex items-center gap-3">
               <ClientAvatar client={client} size="lg" />
