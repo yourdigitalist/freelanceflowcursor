@@ -247,7 +247,8 @@ export default function TimeTracking() {
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
 
-  const todayHighlightClass = 'border-primary bg-primary/10';
+  const selectedDayClass = 'border-primary/70 bg-primary/10 ring-2 ring-primary/35';
+  const todayDayClass = 'border-emerald-500/70 bg-emerald-50/80 dark:bg-emerald-950/30';
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const [createTaskDialogOpen, setCreateTaskDialogOpen] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -979,16 +980,23 @@ export default function TimeTracking() {
             className={cn(
               'cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
               isSelected
-                ? todayHighlightClass
+                ? selectedDayClass
                 : isToday
-                  ? 'border-primary/50 bg-primary/5'
+                  ? todayDayClass
                   : 'border-border bg-card',
               !isSelected && !isToday && isWeekend && 'bg-secondary',
             )}
           >
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              {format(d, 'EEE')}
-            </p>
+            <div className="flex items-center justify-between gap-1">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                {format(d, 'EEE')}
+              </p>
+              {isToday ? (
+                <span className="rounded-full border border-emerald-600/40 bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+                  Today
+                </span>
+              ) : null}
+            </div>
             <p className="mt-0.5 text-[13px] font-medium text-foreground">{format(d, 'd MMM')}</p>
             <p
               className={cn(
@@ -1172,6 +1180,11 @@ export default function TimeTracking() {
                       </p>
                     </div>
                   )}
+                  <div className="flex items-center justify-end border-t border-border px-4 py-3">
+                    <Button variant="outline" size="sm" onClick={() => openLogDialog()}>
+                      + Add entry
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <Card className="border-0 shadow-sm">
@@ -1196,6 +1209,11 @@ export default function TimeTracking() {
                         </p>
                       </div>
                     )}
+                    <div className="flex items-center justify-end border-t px-4 py-3">
+                      <Button variant="outline" size="sm" onClick={() => openLogDialog()}>
+                        + Add entry
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               )}
@@ -1230,7 +1248,14 @@ export default function TimeTracking() {
                         isToday: isTodayVisible(d),
                       })}
                     >
-                      <p className="text-xs">{format(d, 'd')}</p>
+                      <div className="flex items-start justify-between gap-1">
+                        <p className="text-xs">{format(d, 'd')}</p>
+                        {isTodayVisible(d) ? (
+                          <span className="rounded-full border border-emerald-600/40 bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+                            Today
+                          </span>
+                        ) : null}
+                      </div>
                       <p className={timeMonthCalendarDurationClassName(hasEntries)}>
                         {hasEntries ? formatHm(total) : '0:00'}
                       </p>
@@ -1249,6 +1274,39 @@ export default function TimeTracking() {
                   </span>
                 </p>
               </div>
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold">Month Entries Summary</CardTitle>
+                  <CardDescription>All logged entries for {format(monthStart, 'MMMM yyyy')}</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0 overflow-x-auto">
+                  <TimeEntriesTable
+                    entries={timesheetTableEntries}
+                    clientById={clientById}
+                    formatUserDate={formatUserDate}
+                    getEntrySeconds={getEntrySeconds}
+                    getStatusBadge={getStatusBadge}
+                    onEdit={openLogDialog}
+                    onDelete={handleDelete}
+                    onResume={resumeEntry}
+                    emptyMessage="No entries for this month."
+                    emptyTrackTimeHref="/time/timer"
+                  />
+                  {timesheetTableEntries.length > 0 && (
+                    <div className="flex items-center justify-end bg-muted/20 px-4 py-3 border-t">
+                      <p className="text-sm font-medium">
+                        Month total:{' '}
+                        <span className="font-mono">{formatHm(monthTotalSeconds)}</span>
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-end border-t px-4 py-3">
+                    <Button variant="outline" size="sm" onClick={() => openLogDialog()}>
+                      + Add entry
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
           {renderTimeEntryLogDialog()}
@@ -1817,6 +1875,11 @@ export default function TimeTracking() {
                 ) : undefined
               }
             />
+            <div className="flex items-center justify-end border-t px-4 py-3">
+              <Button variant="outline" size="sm" onClick={() => openLogDialog()}>
+                + Add entry
+              </Button>
+            </div>
           </CardContent>
         </Card>
                 <Dialog open={!!selectedLogEntry} onOpenChange={(open) => !open && setSelectedLogEntry(null)}>

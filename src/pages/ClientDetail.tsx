@@ -24,7 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ArrowLeft, Check, MoreVertical, X } from "@/components/icons";
-import { addMonths, addWeeks, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, parseISO, startOfMonth, startOfWeek, subMonths, subWeeks } from "date-fns";
+import { addDays, addMonths, addWeeks, eachDayOfInterval, endOfDay, endOfMonth, endOfWeek, format, isSameDay, parseISO, startOfDay, startOfMonth, startOfWeek, subDays, subMonths, subWeeks } from "date-fns";
 import {
   formatDuration,
   sumMonthSecondsFromDayTotals,
@@ -42,6 +42,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { countryLabel } from "@/lib/locale-data";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate, formatLocaleDateTime } from "@/lib/datetime";
@@ -202,9 +204,11 @@ export default function ClientDetail() {
   const [loading, setLoading] = useState(true);
   const { dateFormat, timeFormat } = useLocalePreferences();
 
-  const [timeView, setTimeView] = useState<"week" | "month">("week");
+  const [timeView, setTimeView] = useState<"day" | "week" | "month">("week");
   const [timeAnchor, setTimeAnchor] = useState<Date>(new Date());
   const [selectedTimeDay, setSelectedTimeDay] = useState<Date>(new Date());
+  const [timeMonthPickerOpen, setTimeMonthPickerOpen] = useState(false);
+  const [timeWeekPickerOpen, setTimeWeekPickerOpen] = useState(false);
   const hasUnsavedChanges = useMemo(() => {
     if (!client) return false;
     const formDirty =
@@ -371,6 +375,50 @@ export default function ClientDetail() {
           return bDate - aDate;
         }),
     [timeEntries, selectedTimeDay],
+  );
+
+  const selectedDaySeconds = useMemo(
+    () => selectedDayEntries.reduce((sum, entry) => sum + toSeconds(entry), 0),
+    [selectedDayEntries],
+  );
+
+  const weekEntries = useMemo(
+    () =>
+      timeEntries
+        .filter((entry) => {
+          const dateStr = entry.started_at || entry.start_time;
+          if (!dateStr) return false;
+          const d = parseISO(dateStr);
+          return d >= startOfDay(weekRange.start) && d <= endOfDay(weekRange.end);
+        })
+        .sort((a, b) => {
+          const aDate = parseISO(a.started_at || a.start_time || new Date(0).toISOString()).getTime();
+          const bDate = parseISO(b.started_at || b.start_time || new Date(0).toISOString()).getTime();
+          return bDate - aDate;
+        }),
+    [timeEntries, weekRange.start, weekRange.end],
+  );
+
+  const weekTotalSeconds = useMemo(
+    () => weekEntries.reduce((sum, entry) => sum + toSeconds(entry), 0),
+    [weekEntries],
+  );
+
+  const monthEntries = useMemo(
+    () =>
+      timeEntries
+        .filter((entry) => {
+          const dateStr = entry.started_at || entry.start_time;
+          if (!dateStr) return false;
+          const d = parseISO(dateStr);
+          return d >= startOfDay(monthStart) && d <= endOfDay(monthEnd);
+        })
+        .sort((a, b) => {
+          const aDate = parseISO(a.started_at || a.start_time || new Date(0).toISOString()).getTime();
+          const bDate = parseISO(b.started_at || b.start_time || new Date(0).toISOString()).getTime();
+          return bDate - aDate;
+        }),
+    [timeEntries, monthStart, monthEnd],
   );
 
   const timeBillingSummary = useMemo(() => {
@@ -714,6 +762,67 @@ export default function ClientDetail() {
     return includeTime ? formatLocaleDateTime(value, dateFormat, timeFormat) : formatLocaleDate(value, dateFormat);
   };
 
+  const isCurrentWeek = isSameDay(weekRange.start, startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const isCurrentMonth = monthStart.getFullYear() === new Date().getFullYear() && monthStart.getMonth() === new Date().getMonth();
+
+  const goToCurrentWeek = () => {
+    const now = new Date();
+    setTimeAnchor(now);
+    setSelectedTimeDay(now);
+  };
+
+  const goToCurrentMonth = () => {
+    const now = new Date();
+    setTimeAnchor(now);
+    setSelectedTimeDay(now);
+  };
+
+  const setTimeMonth = (year: number, monthIndex: number) => {
+    const next = new Date(year, monthIndex, 1);
+    setTimeAnchor(next);
+    setSelectedTimeDay(next);
+  };
+
+  const renderClientTimeWeekPeriodPicker = () => (
+    <Popover open={timeWeekPickerOpen} onOpenChange={setTimeWeekPickerOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" type="button">
+          {isCurrentWeek
+            ? `This week ${formatUserDate(weekRange.start)} – ${formatUserDate(weekRange.end)}`
+            : `${formatUserDate(weekRange.start)} – ${formatUserDate(weekRange.end)}`}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={selectedTimeDay}
+          onSelect={(date) => {
+            if (!date) return;
+            setSelectedTimeDay(date);
+            setTimeAnchor(date);
+            setTimeWeekPickerOpen(false);
+          }}
+          defaultMonth={selectedTimeDay}
+          initialFocus
+        />
+        <div className="border-t p-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => {
+              goToCurrentWeek();
+              setTimeWeekPickerOpen(false);
+            }}
+          >
+            This week
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+
   if (loading) return <AppLayout><div className="text-sm text-muted-foreground">Loading client...</div></AppLayout>;
   if (!client) return <AppLayout><div className="text-sm text-muted-foreground">Client not found.</div></AppLayout>;
 
@@ -1040,26 +1149,99 @@ export default function ClientDetail() {
                 </CardContent>
               </Card>
             </div>
-            <div className="flex items-center justify-between">
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setTimeAnchor((d) => (timeView === "week" ? subWeeks(d, 1) : subMonths(d, 1)))}>Previous</Button>
-                <Button variant="outline" onClick={() => setTimeAnchor((d) => (timeView === "week" ? addWeeks(d, 1) : addMonths(d, 1)))}>Next</Button>
-                <Button variant="outline" onClick={() => { const now = new Date(); setTimeAnchor(now); setSelectedTimeDay(now); }}>Today</Button>
-                <Input
-                  type="date"
-                  className="h-9 w-[170px]"
-                  value={format(selectedTimeDay, "yyyy-MM-dd")}
-                  onChange={(e) => {
-                    const picked = new Date(`${e.target.value}T12:00:00`);
-                    if (Number.isNaN(picked.getTime())) return;
-                    setSelectedTimeDay(picked);
-                    setTimeAnchor(picked);
-                  }}
-                />
-              </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant={timeView === "week" ? "default" : "outline"} onClick={() => setTimeView("week")}>Week</Button>
-                <Button variant={timeView === "month" ? "default" : "outline"} onClick={() => setTimeView("month")}>Month</Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setTimeAnchor((d) =>
+                      timeView === "day" ? subDays(d, 1) : timeView === "week" ? subWeeks(d, 1) : subMonths(d, 1),
+                    )
+                  }
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setTimeAnchor((d) =>
+                      timeView === "day" ? addDays(d, 1) : timeView === "week" ? addWeeks(d, 1) : addMonths(d, 1),
+                    )
+                  }
+                >
+                  Next
+                </Button>
+                {timeView === "month" ? (
+                  <Popover open={timeMonthPickerOpen} onOpenChange={setTimeMonthPickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" type="button">
+                        {isCurrentMonth
+                          ? `This month ${format(monthStart, "MMM yyyy")}`
+                          : format(monthStart, "MMM yyyy")}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3" align="start">
+                      <div className="space-y-3">
+                        <div className="flex gap-2">
+                          <Select
+                            value={String(timeAnchor.getMonth())}
+                            onValueChange={(m) => setTimeMonth(timeAnchor.getFullYear(), Number(m))}
+                          >
+                            <SelectTrigger className="w-[130px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 12 }, (_, i) => (
+                                <SelectItem key={i} value={String(i)}>
+                                  {format(new Date(2024, i, 1), "MMMM")}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Select
+                            value={String(timeAnchor.getFullYear())}
+                            onValueChange={(y) => setTimeMonth(Number(y), timeAnchor.getMonth())}
+                          >
+                            <SelectTrigger className="w-[100px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 11 }, (_, i) => {
+                                const year = new Date().getFullYear() - 5 + i;
+                                return (
+                                  <SelectItem key={year} value={String(year)}>
+                                    {year}
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => {
+                            goToCurrentMonth();
+                            setTimeMonthPickerOpen(false);
+                          }}
+                        >
+                          This month
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  renderClientTimeWeekPeriodPicker()
+                )}
+              </div>
+              <div className="flex rounded-lg border bg-muted/50 p-0.5">
+                <Button variant={timeView === "day" ? "default" : "ghost"} size="sm" onClick={() => setTimeView("day")}>Day</Button>
+                <Button variant={timeView === "week" ? "default" : "ghost"} size="sm" onClick={() => setTimeView("week")}>Week</Button>
+                <Button variant={timeView === "month" ? "default" : "ghost"} size="sm" onClick={() => setTimeView("month")}>Month</Button>
               </div>
             </div>
             {timeView === "week" ? (
@@ -1097,7 +1279,10 @@ export default function ClientDetail() {
                             <TableCell
                               key={k}
                               className="font-mono cursor-pointer hover:bg-muted/40"
-                              onClick={() => setSelectedTimeDay(new Date(`${k}T12:00:00`))}
+                              onClick={() => {
+                                setSelectedTimeDay(new Date(`${k}T12:00:00`));
+                                setTimeView("day");
+                              }}
                             >
                               {row.byDay[k] ? formatHm(row.byDay[k]) : "—"}
                             </TableCell>
@@ -1120,7 +1305,7 @@ export default function ClientDetail() {
                   </TableBody>
                 </Table>
               </CardContent></Card>
-            ) : (
+            ) : timeView === "month" ? (
               <Card><CardContent className="p-4">
                 <div className="grid grid-cols-7 gap-2">
                   {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => (
@@ -1136,7 +1321,10 @@ export default function ClientDetail() {
                     return (
                       <button
                         key={key}
-                        onClick={() => setSelectedTimeDay(d)}
+                        onClick={() => {
+                          setSelectedTimeDay(d);
+                          setTimeView("day");
+                        }}
                         className={timeMonthCalendarDayClassName({
                           inMonth,
                           totalSeconds: total,
@@ -1144,7 +1332,14 @@ export default function ClientDetail() {
                           isToday,
                         })}
                       >
-                        <p className="text-xs">{format(d, "d")}</p>
+                        <div className="flex items-start justify-between gap-1">
+                          <p className="text-xs">{format(d, "d")}</p>
+                          {isToday ? (
+                            <span className="rounded-full border border-emerald-600/40 bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+                              Today
+                            </span>
+                          ) : null}
+                        </div>
                         <p className={timeMonthCalendarDurationClassName(hasEntries)}>
                           {hasEntries ? formatHm(total) : "0:00"}
                         </p>
@@ -1161,14 +1356,36 @@ export default function ClientDetail() {
                   </p>
                 </div>
               </CardContent></Card>
-            )}
+            ) : null}
+            {timeView === "day" ? (
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">{formatUserDate(selectedTimeDay)}</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">
+                    Day total: <span className="font-mono">{formatHm(selectedDaySeconds)}</span>
+                  </p>
+                </CardContent>
+              </Card>
+            ) : null}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base font-semibold">Entries on {formatUserDate(selectedTimeDay)}</CardTitle>
+                <CardTitle className="text-base font-semibold">
+                  {timeView === "day"
+                    ? `Entries on ${formatUserDate(selectedTimeDay)}`
+                    : timeView === "week"
+                      ? `Entries for week of ${formatUserDate(weekRange.start)} – ${formatUserDate(weekRange.end)}`
+                      : `Entries for ${format(monthStart, "MMMM yyyy")}`}
+                </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                {selectedDayEntries.length === 0 ? (
-                  <div className="px-4 pb-4 text-sm text-muted-foreground">No entries for this day.</div>
+                {(timeView === "day" ? selectedDayEntries : timeView === "week" ? weekEntries : monthEntries).length === 0 ? (
+                  <div className="px-4 pb-4 text-sm text-muted-foreground">
+                    {timeView === "day"
+                      ? "No entries for this day."
+                      : timeView === "week"
+                        ? "No entries for this week."
+                        : "No entries for this month."}
+                  </div>
                 ) : (
                   <Table>
                     <TableHeader>
@@ -1180,7 +1397,7 @@ export default function ClientDetail() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {selectedDayEntries.map((entry) => {
+                      {(timeView === "day" ? selectedDayEntries : timeView === "week" ? weekEntries : monthEntries).map((entry) => {
                         const resumeHref = entry.project_id
                           ? `/time/timer?project=${entry.project_id}${entry.task_id ? `&task=${entry.task_id}` : ""}`
                           : "/time/timer";
@@ -1216,6 +1433,21 @@ export default function ClientDetail() {
                     </TableBody>
                   </Table>
                 )}
+                {(timeView === "day" ? selectedDayEntries : timeView === "week" ? weekEntries : monthEntries).length > 0 ? (
+                  <div className="mt-2 flex items-center justify-end border-t px-4 py-3">
+                    <p className="text-sm font-medium text-foreground">
+                      {timeView === "day" ? "Day total: " : timeView === "week" ? "Week total: " : "Month total: "}
+                      <span className="font-mono">
+                        {formatHm(timeView === "day" ? selectedDaySeconds : timeView === "week" ? weekTotalSeconds : monthTotalSeconds)}
+                      </span>
+                    </p>
+                  </div>
+                ) : null}
+                <div className="flex items-center justify-end border-t px-4 py-3">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={`/time?view=day&client=${client.id}`}>+ Add entry</Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

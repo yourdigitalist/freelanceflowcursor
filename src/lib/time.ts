@@ -9,7 +9,7 @@ export function formatDuration(totalSeconds: number, includeSeconds = false): st
   return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
-/** Month calendar cell: today gets a light highlight; logged hours use blue text only. */
+/** Month calendar cell states: selected date and today are intentionally distinct. */
 export function timeMonthCalendarDayClassName(opts: {
   inMonth: boolean;
   totalSeconds: number;
@@ -21,8 +21,9 @@ export function timeMonthCalendarDayClassName(opts: {
   return cn(
     'rounded-md border min-h-[88px] p-2 text-left transition-colors hover:bg-muted/50',
     inMonth ? 'bg-card' : 'bg-muted/30 text-muted-foreground',
-    isToday && !isSelected && 'border-primary/40 bg-primary/5',
-    isSelected && 'border-border bg-muted/40 ring-1 ring-border',
+    isToday && !isSelected && 'border-emerald-500/70 bg-emerald-50/80 dark:bg-emerald-950/30',
+    isSelected && !isToday && 'border-primary/70 bg-primary/10 ring-2 ring-primary/35',
+    isSelected && isToday && 'border-primary bg-primary/15 ring-2 ring-primary/50',
   );
 }
 

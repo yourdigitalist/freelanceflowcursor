@@ -267,7 +267,14 @@ function PortalTimeSection({ entries, dateFormat }: { entries: TimeEntryRow[]; d
                       isToday,
                     })}
                   >
-                    <p className="text-xs">{format(d, "d")}</p>
+                    <div className="flex items-start justify-between gap-1">
+                      <p className="text-xs">{format(d, "d")}</p>
+                      {isToday ? (
+                        <span className="rounded-full border border-emerald-600/40 bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+                          Today
+                        </span>
+                      ) : null}
+                    </div>
                     <p className={timeMonthCalendarDurationClassName(hasEntries)}>
                       {hasEntries ? formatHm(total) : "0:00"}
                     </p>
