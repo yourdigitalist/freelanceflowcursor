@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
+import { ViewToggle, ViewToggleButton } from '@/components/ui/view-toggle';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -56,6 +57,8 @@ import {
   ChevronLeft,
   LayoutGrid,
   List,
+  Search,
+  Filter,
 } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { EmojiPicker } from '@/components/ui/emoji-picker';
@@ -166,6 +169,7 @@ export default function ReviewRequests() {
   const [clientFilter, setClientFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [folderFilter, setFolderFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   // Collapsible folder sections: which are open (default open for "none" and first folder)
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
@@ -611,12 +615,21 @@ export default function ReviewRequests() {
   };
 
   const filteredRequests = requests.filter((r) => {
+    const matchesSearch =
+      r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (r.clients?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (r.projects?.name || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
     const matchesClient = clientFilter === 'all' || r.client_id === clientFilter;
     const matchesProject = projectFilter === 'all' || r.project_id === projectFilter;
     const matchesFolder = folderFilter === 'all' || (folderFilter === 'none' ? !r.folder_id : r.folder_id === folderFilter);
-    return matchesStatus && matchesClient && matchesProject && matchesFolder;
+    return matchesSearch && matchesStatus && matchesClient && matchesProject && matchesFolder;
   });
+  const activeFilterCount =
+    (statusFilter !== 'all' ? 1 : 0) +
+    (clientFilter !== 'all' ? 1 : 0) +
+    (projectFilter !== 'all' ? 1 : 0) +
+    (folderFilter !== 'all' ? 1 : 0);
 
   // Group filtered requests by folder for collapsible directory
   const requestsByFolder = (() => {
@@ -662,75 +675,115 @@ export default function ReviewRequests() {
           </div>
         </div>
 
-        {/* Filters (like Projects) */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center flex-wrap">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-              <SelectItem value="commented">Commented</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={clientFilter} onValueChange={setClientFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Client" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Clients</SelectItem>
-              {clients.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={projectFilter} onValueChange={setProjectFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Project" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Projects</SelectItem>
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={folderFilter} onValueChange={setFolderFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Folder" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Folders</SelectItem>
-              <SelectItem value="none">No folder</SelectItem>
-              {folders.map((f) => (
-                <SelectItem key={f.id} value={f.id}>
-                  <span className="mr-1">{f.emoji}</span>{f.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex rounded-md border border-input bg-background p-0.5">
-            <Button
-              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => { setViewMode('list'); setOpenedFolderId(null); }}
-              title="List view"
-            >
-              <List className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => { setViewMode('cards'); setOpenedFolderId(null); }}
-              title="Cards view"
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </Button>
+        {/* Search + View + Filters */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative max-w-md flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search approvals..."
+              className="pl-10 bg-card"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <ViewToggle>
+              <ViewToggleButton
+                active={viewMode === 'list'}
+                onClick={() => { setViewMode('list'); setOpenedFolderId(null); }}
+                aria-label="List view"
+                title="List view"
+              >
+                <List className="h-4 w-4" />
+              </ViewToggleButton>
+              <ViewToggleButton
+                active={viewMode === 'cards'}
+                onClick={() => { setViewMode('cards'); setOpenedFolderId(null); }}
+                aria-label="Cards view"
+                title="Cards view"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </ViewToggleButton>
+            </ViewToggle>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="relative h-8 w-8 p-0" aria-label="Filters">
+                  <Filter className="h-4 w-4" />
+                  {activeFilterCount > 0 ? (
+                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                      {activeFilterCount}
+                    </span>
+                  ) : null}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-4" align="end">
+                <div className="space-y-3">
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="approved">Approved</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                      <SelectItem value="commented">Commented</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={clientFilter} onValueChange={setClientFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Clients</SelectItem>
+                      {clients.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={projectFilter} onValueChange={setProjectFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Projects</SelectItem>
+                      {projects.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={folderFilter} onValueChange={setFolderFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Folder" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Folders</SelectItem>
+                      <SelectItem value="none">No folder</SelectItem>
+                      {folders.map((f) => (
+                        <SelectItem key={f.id} value={f.id}>
+                          <span className="mr-1">{f.emoji}</span>{f.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {activeFilterCount > 0 ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-full"
+                      onClick={() => {
+                        setStatusFilter('all');
+                        setClientFilter('all');
+                        setProjectFilter('all');
+                        setFolderFilter('all');
+                      }}
+                    >
+                      Reset filters
+                    </Button>
+                  ) : null}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
 

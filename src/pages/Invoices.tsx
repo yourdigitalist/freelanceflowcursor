@@ -24,8 +24,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, MoreVertical, Trash2, Send, Download, Upload, RotateCcw } from '@/components/icons';
+import { Plus, Search, MoreVertical, Trash2, Send, Download, Upload, RotateCcw, Filter } from '@/components/icons';
 import { reopenPaidInvoice } from '@/lib/invoiceStatus';
 import { formatLocaleDate } from '@/lib/datetime';
 import { formatStatusLabel, getStatusBadgeClass } from '@/lib/statusDisplay';
@@ -452,6 +453,11 @@ export default function Invoices() {
     if (filterStatus !== 'all' && inv.status !== filterStatus) return false;
     return true;
   });
+  const activeFilterCount =
+    (dateRangePreset !== 'all' ? 1 : 0) +
+    (filterClientId !== 'all' ? 1 : 0) +
+    (filterProjectId !== 'all' ? 1 : 0) +
+    (filterStatus !== 'all' ? 1 : 0);
 
   const handleDownloadTemplate = () => {
     downloadCsv('invoices_template.csv', getInvoicesTemplateRows());
@@ -932,88 +938,103 @@ export default function Invoices() {
           </Card>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Date</Label>
-            <Select value={dateRangePreset} onValueChange={(v) => setDateRangePreset(v as DateRangePreset)}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All time</SelectItem>
-                <SelectItem value="this_week">This week</SelectItem>
-                <SelectItem value="this_month">This month</SelectItem>
-                <SelectItem value="last_90">Last 90 days</SelectItem>
-                <SelectItem value="custom">Custom</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {dateRangePreset === 'custom' && (
-            <>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">From</Label>
-                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-[140px]" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">To</Label>
-                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-[140px]" />
-              </div>
-            </>
-          )}
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Client</Label>
-            <Select value={filterClientId} onValueChange={setFilterClientId}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="All clients" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All clients</SelectItem>
-                {clients.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Project</Label>
-            <Select value={filterProjectId} onValueChange={setFilterProjectId}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="All projects" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All projects</SelectItem>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Status</Label>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-[130px]">
-                <SelectValue placeholder="All statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="sent">Sent</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="overdue">Overdue</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
+        {/* Search + Filters */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search invoices..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              className="pl-10 bg-card"
             />
           </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="relative h-8 w-8 p-0 ml-auto" aria-label="Filters">
+                <Filter className="h-4 w-4" />
+                {activeFilterCount > 0 ? (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[320px] p-4" align="end">
+              <div className="space-y-3">
+                <Select value={dateRangePreset} onValueChange={(v) => setDateRangePreset(v as DateRangePreset)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All time</SelectItem>
+                    <SelectItem value="this_week">This week</SelectItem>
+                    <SelectItem value="this_month">This month</SelectItem>
+                    <SelectItem value="last_90">Last 90 days</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+                {dateRangePreset === 'custom' ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                    <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                  </div>
+                ) : null}
+                <Select value={filterClientId} onValueChange={setFilterClientId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All clients" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All clients</SelectItem>
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={filterProjectId} onValueChange={setFilterProjectId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All projects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All projects</SelectItem>
+                    {projects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="sent">Sent</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
+                    <SelectItem value="overdue">Overdue</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+                {activeFilterCount > 0 ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-full"
+                    onClick={() => {
+                      setDateRangePreset('all');
+                      setDateFrom('');
+                      setDateTo('');
+                      setFilterClientId('all');
+                      setFilterProjectId('all');
+                      setFilterStatus('all');
+                    }}
+                  >
+                    Reset filters
+                  </Button>
+                ) : null}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Invoices Table */}

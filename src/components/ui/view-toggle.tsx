@@ -24,7 +24,7 @@ export const ViewToggleButton = React.forwardRef<HTMLButtonElement, ViewToggleBu
       aria-pressed={active}
       className={cn(
         "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-        active && "bg-foreground text-background hover:text-background",
+        active && "bg-muted text-foreground hover:bg-muted/90 hover:text-foreground",
         className,
       )}
       {...props}

@@ -45,8 +45,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, MoreVertical, Trash2, Grid, List, PanelLeft, Download, Upload, GripVertical } from '@/components/icons';
+import { Plus, Search, MoreVertical, Trash2, Grid, List, PanelLeft, Download, Upload, GripVertical, Filter } from '@/components/icons';
 import { downloadCsv, parseCsv, getClientsTemplateRows, CLIENTS_CSV_HEADERS } from '@/lib/csv';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import {
@@ -335,18 +336,22 @@ export default function Clients() {
   // Sync view mode and status filter from URL (and grid/board when returning from client detail)
   useEffect(() => {
     const path = location.pathname;
+    const viewParam = new URLSearchParams(location.search).get('view');
     const navState = readClientsNavState(location.state);
     if (path === '/clients/active') {
       setViewMode('list');
       setStatusFilter('active');
     } else if (path === '/clients/list') {
-      setViewMode('list');
+      const nextView = viewParam === 'grid' ? 'grid' : (navState?.clientsViewMode === 'grid' ? 'grid' : 'list');
+      setViewMode(nextView);
       if (statusFilter === 'active') setStatusFilter('all');
     } else if (path === '/clients') {
-      setViewMode(navState?.clientsViewMode ?? 'board');
+      if (viewParam === 'grid') setViewMode('grid');
+      else if (viewParam === 'list') setViewMode('list');
+      else setViewMode(navState?.clientsViewMode ?? 'board');
       if (statusFilter === 'active') setStatusFilter('all');
     }
-  }, [location.pathname, location.state]);
+  }, [location.pathname, location.search, location.state]);
 
   const openClientDetail = (clientId: string) => {
     navigate(`/clients/${clientId}`, {
@@ -376,10 +381,13 @@ export default function Clients() {
     setViewMode(mode);
     if (status !== undefined) setStatusFilter(status);
     if (mode === 'board') navigate('/clients');
+    else if (mode === 'grid') navigate('/clients/list?view=grid');
     else if (mode === 'list' && status === 'active') navigate('/clients/active');
     else if (mode === 'list') navigate('/clients/list');
     else navigate('/clients');
   };
+
+  const activeFilterCount = (statusFilter !== 'all' ? 1 : 0) + (showArchived ? 1 : 0);
 
   const fetchClients = async () => {
     try {
@@ -996,35 +1004,18 @@ export default function Clients() {
           </div>
         </div>
 
-        {/* Search, Status Filter & View Toggle */}
+        {/* Search + View + Filters */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative max-w-sm flex-1">
+          <div className="relative max-w-md flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search clients..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              className="pl-10 bg-card"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
-              <Checkbox checked={showArchived} onCheckedChange={(v) => setShowArchived(!!v)} />
-              Show archived
-            </label>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[130px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                {CLIENT_CRM_STAGES.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <ViewToggle>
               <ViewToggleButton
                 active={viewMode === 'board'}
@@ -1051,6 +1042,52 @@ export default function Clients() {
                 <List className="h-3.5 w-3.5" />
               </ViewToggleButton>
             </ViewToggle>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="relative h-8 w-8 p-0" aria-label="Filters">
+                  <Filter className="h-4 w-4" />
+                  {activeFilterCount > 0 ? (
+                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                      {activeFilterCount}
+                    </span>
+                  ) : null}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[280px] p-4" align="end">
+                <div className="space-y-3">
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      {CLIENT_CRM_STAGES.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
+                    <Checkbox checked={showArchived} onCheckedChange={(v) => setShowArchived(!!v)} />
+                    Show archived
+                  </label>
+                  {activeFilterCount > 0 ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-full"
+                      onClick={() => {
+                        setStatusFilter('all');
+                        setShowArchived(false);
+                      }}
+                    >
+                      Reset filters
+                    </Button>
+                  ) : null}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
 
@@ -1455,13 +1492,6 @@ export default function Clients() {
                           ))
                         )}
                       </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {(viewingClient.tags || []).map((t) => (
-                        <Badge key={t} variant="secondary">
-                          {t}
-                        </Badge>
-                      ))}
                     </div>
                     <div className="pt-2 border-t">
                       <p className="text-sm font-semibold mb-2">Activity</p>

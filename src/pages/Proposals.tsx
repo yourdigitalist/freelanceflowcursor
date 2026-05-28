@@ -13,7 +13,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2 } from "@/components/icons";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Plus, Trash2, Search, Filter } from "@/components/icons";
 import { SlotIcon } from "@/contexts/IconSlotContext";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate } from "@/lib/datetime";
@@ -128,6 +129,7 @@ export default function Proposals() {
       return matchesStatus && matchesQuery;
     });
   }, [rows, searchQuery, statusFilter]);
+  const activeFilterCount = statusFilter !== "all" ? 1 : 0;
 
   const createProposal = async () => {
     if (!user || !clientId) return;
@@ -255,18 +257,49 @@ export default function Proposals() {
         </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Find a proposal..."
-            className="max-w-sm"
-          />
-          {(["all", "draft", "sent", "read", "accepted"] as const).map((status) => (
-            <Button key={status} variant={statusFilter === status ? "default" : "outline"} size="sm" onClick={() => setStatusFilter(status)}>
-              {status.charAt(0).toUpperCase() + status.slice(1)}
-            </Button>
-          ))}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative max-w-md flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Find a proposal..."
+              className="pl-10 bg-card"
+            />
+          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="relative h-8 w-8 p-0 ml-auto" aria-label="Filters">
+                <Filter className="h-4 w-4" />
+                {activeFilterCount > 0 ? (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[240px] p-4" align="end">
+              <div className="space-y-3">
+                <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="sent">Sent</SelectItem>
+                    <SelectItem value="read">Read</SelectItem>
+                    <SelectItem value="accepted">Accepted</SelectItem>
+                  </SelectContent>
+                </Select>
+                {activeFilterCount > 0 ? (
+                  <Button variant="ghost" size="sm" className="h-8 w-full" onClick={() => setStatusFilter("all")}>
+                    Reset filters
+                  </Button>
+                ) : null}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         <Card className="border-0 shadow-sm">

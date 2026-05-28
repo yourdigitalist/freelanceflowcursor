@@ -15,7 +15,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2 } from "@/components/icons";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Plus, Trash2, Search, Filter } from "@/components/icons";
 import { SlotIcon } from "@/contexts/IconSlotContext";
 import { applyProposalImportToContract } from "@/lib/contractProposalImport";
 import { contractClientSnapshotFromClient } from "@/lib/clientForm";
@@ -185,6 +186,7 @@ export default function Contracts() {
       return matchesStatus && matchesQuery;
     });
   }, [rows, searchQuery, statusFilter]);
+  const activeFilterCount = statusFilter !== "all" ? 1 : 0;
 
   const formatMoney = (amount: number, currencyCode?: string | null) =>
     new Intl.NumberFormat(undefined, { style: "currency", currency: currencyCode || "USD" }).format(amount || 0);
@@ -380,23 +382,49 @@ export default function Contracts() {
           )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-          <Input
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Find a contract..."
-            className="max-w-sm"
-          />
-          {(["all", "draft", "pending_signatures", "signed", "cancelled"] as const).map((status) => (
-            <Button
-              key={status}
-              variant={statusFilter === status ? "default" : "outline"}
-              size="sm"
-              onClick={() => setStatusFilter(status)}
-            >
-              {formatStatus(status)}
-            </Button>
-          ))}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative max-w-md flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Find a contract..."
+              className="pl-10 bg-card"
+            />
+          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="relative h-8 w-8 p-0 ml-auto" aria-label="Filters">
+                <Filter className="h-4 w-4" />
+                {activeFilterCount > 0 ? (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[260px] p-4" align="end">
+              <div className="space-y-3">
+                <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="pending_signatures">Pending signatures</SelectItem>
+                    <SelectItem value="signed">Signed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+                {activeFilterCount > 0 ? (
+                  <Button variant="ghost" size="sm" className="h-8 w-full" onClick={() => setStatusFilter("all")}>
+                    Reset filters
+                  </Button>
+                ) : null}
+              </div>
+            </PopoverContent>
+          </Popover>
             </div>
 
             <Card className="border-0 shadow-sm">
