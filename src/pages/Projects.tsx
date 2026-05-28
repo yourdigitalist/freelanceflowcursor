@@ -567,7 +567,7 @@ export default function Projects() {
                       </DropdownMenu>
                     </div>
                   </div>
-                  <h3 className="font-semibold text-primary mb-1">{project.name}</h3>
+                  <h3 className="font-semibold text-[rgba(51,51,51,1)] mb-1">{project.name}</h3>
                   <div className="mb-3">
                     {project.clients ? (
                       <button
@@ -633,7 +633,12 @@ export default function Projects() {
                     {project.icon_emoji || '📁'}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-primary truncate">{project.name}</h3>
+                    <h3
+                      className="font-semibold text-[rgba(51,51,51,1)] truncate"
+                      style={{ fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif' }}
+                    >
+                      {project.name}
+                    </h3>
                     {project.clients ? (
                       <button
                         type="button"
