@@ -23,7 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Check, MoreVertical, X } from "@/components/icons";
+import { ArrowLeft, Check, MoreVertical } from "@/components/icons";
 import { addDays, addMonths, addWeeks, eachDayOfInterval, endOfDay, endOfMonth, endOfWeek, format, isSameDay, parseISO, startOfDay, startOfMonth, startOfWeek, subDays, subMonths, subWeeks } from "date-fns";
 import {
   formatDuration,
@@ -48,6 +48,7 @@ import { countryLabel } from "@/lib/locale-data";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate, formatLocaleDateTime } from "@/lib/datetime";
 import { ClientPortalSettings } from "@/components/clients/ClientPortalSettings";
+import { TimeEntriesTable, type TimeEntriesTableEntry } from "@/components/time/TimeEntriesTable";
 import { readClientsNavState } from "@/lib/clientsNavigation";
 import {
   archiveClient,
@@ -108,11 +109,12 @@ type TimeEntry = {
   description: string | null;
   started_at: string | null;
   start_time: string | null;
+  end_time: string | null;
   total_duration_seconds: number | null;
   duration_minutes: number | null;
   billable: boolean | null;
   billing_status: string | null;
-  projects?: { name: string } | null;
+  projects?: { name: string; client_id: string | null } | null;
   tasks?: { title: string } | null;
 };
 type FollowUp = {
@@ -143,28 +145,6 @@ const formatHm = (seconds: number) => {
   const m = totalMinutes % 60;
   return `${h}:${m.toString().padStart(2, "0")}`;
 };
-
-const tagColorClass = (tag: string) => {
-  const palette = [
-    "bg-blue-50 text-blue-700 border-blue-200",
-    "bg-emerald-50 text-emerald-700 border-emerald-200",
-    "bg-violet-50 text-violet-700 border-violet-200",
-    "bg-amber-50 text-amber-700 border-amber-200",
-    "bg-rose-50 text-rose-700 border-rose-200",
-    "bg-cyan-50 text-cyan-700 border-cyan-200",
-  ];
-  const hash = Array.from(tag).reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return palette[hash % palette.length];
-};
-
-const formatTag = (tag: string) =>
-  tag
-    .replace(/_/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(" ")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(" ");
 
 export default function ClientDetail() {
   const { id } = useParams<{ id: string }>();
@@ -199,8 +179,6 @@ export default function ClientDetail() {
   const clientMoneyCurrency = resolveMoneyCurrency(client?.currency, profileCurrency);
   const formatClientMoney = (amount: number | null | undefined) =>
     formatPortalMoney(amount, clientMoneyCurrency);
-  const [isAddingTag, setIsAddingTag] = useState(false);
-  const [newTag, setNewTag] = useState("");
   const [loading, setLoading] = useState(true);
   const { dateFormat, timeFormat } = useLocalePreferences();
 
@@ -218,9 +196,8 @@ export default function ClientDetail() {
         clientLogoPreview !== (client.logo_url ? clientLogoPublicUrl(client.logo_url) : null) ||
         selectedAvatarColor !== (client.avatar_color || DEFAULT_CLIENT_AVATAR_COLOR));
     const followUpDraftDirty = !!newFollowUpTitle.trim() || !!newFollowUpDueAt;
-    const tagDraftDirty = isAddingTag && !!newTag.trim();
     const followUpEditDirty = !!editingFollowUpId;
-    return formDirty || followUpDraftDirty || tagDraftDirty || followUpEditDirty;
+    return formDirty || followUpDraftDirty || followUpEditDirty;
   }, [
     client,
     clientLogoPreview,
@@ -228,10 +205,8 @@ export default function ClientDetail() {
     editingInfo,
     formPhone,
     formValues,
-    isAddingTag,
     newFollowUpDueAt,
     newFollowUpTitle,
-    newTag,
     profileCurrency,
     selectedAvatarColor,
   ]);
@@ -278,7 +253,7 @@ export default function ClientDetail() {
         if (projectIds.length > 0) {
           const { data: te } = await supabase
             .from("time_entries")
-            .select("id, project_id, task_id, description, started_at, start_time, total_duration_seconds, duration_minutes, billable, billing_status, projects(name), tasks(title)")
+            .select("id, project_id, task_id, description, started_at, start_time, end_time, total_duration_seconds, duration_minutes, billable, billing_status, projects(name, client_id), tasks(title)")
             .in("project_id", projectIds)
             .eq("user_id", user.id)
             .order("started_at", { ascending: false });
@@ -420,6 +395,62 @@ export default function ClientDetail() {
         }),
     [timeEntries, monthStart, monthEnd],
   );
+
+  const visibleTimeEntries = useMemo(
+    () => (timeView === "day" ? selectedDayEntries : timeView === "week" ? weekEntries : monthEntries),
+    [timeView, selectedDayEntries, weekEntries, monthEntries],
+  );
+
+  const clientTimeTableEntries = useMemo<TimeEntriesTableEntry[]>(
+    () =>
+      visibleTimeEntries.map((entry) => ({
+        id: entry.id,
+        description: entry.description,
+        start_time: entry.start_time ?? entry.started_at ?? new Date(0).toISOString(),
+        started_at: entry.started_at,
+        project_id: entry.project_id,
+        task_id: entry.task_id,
+        total_duration_seconds: entry.total_duration_seconds,
+        duration_minutes: entry.duration_minutes,
+        end_time: entry.end_time,
+        billable: entry.billable ?? true,
+        billing_status: entry.billing_status,
+        projects: entry.projects
+          ? { name: entry.projects.name, client_id: entry.projects.client_id ?? client?.id ?? null }
+          : null,
+        tasks: entry.tasks ?? null,
+      })),
+    [visibleTimeEntries, client?.id],
+  );
+
+  const clientTimeClientById = useMemo(() => {
+    const map = new Map<string, { name: string }>();
+    if (client?.id && client?.name) map.set(client.id, { name: client.name });
+    return map;
+  }, [client?.id, client?.name]);
+
+  const getClientEntryStatusBadge = (entry: TimeEntriesTableEntry) => {
+    if (!entry.billable) return <Badge variant="secondary">Not Billable</Badge>;
+    switch (entry.billing_status) {
+      case "paid":
+        return <Badge className="bg-success/10 text-success">Paid</Badge>;
+      case "billed":
+        return <Badge className="bg-primary/10 text-primary">Billed</Badge>;
+      default:
+        return <Badge className="bg-warning/10 text-warning">Billable</Badge>;
+    }
+  };
+
+  const handleDeleteClientTimeEntry = async (entryId: string) => {
+    if (!window.confirm("Delete this time entry?")) return;
+    const { error } = await supabase.from("time_entries").delete().eq("id", entryId);
+    if (error) {
+      toast({ title: "Failed to delete time entry", description: error.message, variant: "destructive" });
+      return;
+    }
+    setTimeEntries((prev) => prev.filter((entry) => entry.id !== entryId));
+    toast({ title: "Time entry deleted" });
+  };
 
   const timeBillingSummary = useMemo(() => {
     const summary = {
@@ -565,36 +596,9 @@ export default function ClientDetail() {
     toast({ title: "CRM stage updated" });
   };
 
-  const saveTag = async () => {
-    if (!client) return;
-    const cleaned = newTag.trim().replace(/_/g, " ").replace(/\s+/g, " ");
-    if (!cleaned) {
-      setIsAddingTag(false);
-      setNewTag("");
-      return;
-    }
-    const existing = new Set((client.tags || []).map((t) => t.toLowerCase()));
-    if (existing.has(cleaned.toLowerCase())) {
-      setIsAddingTag(false);
-      setNewTag("");
-      return;
-    }
-    const nextTags = [...(client.tags || []), cleaned];
-    const { error, data } = await supabase.from("clients").update({ tags: nextTags }).eq("id", client.id).select("*").single();
-    if (error) {
-      toast({ title: "Failed to add tag", description: error.message, variant: "destructive" });
-      return;
-    }
-    setClient(data as Client);
-    syncFormFromClient(data as Client);
-    setIsAddingTag(false);
-    setNewTag("");
-  };
-
   const saveAllPending = async () => {
     if (editingInfo) await saveClientInfo();
     if (editingFollowUpId) await saveFollowUpEdit();
-    if (isAddingTag && newTag.trim()) await saveTag();
   };
 
   const addFollowUp = async () => {
@@ -731,18 +735,6 @@ export default function ClientDetail() {
     setFollowUps((prev) => prev.map((f) => (f.id === id ? (data as FollowUp) : f)));
   };
 
-  const removeTag = async (tagToRemove: string) => {
-    if (!client) return;
-    const nextTags = (client.tags || []).filter((tag) => tag !== tagToRemove);
-    const { error, data } = await supabase.from("clients").update({ tags: nextTags }).eq("id", client.id).select("*").single();
-    if (error) {
-      toast({ title: "Failed to remove tag", description: error.message, variant: "destructive" });
-      return;
-    }
-    setClient(data as Client);
-    syncFormFromClient(data as Client);
-  };
-
   const followUpRows = useMemo(() => {
     const rows: Array<{ id: string; title: string; due_at: string | null; completed_at: string | null; source: "next_action" | "follow_up" }> = [];
     if (client?.next_action) {
@@ -867,80 +859,11 @@ export default function ClientDetail() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Client added on {formatUserDate(client.created_at, true)}
-            </p>
-            {(client.tags || []).length > 0 ? (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {(client.tags || []).map((tag) => (
-                  <Badge key={tag} variant="outline" className={`group relative ${tagColorClass(tag)}`}>
-                    {formatTag(tag)}
-                    <button
-                      type="button"
-                      className="absolute right-0.5 top-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/10"
-                      onClick={() => void removeTag(tag)}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-                {!isAddingTag ? (
-                  <button
-                    type="button"
-                    className="rounded-full border border-dashed px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
-                    onClick={() => setIsAddingTag(true)}
-                  >
-                    + Add tag
-                  </button>
-                ) : (
-                  <span className="flex items-center gap-1 rounded-full border px-2 py-0.5">
-                    <Input
-                      className="h-6 w-28 border-0 px-1 text-xs shadow-none focus-visible:ring-0"
-                      placeholder="Tag"
-                      value={newTag}
-                      onChange={(e) => setNewTag(e.target.value)}
-                      onBlur={() => void saveTag()}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          void saveTag();
-                        }
-                      }}
-                    />
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="mt-2">
-                {!isAddingTag ? (
-                  <button
-                    type="button"
-                    className="rounded-full border border-dashed px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
-                    onClick={() => setIsAddingTag(true)}
-                  >
-                    + Add tag
-                  </button>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5">
-                    <Input
-                      className="h-6 w-28 border-0 px-1 text-xs shadow-none focus-visible:ring-0"
-                      placeholder="Tag"
-                      value={newTag}
-                      onChange={(e) => setNewTag(e.target.value)}
-                      onBlur={() => void saveTag()}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          void saveTag();
-                        }
-                      }}
-                    />
-                  </span>
-                )}
-              </div>
-            )}
           </div>
           <div className="flex items-center gap-2">
+            <p className="hidden text-sm text-muted-foreground lg:block">
+              Client added on {formatUserDate(client.created_at, true)}
+            </p>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon">
@@ -1030,9 +953,6 @@ export default function ClientDetail() {
                     <p className="sm:col-span-2">
                       <strong>Address:</strong>{" "}
                       {[client.street, client.street2, client.city, client.state, client.postal_code, countryLabel(client.country)].filter(Boolean).join(", ") || "—"}
-                    </p>
-                    <p className="sm:col-span-2">
-                      <strong>Tags:</strong> {(client.tags || []).length > 0 ? (client.tags || []).map(formatTag).join(", ") : "—"}
                     </p>
                     <p className="sm:col-span-2 whitespace-pre-wrap">
                       <strong>Notes:</strong> {client.notes || "—"}
@@ -1378,7 +1298,7 @@ export default function ClientDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                {(timeView === "day" ? selectedDayEntries : timeView === "week" ? weekEntries : monthEntries).length === 0 ? (
+                {visibleTimeEntries.length === 0 ? (
                   <div className="px-4 pb-4 text-sm text-muted-foreground">
                     {timeView === "day"
                       ? "No entries for this day."
@@ -1387,53 +1307,26 @@ export default function ClientDetail() {
                         : "No entries for this month."}
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Project / Task</TableHead>
-                        <TableHead>Notes</TableHead>
-                        <TableHead>Duration</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(timeView === "day" ? selectedDayEntries : timeView === "week" ? weekEntries : monthEntries).map((entry) => {
-                        const resumeHref = entry.project_id
-                          ? `/time/timer?project=${entry.project_id}${entry.task_id ? `&task=${entry.task_id}` : ""}`
-                          : "/time/timer";
-                        return (
-                          <TableRow key={entry.id}>
-                            <TableCell>
-                              <div className="font-medium">
-                                {entry.project_id ? (
-                                  <Link to={`/projects/${entry.project_id}`} className="hover:underline">
-                                    {entry.projects?.name || "No project"}
-                                  </Link>
-                                ) : (
-                                  entry.projects?.name || "No project"
-                                )}
-                              </div>
-                              <div className="text-xs text-muted-foreground">{entry.tasks?.title || "No task"}</div>
-                            </TableCell>
-                            <TableCell>{entry.description || <span className="text-muted-foreground">No notes</span>}</TableCell>
-                            <TableCell className="font-mono">{formatHm(toSeconds(entry))}</TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                <Button variant="ghost" size="sm" asChild>
-                                  <Link to={`/time?view=day&edit=${entry.id}`}>Edit</Link>
-                                </Button>
-                                <Button variant="ghost" size="sm" asChild>
-                                  <Link to={resumeHref}>Resume</Link>
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                  <TimeEntriesTable
+                    entries={clientTimeTableEntries}
+                    clientById={clientTimeClientById}
+                    formatUserDate={(value) => formatUserDate(value)}
+                    getEntrySeconds={(entry) =>
+                      entry.total_duration_seconds != null ? entry.total_duration_seconds : (entry.duration_minutes || 0) * 60
+                    }
+                    getStatusBadge={getClientEntryStatusBadge}
+                    onEdit={(entry) => navigate(`/time?view=day&edit=${entry.id}`)}
+                    onDelete={handleDeleteClientTimeEntry}
+                    onResume={(entryId) => {
+                      const entry = clientTimeTableEntries.find((row) => row.id === entryId);
+                      const resumeHref = entry?.project_id
+                        ? `/time/timer?project=${entry.project_id}${entry.task_id ? `&task=${entry.task_id}` : ""}`
+                        : "/time/timer";
+                      navigate(resumeHref);
+                    }}
+                  />
                 )}
-                {(timeView === "day" ? selectedDayEntries : timeView === "week" ? weekEntries : monthEntries).length > 0 ? (
+                {visibleTimeEntries.length > 0 ? (
                   <div className="mt-2 flex items-center justify-end border-t px-4 py-3">
                     <p className="text-sm font-medium text-foreground">
                       {timeView === "day" ? "Day total: " : timeView === "week" ? "Week total: " : "Month total: "}

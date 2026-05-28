@@ -27,7 +27,7 @@ import {
   Pencil,
   Trash2,
   X,
-  Check,
+  Save,
 } from '@/components/icons';
 import { PortalBackLink, usePortalTokenFromSearch } from '@/components/clients/PortalBackLink';
 import { SlotIcon } from '@/contexts/IconSlotContext';
@@ -417,7 +417,7 @@ export default function ClientReview() {
                       disabled={!editingCommentContent.trim() || isSaving}
                       title="Save comment"
                     >
-                      <Check className="h-3.5 w-3.5" />
+                      <Save className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                       variant="ghost"
@@ -487,7 +487,7 @@ export default function ClientReview() {
         <Card className="max-w-md w-full">
           <CardContent className="pt-6 pb-6 text-center space-y-4">
             <XCircle className="h-12 w-12 text-destructive mx-auto" />
-            <h2 className="text-xl font-semibold">Link expired or invalid</h2>
+            <h2 className="text-xl font-semibold tracking-tight">Link expired or invalid</h2>
             <p className="text-muted-foreground text-sm">
               This review link may have expired or the address is incorrect. Please ask the sender for a new link.
             </p>
@@ -548,7 +548,7 @@ export default function ClientReview() {
             <div className="flex items-center gap-3">
               <Badge
                 variant={request.status === 'rejected' ? 'destructive' : 'secondary'}
-                className={request.status === 'approved' ? 'bg-green-600 hover:bg-green-600 text-white border-0' : ''}
+                className={request.status === 'approved' ? 'bg-success text-success-foreground border-0' : ''}
               >
                 {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
               </Badge>

@@ -138,8 +138,8 @@ export function ProjectHeader({
                   </DropdownMenuItem>
                 )}
                 {onDelete && (
-                  <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
-                    <Trash2 className="h-4 w-4 mr-2" />
+                  <DropdownMenuItem onClick={onDelete}>
+                    <Trash2 className="h-4 w-4 mr-2 text-muted-foreground" />
                     Delete
                   </DropdownMenuItem>
                 )}

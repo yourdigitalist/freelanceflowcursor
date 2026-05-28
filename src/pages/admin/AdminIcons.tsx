@@ -100,7 +100,7 @@ export default function AdminIcons() {
           <div className="space-y-8">
             {ICON_SLOT_GROUPS.map(({ group, slots }) => (
               <div key={group}>
-                <h3 className="text-sm font-semibold text-muted-foreground mb-3">{group}</h3>
+                <h4 className="text-sm font-semibold text-muted-foreground mb-3">{group}</h4>
                 <div className="space-y-3">
                   {slots.map(({ key, label }) => (
                     <div key={key} className="flex flex-wrap items-center gap-4">

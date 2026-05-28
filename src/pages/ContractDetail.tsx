@@ -1080,7 +1080,7 @@ export default function ContractDetail() {
                     <div className="md:col-span-2 flex items-center justify-between">
                       <span className="text-sm font-medium">{formatMoney(Number(item.price || 0) * Number(item.quantity || 0))}</span>
                       <Button size="icon" variant="ghost" onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))} disabled={isLocked}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
                       </Button>
                     </div>
                   </div>
@@ -1219,7 +1219,7 @@ export default function ContractDetail() {
                     </p>
                     <div className="mx-auto mt-3 h-px w-full bg-zinc-500" />
                     <p className="mt-2 text-lg font-semibold tracking-wide text-zinc-900">CONTRACTING PARTY</p>
-                    <p className="mt-1 text-xs text-zinc-500">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       Signed at: {contract.client_signed_at ? fmtDateTime(contract.client_signed_at) : "Pending signature"}
                     </p>
                   </div>
@@ -1229,7 +1229,7 @@ export default function ContractDetail() {
                     </p>
                     <div className="mx-auto mt-3 h-px w-full bg-zinc-500" />
                     <p className="mt-2 text-lg font-semibold tracking-wide text-zinc-900">SERVICE PROVIDER</p>
-                    <p className="mt-1 text-xs text-zinc-500">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       Signed at: {contract.freelancer_signed_at ? fmtDateTime(contract.freelancer_signed_at) : "Pending signature"}
                     </p>
                   </div>
@@ -1272,7 +1272,7 @@ export default function ContractDetail() {
                   </div>
                 </div>
               </section>
-              <footer className="mt-10 border-t pt-4 text-center text-xs text-zinc-500">
+              <footer className="mt-10 border-t pt-4 text-center text-xs text-muted-foreground">
                 Contract generated and signed digitally via Lance.
               </footer>
             </div>

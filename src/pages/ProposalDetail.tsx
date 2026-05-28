@@ -768,7 +768,7 @@ export default function ProposalDetail() {
                       <Label className="text-xs text-muted-foreground">Total</Label>
                       <div className="flex items-center justify-between pt-2">
                         <span className="text-sm font-medium">{formatMoney(Number(item.price || 0) * Number(item.quantity || 0))}</span>
-                        <Button size="icon" variant="ghost" onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        <Button size="icon" variant="ghost" onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4 text-muted-foreground" /></Button>
                       </div>
                     </div>
                   </div>

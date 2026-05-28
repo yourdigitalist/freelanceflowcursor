@@ -25,8 +25,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { GripVertical, Trash2, MessageSquare, Plus, ChevronUp, ChevronDown } from '@/components/icons';
-import { SlotIcon } from '@/contexts/IconSlotContext';
+import { GripVertical, Trash2, MessageSquare, Plus, ChevronUp, ChevronDown, Pencil, Copy } from '@/components/icons';
 import { Task, ProjectStatus } from './types';
 import { PrioritySelect } from './PrioritySelect';
 import { format } from 'date-fns';
@@ -178,7 +177,7 @@ function SortableRow({
               {task.title}
             </span>
             {commentCount > 0 && (
-              <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+              <span className="text-sm text-muted-foreground flex items-center gap-0.5">
                 <MessageSquare className="h-3 w-3" />
                 {commentCount}
               </span>
@@ -188,7 +187,7 @@ function SortableRow({
       </TableCell>
       <TableCell>
         <Select value={task.status_id || ''} onValueChange={onStatusChange}>
-          <SelectTrigger className="w-[160px] h-8 border-0 bg-transparent hover:bg-muted">
+          <SelectTrigger className="w-[160px] h-8 border-0 bg-transparent text-sm hover:bg-muted">
             <div className="flex items-center gap-2">
               {currentStatus && (
                 <div
@@ -218,7 +217,7 @@ function SortableRow({
         <PrioritySelect
           value={task.priority}
           onValueChange={onPriorityChange}
-          triggerClassName="w-[110px] h-8 border-0 bg-transparent p-0 shadow-none"
+          triggerClassName="w-[110px] h-8 border-0 bg-transparent p-0 text-sm font-normal shadow-none"
         />
       </TableCell>
       <TableCell>
@@ -244,7 +243,7 @@ function SortableRow({
       </TableCell>
       <TableCell>
         {trackedSeconds > 0 ? (
-          <span className="text-primary font-medium">{formatDuration(trackedSeconds, true)}</span>
+          <span className="text-primary">{formatDuration(trackedSeconds, true)}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
@@ -256,7 +255,7 @@ function SortableRow({
               variant="ghost"
               size="sm"
               className={cn(
-                "h-8 px-2 font-normal justify-start",
+                "h-8 justify-start px-2 text-sm font-normal",
                 !task.due_date && "text-muted-foreground"
               )}
             >
@@ -276,14 +275,14 @@ function SortableRow({
       <TableCell>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onTaskClick} title="Edit">
-            <SlotIcon slot="action_edit" className="h-4 w-4" />
+            <Pencil className="h-4 w-4" />
           </Button>
           {onDuplicate && (
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onDuplicate} title="Duplicate">
-              <SlotIcon slot="action_duplicate" className="h-4 w-4" />
+              <Copy className="h-4 w-4" />
             </Button>
           )}
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={onDelete} title="Delete">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={onDelete} title="Delete">
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
@@ -313,7 +312,7 @@ function SortableHead({
       <Button
         variant="ghost"
         size="sm"
-        className="-ml-2 h-8 font-medium hover:bg-muted hover:text-foreground"
+        className="-ml-0.5 h-auto p-1 font-medium text-muted-foreground hover:bg-transparent hover:text-muted-foreground"
         onClick={() => onSort(sortKey)}
       >
         {label}
@@ -408,7 +407,7 @@ export function TaskListView({
   }, [tasks, sortKey, sortDir, statuses]);
 
   return (
-    <div className="border rounded-lg bg-card overflow-hidden">
+    <div className="overflow-hidden rounded-lg border bg-card">
       <Table>
         <TableHeader>
           <TableRow>

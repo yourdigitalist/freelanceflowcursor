@@ -33,7 +33,7 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="min-h-screen flex items-center justify-center p-4 bg-background">
           <Card className="max-w-md w-full">
             <CardContent className="pt-6 pb-6 text-center space-y-4">
-              <h2 className="text-xl font-semibold">Something went wrong</h2>
+              <h2 className="text-xl font-semibold tracking-tight">Something went wrong</h2>
               <p className="text-muted-foreground text-sm">
                 An unexpected error occurred. Try refreshing the page.
               </p>

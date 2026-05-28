@@ -22,14 +22,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
   DndContext,
   closestCenter,
   KeyboardSensor,
@@ -58,11 +50,13 @@ import { TaskKanbanView } from '@/components/tasks/TaskKanbanView';
 import { TaskListView } from '@/components/tasks/TaskListView';
 import { TaskEditSheet, type TaskTimeEntryRow } from '@/components/tasks/TaskEditSheet';
 import { TimeEntryLogDialog, type TimeEntryLogDialogEntry } from '@/components/time/TimeEntryLogDialog';
+import { TimeEntriesTable, type TimeEntriesTableEntry } from '@/components/time/TimeEntriesTable';
 import { StatusManagementModal } from '@/components/tasks/StatusManagementModal';
 import { formatDuration } from '@/lib/time';
 import { formatLocaleDate, formatLocaleDateTime } from '@/lib/datetime';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { format, parseISO } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
 
 interface ProjectTimeEntry {
   id: string;
@@ -77,6 +71,7 @@ interface ProjectTimeEntry {
   project_id: string | null;
   task_id: string | null;
   tasks: { title: string } | null;
+  projects?: { name: string; client_id: string | null } | null;
 }
 
 interface EntrySegment {
@@ -85,6 +80,23 @@ interface EntrySegment {
   end_time: string;
   duration_seconds: number;
 }
+
+const getProjectDeleteErrorMessage = (error: unknown) => {
+  const rawMessage =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : '';
+  const normalizedMessage = rawMessage.toLowerCase();
+
+  if (
+    normalizedMessage.includes('contract is read-only after it has been sent') ||
+    (normalizedMessage.includes('contract') && normalizedMessage.includes('read-only'))
+  ) {
+    return 'This project is linked to a sent contract. Archive the contract first, then delete the project.';
+  }
+
+  return rawMessage || 'Could not delete project. Please try again.';
+};
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -320,6 +332,60 @@ export default function ProjectDetail() {
     }
   };
 
+  const projectTimeTableEntries = useMemo<TimeEntriesTableEntry[]>(
+    () =>
+      projectTimeEntries.map((entry) => ({
+        id: entry.id,
+        description: entry.description,
+        start_time: entry.start_time,
+        started_at: entry.started_at ?? null,
+        project_id: entry.project_id,
+        task_id: entry.task_id,
+        total_duration_seconds: entry.total_duration_seconds,
+        duration_minutes: entry.duration_minutes,
+        end_time: entry.end_time,
+        billable: entry.billable ?? true,
+        billing_status: entry.billing_status,
+        projects: { name: project?.name || 'Project', client_id: project?.clients?.id ?? null },
+        tasks: entry.tasks ?? null,
+      })),
+    [projectTimeEntries, project?.name, project?.clients?.id],
+  );
+
+  const projectTimeClientById = useMemo(() => new Map<string, { name: string }>(), []);
+
+  const getProjectEntrySeconds = (entry: TimeEntriesTableEntry) =>
+    entry.total_duration_seconds != null ? entry.total_duration_seconds : (entry.duration_minutes || 0) * 60;
+
+  const getProjectEntryStatusBadge = (entry: TimeEntriesTableEntry) => {
+    if (!entry.billable) return <Badge variant="secondary">Not Billable</Badge>;
+    switch (entry.billing_status) {
+      case 'paid':
+        return <Badge className="bg-success/10 text-success">Paid</Badge>;
+      case 'billed':
+        return <Badge className="bg-primary/10 text-primary">Billed</Badge>;
+      default:
+        return <Badge className="bg-warning/10 text-warning">Billable</Badge>;
+    }
+  };
+
+  const handleDeleteProjectTimeEntry = async (entryId: string) => {
+    if (!confirm('Delete this time entry?')) return;
+    try {
+      const { error } = await supabase.from('time_entries').delete().eq('id', entryId);
+      if (error) throw error;
+      toast({ title: 'Time entry deleted' });
+      void fetchProjectTimeEntries();
+      void fetchTotalHours();
+    } catch (error: any) {
+      toast({
+        title: 'Error deleting time entry',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   useEffect(() => {
     if (user && id) {
       fetchProject();
@@ -522,7 +588,7 @@ export default function ProjectDetail() {
     } catch (error: any) {
       toast({
         title: 'Error deleting project',
-        description: error.message,
+        description: getProjectDeleteErrorMessage(error),
         variant: 'destructive',
       });
     }
@@ -1031,58 +1097,27 @@ export default function ProjectDetail() {
             {projectTimeEntries.length === 0 ? (
               <p className="text-sm text-muted-foreground">No entries yet for this project.</p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Task</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Duration</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {projectTimeEntries.map((entry) => {
-                    const secs = entry.total_duration_seconds ?? (entry.duration_minutes || 0) * 60;
-                    return (
-                      <TableRow key={entry.id} className="cursor-pointer" onClick={() => openEntryDetails(entry)}>
-                        <TableCell>{formatLocaleDate(entry.start_time, dateFormat)}</TableCell>
-                        <TableCell>{entry.tasks?.title || <span className="text-muted-foreground">—</span>}</TableCell>
-                        <TableCell>{entry.description || <span className="text-muted-foreground">No description</span>}</TableCell>
-                        <TableCell>{formatDuration(secs, true)}</TableCell>
-                        <TableCell>{entry.billable ? (entry.billing_status || 'unbilled') : 'not_billable'}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/time?view=day&edit=${entry.id}`);
-                              }}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const params = new URLSearchParams({ project: id ?? '' });
-                                if (entry.task_id) params.set('task', entry.task_id);
-                                navigate(`/time/timer?${params.toString()}`);
-                              }}
-                            >
-                              Resume
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <TimeEntriesTable
+                entries={projectTimeTableEntries}
+                clientById={projectTimeClientById}
+                formatUserDate={(value) => formatLocaleDate(value, dateFormat)}
+                getEntrySeconds={getProjectEntrySeconds}
+                getStatusBadge={getProjectEntryStatusBadge}
+                onEdit={(entry) => navigate(`/time?view=day&edit=${entry.id}`)}
+                onDelete={handleDeleteProjectTimeEntry}
+                showClientColumn={false}
+                showProjectColumn={false}
+                onResume={(entryId) => {
+                  const found = projectTimeTableEntries.find((entry) => entry.id === entryId);
+                  const params = new URLSearchParams({ project: id ?? '' });
+                  if (found?.task_id) params.set('task', found.task_id);
+                  navigate(`/time/timer?${params.toString()}`);
+                }}
+                onRowClick={(entry) => {
+                  const found = projectTimeEntries.find((row) => row.id === entry.id);
+                  if (found) void openEntryDetails(found);
+                }}
+              />
             )}
           </CardContent>
         </Card>

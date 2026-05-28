@@ -11,13 +11,13 @@ const buttonVariants = cva(
       variant: {
         /** Purple brand CTA — one per screen (design: btn-brand) */
         default:
-          "bg-primary text-primary-foreground hover:bg-primary-deep disabled:bg-primary/35 disabled:text-primary-foreground",
+          "border border-transparent bg-primary text-primary-foreground hover:bg-primary-deep disabled:bg-primary/35 disabled:text-primary-foreground",
         /** Alias for default — same as btn-brand */
         brand:
-          "bg-primary text-primary-foreground hover:bg-primary-deep disabled:bg-primary/35 disabled:text-primary-foreground",
+          "border border-transparent bg-primary text-primary-foreground hover:bg-primary-deep disabled:bg-primary/35 disabled:text-primary-foreground",
         /** Alias for brand for teams using btn-purple naming */
         purple:
-          "bg-primary text-primary-foreground hover:bg-primary-deep disabled:bg-primary/35 disabled:text-primary-foreground",
+          "border border-transparent bg-primary text-primary-foreground hover:bg-primary-deep disabled:bg-primary/35 disabled:text-primary-foreground",
         /** Near-black action — when purple is too loud (design: btn-primary / Log time) */
         secondary: "bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50",
         /** Alias for near-black action for teams using btn-primary naming */
@@ -25,15 +25,20 @@ const buttonVariants = cva(
         /** Default outline (design: plain btn / Cancel) */
         outline:
           "border border-border bg-card text-foreground hover:bg-muted disabled:opacity-50",
+        /** Subtle filled action for low emphasis toolbars */
+        subtle: "bg-muted text-foreground hover:bg-muted/80 disabled:opacity-50",
         ghost: "text-foreground hover:bg-muted disabled:opacity-50",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50",
         link: "text-primary underline-offset-4 hover:underline disabled:opacity-50",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3 text-xs",
+        xs: "h-8 rounded-md px-2.5 text-xs",
+        default: "h-9 px-4 text-sm",
+        sm: "h-9 rounded-md px-3 text-sm",
         lg: "h-11 rounded-md px-8",
+        xl: "h-12 rounded-md px-10 text-sm",
+        "icon-sm": "h-8 w-8",
         icon: "h-10 w-10",
         "icon-lg": "h-11 w-11",
       },

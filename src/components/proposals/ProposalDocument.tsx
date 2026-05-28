@@ -116,9 +116,9 @@ export function ProposalDocument({
                 </div>
               )}
               <div>
-                <div className="mb-0.5 text-xs text-[#888]">Client</div>
+                <div className="mb-0.5 text-xs text-muted-foreground">Client</div>
                 <div className="text-[16px] leading-relaxed font-medium text-[#1a1a2e]">{clientDisplayName}</div>
-                {clientDisplayCompany ? <div className="text-[13px] text-[#888]">{clientDisplayCompany}</div> : null}
+                {clientDisplayCompany ? <div className="text-[13px] text-muted-foreground">{clientDisplayCompany}</div> : null}
               </div>
             </div>
             <div className="flex items-center gap-2.5">
@@ -135,7 +135,7 @@ export function ProposalDocument({
                 </div>
               )}
               <div>
-                <div className="mb-0.5 text-xs text-[#888]">Prepared by</div>
+                <div className="mb-0.5 text-xs text-muted-foreground">Prepared by</div>
                 <div className="text-[16px] leading-relaxed font-medium text-[#1a1a2e]">{business?.business_name || "—"}</div>
               </div>
             </div>
@@ -171,17 +171,17 @@ export function ProposalDocument({
           </div>
 
           <div className={SERVICE_TABLE_ROW + " border-b border-[#e7e0f4] py-2"}>
-            <div className="text-xs text-[#888]">Service</div>
-            <div className="text-xs text-[#888]">Description</div>
-            <div className="text-right text-xs text-[#888]">Qty</div>
-            <div className="text-right text-xs text-[#888]">Value</div>
+            <div className="text-xs text-muted-foreground">Service</div>
+            <div className="text-xs text-muted-foreground">Description</div>
+            <div className="text-right text-xs text-muted-foreground">Qty</div>
+            <div className="text-right text-xs text-muted-foreground">Value</div>
           </div>
 
           {items.map((item: any) => (
             <div key={item.id} className={SERVICE_TABLE_ROW + " border-b border-[#e7e0f4] py-4"}>
               <div className="text-[15px] font-medium leading-snug text-[#1a1a2e]">{item.name}</div>
-              <div className="text-[13px] leading-relaxed text-[#888]">{item.description || "—"}</div>
-              <div className="pt-0.5 text-right text-[15px] tabular-nums text-[#888]">{item.quantity}</div>
+              <div className="text-[13px] leading-relaxed text-muted-foreground">{item.description || "—"}</div>
+              <div className="pt-0.5 text-right text-[15px] tabular-nums text-muted-foreground">{item.quantity}</div>
               <div className="pt-0.5 text-right text-[15px] font-medium tabular-nums" style={{ color: proposalMainColor }}>
                 {formatCurrency(item.line_total, item.currency || primaryCurrency)}
               </div>
@@ -189,11 +189,11 @@ export function ProposalDocument({
           ))}
 
           <div className={SERVICE_TABLE_ROW + " border-b border-[#e7e0f4] py-2.5"}>
-            <div className="col-span-3 text-xs text-[#888]">Subtotal</div>
-            <div className="text-right text-xs tabular-nums text-[#888]">{formatCurrency(proposal.subtotal, primaryCurrency)}</div>
+            <div className="col-span-3 text-xs text-muted-foreground">Subtotal</div>
+            <div className="text-right text-xs tabular-nums text-muted-foreground">{formatCurrency(proposal.subtotal, primaryCurrency)}</div>
           </div>
           <div className={SERVICE_TABLE_ROW + " border-b border-[#e7e0f4] py-2.5"}>
-            <div className="col-span-3 text-xs text-[#888]">Discount</div>
+            <div className="col-span-3 text-xs text-muted-foreground">Discount</div>
             <div className="text-right text-xs tabular-nums" style={{ color: proposalMainColor }}>
               {formatCurrency(discountAmount, primaryCurrency)}
               {proposal.discount_type === "percent" ? ` (${proposal.discount_value}%)` : ""}
@@ -232,7 +232,7 @@ export function ProposalDocument({
               <div className="text-base font-semibold text-[#1a1a2e]">Payment</div>
             </div>
             <div className="text-sm leading-relaxed text-[#333333]">{proposal.payment_structure ? paymentLabel(proposal.payment_structure) : "Not specified"}</div>
-            <div className="mt-1.5 text-[13px] text-[#888]">
+            <div className="mt-1.5 text-[13px] text-muted-foreground">
               {(proposal.payment_methods || []).length
                 ? (proposal.payment_methods || []).map((method: string) => paymentLabel(method)).join(", ")
                 : "No methods"}
@@ -304,7 +304,7 @@ export function ProposalDocument({
             {business?.business_name || "Your Business"}
             {business?.business_email ? ` · ${business.business_email}` : ""}
           </div>
-          <div className="mt-1 text-xs text-[#888]">
+          <div className="mt-1 text-xs text-muted-foreground">
             {proposal.identifier}
             {proposal.expires_at ? ` · Valid until ${new Date(proposal.expires_at).toLocaleDateString()}` : ""}
           </div>

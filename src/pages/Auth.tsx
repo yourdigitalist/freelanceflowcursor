@@ -198,8 +198,8 @@ export default function Auth() {
   return (
     <div className="auth-brand min-h-screen flex bg-[linear-gradient(170deg,#faf8ff_0%,#f0ebfc_50%,#fff_100%)]">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap');
-        .auth-brand { font-family: 'Plus Jakarta Sans', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+        .auth-brand { font-family: 'Inter', sans-serif; }
       `}</style>
       {/* Left side - Features */}
       <div className="hidden lg:flex lg:w-1/2 bg-[linear-gradient(160deg,#f8f6ff_0%,#fff_100%)] p-12 flex-col justify-between border-r border-[#ede8fa]">

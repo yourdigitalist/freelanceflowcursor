@@ -42,7 +42,7 @@ function KanbanColumn({ status, tasks, commentCounts, trackedSecondsByTask, onTa
         style={{ backgroundColor: status.color }}
       >
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-sm text-white">{status.name}</h3>
+          <h4 className="text-sm font-semibold text-white">{status.name}</h4>
           <Badge variant="secondary" className="bg-white/20 text-white border-0 text-xs">
             {tasks.length}
           </Badge>

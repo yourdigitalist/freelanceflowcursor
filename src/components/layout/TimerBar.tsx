@@ -4,9 +4,9 @@ import { useTimer } from '@/contexts/TimerContext';
 import { formatElapsed } from '@/contexts/TimerContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Play, Trash2, Check } from '@/components/icons';
+import { Play, Trash2, Save } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
-import { Pause } from 'lucide-react';
+import { ArrowUpRight, Pause } from 'lucide-react';
 
 export function TimerBar() {
   const { user } = useAuth();
@@ -47,33 +47,33 @@ export function TimerBar() {
         />
         <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto justify-end sm:justify-start">
           {isLocalTimerRunning ? (
-            <Button variant="secondary" size="icon" onClick={stopTimer} title="Pause timer" className="h-8 w-8">
+            <Button variant="secondary" size="icon-sm" onClick={stopTimer} title="Pause timer">
               <Pause className="h-3.5 w-3.5" />
             </Button>
           ) : (
-            <Button variant="secondary" size="icon" onClick={startTimer} title="Resume timer" className="h-8 w-8">
+            <Button variant="secondary" size="icon-sm" onClick={startTimer} title="Resume timer">
               <Play className="h-3.5 w-3.5" />
             </Button>
           )}
-          <Button variant="secondary" size="icon" onClick={handleSave} title="Save entry" className="h-8 w-8">
-            <Check className="h-3.5 w-3.5" />
+          <Button variant="secondary" size="icon-sm" onClick={handleSave} title="Save entry">
+            <Save className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="secondary"
-            size="icon"
+            size="icon-sm"
             onClick={() => {
               if (confirm('Discard this timer entry? This removes all tracked segments and closes the timer bar.')) {
                 discardTimerSegment();
               }
             }}
             title="Discard draft"
-            className="h-8 w-8 text-destructive"
+            className="text-destructive"
           >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" asChild className="gap-1.5 text-white/80 hover:text-white hover:bg-white/10">
+          <Button variant="ghost" size="xs" asChild className="gap-1.5 text-white/80 hover:text-white hover:bg-white/10">
             <Link to="/time/timer">
-              <SlotIcon slot="timer_bar_open" className="h-3.5 w-3.5" />
+              <ArrowUpRight className="h-3.5 w-3.5" />
               Open Timer
             </Link>
           </Button>

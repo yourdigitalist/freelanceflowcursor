@@ -3,6 +3,14 @@
 @tailwind utilities;
 
 /* Lance Design System - Purple Theme */
+/* Typography scale (apply going forward):
+   H1: text-2xl font-bold tracking-tight
+   H2: text-xl font-semibold tracking-tight
+   H3 (major): text-lg font-semibold
+   H3 (subsection): text-base font-semibold
+   H4: text-sm font-semibold text-muted-foreground
+   H5/H6: text-xs font-medium text-muted-foreground
+*/
 
 @layer base {
   :root {
@@ -22,7 +30,7 @@
     --secondary-foreground: 222 47% 11%;
 
     --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
+    --muted-foreground: 233.7 8.4% 44.1%;
 
     --accent: 265 78% 65%;
     --accent-foreground: 0 0% 100%;
@@ -121,7 +129,7 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: "Open Runde", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
@@ -155,7 +163,7 @@
 
 /* Magic UI landing-only styles (layout, spacing, animations) */
 .magic-landing {
-  font-family: "Open Runde", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
 }
 

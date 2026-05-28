@@ -472,13 +472,13 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="flex gap-2 shrink-0 justify-center sm:justify-end">
-            <Button variant="outline" asChild>
+            <Button variant="outline" size="sm" asChild>
               <Link to="/time">
                 <SlotIcon slot="stat_hours" className="mr-2 h-4 w-4" />
                 Log Time
               </Link>
             </Button>
-            <Button asChild className="py-1.5">
+            <Button size="sm" asChild>
               <Link to="/projects?new=1">
                 <Plus className="mr-2 h-4 w-4" />
                 New Project
@@ -536,40 +536,27 @@ export default function Dashboard() {
                   </Button>
                 </div>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="divide-y rounded-lg border">
                   {recentProjects.map((project) => (
                     <Link
                       key={project.id}
                       to={`/projects/${project.id}`}
-                      className="block p-4 rounded-xl border bg-card hover:shadow-md transition-shadow"
+                      className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-muted/30 transition-colors"
                     >
-                      <div className="flex items-start justify-between mb-3">
-                        <div
-                          className="h-10 w-10 rounded-lg flex items-center justify-center text-lg"
-                          style={{ backgroundColor: project.icon_color || '#9B63E9' }}
-                        >
-                          {project.icon_emoji || '📁'}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate font-semibold text-foreground">{project.name}</p>
+                          <Badge variant="outline" className={getStatusBadgeStyle(project.status)}>
+                            {formatStatus(project.status)}
+                          </Badge>
                         </div>
-                        <Badge variant="outline" className={getStatusBadgeStyle(project.status)}>
-                          {formatStatus(project.status)}
-                        </Badge>
+                        <p className="truncate text-sm text-muted-foreground">
+                          {project.client_name || 'No client'}
+                        </p>
                       </div>
-                      <h3 className="font-semibold mb-1 text-foreground">{project.name}</h3>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        {project.client_name || 'No client'}
-                      </p>
-                      <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <div className="flex items-center gap-3">
-                          {project.due_date && (
-                            <span className="flex items-center gap-1">
-                              📅 {formatLocaleDate(project.due_date, dateFormat)}
-                            </span>
-                          )}
-                          <span className="flex items-center gap-1">
-                            ⏱️ {project.hours.toFixed(1)}h
-                          </span>
-                        </div>
-                        <span>{project.task_count} tasks</span>
+                      <div className="shrink-0 text-right text-sm text-muted-foreground">
+                        <p>{project.hours.toFixed(1)}h</p>
+                        <p>{project.task_count} tasks</p>
                       </div>
                     </Link>
                   ))}

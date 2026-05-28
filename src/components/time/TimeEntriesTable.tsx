@@ -52,6 +52,8 @@ interface TimeEntriesTableProps {
   emptyTrackTimeHref?: string;
   variant?: TimeEntriesTableVariant;
   headerActions?: React.ReactNode;
+  showClientColumn?: boolean;
+  showProjectColumn?: boolean;
 }
 
 export function TimeEntriesTable({
@@ -72,6 +74,8 @@ export function TimeEntriesTable({
   emptyTrackTimeHref,
   variant = 'default',
   headerActions,
+  showClientColumn = true,
+  showProjectColumn = true,
 }: TimeEntriesTableProps) {
   const isTimesheetDay = variant === 'timesheetDay';
 
@@ -97,8 +101,8 @@ export function TimeEntriesTable({
         <TableRow className={isTimesheetDay ? 'hover:bg-transparent' : undefined}>
           {selectionMode && <TableHead className="w-10" />}
           <TableHead>Date</TableHead>
-          <TableHead>Client</TableHead>
-          <TableHead>Project</TableHead>
+          {showClientColumn ? <TableHead>Client</TableHead> : null}
+          {showProjectColumn ? <TableHead>Project</TableHead> : null}
           <TableHead>{isTimesheetDay ? 'Task / Notes' : 'Task'}</TableHead>
           {!isTimesheetDay && <TableHead>Notes</TableHead>}
           <TableHead>Duration</TableHead>
@@ -132,26 +136,30 @@ export function TimeEntriesTable({
               <TableCell className={isTimesheetDay ? 'px-4 py-3 text-[13px] font-medium' : undefined}>
                 {formatUserDate(entry.started_at || entry.start_time)}
               </TableCell>
-              <TableCell className={isTimesheetDay ? 'px-4 py-3 text-[13px] font-medium' : undefined}>
-                {clientName || <span className="text-muted-foreground">—</span>}
-              </TableCell>
-              <TableCell
-                className={cn(
-                  isTimesheetDay ? 'px-4 py-3 text-[13px] font-medium' : 'font-medium',
-                )}
-              >
-                {entry.project_id && entry.projects?.name ? (
-                  <Link
-                    to={`/projects/${entry.project_id}`}
-                    className="hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {entry.projects.name}
-                  </Link>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </TableCell>
+              {showClientColumn ? (
+                <TableCell className={isTimesheetDay ? 'px-4 py-3 text-[13px] font-medium' : undefined}>
+                  {clientName || <span className="text-muted-foreground">—</span>}
+                </TableCell>
+              ) : null}
+              {showProjectColumn ? (
+                <TableCell
+                  className={cn(
+                    isTimesheetDay ? 'px-4 py-3 text-[13px] font-medium' : 'font-medium',
+                  )}
+                >
+                  {entry.project_id && entry.projects?.name ? (
+                    <Link
+                      to={`/projects/${entry.project_id}`}
+                      className="hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {entry.projects.name}
+                    </Link>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+              ) : null}
               <TableCell className={isTimesheetDay ? 'px-4 py-3 max-w-[280px]' : undefined}>
                 {isTimesheetDay ? (
                   <div className="space-y-0.5">
@@ -212,7 +220,7 @@ export function TimeEntriesTable({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
                     onClick={() => onDelete(entry.id)}
                   >
                     <Trash2 className="h-4 w-4" />

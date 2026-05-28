@@ -603,7 +603,6 @@ export default function Clients() {
         c.lead_source ?? '',
         c.estimated_value ?? '',
         c.currency ?? '',
-        (c.tags || []).join('; '),
         c.notes ?? '',
         c.street ?? '',
         c.street2 ?? '',
@@ -645,8 +644,6 @@ export default function Clients() {
           errors.push(`Row ${r + 1}: email required`);
           continue;
         }
-        const tagsRaw = get('tags')(row);
-        const tags = tagsRaw ? tagsRaw.split(/[,;]/).map((t) => t.trim()).filter(Boolean) : [];
         const estimatedVal = get('estimated_value')(row);
         const estimatedValue = estimatedVal ? Number(estimatedVal) : null;
         const nextFollowUp = get('next_follow_up_at')(row);
@@ -688,7 +685,6 @@ export default function Clients() {
           lead_source: get('lead_source')(row) || null,
           estimated_value: estimatedValue,
           currency: get('currency')(row) || 'USD',
-          tags,
           user_id: user.id,
         };
         const existing = clients.find((c) => c.email?.toLowerCase() === email.toLowerCase());
@@ -1337,7 +1333,7 @@ export default function Clients() {
 
             {showArchived && sortedArchivedClients.length > 0 ? (
               <div className="mt-8 space-y-3">
-                <h3 className="text-sm font-semibold text-muted-foreground">Archived clients</h3>
+                <h4 className="text-sm font-semibold text-muted-foreground">Archived clients</h4>
                 <div className={viewMode === 'grid' ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3" : "space-y-3"}>
                   {sortedArchivedClients.map((client) => (
                     <Card

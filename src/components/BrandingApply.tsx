@@ -35,7 +35,6 @@ const PRIMARY_VARS = [
   '--accent',
   '--ring',
   '--sidebar-primary',
-  '--sidebar-accent-foreground',
   '--sidebar-ring',
   '--purple-dark',
   '--chart-1',

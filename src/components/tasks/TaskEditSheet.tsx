@@ -18,8 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Send, MessageSquare, Trash2 } from '@/components/icons';
-import { SlotIcon } from '@/contexts/IconSlotContext';
+import { Send, MessageSquare, Trash2, Copy, Pencil } from '@/components/icons';
 import { Task, ProjectStatus, TaskComment } from './types';
 import { PrioritySelect } from './PrioritySelect';
 import { supabase } from '@/integrations/supabase/client';
@@ -172,7 +171,7 @@ export function TaskEditSheet({
                   size="sm"
                   onClick={() => onDuplicate(task)}
                 >
-                  <SlotIcon slot="action_duplicate" className="h-4 w-4 mr-2" />
+                  <Copy className="h-4 w-4 mr-2" />
                   Duplicate
                 </Button>
               )}
@@ -296,7 +295,7 @@ export function TaskEditSheet({
                               className="h-7 w-7"
                               onClick={() => onEditTimeEntry(entry)}
                             >
-                              <SlotIcon slot="action_edit" className="h-3.5 w-3.5" />
+                              <Pencil className="h-3.5 w-3.5" />
                             </Button>
                           )}
                         </div>

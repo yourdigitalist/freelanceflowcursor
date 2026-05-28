@@ -19,7 +19,6 @@ export type ClientFormValues = {
   next_action: string;
   estimated_value: string;
   currency: string;
-  tags: string;
   notes: string;
 };
 
@@ -43,7 +42,6 @@ type ClientLike = {
   next_action?: string | null;
   estimated_value?: number | null;
   currency?: string | null;
-  tags?: string[] | null;
   notes?: string | null;
 };
 
@@ -70,7 +68,6 @@ export function emptyClientFormValues(
     next_action: '',
     estimated_value: '',
     currency: defaultCurrency,
-    tags: '',
     notes: '',
   };
 }
@@ -110,7 +107,6 @@ export function clientToFormValues(
     estimated_value:
       client.estimated_value != null ? String(client.estimated_value) : '',
     currency: client.currency || defaultCurrency,
-    tags: (client.tags || []).join(', '),
     notes: client.notes || '',
   };
 }
@@ -127,12 +123,6 @@ export function buildClientDbPayload(
   const firstName = values.first_name.trim();
   const lastName = values.last_name.trim();
   const fullName = `${firstName} ${lastName}`.trim();
-  const tags = values.tags.trim()
-    ? values.tags
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean)
-    : [];
   const nextFollowUpAt = values.next_follow_up_at
     ? new Date(values.next_follow_up_at).toISOString()
     : null;
@@ -163,7 +153,6 @@ export function buildClientDbPayload(
     next_follow_up_at: nextFollowUpAt,
     estimated_value: estimatedValue,
     currency: values.currency || 'USD',
-    tags,
     ...(options.user_id ? { user_id: options.user_id } : {}),
   };
 }
@@ -250,11 +239,5 @@ export function clientFormSnapshot(values: ClientFormValues) {
     estimated_value: values.estimated_value.trim()
       ? Number(values.estimated_value)
       : null,
-    tags: values.tags.trim()
-      ? values.tags
-          .split(',')
-          .map((t) => t.trim())
-          .filter(Boolean)
-      : [],
   });
 }

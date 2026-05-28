@@ -1060,7 +1060,7 @@ export default function TimeTracking() {
               <Button variant="outline" onClick={() => openLogDialog()}>
                 Manual Log
               </Button>
-              <Button asChild className="bg-green-600 hover:bg-green-700 text-white">
+              <Button asChild>
                 <Link to="/time/timer">
                   <Plus className="mr-2 h-4 w-4" />
                   Track time
@@ -1450,7 +1450,7 @@ export default function TimeTracking() {
             Manual Log
           </Button>
           {renderTimeEntryLogDialog()}
-          <Button className="bg-green-600 hover:bg-green-700 text-white" asChild>
+          <Button asChild>
             <Link to="/time/timer">
               <Plus className="mr-2 h-4 w-4" />
               Track time

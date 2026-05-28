@@ -167,6 +167,7 @@ const IconSlotContext = createContext<ContextValue | null>(null);
 const ICON_SLOTS_QUERY_KEY = ['app_icon_slots'] as const;
 const ICON_UPLOADS_QUERY_KEY = ['app_icon_uploads'] as const;
 const BUCKET = 'app-icons';
+const FORCE_DEFAULT_ACTION_SLOTS = new Set<IconSlotKey>(['action_edit', 'action_delete']);
 
 /** Replace only actual colors with currentColor; keep fill="none" and stroke="none" so line icons stay outline */
 function normalizeSvgForCurrentColor(innerSvg: string): string {
@@ -290,6 +291,9 @@ export function IconSlotProvider({ children }: { children: React.ReactNode }) {
     return (slot: IconSlotKey): IconComponent => {
       const assignment = assignments[slot];
       const DefaultIcon = DEFAULT_ICONS[slot];
+      if (FORCE_DEFAULT_ACTION_SLOTS.has(slot)) {
+        return DefaultIcon ?? HelpCircle;
+      }
       if (assignment?.storagePath) {
         const path = assignment.storagePath;
         return ({ className }) => (

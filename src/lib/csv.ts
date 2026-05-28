@@ -134,7 +134,6 @@ export const CLIENTS_CSV_HEADERS = [
   'lead_source',
   'estimated_value',
   'currency',
-  'tags',
   'notes',
   'street',
   'street2',

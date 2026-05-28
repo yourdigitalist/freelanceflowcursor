@@ -470,7 +470,7 @@ export default function Contracts() {
                             </Link>
                           </Button>
                           <Button size="icon" variant="ghost" onClick={(event) => { event.stopPropagation(); setCancelId(row.id); }}>
-                            <SlotIcon slot="action_delete" className="h-4 w-4 text-destructive" />
+                            <SlotIcon slot="action_delete" className="h-4 w-4 text-muted-foreground" />
                           </Button>
                         </div>
                       </TableCell>
@@ -517,7 +517,7 @@ export default function Contracts() {
                               <Button variant="ghost" size="icon" onClick={(event) => { event.stopPropagation(); void duplicateTemplate(row.id); }} aria-label="Duplicate template">
                                 <SlotIcon slot="action_duplicate" className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="icon" onClick={(event) => { event.stopPropagation(); setTemplateDeleteId(row.id); }} aria-label="Delete template"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                              <Button variant="ghost" size="icon" onClick={(event) => { event.stopPropagation(); setTemplateDeleteId(row.id); }} aria-label="Delete template"><Trash2 className="h-4 w-4 text-muted-foreground" /></Button>
                             </div>
                           </TableCell>
                         </TableRow>

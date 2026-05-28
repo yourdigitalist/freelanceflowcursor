@@ -63,6 +63,23 @@ interface Project {
   task_count?: number;
 }
 
+const getProjectDeleteErrorMessage = (error: unknown) => {
+  const rawMessage =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : '';
+  const normalizedMessage = rawMessage.toLowerCase();
+
+  if (
+    normalizedMessage.includes('contract is read-only after it has been sent') ||
+    (normalizedMessage.includes('contract') && normalizedMessage.includes('read-only'))
+  ) {
+    return 'This project is linked to a sent contract. Archive the contract first, then delete the project.';
+  }
+
+  return rawMessage || 'Could not delete project. Please try again.';
+};
+
 const PROJECT_STATUSES: Array<{ value: string; label: string }> = [
   { value: 'active', label: 'Active' },
   { value: 'on_hold', label: 'On Hold' },
@@ -192,7 +209,7 @@ export default function Projects() {
     } catch (error: any) {
       toast({
         title: 'Error deleting project',
-        description: error.message,
+        description: getProjectDeleteErrorMessage(error),
         variant: 'destructive',
       });
     }
@@ -524,10 +541,10 @@ export default function Projects() {
             {filteredProjects.map((project) => (
               <Card
                 key={project.id}
-                className="border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
+                className="h-full border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
                 onClick={() => navigate(`/projects/${project.id}`)}
               >
-                <CardContent className="p-4">
+                <CardContent className="flex h-full flex-col p-4">
                   <div className="flex items-start justify-between mb-3">
                     <div
                       className="h-10 w-10 rounded-lg flex items-center justify-center text-lg"
@@ -567,7 +584,7 @@ export default function Projects() {
                       </DropdownMenu>
                     </div>
                   </div>
-                  <h3 className="font-semibold text-[rgba(51,51,51,1)] mb-1">{project.name}</h3>
+                  <h3 className="mb-1 min-h-[2.5rem] font-semibold leading-5 text-foreground">{project.name}</h3>
                   <div className="mb-3">
                     {project.clients ? (
                       <button
@@ -598,7 +615,7 @@ export default function Projects() {
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+                  <div className="mt-auto flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       {project.due_date && (
                         <span className="inline-flex items-center gap-1.5">
@@ -634,7 +651,7 @@ export default function Projects() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3
-                      className="font-semibold text-[rgba(51,51,51,1)] truncate"
+                      className="font-semibold text-foreground truncate"
                       style={{ fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif' }}
                     >
                       {project.name}

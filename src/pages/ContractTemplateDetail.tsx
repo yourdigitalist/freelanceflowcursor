@@ -209,7 +209,7 @@ export default function ContractTemplateDetail() {
                 </div>
               </div>
               <div className="space-y-4 rounded-lg border p-3">
-                <h3 className="text-sm font-semibold">Available Variables</h3>
+                <h4 className="text-sm font-semibold text-muted-foreground">Available Variables</h4>
                 {Array.from(new Set(CONTRACT_VARIABLES.map((v) => v.group))).map((group) => (
                   <div key={group} className="space-y-2">
                     <p className="text-xs font-semibold uppercase text-muted-foreground">{group}</p>
@@ -259,7 +259,7 @@ export default function ContractTemplateDetail() {
                   </div>
                 </div>
               </section>
-              <footer className="mt-10 border-t pt-4 text-center text-xs text-zinc-500">
+              <footer className="mt-10 border-t pt-4 text-center text-xs text-muted-foreground">
                 Contract generated and signed digitally via Lance.
               </footer>
               <div className="mt-4 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">

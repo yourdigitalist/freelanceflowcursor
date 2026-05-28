@@ -327,7 +327,7 @@ export default function ReviewRequestDetail() {
               {request.sent_at ? 'Send reminder' : 'Send to client'}
             </Button>
             <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeleteDialogOpen(true)}>
-              <SlotIcon slot="action_delete" className="h-4 w-4 mr-2" />
+              <SlotIcon slot="action_delete" className="h-4 w-4 mr-2 text-muted-foreground" />
               Delete
             </Button>
           </div>
@@ -797,7 +797,7 @@ export default function ReviewRequestDetail() {
               <CardContent className="space-y-2">
                 <Button 
                   variant={request.status === 'approved' ? 'default' : 'outline'} 
-                  className={request.status === 'approved' ? 'w-full justify-start bg-green-600 hover:bg-green-700 text-white' : 'w-full justify-start'}
+                  className={request.status === 'approved' ? 'w-full justify-start bg-success text-success-foreground hover:bg-success/90' : 'w-full justify-start'}
                   onClick={() => updateStatus('approved')}
                 >
                   <SlotIcon slot="approval_client_approve" className="h-4 w-4 mr-2" />
@@ -805,7 +805,7 @@ export default function ReviewRequestDetail() {
                 </Button>
                 <Button 
                   variant={request.status === 'rejected' ? 'default' : 'outline'} 
-                  className={request.status === 'rejected' ? 'w-full justify-start bg-red-600 hover:bg-red-700 text-white' : 'w-full justify-start'}
+                  className={request.status === 'rejected' ? 'w-full justify-start bg-destructive text-destructive-foreground hover:bg-destructive/90' : 'w-full justify-start'}
                   onClick={() => updateStatus('rejected')}
                 >
                   <SlotIcon slot="approval_client_reject" className="h-4 w-4 mr-2" />

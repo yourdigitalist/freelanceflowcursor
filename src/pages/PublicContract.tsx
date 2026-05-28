@@ -369,7 +369,7 @@ export default function PublicContract() {
                     </p>
                     <div className="mx-auto mt-3 h-px w-full bg-zinc-500" />
                     <p className="mt-2 text-lg font-semibold tracking-wide text-zinc-900">CONTRACTING PARTY</p>
-                    <p className="mt-1 text-xs text-zinc-500">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       Signed at: {contract.client_signed_at ? new Date(contract.client_signed_at).toLocaleString() : "Pending signature"}
                     </p>
                   </div>
@@ -379,7 +379,7 @@ export default function PublicContract() {
                     </p>
                     <div className="mx-auto mt-3 h-px w-full bg-zinc-500" />
                     <p className="mt-2 text-lg font-semibold tracking-wide text-zinc-900">SERVICE PROVIDER</p>
-                    <p className="mt-1 text-xs text-zinc-500">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       Signed at: {contract.freelancer_signed_at ? new Date(contract.freelancer_signed_at).toLocaleString() : "Pending signature"}
                     </p>
                   </div>
@@ -412,7 +412,7 @@ export default function PublicContract() {
                   </div>
                 </div>
               </section>
-              <footer className="mt-10 border-t pt-4 text-center text-xs text-zinc-500">
+              <footer className="mt-10 border-t pt-4 text-center text-xs text-muted-foreground">
                 Contract generated and signed digitally via Lance.
               </footer>
             </div>
@@ -430,7 +430,7 @@ export default function PublicContract() {
         {step === "details" && (
           <Card>
             <CardContent className="space-y-4 p-6">
-              <h2 className="text-xl font-semibold">Confirm your details</h2>
+              <h2 className="text-xl font-semibold tracking-tight">Confirm your details</h2>
               <p className="text-sm text-muted-foreground">Please confirm your details below to complete the electronic signing of this contract.</p>
               <div className="space-y-1">
                 <Label>Entity type</Label>
@@ -484,7 +484,7 @@ export default function PublicContract() {
         {step === "agree" && (
           <Card>
             <CardContent className="space-y-4 p-6">
-              <h2 className="text-xl font-semibold">Sign this contract</h2>
+              <h2 className="text-xl font-semibold tracking-tight">Sign this contract</h2>
               <p className="text-sm text-muted-foreground">
                 You are signing contract {contract.identifier}, for {new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(Number(contract.total || 0))}, related to project {contract.projects?.name || "Not specified"}.
                 The signature will be made in the name of {clientData.client_name || "the client"}.
@@ -511,7 +511,7 @@ export default function PublicContract() {
         {step === "otp" && (
           <Card>
             <CardContent className="space-y-4 p-6">
-              <h2 className="text-xl font-semibold">Verify your email to sign</h2>
+              <h2 className="text-xl font-semibold tracking-tight">Verify your email to sign</h2>
               <p className="text-sm text-muted-foreground">
                 For your security, a 6-digit code has been sent to {clientData.client_email}. Enter it below to verify your identity and sign the contract.
               </p>
@@ -550,7 +550,7 @@ export default function PublicContract() {
           <Card>
             <CardContent className="space-y-4 p-8 text-center">
               <CheckCircle className="mx-auto h-10 w-10 text-emerald-600" />
-              <h2 className="text-2xl font-semibold text-emerald-700">Contract signed successfully!</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-emerald-700">Contract signed successfully!</h2>
               <p className="text-sm text-muted-foreground">
                 Your signature has been recorded. Both parties will receive a copy for their records.
               </p>

@@ -43,7 +43,7 @@ function CategorySection({
 }) {
   return (
     <div>
-      <h3 className="text-sm font-medium mb-1">{title}</h3>
+      <h4 className="text-sm font-semibold text-muted-foreground mb-1">{title}</h4>
       {description && <p className="text-xs text-muted-foreground mb-3">{description}</p>}
       <div className="space-y-0 pl-2 border-l border-muted">{children}</div>
     </div>

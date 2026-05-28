@@ -858,7 +858,7 @@ export default function ReviewRequests() {
                             <SlotIcon slot="action_edit" className="h-4 w-4 mr-2" />Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => folder && handleDeleteFolder(folder)} className="text-destructive">
-                            <SlotIcon slot="action_delete" className="h-4 w-4 mr-2" />Delete
+                            <SlotIcon slot="action_delete" className="h-4 w-4 mr-2 text-muted-foreground" />Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -918,7 +918,7 @@ export default function ReviewRequests() {
                                   </DropdownMenuItem>
                                 )}
                                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDeleteRequest(request); }} className="text-destructive">
-                                  <SlotIcon slot="action_delete" className="h-4 w-4 mr-2" />Delete
+                                  <SlotIcon slot="action_delete" className="h-4 w-4 mr-2 text-muted-foreground" />Delete
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -1008,7 +1008,7 @@ export default function ReviewRequests() {
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDeleteRequest(request); }} className="text-destructive">
-                                <SlotIcon slot="action_delete" className="h-4 w-4 mr-2" />Delete
+                                <SlotIcon slot="action_delete" className="h-4 w-4 mr-2 text-muted-foreground" />Delete
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -1050,7 +1050,7 @@ export default function ReviewRequests() {
                           <SlotIcon slot="action_edit" className="h-4 w-4 mr-2" />Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleDeleteFolder(folder)} className="text-destructive">
-                          <SlotIcon slot="action_delete" className="h-4 w-4 mr-2" />Delete
+                          <SlotIcon slot="action_delete" className="h-4 w-4 mr-2 text-muted-foreground" />Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -1119,7 +1119,7 @@ export default function ReviewRequests() {
                                     </DropdownMenuItem>
                                   )}
                                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDeleteRequest(request); }} className="text-destructive">
-                                    <SlotIcon slot="action_delete" className="h-4 w-4 mr-2" />Delete
+                                    <SlotIcon slot="action_delete" className="h-4 w-4 mr-2 text-muted-foreground" />Delete
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>

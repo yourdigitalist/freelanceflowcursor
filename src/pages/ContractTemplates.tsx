@@ -140,7 +140,7 @@ export default function ContractTemplates() {
                           <Button variant="ghost" size="sm" asChild><Link to={`/contract-templates/${row.id}`}>Edit</Link></Button>
                           {!row.is_default ? <Button variant="ghost" size="sm" onClick={() => void setDefault(row.id)}><Star className="mr-1 h-4 w-4" />Set default</Button> : null}
                           <Button variant="ghost" size="sm" onClick={() => void duplicateTemplate(row)}><Copy className="mr-1 h-4 w-4" />Duplicate</Button>
-                          <Button variant="ghost" size="sm" onClick={() => setDeleteId(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => setDeleteId(row.id)}><Trash2 className="h-4 w-4 text-muted-foreground" /></Button>
                         </div>
                       </TableCell>
                     </TableRow>

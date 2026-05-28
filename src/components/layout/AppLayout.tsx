@@ -211,7 +211,7 @@ export function AppLayout({
   };
 
   const shellIconBtn =
-    'h-8 w-8 text-white/80 hover:bg-[#4D4D4D] hover:text-white';
+    'h-8 w-8 text-white/80 hover:bg-sidebar-accent hover:text-white';
 
   const shellTopBarActions = () => (
     <div className="flex shrink-0 items-center gap-0.5">
@@ -288,7 +288,7 @@ export function AppLayout({
           type="button"
           className={cn(
             'flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors',
-            shell ? 'text-white/90 hover:bg-[#4D4D4D]' : 'hover:bg-muted',
+            shell ? 'text-white/90 hover:bg-sidebar-accent' : 'hover:bg-muted',
           )}
         >
           <Avatar className="h-7 w-7 border border-white/20">
@@ -538,7 +538,7 @@ export function AppLayout({
             <Button
               variant="ghost"
               size="icon"
-              className="inline-flex h-8 w-8 text-white/60 hover:bg-[#4D4D4D] hover:text-white"
+              className="inline-flex h-8 w-8 text-white/60 hover:bg-sidebar-accent hover:text-white"
               onClick={toggleSidebarCollapsed}
               aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >

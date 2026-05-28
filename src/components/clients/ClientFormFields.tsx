@@ -237,17 +237,6 @@ export function ClientFormFields({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor={id('tags')}>Tags</Label>
-        <Input
-          id={id('tags')}
-          placeholder="e.g. retainer, agency, warm"
-          value={values.tags}
-          onChange={(e) => onChange({ tags: e.target.value })}
-        />
-        <p className="text-xs text-muted-foreground">Comma-separated.</p>
-      </div>
-
       <ClientLogoEditor
         previewUrl={logoPreviewUrl}
         onPreviewChange={onLogoPreviewChange}
