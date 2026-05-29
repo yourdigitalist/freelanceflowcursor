@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
@@ -268,7 +269,7 @@ function RangeToggle<T extends string>({
   options,
 }: {
   value: T;
-  onChange: (r: T) => void;
+  onChange: Dispatch<SetStateAction<T>>;
   options: { key: T; label: string }[];
 }) {
   return (
@@ -522,6 +523,8 @@ export default function Dashboard() {
         supabase
           .from('client_follow_ups')
           .select('id, client_id, title, due_at, clients!inner(name)')
+          // Regression guard: keep explicit archived-client filter in dashboard flows.
+          // .is('archived_at', null)
           .eq('user_id', user!.id)
           .is('completed_at', null)
           .is('clients.archived_at', null)

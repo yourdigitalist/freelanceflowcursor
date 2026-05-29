@@ -5,6 +5,11 @@ function mapTasks(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string");
 }
 
+/** Normalizes service default_tasks payload into string titles. */
+export function mapDefaultTasks(value: unknown): string[] {
+  return mapTasks(value);
+}
+
 /** Normalize a services row from Supabase for app state. */
 export function mapServiceRow(row: Record<string, unknown>): Service {
   return {

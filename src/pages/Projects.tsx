@@ -165,8 +165,6 @@ export default function Projects() {
               : null,
             task_count,
             completed_tasks,
-            task_count,
-            completed_tasks,
             open_task_count,
             hours,
           } satisfies Project;
