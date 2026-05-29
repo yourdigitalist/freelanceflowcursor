@@ -53,6 +53,8 @@ import { countryLabel } from "@/lib/locale-data";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate, formatLocaleDateTime } from "@/lib/datetime";
 import { ClientPortalSettings } from "@/components/clients/ClientPortalSettings";
+import { ClientActivityTimeline } from "@/components/clients/ClientActivityTimeline";
+import { buildClientActivityFeed, type ClientActivityRecord } from "@/lib/clientActivityFeed";
 import { TimeEntriesTable, type TimeEntriesTableEntry } from "@/components/time/TimeEntriesTable";
 import { usePagination } from "@/hooks/usePagination";
 import { useTableSort } from "@/hooks/useTableSort";
@@ -108,9 +110,40 @@ type Client = {
 };
 
 type Project = { id: string; name: string; status: string | null; due_date: string | null; budget: number | null };
-type Invoice = { id: string; invoice_number: string; status: string; total: number; due_date: string | null };
-type Proposal = { id: string; identifier: string; status: string; total: number | null; expires_at: string | null };
-type Contract = { id: string; identifier: string; status: string; total: number | null };
+type Invoice = {
+  id: string;
+  invoice_number: string;
+  status: string;
+  total: number;
+  due_date: string | null;
+  created_at: string;
+  updated_at: string;
+};
+type Proposal = {
+  id: string;
+  identifier: string;
+  status: string;
+  total: number | null;
+  expires_at: string | null;
+  sent_at: string | null;
+  accepted_at: string | null;
+  created_at: string;
+};
+type Contract = {
+  id: string;
+  identifier: string;
+  status: string;
+  total: number | null;
+  sent_at: string | null;
+  created_at: string;
+};
+type ClientNote = {
+  id: string;
+  title: string;
+  note_comment: string | null;
+  content: string | null;
+  created_at: string;
+};
 type Approval = { id: string; title: string; status: string; created_at: string; project_id: string | null; projects?: { name: string } | null };
 type TimeEntry = {
   id: string;
@@ -174,6 +207,8 @@ export default function ClientDetail() {
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
+  const [activities, setActivities] = useState<ClientActivityRecord[]>([]);
+  const [clientNotes, setClientNotes] = useState<ClientNote[]>([]);
   const [newFollowUpTitle, setNewFollowUpTitle] = useState("");
   const [newFollowUpDueAt, setNewFollowUpDueAt] = useState("");
   const [editingFollowUpId, setEditingFollowUpId] = useState<string | null>(null);
@@ -235,14 +270,16 @@ export default function ClientDetail() {
       if (!user || !id) return;
       setLoading(true);
       try {
-        const [{ data: c, error: cErr }, { data: p }, { data: inv }, { data: prop }, { data: ctr }, { data: appr }, { data: fu }] = await Promise.all([
+        const [{ data: c, error: cErr }, { data: p }, { data: inv }, { data: prop }, { data: ctr }, { data: appr }, { data: fu }, { data: act }, { data: noteRows }] = await Promise.all([
           supabase.from("clients").select("*").eq("id", id).eq("user_id", user.id).maybeSingle(),
           supabase.from("projects").select("id, name, status, due_date, budget").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
-          supabase.from("invoices").select("id, invoice_number, status, total, due_date").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
-          supabase.from("proposals").select("id, identifier, status, total, expires_at").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
-          supabase.from("contracts").select("id, identifier, status, total").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
+          supabase.from("invoices").select("id, invoice_number, status, total, due_date, created_at, updated_at").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
+          supabase.from("proposals").select("id, identifier, status, total, expires_at, sent_at, accepted_at, created_at").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
+          supabase.from("contracts").select("id, identifier, status, total, sent_at, created_at").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("review_requests").select("id, title, status, created_at, project_id, projects(name)").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("client_follow_ups").select("id, title, due_at, completed_at").eq("client_id", id).order("created_at", { ascending: false }),
+          supabase.from("client_activities").select("id, type, body, occurred_at").eq("client_id", id).order("occurred_at", { ascending: false }),
+          supabase.from("notes").select("id, title, note_comment, content, created_at").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
         ]);
 
         if (cErr) throw cErr;
@@ -258,6 +295,8 @@ export default function ClientDetail() {
         setContracts((ctr || []) as Contract[]);
         setApprovals((appr || []) as Approval[]);
         setFollowUps((fu || []) as FollowUp[]);
+        setActivities((act || []) as ClientActivityRecord[]);
+        setClientNotes((noteRows || []) as ClientNote[]);
 
         const projectIds = ((p || []) as Project[]).map((row) => row.id);
         if (projectIds.length > 0) {
@@ -282,7 +321,20 @@ export default function ClientDetail() {
 
   useEffect(() => {
     setSelectedTimeDay(timeAnchor);
-  }, [timeAnchor, timeView]);
+  }, [timeView]);
+
+  const activityFeedItems = useMemo(() => {
+    if (!client) return [];
+    return buildClientActivityFeed({
+      clientCreatedAt: client.created_at,
+      activities,
+      proposals,
+      contracts,
+      invoices,
+      notes: clientNotes,
+      timeEntries,
+    });
+  }, [activities, client, clientNotes, contracts, invoices, proposals, timeEntries]);
 
   const weekRange = useMemo(
     () => ({
@@ -358,6 +410,7 @@ export default function ClientDetail() {
     created: (a, b) => compareDates(a.created_at, b.created_at),
   });
 
+  const activityPagination = usePagination(activityFeedItems);
   const projectsPagination = usePagination(clientProjectSort.sortedItems);
   const invoicesPagination = usePagination(clientInvoiceSort.sortedItems);
   const proposalsPagination = usePagination(clientProposalSort.sortedItems);
@@ -830,6 +883,35 @@ export default function ClientDetail() {
     setSelectedTimeDay(next);
   };
 
+  const shiftTimePeriod = (direction: "prev" | "next") => {
+    if (timeView === "month") {
+      setTimeAnchor((d) => {
+        const next = new Date(d.getFullYear(), d.getMonth() + (direction === "prev" ? -1 : 1), 1);
+        setSelectedTimeDay(next);
+        return next;
+      });
+      return;
+    }
+    if (timeView === "day") {
+      setTimeAnchor((d) => {
+        const next = direction === "prev" ? subDays(d, 1) : addDays(d, 1);
+        setSelectedTimeDay(next);
+        return next;
+      });
+      return;
+    }
+    setTimeAnchor((d) => {
+      const currentWeekStart = startOfWeek(d, { weekStartsOn: 1 });
+      const nextWeekStart = direction === "prev" ? subWeeks(currentWeekStart, 1) : addWeeks(currentWeekStart, 1);
+      const nextWeekEnd = endOfWeek(nextWeekStart, { weekStartsOn: 1 });
+      setSelectedTimeDay((prev) => {
+        if (prev >= nextWeekStart && prev <= nextWeekEnd) return prev;
+        return nextWeekStart;
+      });
+      return nextWeekStart;
+    });
+  };
+
   const renderClientTimeWeekPeriodPicker = () => (
     <Popover open={timeWeekPickerOpen} onOpenChange={setTimeWeekPickerOpen}>
       <PopoverTrigger asChild>
@@ -1081,6 +1163,30 @@ export default function ClientDetail() {
               </CardContent>
             </Card>
 
+            <Card className="flex flex-col">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold">Activity</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ClientActivityTimeline
+                  items={activityPagination.paginatedItems}
+                  loading={loading}
+                  highlightItemId={activityFeedItems[0]?.id}
+                />
+              </CardContent>
+              <TablePagination
+                total={activityPagination.total}
+                page={activityPagination.page}
+                pageSize={activityPagination.pageSize}
+                from={activityPagination.from}
+                to={activityPagination.to}
+                pageSizeOptions={activityPagination.pageSizeOptions}
+                showPageSizeSelect={activityPagination.showPageSizeSelect}
+                onPageChange={activityPagination.setPage}
+                onPageSizeChange={activityPagination.setPageSize}
+              />
+            </Card>
+
           </TabsContent>
 
           <TabsContent value="projects" className="space-y-3">
@@ -1168,24 +1274,10 @@ export default function ClientDetail() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() =>
-                    setTimeAnchor((d) =>
-                      timeView === "day" ? subDays(d, 1) : timeView === "week" ? subWeeks(d, 1) : subMonths(d, 1),
-                    )
-                  }
+                  onClick={() => shiftTimePeriod("prev")}
+                  aria-label="Previous period"
                 >
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setTimeAnchor((d) =>
-                      timeView === "day" ? addDays(d, 1) : timeView === "week" ? addWeeks(d, 1) : addMonths(d, 1),
-                    )
-                  }
-                >
-                  Next
+                  ←
                 </Button>
                 {timeView === "month" ? (
                   <Popover open={timeMonthPickerOpen} onOpenChange={setTimeMonthPickerOpen}>
@@ -1250,6 +1342,20 @@ export default function ClientDetail() {
                   </Popover>
                 ) : (
                   renderClientTimeWeekPeriodPicker()
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => shiftTimePeriod("next")}
+                  aria-label="Next period"
+                >
+                  →
+                </Button>
+                {(timeView === "day" || timeView === "week") && (
+                  <span className="text-sm text-muted-foreground">
+                    Week total:{" "}
+                    <span className="font-mono font-medium text-foreground">{formatHm(weekTotalSeconds)}</span>
+                  </span>
                 )}
               </div>
               <div className="flex rounded-lg border bg-muted/50 p-0.5">

@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Trash2, Download, Upload } from '@/components/icons';
+import { ClientAvatar } from '@/components/clients/ClientAvatar';
 import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { MenuDotsTrigger } from '@/components/ui/menu-dots-trigger';
 import { SlotIcon } from '@/contexts/IconSlotContext';
@@ -91,13 +92,17 @@ export function ProjectHeader({
                 {getStatusLabel(project.status || 'active')}
               </Badge>
             </div>
-            <div className="mt-1 text-sm text-muted-foreground">
+            <div className="mt-2">
               {project.clients?.id ? (
-                <Link className="underline-offset-2 hover:underline" to={`/clients/${project.clients.id}`}>
-                  {project.clients.name}
+                <Link
+                  to={`/clients/${project.clients.id}`}
+                  className="inline-flex items-center gap-2 text-sm text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  <ClientAvatar client={project.clients} size="sm" />
+                  <span className="truncate font-medium">{project.clients.name}</span>
                 </Link>
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <span>No client</span>
                   {onEdit ? (
                     <button

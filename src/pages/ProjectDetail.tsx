@@ -183,7 +183,7 @@ export default function ProjectDetail() {
           hourly_rate,
           icon_emoji,
           icon_color,
-          clients(id, name)
+          clients(id, name, first_name, last_name, avatar_color, logo_url)
         `)
         .eq('id', id)
         .maybeSingle();
