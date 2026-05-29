@@ -2,6 +2,7 @@ import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 
+import { Spinner, spinnerVariantForButton } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
@@ -11,17 +12,17 @@ const buttonVariants = cva(
       variant: {
         /** Purple brand CTA — one per screen (design: btn-brand) */
         default:
-          "border border-transparent bg-primary text-primary-foreground hover:bg-primary-deep disabled:bg-primary/35 disabled:text-primary-foreground",
+          "border border-transparent bg-primary text-primary-foreground hover:bg-primary-deep disabled:bg-primary/35 disabled:text-primary-foreground [&_svg]:text-current",
         /** Alias for default — same as btn-brand */
         brand:
-          "border border-transparent bg-primary text-primary-foreground hover:bg-primary-deep disabled:bg-primary/35 disabled:text-primary-foreground",
+          "border border-transparent bg-primary text-primary-foreground hover:bg-primary-deep disabled:bg-primary/35 disabled:text-primary-foreground [&_svg]:text-current",
         /** Alias for brand for teams using btn-purple naming */
         purple:
-          "border border-transparent bg-primary text-primary-foreground hover:bg-primary-deep disabled:bg-primary/35 disabled:text-primary-foreground",
+          "border border-transparent bg-primary text-primary-foreground hover:bg-primary-deep disabled:bg-primary/35 disabled:text-primary-foreground [&_svg]:text-current",
         /** Near-black action — when purple is too loud (design: btn-primary / Log time) */
-        secondary: "bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50",
+        secondary: "bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 [&_svg]:text-current",
         /** Alias for near-black action for teams using btn-primary naming */
-        primary: "bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50",
+        primary: "bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 [&_svg]:text-current",
         /** Default outline (design: plain btn / Cancel) */
         outline:
           "border border-foreground/20 bg-card text-foreground hover:bg-muted disabled:opacity-50",
@@ -29,7 +30,7 @@ const buttonVariants = cva(
         subtle: "bg-muted text-foreground hover:bg-muted/80 disabled:opacity-50",
         ghost: "text-foreground hover:bg-muted disabled:opacity-50",
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50",
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 [&_svg]:text-current",
         link: "text-primary underline-offset-4 hover:underline disabled:opacity-50",
       },
       size: {
@@ -54,12 +55,43 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  /** Shows spinner and disables the button while true. */
+  loading?: boolean;
+  /** Replaces children while loading (e.g. "Saving…"). */
+  loadingText?: React.ReactNode;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, loading = false, loadingText, disabled, children, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
-    return <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />;
+    const isDisabled = disabled || loading;
+
+    if (asChild) {
+      return (
+        <Comp
+          className={cn(buttonVariants({ variant, size, className }))}
+          ref={ref}
+          disabled={isDisabled}
+          aria-busy={loading || undefined}
+          {...props}
+        >
+          {children}
+        </Comp>
+      );
+    }
+
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        disabled={isDisabled}
+        aria-busy={loading || undefined}
+        {...props}
+      >
+        {loading ? <Spinner variant={spinnerVariantForButton(variant)} className="size-4" /> : null}
+        {loading && loadingText != null ? loadingText : children}
+      </Comp>
+    );
   },
 );
 Button.displayName = "Button";

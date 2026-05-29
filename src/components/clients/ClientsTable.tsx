@@ -3,10 +3,11 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
+import type { TableSortState } from '@/hooks/useTableSort';
 import { TableStatusBadge } from '@/components/ui/table-status-badge';
 import { ClientAvatar } from '@/components/clients/ClientAvatar';
 import { TablePagination } from '@/components/ui/table-pagination';
@@ -25,6 +26,7 @@ type ClientsTableProps = {
   dateFormat?: string;
   formatMoney: (amount: number) => string;
   onRowClick: (id: string) => void;
+  sort: TableSortState;
   pagination: {
     total: number;
     page: number;
@@ -43,6 +45,7 @@ export function ClientsTable({
   dateFormat,
   formatMoney,
   onRowClick,
+  sort,
   pagination,
 }: ClientsTableProps) {
   return (
@@ -50,11 +53,11 @@ export function ClientsTable({
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead>Client</TableHead>
-            <TableHead>Stage</TableHead>
-            <TableHead>Projects</TableHead>
-            <TableHead>Last activity</TableHead>
-            <TableHead className="text-right">Value</TableHead>
+            <SortableTableHead label="Client" sortKey="name" sort={sort} />
+            <SortableTableHead label="Stage" sortKey="stage" sort={sort} />
+            <SortableTableHead label="Projects" sortKey="projects" sort={sort} />
+            <SortableTableHead label="Last activity" sortKey="activity" sort={sort} />
+            <SortableTableHead label="Value" sortKey="value" sort={sort} align="right" className="text-right" />
           </TableRow>
         </TableHeader>
         <TableBody>

@@ -31,6 +31,9 @@ import { Plus, Trash2 } from "@/components/icons";
 import { SlotIcon } from "@/contexts/IconSlotContext";
 import type { Service } from "@/types/services";
 import { usePagination } from "@/hooks/usePagination";
+import { useTableSort } from "@/hooks/useTableSort";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import { compareNullableNumbers, compareStrings } from "@/lib/tableSort";
 import { TablePagination } from "@/components/ui/table-pagination";
 
 function mapTasks(value: unknown): string[] {
@@ -48,7 +51,21 @@ export default function Services() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [deletingService, setDeletingService] = useState<Service | null>(null);
-  const servicesPagination = usePagination(services);
+  const serviceSortComparators = useMemo(
+    () => ({
+      name: (a: Service, b: Service) => compareStrings(a.name, b.name),
+      description: (a: Service, b: Service) =>
+        compareStrings(a.description ?? "", b.description ?? ""),
+      price: (a: Service, b: Service) =>
+        compareNullableNumbers(a.price, b.price),
+      tasks: (a: Service, b: Service) =>
+        compareNullableNumbers(a.default_tasks?.length ?? 0, b.default_tasks?.length ?? 0),
+    }),
+    [],
+  );
+
+  const serviceSort = useTableSort(services, serviceSortComparators);
+  const servicesPagination = usePagination(serviceSort.sortedItems);
 
   const fetchServices = async () => {
     try {
@@ -159,10 +176,10 @@ export default function Services() {
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Service</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead>Default tasks</TableHead>
+                    <SortableTableHead label="Service" sortKey="name" sort={serviceSort} />
+                    <SortableTableHead label="Description" sortKey="description" sort={serviceSort} />
+                    <SortableTableHead label="Price" sortKey="price" sort={serviceSort} />
+                    <SortableTableHead label="Default tasks" sortKey="tasks" sort={serviceSort} />
                     <TableHead className="w-[96px] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>

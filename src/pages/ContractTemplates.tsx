@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { EmptyValue } from "@/components/ui/empty-value";
@@ -13,6 +13,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, Star, Trash2, Copy } from "@/components/icons";
 import { DEFAULT_CONTRACT_TEMPLATE_CONTENT } from "@/lib/contractTemplate";
 import { usePagination } from "@/hooks/usePagination";
+import { useTableSort } from "@/hooks/useTableSort";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import { compareBooleans, compareStrings } from "@/lib/tableSort";
 import { TablePagination } from "@/components/ui/table-pagination";
 
 type ContractTemplateRow = {
@@ -30,7 +33,20 @@ export default function ContractTemplates() {
   const [templates, setTemplates] = useState<ContractTemplateRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const templatesPagination = usePagination(templates);
+  const templateSortComparators = useMemo(
+    () => ({
+      name: (a: ContractTemplateRow, b: ContractTemplateRow) =>
+        compareStrings(a.name, b.name),
+      description: (a: ContractTemplateRow, b: ContractTemplateRow) =>
+        compareStrings(a.description ?? "", b.description ?? ""),
+      default: (a: ContractTemplateRow, b: ContractTemplateRow) =>
+        compareBooleans(!!a.is_default, !!b.is_default),
+    }),
+    [],
+  );
+
+  const templateSort = useTableSort(templates, templateSortComparators);
+  const templatesPagination = usePagination(templateSort.sortedItems);
 
   const load = async () => {
     if (!user) return;
@@ -128,9 +144,9 @@ export default function ContractTemplates() {
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Name</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Default</TableHead>
+                    <SortableTableHead label="Name" sortKey="name" sort={templateSort} />
+                    <SortableTableHead label="Description" sortKey="description" sort={templateSort} />
+                    <SortableTableHead label="Default" sortKey="default" sort={templateSort} />
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>

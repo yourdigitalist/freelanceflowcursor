@@ -32,6 +32,9 @@ import { useLanceServiceAgreementDisclaimer } from "@/hooks/useLanceServiceAgree
 import { ClientFormDialog } from "@/components/clients/ClientFormDialog";
 import { ProjectFormDialog } from "@/components/projects/ProjectFormDialog";
 import { usePagination } from "@/hooks/usePagination";
+import { useTableSort } from "@/hooks/useTableSort";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import { compareBooleans, compareNullableNumbers, compareStrings } from "@/lib/tableSort";
 import { TablePagination } from "@/components/ui/table-pagination";
 import { PageSummaryBar, PageSummaryStat } from "@/components/ui/page-summary-stats";
 
@@ -202,8 +205,37 @@ export default function Contracts() {
     });
   }, [rows, searchQuery, statusFilter]);
   const activeFilterCount = statusFilter !== "all" ? 1 : 0;
-  const contractsPagination = usePagination(filteredRows);
-  const templatesPagination = usePagination(templateRows);
+  const contractSortComparators = useMemo(
+    () => ({
+      contract: (a: ContractRow, b: ContractRow) =>
+        compareStrings(a.identifier, b.identifier),
+      client: (a: ContractRow, b: ContractRow) =>
+        compareStrings(a.clients?.name ?? "", b.clients?.name ?? ""),
+      project: (a: ContractRow, b: ContractRow) =>
+        compareStrings(a.projects?.name ?? "", b.projects?.name ?? ""),
+      status: (a: ContractRow, b: ContractRow) => compareStrings(a.status, b.status),
+      total: (a: ContractRow, b: ContractRow) =>
+        compareNullableNumbers(a.total, b.total),
+    }),
+    [],
+  );
+
+  const contractSort = useTableSort(filteredRows, contractSortComparators);
+  const contractsPagination = usePagination(contractSort.sortedItems);
+
+  const templateSortComparators = useMemo(
+    () => ({
+      name: (a: TemplateRow, b: TemplateRow) => compareStrings(a.name, b.name),
+      description: (a: TemplateRow, b: TemplateRow) =>
+        compareStrings(a.description ?? "", b.description ?? ""),
+      default: (a: TemplateRow, b: TemplateRow) =>
+        compareBooleans(!!a.is_default, !!b.is_default),
+    }),
+    [],
+  );
+
+  const templateSort = useTableSort(templateRows, templateSortComparators);
+  const templatesPagination = usePagination(templateSort.sortedItems);
 
   const formatMoney = (amount: number, currencyCode?: string | null) =>
     new Intl.NumberFormat(undefined, { style: "currency", currency: currencyCode || "USD" }).format(amount || 0);
@@ -462,11 +494,11 @@ export default function Contracts() {
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Contract</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Project</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
+                    <SortableTableHead label="Contract" sortKey="contract" sort={contractSort} />
+                    <SortableTableHead label="Client" sortKey="client" sort={contractSort} />
+                    <SortableTableHead label="Project" sortKey="project" sort={contractSort} />
+                    <SortableTableHead label="Status" sortKey="status" sort={contractSort} />
+                    <SortableTableHead label="Total" sortKey="total" sort={contractSort} align="right" className="text-right" />
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -531,9 +563,9 @@ export default function Contracts() {
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead>Name</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>Default</TableHead>
+                        <SortableTableHead label="Name" sortKey="name" sort={templateSort} />
+                        <SortableTableHead label="Description" sortKey="description" sort={templateSort} />
+                        <SortableTableHead label="Default" sortKey="default" sort={templateSort} />
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>

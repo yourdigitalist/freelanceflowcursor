@@ -65,6 +65,7 @@ export function ProjectFormDialog({
   const { toast } = useToast();
   const [dialogClientId, setDialogClientId] = useState<string>('none');
   const [createClientOpen, setCreateClientOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [availableClients, setAvailableClients] = useState<ProjectFormDialogClient[]>(clients);
 
   useEffect(() => {
@@ -117,6 +118,7 @@ export function ProjectFormDialog({
       user_id: user.id,
     };
 
+    setSaving(true);
     try {
       let savedProject: ProjectFormDialogProject | null = null;
       if (editingProject) {
@@ -145,10 +147,12 @@ export function ProjectFormDialog({
       if (savedProject) onSaved?.(savedProject);
     } catch (error: any) {
       toast({
-        title: 'Error saving project',
-        description: error.message,
+        title: "Couldn't save project",
+        description: 'Try again',
         variant: 'destructive',
       });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -264,10 +268,10 @@ export function ProjectFormDialog({
               </Select>
             </div>
             <div className="flex gap-2 justify-end">
-              <Button type="button" variant="outline" onClick={resetAndClose}>
+              <Button type="button" variant="outline" onClick={resetAndClose} disabled={saving}>
                 Cancel
               </Button>
-              <Button type="submit">
+              <Button type="submit" loading={saving} loadingText="Saving…">
                 {editingProject ? 'Update' : 'Create'} Project
               </Button>
             </div>

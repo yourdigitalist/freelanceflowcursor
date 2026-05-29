@@ -64,6 +64,9 @@ import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { ClientFormDialog } from '@/components/clients/ClientFormDialog';
 import { ProjectFormDialog } from '@/components/projects/ProjectFormDialog';
 import { usePagination } from '@/hooks/usePagination';
+import { useTableSort } from '@/hooks/useTableSort';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
+import { compareDates, compareNullableNumbers, compareStrings } from '@/lib/tableSort';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { PageSummaryBar, PageSummaryStat } from '@/components/ui/page-summary-stats';
 
@@ -475,7 +478,22 @@ export default function Invoices() {
     (filterProjectId !== 'all' ? 1 : 0) +
     (filterStatus !== 'all' ? 1 : 0);
 
-  const invoicesPagination = usePagination(filteredInvoices);
+  const invoiceSortComparators = useMemo(
+    () => ({
+      invoice: (a: Invoice, b: Invoice) => compareStrings(a.invoice_number, b.invoice_number),
+      client: (a: Invoice, b: Invoice) =>
+        compareStrings(a.clients?.name ?? '', b.clients?.name ?? ''),
+      issued: (a: Invoice, b: Invoice) => compareDates(a.issue_date, b.issue_date),
+      due: (a: Invoice, b: Invoice) => compareDates(a.due_date, b.due_date),
+      status: (a: Invoice, b: Invoice) => compareStrings(a.status ?? '', b.status ?? ''),
+      amount: (a: Invoice, b: Invoice) =>
+        compareNullableNumbers(Number(a.total), Number(b.total)),
+    }),
+    [],
+  );
+
+  const invoiceSort = useTableSort(filteredInvoices, invoiceSortComparators);
+  const invoicesPagination = usePagination(invoiceSort.sortedItems);
 
   const duplicateInvoice = async (invoice: Invoice) => {
     if (!user) return;
@@ -1127,12 +1145,12 @@ export default function Invoices() {
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Invoice</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Issued</TableHead>
-                    <TableHead>Due</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <SortableTableHead label="Invoice" sortKey="invoice" sort={invoiceSort} />
+                    <SortableTableHead label="Client" sortKey="client" sort={invoiceSort} />
+                    <SortableTableHead label="Issued" sortKey="issued" sort={invoiceSort} />
+                    <SortableTableHead label="Due" sortKey="due" sort={invoiceSort} />
+                    <SortableTableHead label="Status" sortKey="status" sort={invoiceSort} />
+                    <SortableTableHead label="Amount" sortKey="amount" sort={invoiceSort} align="right" className="text-right" />
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>

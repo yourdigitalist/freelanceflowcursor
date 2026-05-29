@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -65,6 +65,9 @@ import { ClientsTable } from '@/components/clients/ClientsTable';
 import { ClientFormDialog } from '@/components/clients/ClientFormDialog';
 import { useProfileCurrency } from '@/hooks/useProfileCurrency';
 import { usePagination } from '@/hooks/usePagination';
+import { useTableSort } from '@/hooks/useTableSort';
+import { compareDates, compareNullableNumbers, compareStrings } from '@/lib/tableSort';
+import type { ClientListCardData } from '@/components/clients/ClientListCard';
 import { DEFAULT_CLIENT_AVATAR_COLOR } from '@/lib/clientAvatarColors';
 import { CLIENT_CRM_STAGES, getClientStageLabel } from '@/lib/clientCrmStages';
 import { buildClientsNavState, readClientsNavState } from '@/lib/clientsNavigation';
@@ -433,7 +436,26 @@ export default function Clients() {
     (b.archived_at || '').localeCompare(a.archived_at || ''),
   );
 
-  const clientsPagination = usePagination(sortedClients);
+  const clientSortComparators = useMemo(() => {
+    const stageOrder = CLIENT_CRM_STAGES.map((s) => s.value);
+    return {
+      name: (a: ClientListCardData, b: ClientListCardData) => compareStrings(a.name, b.name),
+      stage: (a: ClientListCardData, b: ClientListCardData) =>
+        stageOrder.indexOf(a.status || 'active') - stageOrder.indexOf(b.status || 'active'),
+      projects: (a: ClientListCardData, b: ClientListCardData) =>
+        compareNullableNumbers(a.project_count ?? 0, b.project_count ?? 0),
+      activity: (a: ClientListCardData, b: ClientListCardData) =>
+        compareDates(a.last_contacted_at, b.last_contacted_at),
+      value: (a: ClientListCardData, b: ClientListCardData) =>
+        compareNullableNumbers(
+          a.projects_value ?? a.estimated_value ?? null,
+          b.projects_value ?? b.estimated_value ?? null,
+        ),
+    };
+  }, []);
+
+  const clientSort = useTableSort(sortedClients, clientSortComparators);
+  const clientsPagination = usePagination(clientSort.sortedItems);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -1141,6 +1163,7 @@ export default function Clients() {
                     dateFormat={dateFormat}
                     formatMoney={formatMoney}
                     onRowClick={openClientDetail}
+                    sort={clientSort}
                     pagination={clientsPagination}
                   />
                 </CardContent>

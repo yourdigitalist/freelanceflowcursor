@@ -8,7 +8,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ArrowLeft, Trash2, Download, Upload } from '@/components/icons';
+import { Trash2, Download, Upload } from '@/components/icons';
+import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { MenuDotsTrigger } from '@/components/ui/menu-dots-trigger';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { Project, Task, ProjectStatus } from './types';
@@ -72,15 +73,15 @@ export function ProjectHeader({
   return (
     <div className="space-y-6">
       {/* Top Header */}
-      <div className="flex items-start gap-4 border-b pb-4">
-        <Button variant="ghost" size="icon" asChild className="shrink-0">
-          <Link to="/projects" aria-label="Back to projects">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-
-        <div className="flex flex-1 min-w-0 items-center gap-3">
-          <div className="min-w-0">
+      <div className="space-y-2 border-b pb-4">
+        <PageBreadcrumb
+          items={[
+            { label: 'Projects', href: '/projects' },
+            { label: project.name },
+          ]}
+        />
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold tracking-tight truncate">{project.name}</h1>
               <Badge className={getStatusColor(project.status || 'active')} variant="secondary">
@@ -108,9 +109,8 @@ export function ProjectHeader({
               )}
             </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
           <Button variant="outline" size="sm" asChild>
             <Link to={`/invoices?project_id=${project.id}&from_review=1`}>Create Invoice</Link>
           </Button>
@@ -154,6 +154,7 @@ export function ProjectHeader({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          </div>
         </div>
       </div>
 

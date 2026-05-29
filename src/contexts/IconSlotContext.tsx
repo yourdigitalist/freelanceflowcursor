@@ -359,8 +359,8 @@ export function SlotIcon({
   return (
     <Icon
       className={cn(
-        className,
         isAction && 'h-3.5 w-3.5 shrink-0 text-muted-foreground',
+        className,
       )}
     />
   );

@@ -12,6 +12,9 @@ import { TableClientCell } from '@/components/ui/table-client-cell';
 import { TableStatusBadge } from '@/components/ui/table-status-badge';
 import { EmptyValue } from '@/components/ui/empty-value';
 import { usePagination } from '@/hooks/usePagination';
+import { useTableSort } from '@/hooks/useTableSort';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
+import { compareDates, compareStrings } from '@/lib/tableSort';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDate } from '@/lib/datetime';
@@ -608,7 +611,27 @@ export default function ReviewRequests() {
     return map;
   }, [folders]);
 
-  const approvalsPagination = usePagination(filteredRequests);
+  const approvalSortComparators = useMemo(
+    () => ({
+      approval: (a: ReviewRequest, b: ReviewRequest) => compareStrings(a.title, b.title),
+      client: (a: ReviewRequest, b: ReviewRequest) =>
+        compareStrings(a.clients?.name ?? '', b.clients?.name ?? ''),
+      project: (a: ReviewRequest, b: ReviewRequest) =>
+        compareStrings(a.projects?.name ?? '', b.projects?.name ?? ''),
+      folder: (a: ReviewRequest, b: ReviewRequest) => {
+        const fa = a.folder_id ? folderById[a.folder_id]?.name ?? '' : '';
+        const fb = b.folder_id ? folderById[b.folder_id]?.name ?? '' : '';
+        return compareStrings(fa, fb);
+      },
+      status: (a: ReviewRequest, b: ReviewRequest) => compareStrings(a.status, b.status),
+      due: (a: ReviewRequest, b: ReviewRequest) => compareDates(a.due_date, b.due_date),
+      sent: (a: ReviewRequest, b: ReviewRequest) => compareDates(a.sent_at, b.sent_at),
+    }),
+    [folderById],
+  );
+
+  const approvalSort = useTableSort(filteredRequests, approvalSortComparators);
+  const approvalsPagination = usePagination(approvalSort.sortedItems);
 
   if (loading) {
     return (
@@ -745,13 +768,13 @@ export default function ReviewRequests() {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead>Approval</TableHead>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Project</TableHead>
-                      <TableHead>Folder</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Due</TableHead>
-                      <TableHead>Sent</TableHead>
+                      <SortableTableHead label="Approval" sortKey="approval" sort={approvalSort} />
+                      <SortableTableHead label="Client" sortKey="client" sort={approvalSort} />
+                      <SortableTableHead label="Project" sortKey="project" sort={approvalSort} />
+                      <SortableTableHead label="Folder" sortKey="folder" sort={approvalSort} />
+                      <SortableTableHead label="Status" sortKey="status" sort={approvalSort} />
+                      <SortableTableHead label="Due" sortKey="due" sort={approvalSort} />
+                      <SortableTableHead label="Sent" sortKey="sent" sort={approvalSort} />
                       <TableHead className="w-10" />
                     </TableRow>
                   </TableHeader>
@@ -1169,11 +1192,17 @@ export default function ReviewRequests() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRequestDialogOpen(false)}>Cancel</Button>
-            <Button 
-              onClick={handleSaveRequest} 
-              disabled={uploading || !requestTitle.trim() || !requestClientId || (!editingRequest && (requestFiles.length === 0 || requestRecipients.length === 0))}
+            <Button
+              onClick={handleSaveRequest}
+              loading={uploading}
+              loadingText={editingRequest ? 'Saving…' : 'Sending…'}
+              disabled={
+                !requestTitle.trim() ||
+                !requestClientId ||
+                (!editingRequest && (requestFiles.length === 0 || requestRecipients.length === 0))
+              }
             >
-              {uploading ? 'Uploading...' : editingRequest ? 'Update' : 'Send for approval'}
+              {editingRequest ? 'Update' : 'Send for approval'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { CONTRACT_VARIABLES } from "@/lib/contractVariables";
-import { ArrowLeft } from "@/components/icons";
+import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import ReactQuill from "react-quill";
 import type ReactQuillType from "react-quill";
 import "react-quill/dist/quill.snow.css";
@@ -133,11 +133,14 @@ export default function ContractTemplateDetail() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <Link to="/contracts?tab=templates" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Contract Templates
-            </Link>
-          <h1 className="text-2xl font-bold">{row.name}</h1>
+            <PageBreadcrumb
+              items={[
+                { label: 'Contracts', href: '/contracts' },
+                { label: 'Templates', href: '/contracts?tab=templates' },
+                { label: row.name },
+              ]}
+            />
+          <h1 className="mt-1 text-2xl font-bold">{row.name}</h1>
           </div>
           <div className="flex gap-2">
             <Button variant="destructive" onClick={() => void remove()}>Delete template</Button>

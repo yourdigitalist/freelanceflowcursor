@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useSettingsDirty } from '@/contexts/SettingsDirtyContext';
@@ -27,6 +27,9 @@ import {
   DataTableFrame,
 } from '@/components/ui/table';
 import { usePagination } from '@/hooks/usePagination';
+import { useTableSort } from '@/hooks/useTableSort';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
+import { compareBooleans, compareNullableNumbers, compareStrings } from '@/lib/tableSort';
 import { TablePagination } from '@/components/ui/table-pagination';
 
 const MERGE_TAGS = [
@@ -76,7 +79,16 @@ export default function InvoiceSettings() {
     reminder_body_default: string | null;
   } | null>(null);
   const [taxes, setTaxes] = useState<Tax[]>([]);
-  const taxesPagination = usePagination(taxes);
+  const taxSortComparators = useMemo(
+    () => ({
+      name: (a: Tax, b: Tax) => compareStrings(a.name, b.name),
+      rate: (a: Tax, b: Tax) => compareNullableNumbers(a.rate, b.rate),
+      default: (a: Tax, b: Tax) => compareBooleans(!!a.is_default, !!b.is_default),
+    }),
+    [],
+  );
+  const taxSort = useTableSort(taxes, taxSortComparators);
+  const taxesPagination = usePagination(taxSort.sortedItems);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -677,9 +689,9 @@ export default function InvoiceSettings() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Rate</TableHead>
-                  <TableHead>Default</TableHead>
+                  <SortableTableHead label="Name" sortKey="name" sort={taxSort} />
+                  <SortableTableHead label="Rate" sortKey="rate" sort={taxSort} />
+                  <SortableTableHead label="Default" sortKey="default" sort={taxSort} />
                   <TableHead className="w-24"></TableHead>
                 </TableRow>
               </TableHeader>

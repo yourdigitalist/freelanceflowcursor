@@ -13,7 +13,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Trash2, Loader2, ListTodo, Wallet, Download, Save, RotateCcw } from '@/components/icons';
+import { Plus, Trash2, Loader2, ListTodo, Wallet, Download, Save, RotateCcw } from '@/components/icons';
+import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { MenuDotsTrigger } from '@/components/ui/menu-dots-trigger';
 import { reopenPaidInvoice } from '@/lib/invoiceStatus';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
@@ -859,7 +860,13 @@ export default function InvoiceDetail() {
 
       const suffix = missingRateCount > 0 ? ` (${missingRateCount} entries used default rate)` : '';
       const skipSuffix = skippedCount > 0 ? `, ${skippedCount} skipped` : '';
-      toast({ title: `Imported ${finalEntries.length} time entries${skipSuffix}${suffix}` });
+      const importParts = [`${finalEntries.length} entries imported`];
+      if (skippedCount > 0) importParts.push(`${skippedCount} skipped`);
+      if (missingRateCount > 0) importParts.push(`${missingRateCount} used default rate`);
+      toast({
+        title: importParts.join(' · '),
+        variant: skippedCount > 0 ? 'warning' : 'default',
+      });
       setIsImportModalOpen(false);
       fetchItems();
     } catch (error: any) {
@@ -1555,9 +1562,14 @@ export default function InvoiceDetail() {
       <AppLayout>
         <div className="space-y-4 max-w-lg">
           <p className="text-muted-foreground">Invoice not found.</p>
+          <PageBreadcrumb
+            items={[
+              { label: 'Invoices', href: '/invoices' },
+              { label: 'Invoice not found' },
+            ]}
+          />
           <Button variant="outline" onClick={() => navigate('/invoices')}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to invoices
+            View all invoices
           </Button>
         </div>
       </AppLayout>
@@ -1570,10 +1582,13 @@ export default function InvoiceDetail() {
       <div className="space-y-6 max-w-6xl">
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/invoices')}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
+          <div className="min-w-0 space-y-2">
+            <PageBreadcrumb
+              items={[
+                { label: 'Invoices', href: '/invoices' },
+                { label: invoice.invoice_number || 'Invoice' },
+              ]}
+            />
             <div className="min-w-0">
               {isEditMode ? (
                 <Input
@@ -1660,7 +1675,7 @@ export default function InvoiceDetail() {
                   setIsSendModalOpen(true);
                 }}
               >
-                <SlotIcon slot="action_send" className="mr-2 h-4 w-4" />
+                <SlotIcon slot="action_send" className="mr-2 h-4 w-4 text-current" />
                 {invoice.status === 'paid' ? 'Send receipt' : invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send to Client'}
               </Button>
             )}

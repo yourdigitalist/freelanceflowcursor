@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,6 +16,9 @@ import { cn } from '@/lib/utils';
 import { getEntryClientName } from '@/lib/timeEntryFilters';
 import { formatDuration } from '@/lib/time';
 import { usePagination } from '@/hooks/usePagination';
+import { useTableSort } from '@/hooks/useTableSort';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
+import { compareDates, compareNullableNumbers, compareStrings } from '@/lib/tableSort';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { TableClientCell } from '@/components/ui/table-client-cell';
 import { EmptyValue } from '@/components/ui/empty-value';
@@ -84,7 +88,29 @@ export function TimeEntriesTable({
   showProjectColumn = true,
 }: TimeEntriesTableProps) {
   const isTimesheetDay = variant === 'timesheetDay';
-  const pagination = usePagination(entries);
+
+  const entrySortComparators = useMemo(
+    () => ({
+      date: (a: TimeEntriesTableEntry, b: TimeEntriesTableEntry) =>
+        compareDates(a.started_at || a.start_time, b.started_at || b.start_time),
+      client: (a: TimeEntriesTableEntry, b: TimeEntriesTableEntry) =>
+        compareStrings(getEntryClientName(a, clientById), getEntryClientName(b, clientById)),
+      project: (a: TimeEntriesTableEntry, b: TimeEntriesTableEntry) =>
+        compareStrings(a.projects?.name ?? '', b.projects?.name ?? ''),
+      task: (a: TimeEntriesTableEntry, b: TimeEntriesTableEntry) =>
+        compareStrings(a.tasks?.title ?? '', b.tasks?.title ?? ''),
+      notes: (a: TimeEntriesTableEntry, b: TimeEntriesTableEntry) =>
+        compareStrings(a.description ?? '', b.description ?? ''),
+      duration: (a: TimeEntriesTableEntry, b: TimeEntriesTableEntry) =>
+        compareNullableNumbers(getEntrySeconds(a), getEntrySeconds(b)),
+      status: (a: TimeEntriesTableEntry, b: TimeEntriesTableEntry) =>
+        compareStrings(a.billing_status ?? '', b.billing_status ?? ''),
+    }),
+    [clientById, getEntrySeconds],
+  );
+
+  const entrySort = useTableSort(entries, entrySortComparators);
+  const pagination = usePagination(entrySort.sortedItems);
 
   if (entries.length === 0) {
     return (
@@ -108,13 +134,23 @@ export function TimeEntriesTable({
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           {selectionMode && <TableHead className="w-10" />}
-          <TableHead>Date</TableHead>
-          {showClientColumn ? <TableHead>Client</TableHead> : null}
-          {showProjectColumn ? <TableHead>Project</TableHead> : null}
-          <TableHead>{isTimesheetDay ? 'Task / Notes' : 'Task'}</TableHead>
-          {!isTimesheetDay && <TableHead>Notes</TableHead>}
-          <TableHead>Duration</TableHead>
-          <TableHead>Status</TableHead>
+          <SortableTableHead label="Date" sortKey="date" sort={entrySort} />
+          {showClientColumn ? (
+            <SortableTableHead label="Client" sortKey="client" sort={entrySort} />
+          ) : null}
+          {showProjectColumn ? (
+            <SortableTableHead label="Project" sortKey="project" sort={entrySort} />
+          ) : null}
+          <SortableTableHead
+            label={isTimesheetDay ? 'Task / Notes' : 'Task'}
+            sortKey="task"
+            sort={entrySort}
+          />
+          {!isTimesheetDay ? (
+            <SortableTableHead label="Notes" sortKey="notes" sort={entrySort} />
+          ) : null}
+          <SortableTableHead label="Duration" sortKey="duration" sort={entrySort} />
+          <SortableTableHead label="Status" sortKey="status" sort={entrySort} />
           <TableHead className={cn('w-[140px]', headerActions && 'text-right')}>
             {headerActions ?? 'Actions'}
           </TableHead>

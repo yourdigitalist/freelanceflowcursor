@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
-import { ArrowLeft, ShieldCheck } from '@/components/icons';
+import { ShieldCheck } from '@/components/icons';
+import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
+import { getAdminBreadcrumbs } from '@/lib/adminBreadcrumbs';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 
 const adminNavItems = [
@@ -56,12 +58,6 @@ export default function AdminLayout() {
               <ShieldCheck className="h-5 w-5 text-primary" />
               <span className="font-semibold">Admin</span>
             </div>
-            <Button variant="ghost" size="sm" asChild className="w-full justify-start text-muted-foreground">
-              <Link to="/dashboard">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to app
-              </Link>
-            </Button>
             <nav className="space-y-0.5 pt-2 border-t">
               {adminNavItems.map((item) => {
                 const isActive = location.pathname === item.path;
@@ -82,9 +78,10 @@ export default function AdminLayout() {
             </nav>
           </div>
         </aside>
-        <div className="flex-1 min-w-0">
+        <main className="flex-1 min-w-0 space-y-4">
+          <PageBreadcrumb items={getAdminBreadcrumbs(location.pathname)} />
           <Outlet />
-        </div>
+        </main>
       </div>
     </AppLayout>
   );

@@ -36,7 +36,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ArrowLeft, CheckCircle, Plus, Trash2 } from "@/components/icons";
+import { CheckCircle, Plus, Trash2 } from "@/components/icons";
+import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import { LanceServiceAgreementDisclaimerDialog } from "@/components/contracts/LanceServiceAgreementDisclaimerDialog";
 import {
   CONTRACT_DOCUMENT_STYLES,
@@ -804,11 +805,13 @@ export default function ContractDetail() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
           <div>
-            <Link to="/contracts" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Contracts
-            </Link>
-            <div className="mt-2 flex items-center gap-2">
+            <PageBreadcrumb
+              items={[
+                { label: 'Contracts', href: '/contracts' },
+                { label: contract.identifier },
+              ]}
+            />
+            <div className="mt-1 flex items-center gap-2">
               <h1 className="text-2xl font-bold">{contract.identifier}</h1>
               <Badge variant="outline" className={getStatusBadgeClass(contract.status)}>
                 {formatStatusLabel(contract.status)}

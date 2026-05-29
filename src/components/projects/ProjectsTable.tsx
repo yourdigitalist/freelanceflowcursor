@@ -3,10 +3,11 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
+import type { TableSortState } from '@/hooks/useTableSort';
 import { TableClientCell } from '@/components/ui/table-client-cell';
 import { TablePagination } from '@/components/ui/table-pagination';
 import type { ProjectListCardData } from '@/components/projects/ProjectListCard';
@@ -26,6 +27,7 @@ type ProjectsTableProps = {
   dateFormat?: string;
   formatMoney: (amount: number) => string;
   onRowClick: (id: string) => void;
+  sort: TableSortState;
   pagination: {
     paginatedItems: ProjectListCardData[];
     total: number;
@@ -44,6 +46,7 @@ export function ProjectsTable({
   dateFormat,
   formatMoney,
   onRowClick,
+  sort,
   pagination,
 }: ProjectsTableProps) {
   return (
@@ -51,13 +54,13 @@ export function ProjectsTable({
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead>Project</TableHead>
-            <TableHead>Client</TableHead>
-            <TableHead>Progress</TableHead>
-            <TableHead>Tasks</TableHead>
-            <TableHead>Hours</TableHead>
-            <TableHead>Due</TableHead>
-            <TableHead className="text-right">Value</TableHead>
+            <SortableTableHead label="Project" sortKey="name" sort={sort} />
+            <SortableTableHead label="Client" sortKey="client" sort={sort} />
+            <SortableTableHead label="Progress" sortKey="progress" sort={sort} />
+            <SortableTableHead label="Tasks" sortKey="tasks" sort={sort} />
+            <SortableTableHead label="Hours" sortKey="hours" sort={sort} />
+            <SortableTableHead label="Due" sortKey="due" sort={sort} />
+            <SortableTableHead label="Value" sortKey="value" sort={sort} align="right" className="text-right" />
           </TableRow>
         </TableHeader>
         <TableBody>

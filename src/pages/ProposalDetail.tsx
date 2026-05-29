@@ -16,7 +16,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ServiceFormModal } from "@/components/services/ServiceFormModal";
-import { ArrowLeft, CheckCircle, Plus, Trash2, Upload } from "@/components/icons";
+import { CheckCircle, Plus, Trash2, Upload } from "@/components/icons";
+import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import { useProfileCurrency } from "@/hooks/useProfileCurrency";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate } from "@/lib/datetime";
@@ -535,11 +536,13 @@ export default function ProposalDetail() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
           <div>
-            <Link to="/proposals" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Proposals
-            </Link>
-            <div className="mt-2 flex items-center gap-2">
+            <PageBreadcrumb
+              items={[
+                { label: 'Proposals', href: '/proposals' },
+                { label: proposal.identifier || 'Draft proposal' },
+              ]}
+            />
+            <div className="mt-1 flex items-center gap-2">
               <h1 className="text-2xl font-bold">{proposal.identifier || "Draft proposal"}</h1>
               <Badge variant="outline" className={getStatusBadgeClass(proposal.status)}>
                 {formatStatusLabel(proposal.status)}

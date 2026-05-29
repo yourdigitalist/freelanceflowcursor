@@ -61,7 +61,7 @@ interface RecentInvoice {
 
 type PriorityCategory = 'delivery' | 'finance' | 'approval' | 'crm';
 
-type PriorityFilter = 'overdue' | 'due_soon' | 'finance';
+type PriorityFilter = 'all' | 'overdue' | 'due_soon' | 'finance';
 
 interface PriorityItem {
   id: string;
@@ -78,6 +78,8 @@ interface PriorityItem {
 
 function matchesPriorityFilter(item: PriorityItem, filter: PriorityFilter): boolean {
   switch (filter) {
+    case 'all':
+      return true;
     case 'overdue':
       return item.tone === 'overdue';
     case 'due_soon':
@@ -88,10 +90,13 @@ function matchesPriorityFilter(item: PriorityItem, filter: PriorityFilter): bool
 }
 
 const PRIORITY_FILTER_LABELS: Record<PriorityFilter, string> = {
+  all: 'All',
   overdue: 'Overdue',
   due_soon: 'Due soon',
   finance: 'Finance',
 };
+
+const PRIORITY_FILTERS: PriorityFilter[] = ['all', 'overdue', 'due_soon', 'finance'];
 
 interface RecentItem {
   id: string;
@@ -318,7 +323,7 @@ export default function Dashboard() {
   const [recentInvoices, setRecentInvoices] = useState<RecentInvoice[]>([]);
   const [totalInvoicesCount, setTotalInvoicesCount] = useState(0);
   const [priorityItems, setPriorityItems] = useState<PriorityItem[]>([]);
-  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('overdue');
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
   const [hoursSparkline, setHoursSparkline] = useState<SparkPoint[]>([]);
   const [rawTimeEntries, setRawTimeEntries] = useState<RawTimeEntry[]>([]);
@@ -864,6 +869,7 @@ export default function Dashboard() {
 
   const priorityFilterCounts = useMemo(
     () => ({
+      all: priorityItems.length,
       overdue: priorityItems.filter((item) => matchesPriorityFilter(item, 'overdue')).length,
       due_soon: priorityItems.filter((item) => matchesPriorityFilter(item, 'due_soon')).length,
       finance: priorityItems.filter((item) => matchesPriorityFilter(item, 'finance')).length,
@@ -1018,26 +1024,29 @@ export default function Dashboard() {
                   )}
                 </CardTitle>
                 {priorityItems.length > 0 ? (
-                  <div className="flex flex-wrap gap-0.5 rounded-lg border border-border bg-card p-0.5">
-                    {(['overdue', 'due_soon', 'finance'] as const).map((key) => (
-                      <Button
+                  <div className="flex flex-wrap justify-end gap-1 sm:ml-auto">
+                    {PRIORITY_FILTERS.map((key) => (
+                      <button
                         key={key}
                         type="button"
-                        variant={priorityFilter === key ? 'secondary' : 'ghost'}
-                        size="xs"
-                        className={cn(
-                          'h-8 rounded-md px-2.5',
-                          priorityFilter === key && 'bg-muted shadow-none',
-                        )}
                         onClick={() => setPriorityFilter(key)}
+                        className={cn(
+                          'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                          priorityFilter === key
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                        )}
                       >
                         {PRIORITY_FILTER_LABELS[key]}
-                        {priorityFilterCounts[key] > 0 ? (
-                          <span className="ml-1 tabular-nums text-muted-foreground">
-                            {priorityFilterCounts[key]}
-                          </span>
-                        ) : null}
-                      </Button>
+                        <span
+                          className={cn(
+                            'ml-1.5 rounded-full px-1 py-0.5 text-[10px]',
+                            priorityFilter === key ? 'bg-white/20' : 'bg-muted',
+                          )}
+                        >
+                          {priorityFilterCounts[key]}
+                        </span>
+                      </button>
                     ))}
                   </div>
                 ) : null}
@@ -1052,8 +1061,10 @@ export default function Dashboard() {
                 </div>
               ) : filteredPriorityItems.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-                  <p className="text-sm font-medium">Nothing in {PRIORITY_FILTER_LABELS[priorityFilter].toLowerCase()}</p>
-                  <p className="mt-0.5 text-xs">Try another filter above.</p>
+                  <p className="text-sm font-medium">
+                    Nothing in {PRIORITY_FILTER_LABELS[priorityFilter].toLowerCase()}
+                  </p>
+                  <p className="mt-0.5 text-xs">Try another tab above.</p>
                 </div>
               ) : (
                 <>
@@ -1061,7 +1072,7 @@ export default function Dashboard() {
                   {priorityPagination.paginatedItems.map((item) => (
                     <div
                       key={item.id}
-                      className="grid grid-cols-[7.25rem_minmax(0,1fr)_auto] items-center gap-x-3 py-3 first:pt-0 last:pb-0"
+                      className="grid grid-cols-[7.25rem_minmax(0,1fr)_7.5rem] items-center gap-x-3 py-3 first:pt-0 last:pb-0"
                     >
                       <div>
                         <span
@@ -1077,11 +1088,8 @@ export default function Dashboard() {
                         <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
                         <p className="truncate text-xs text-muted-foreground">{item.subtitle}</p>
                       </div>
-                      <Button variant="outline" size="xs" asChild className="shrink-0">
-                        <Link to={item.to}>
-                          {item.ctaLabel}
-                          <ArrowRight className="ml-1 h-3 w-3" />
-                        </Link>
+                      <Button variant="outline" size="xs" asChild className="w-full shrink-0 justify-center">
+                        <Link to={item.to}>{item.ctaLabel}</Link>
                       </Button>
                     </div>
                   ))}
@@ -1146,13 +1154,14 @@ export default function Dashboard() {
                   </span>
                 </div>
               </div>
-              {stats.pendingAmount > 0 && (
+              <div className="grid grid-cols-2 gap-2">
                 <Button size="sm" variant="outline" asChild className="w-full text-xs">
-                  <Link to="/invoices">
-                    Bill now <ArrowRight className="ml-1.5 h-3 w-3" />
-                  </Link>
+                  <Link to="/invoices">Invoices</Link>
                 </Button>
-              )}
+                <Button size="sm" variant="outline" asChild className="w-full text-xs">
+                  <Link to="/time/timer">Timer</Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -31,3 +31,26 @@ export function Spinner({ className, variant = "default" }: SpinnerProps) {
     </svg>
   );
 }
+
+type LoadingInlineProps = {
+  label: string;
+  className?: string;
+};
+
+/** Muted inline loading row (e.g. “Loading invoices…”). */
+export function LoadingInline({ label, className }: LoadingInlineProps) {
+  return (
+    <span className={cn("inline-flex items-center gap-2 text-sm text-muted-foreground", className)}>
+      <Spinner className="text-muted-foreground" />
+      {label}
+    </span>
+  );
+}
+
+const ON_PRIMARY_VARIANTS = new Set(["default", "brand", "purple", "secondary", "primary", "destructive"]);
+
+export function spinnerVariantForButton(
+  variant?: string | null,
+): SpinnerProps["variant"] {
+  return variant && ON_PRIMARY_VARIANTS.has(variant) ? "on-primary" : "default";
+}

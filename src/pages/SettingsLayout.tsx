@@ -1,6 +1,8 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { cn } from '@/lib/utils';
+import { getSettingsBreadcrumbs } from '@/lib/settingsBreadcrumbs';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 
 const settingsNav = [
@@ -40,7 +42,8 @@ export default function SettingsLayout() {
             })}
           </nav>
         </aside>
-        <main className="flex-1 min-w-0">
+        <main className="flex-1 min-w-0 space-y-4">
+          <PageBreadcrumb items={getSettingsBreadcrumbs(location.pathname)} />
           <Outlet />
         </main>
       </div>

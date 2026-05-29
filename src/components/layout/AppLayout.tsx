@@ -415,6 +415,7 @@ export function AppLayout({
                 icon={<SlotIcon slot="sidebar_clients" className={shellNavIcon(isClientsActive)} />}
                 links={clientsFlyoutLinks}
                 isSectionActive={isClientsActive}
+                defaultHref="/clients/list"
                 onNavigate={closeMobileSidebar}
               />
             ) : (
@@ -453,6 +454,7 @@ export function AppLayout({
                 icon={<SlotIcon slot="sidebar_time" className={shellNavIcon(isTimeActive)} />}
                 links={timeFlyoutLinks}
                 isSectionActive={isTimeActive}
+                defaultHref="/time/timer"
                 onNavigate={closeMobileSidebar}
               />
             ) : (

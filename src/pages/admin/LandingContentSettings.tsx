@@ -15,7 +15,8 @@ import {
 } from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, Upload } from '@/components/icons';
+import { Upload } from '@/components/icons';
+import { LoadingInline, Spinner } from '@/components/ui/spinner';
 import { PageSearchInput } from '@/components/ui/page-search-input';
 import {
   Dialog,
@@ -149,7 +150,7 @@ export default function LandingContentSettings() {
   if (isPending || !form) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <LoadingInline label="Loading…" className="text-base" />
       </div>
     );
   }
@@ -167,8 +168,7 @@ export default function LandingContentSettings() {
               View landing page
             </a>
           </Button>
-          <Button onClick={save} disabled={saving}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          <Button onClick={save} loading={saving} loadingText="Saving…">
             Save changes
           </Button>
         </div>
@@ -221,7 +221,7 @@ export default function LandingContentSettings() {
               <input ref={heroImageRef} type="file" accept="image/*" className="hidden" onChange={handleHeroImage} />
               <div className="flex items-center gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => heroImageRef.current?.click()} disabled={!!uploading}>
-                  {uploading === 'hero' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {uploading === 'hero' ? <Spinner className="size-4" /> : <Upload className="h-4 w-4" />}
                   Upload image
                 </Button>
                 {form.hero.imageUrl ? (
@@ -418,7 +418,7 @@ export default function LandingContentSettings() {
                         onClick={() => solutionImageRefs.current[i]?.click()}
                         disabled={uploading === `solution-${i}`}
                       >
-                        {uploading === `solution-${i}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                        {uploading === `solution-${i}` ? <Spinner className="size-4" /> : <Upload className="h-4 w-4" />}
                         Upload image
                       </Button>
                       {box.imageUrl ? (
@@ -775,7 +775,7 @@ export default function LandingContentSettings() {
             <div className="flex-1 overflow-auto rounded-md border bg-muted/30 p-4 min-h-[280px]">
               {loadingIconPaths ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  <LoadingInline label="Loading…" className="text-base" />
                 </div>
               ) : filteredProblemIconPaths.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">

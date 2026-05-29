@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -42,7 +42,10 @@ import { ProjectListCard, type ProjectListCardData } from '@/components/projects
 import { ProjectsTable } from '@/components/projects/ProjectsTable';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { usePagination } from '@/hooks/usePagination';
+import { useTableSort } from '@/hooks/useTableSort';
+import { compareDates, compareNullableNumbers, compareStrings } from '@/lib/tableSort';
 import { useProfileCurrency } from '@/hooks/useProfileCurrency';
+import { LoadingInline } from '@/components/ui/spinner';
 
 interface Client {
   id: string;
@@ -200,7 +203,32 @@ export default function Projects() {
     return matchesSearch && matchesStatus;
   });
   const activeFilterCount = statusFilter !== 'all' ? 1 : 0;
-  const projectsPagination = usePagination(filteredProjects);
+
+  const projectSortComparators = useMemo(
+    () => ({
+      name: (a: ProjectListCardData, b: ProjectListCardData) =>
+        compareStrings(a.name, b.name),
+      client: (a: ProjectListCardData, b: ProjectListCardData) =>
+        compareStrings(a.clients?.name ?? '', b.clients?.name ?? ''),
+      progress: (a: ProjectListCardData, b: ProjectListCardData) => {
+        const pct = (p: ProjectListCardData) =>
+          p.task_count > 0 ? p.completed_tasks / p.task_count : -1;
+        return compareNullableNumbers(pct(a), pct(b));
+      },
+      tasks: (a: ProjectListCardData, b: ProjectListCardData) =>
+        compareNullableNumbers(a.completed_tasks, b.completed_tasks),
+      hours: (a: ProjectListCardData, b: ProjectListCardData) =>
+        compareNullableNumbers(a.hours, b.hours),
+      due: (a: ProjectListCardData, b: ProjectListCardData) =>
+        compareDates(a.due_date, b.due_date),
+      value: (a: ProjectListCardData, b: ProjectListCardData) =>
+        compareNullableNumbers(a.budget, b.budget),
+    }),
+    [],
+  );
+
+  const projectSort = useTableSort(filteredProjects, projectSortComparators);
+  const projectsPagination = usePagination(projectSort.sortedItems);
 
   const downloadProjectsTemplate = () => {
     downloadCsv('projects_template.csv', getProjectsTemplateRows());
@@ -462,15 +490,8 @@ export default function Projects() {
 
         {/* Projects */}
         {loading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <Card key={i} className="animate-pulse">
-                <CardContent className="p-6">
-                  <div className="h-4 bg-muted rounded w-3/4 mb-2" />
-                  <div className="h-3 bg-muted rounded w-1/2" />
-                </CardContent>
-              </Card>
-            ))}
+          <div className="flex justify-center py-16">
+            <LoadingInline label="Loading projects…" />
           </div>
         ) : filteredProjects.length === 0 ? (
           <Card className="border-dashed">
@@ -517,6 +538,7 @@ export default function Projects() {
                 dateFormat={dateFormat}
                 formatMoney={formatMoney}
                 onRowClick={(id) => navigate(`/projects/${id}`)}
+                sort={projectSort}
                 pagination={projectsPagination}
               />
             </CardContent>

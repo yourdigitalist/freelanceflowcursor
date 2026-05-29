@@ -28,6 +28,9 @@ import { displayProposalClientName } from "@/lib/proposalClientDisplay";
 import { ClientFormDialog } from "@/components/clients/ClientFormDialog";
 import { ProjectFormDialog } from "@/components/projects/ProjectFormDialog";
 import { usePagination } from "@/hooks/usePagination";
+import { useTableSort } from "@/hooks/useTableSort";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import { compareDates, compareNullableNumbers, compareStrings } from "@/lib/tableSort";
 import { TablePagination } from "@/components/ui/table-pagination";
 import { PageSummaryBar, PageSummaryStat } from "@/components/ui/page-summary-stats";
 
@@ -144,7 +147,24 @@ export default function Proposals() {
     });
   }, [rows, searchQuery, statusFilter]);
   const activeFilterCount = statusFilter !== "all" ? 1 : 0;
-  const proposalsPagination = usePagination(filteredRows);
+  const proposalSortComparators = useMemo(
+    () => ({
+      proposal: (a: ProposalRow, b: ProposalRow) =>
+        compareStrings(a.identifier, b.identifier),
+      client: (a: ProposalRow, b: ProposalRow) =>
+        compareStrings(displayProposalClientName(a), displayProposalClientName(b)),
+      project: (a: ProposalRow, b: ProposalRow) =>
+        compareStrings(a.projects?.name ?? "", b.projects?.name ?? ""),
+      status: (a: ProposalRow, b: ProposalRow) => compareStrings(a.status, b.status),
+      expires: (a: ProposalRow, b: ProposalRow) => compareDates(a.expires_at, b.expires_at),
+      total: (a: ProposalRow, b: ProposalRow) =>
+        compareNullableNumbers(a.total, b.total),
+    }),
+    [],
+  );
+
+  const proposalSort = useTableSort(filteredRows, proposalSortComparators);
+  const proposalsPagination = usePagination(proposalSort.sortedItems);
 
   const createProposal = async () => {
     if (!user || !clientId) return;
@@ -336,12 +356,12 @@ export default function Proposals() {
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Proposal</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Project</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Expires</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
+                    <SortableTableHead label="Proposal" sortKey="proposal" sort={proposalSort} />
+                    <SortableTableHead label="Client" sortKey="client" sort={proposalSort} />
+                    <SortableTableHead label="Project" sortKey="project" sort={proposalSort} />
+                    <SortableTableHead label="Status" sortKey="status" sort={proposalSort} />
+                    <SortableTableHead label="Expires" sortKey="expires" sort={proposalSort} />
+                    <SortableTableHead label="Total" sortKey="total" sort={proposalSort} align="right" className="text-right" />
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>

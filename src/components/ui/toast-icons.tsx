@@ -1,32 +1,46 @@
 import { cn } from "@/lib/utils";
 
-const iconBase = "h-5 w-5 shrink-0";
+const iconShell = "flex h-5 w-5 shrink-0 items-center justify-center rounded-full";
 
 type ToastIconProps = { className?: string };
 
 export function ToastSuccessIcon({ className }: ToastIconProps) {
   return (
-    <svg className={cn(iconBase, "text-emerald-500", className)} viewBox="0 0 20 20" fill="none" aria-hidden>
-      <circle cx="10" cy="10" r="8.25" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M6.25 10.25 8.5 12.5 13.75 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <span className={cn(iconShell, "bg-emerald-500", className)} aria-hidden>
+      <svg className="h-3 w-3 text-white" viewBox="0 0 12 12" fill="none">
+        <path
+          d="M2.5 6.25 4.75 8.5 9.5 3.5"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
   );
 }
 
 export function ToastWarningIcon({ className }: ToastIconProps) {
   return (
-    <svg className={cn(iconBase, "text-amber-500", className)} viewBox="0 0 20 20" fill="none" aria-hidden>
-      <circle cx="10" cy="10" r="8.25" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M10 6.25v4.5M10 13.75h.01" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-    </svg>
+    <span className={cn(iconShell, "bg-amber-500", className)} aria-hidden>
+      <svg className="h-3 w-3 text-white" viewBox="0 0 12 12" fill="none">
+        <path d="M6 3.25v3.25M6 8.75h.01" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      </svg>
+    </span>
   );
 }
 
 export function ToastErrorIcon({ className }: ToastIconProps) {
   return (
-    <svg className={cn(iconBase, "text-red-500", className)} viewBox="0 0 20 20" fill="none" aria-hidden>
-      <circle cx="10" cy="10" r="8.25" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M7.25 7.25 12.75 12.75M12.75 7.25 7.25 12.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
+    <span className={cn(iconShell, "bg-red-500", className)} aria-hidden>
+      <svg className="h-3 w-3 text-white" viewBox="0 0 12 12" fill="none">
+        <path
+          d="M3.25 3.25 8.75 8.75M8.75 3.25 3.25 8.75"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+        />
+      </svg>
+    </span>
   );
 }

@@ -1,5 +1,5 @@
 import { ReactNode, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { shellFlyoutLink, shellNavLink } from './shellNav';
 
@@ -14,6 +14,8 @@ interface SidebarNavFlyoutProps {
   icon: ReactNode;
   links: SidebarFlyoutLink[];
   isSectionActive: boolean;
+  /** Navigates here when the collapsed icon is clicked (not a flyout item). */
+  defaultHref: string;
   onNavigate?: () => void;
 }
 
@@ -22,9 +24,17 @@ export function SidebarNavFlyout({
   icon,
   links,
   isSectionActive,
+  defaultHref,
   onNavigate,
 }: SidebarNavFlyoutProps) {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const handleTriggerClick = () => {
+    navigate(defaultHref);
+    onNavigate?.();
+    setOpen(false);
+  };
 
   return (
     <div
@@ -43,6 +53,7 @@ export function SidebarNavFlyout({
         className={shellNavLink(isSectionActive, true)}
         aria-expanded={open}
         aria-haspopup="true"
+        onClick={handleTriggerClick}
       >
         {icon}
       </button>

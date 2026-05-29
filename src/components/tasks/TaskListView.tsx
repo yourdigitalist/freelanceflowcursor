@@ -26,7 +26,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { GripVertical, Trash2, MessageSquare, Plus, ChevronUp, ChevronDown, Pencil, Copy } from '@/components/icons';
+import { GripVertical, Trash2, MessageSquare, Plus, Pencil, Copy } from '@/components/icons';
 import { Task, ProjectStatus } from './types';
 import { PrioritySelect } from './PrioritySelect';
 import { format } from 'date-fns';
@@ -34,8 +34,11 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { cn } from '@/lib/utils';
 import { QuickAddTask } from './QuickAddTask';
 import { usePagination } from '@/hooks/usePagination';
+import { useTableSort } from '@/hooks/useTableSort';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { DataTableFrame } from '@/components/ui/table';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
+import { compareDates, compareNullableNumbers, compareStrings } from '@/lib/tableSort';
 import { formatDuration } from '@/lib/time';
 
 export type TaskListSortKey = 'title' | 'status' | 'priority' | 'estimated_hours' | 'due_date';
@@ -295,45 +298,6 @@ function SortableRow({
   );
 }
 
-function SortableHead({
-  label,
-  sortKey,
-  currentSortKey,
-  sortDir,
-  onSort,
-  className,
-}: {
-  label: string;
-  sortKey: TaskListSortKey;
-  currentSortKey: TaskListSortKey | null;
-  sortDir: 'asc' | 'desc';
-  onSort: (key: TaskListSortKey) => void;
-  className?: string;
-}) {
-  const isActive = currentSortKey === sortKey;
-  return (
-    <TableHead className={className}>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="-ml-0.5 h-auto p-1 font-medium text-muted-foreground hover:bg-transparent hover:text-muted-foreground"
-        onClick={() => onSort(sortKey)}
-      >
-        {label}
-        {isActive ? (
-          sortDir === 'asc' ? (
-            <ChevronUp className="ml-1 h-4 w-4" />
-          ) : (
-            <ChevronDown className="ml-1 h-4 w-4" />
-          )
-        ) : (
-          <span className="ml-1 inline-block w-4" aria-hidden />
-        )}
-      </Button>
-    </TableHead>
-  );
-}
-
 export function TaskListView({
   tasks,
   statuses,
@@ -351,66 +315,33 @@ export function TaskListView({
   defaultStatusId,
 }: TaskListViewProps) {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
-  const [sortKey, setSortKey] = useState<TaskListSortKey | null>(null);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-  const handleSort = (key: TaskListSortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortKey(key);
-      setSortDir('asc');
-    }
-  };
-
-  const sortedTasks = useMemo(() => {
-    if (!sortKey) return tasks;
+  const taskSortComparators = useMemo(() => {
     const statusPos = (s: ProjectStatus) => s.position;
     const statusName = (t: Task) => statuses.find((s) => s.id === t.status_id)?.name ?? '';
     const priorityOrder = (p: string | null) =>
       p ? ['low', 'medium', 'high', 'urgent'].indexOf(p) : -1;
-    const cmp = (a: Task, b: Task): number => {
-      let va: string | number | null;
-      let vb: string | number | null;
-      switch (sortKey) {
-        case 'title':
-          va = a.title.toLowerCase();
-          vb = b.title.toLowerCase();
-          break;
-        case 'status': {
-          const sa = statuses.find((s) => s.id === a.status_id);
-          const sb = statuses.find((s) => s.id === b.status_id);
-          va = sa ? statusPos(sa) : 999;
-          vb = sb ? statusPos(sb) : 999;
-          if (va === vb) {
-            va = statusName(a);
-            vb = statusName(b);
-          }
-          break;
-        }
-        case 'priority':
-          va = priorityOrder(a.priority);
-          vb = priorityOrder(b.priority);
-          break;
-        case 'estimated_hours':
-          va = a.estimated_hours ?? -1;
-          vb = b.estimated_hours ?? -1;
-          break;
-        case 'due_date':
-          va = a.due_date ? new Date(a.due_date).getTime() : 0;
-          vb = b.due_date ? new Date(b.due_date).getTime() : 0;
-          break;
-        default:
-          return 0;
-      }
-      if (va < vb) return sortDir === 'asc' ? -1 : 1;
-      if (va > vb) return sortDir === 'asc' ? 1 : -1;
-      return 0;
-    };
-    return [...tasks].sort(cmp);
-  }, [tasks, sortKey, sortDir, statuses]);
 
-  const tasksPagination = usePagination(sortedTasks);
+    return {
+      title: (a: Task, b: Task) => compareStrings(a.title, b.title),
+      status: (a: Task, b: Task) => {
+        const sa = statuses.find((s) => s.id === a.status_id);
+        const sb = statuses.find((s) => s.id === b.status_id);
+        const va = sa ? statusPos(sa) : 999;
+        const vb = sb ? statusPos(sb) : 999;
+        if (va !== vb) return va - vb;
+        return compareStrings(statusName(a), statusName(b));
+      },
+      priority: (a: Task, b: Task) =>
+        priorityOrder(a.priority) - priorityOrder(b.priority),
+      estimated_hours: (a: Task, b: Task) =>
+        compareNullableNumbers(a.estimated_hours, b.estimated_hours, -1),
+      due_date: (a: Task, b: Task) => compareDates(a.due_date, b.due_date),
+    };
+  }, [statuses]);
+
+  const taskSort = useTableSort(tasks, taskSortComparators);
+  const tasksPagination = usePagination(taskSort.sortedItems);
 
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border bg-card">
@@ -419,12 +350,17 @@ export function TaskListView({
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead className="w-8"></TableHead>
-            <SortableHead label="Title" sortKey="title" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-            <SortableHead label="Status" sortKey="status" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="w-[180px]" />
-            <SortableHead label="Priority" sortKey="priority" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="w-[120px]" />
-            <SortableHead label="Est. Hours" sortKey="estimated_hours" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="w-[100px] whitespace-nowrap min-w-[100px]" />
+            <SortableTableHead label="Title" sortKey="title" sort={taskSort} />
+            <SortableTableHead label="Status" sortKey="status" sort={taskSort} className="w-[180px]" />
+            <SortableTableHead label="Priority" sortKey="priority" sort={taskSort} className="w-[120px]" />
+            <SortableTableHead
+              label="Est. Hours"
+              sortKey="estimated_hours"
+              sort={taskSort}
+              className="w-[100px] whitespace-nowrap min-w-[100px]"
+            />
             <TableHead className="w-[120px]">Tracked</TableHead>
-            <SortableHead label="Due Date" sortKey="due_date" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="w-[140px]" />
+            <SortableTableHead label="Due Date" sortKey="due_date" sort={taskSort} className="w-[140px]" />
             <TableHead className="w-[100px]">Actions</TableHead>
           </TableRow>
         </TableHeader>

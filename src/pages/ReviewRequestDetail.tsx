@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,7 +29,6 @@ import { uploadReviewFile } from '@/lib/reviewFileUpload';
 import { sendReviewRequestEmail } from '@/lib/sendReviewRequest';
 import { format } from 'date-fns';
 import {
-  ArrowLeft,
   Clock,
   Calendar,
   User,
@@ -300,11 +300,15 @@ export default function ReviewRequestDetail() {
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/reviews')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div className="flex-1">
+        <div className="space-y-2 border-b pb-4">
+          <PageBreadcrumb
+            items={[
+              { label: 'Approvals', href: '/reviews' },
+              { label: request.title },
+            ]}
+          />
+          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold">{request.title}</h1>
               {getStatusBadge(request.status)}
@@ -328,6 +332,7 @@ export default function ReviewRequestDetail() {
               <SlotIcon slot="action_delete" className="h-4 w-4 mr-2 text-muted-foreground" />
               Delete
             </Button>
+          </div>
           </div>
         </div>
 

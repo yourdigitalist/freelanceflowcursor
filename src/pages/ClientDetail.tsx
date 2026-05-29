@@ -23,7 +23,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Check } from "@/components/icons";
+import { Check } from "@/components/icons";
+import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import { MenuDotsTrigger } from "@/components/ui/menu-dots-trigger";
 import { addDays, addMonths, addWeeks, eachDayOfInterval, endOfDay, endOfMonth, endOfWeek, format, isSameDay, parseISO, startOfDay, startOfMonth, startOfWeek, subDays, subMonths, subWeeks } from "date-fns";
 import {
@@ -53,6 +54,9 @@ import { formatLocaleDate, formatLocaleDateTime } from "@/lib/datetime";
 import { ClientPortalSettings } from "@/components/clients/ClientPortalSettings";
 import { TimeEntriesTable, type TimeEntriesTableEntry } from "@/components/time/TimeEntriesTable";
 import { usePagination } from "@/hooks/usePagination";
+import { useTableSort } from "@/hooks/useTableSort";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import { compareDates, compareNullableNumbers, compareStrings } from "@/lib/tableSort";
 import { TablePagination } from "@/components/ui/table-pagination";
 import { readClientsNavState } from "@/lib/clientsNavigation";
 import {
@@ -323,11 +327,41 @@ export default function ClientDetail() {
     return out;
   }, [groupedRows, dayKeys]);
 
-  const projectsPagination = usePagination(projects);
-  const invoicesPagination = usePagination(invoices);
-  const proposalsPagination = usePagination(proposals);
-  const contractsPagination = usePagination(contracts);
-  const approvalsPagination = usePagination(approvals);
+  const clientProjectSort = useTableSort(projects, {
+    name: (a, b) => compareStrings(a.name, b.name),
+    status: (a, b) => compareStrings(a.status ?? "", b.status ?? ""),
+    due: (a, b) => compareDates(a.due_date, b.due_date),
+    budget: (a, b) => compareNullableNumbers(a.budget, b.budget),
+  });
+  const clientInvoiceSort = useTableSort(invoices, {
+    invoice: (a, b) => compareStrings(a.invoice_number, b.invoice_number),
+    status: (a, b) => compareStrings(a.status, b.status),
+    total: (a, b) => compareNullableNumbers(Number(a.total), Number(b.total)),
+    due: (a, b) => compareDates(a.due_date, b.due_date),
+  });
+  const clientProposalSort = useTableSort(proposals, {
+    proposal: (a, b) => compareStrings(a.identifier, b.identifier),
+    status: (a, b) => compareStrings(a.status, b.status),
+    total: (a, b) => compareNullableNumbers(a.total, b.total),
+    expires: (a, b) => compareDates(a.expires_at, b.expires_at),
+  });
+  const clientContractSort = useTableSort(contracts, {
+    contract: (a, b) => compareStrings(a.identifier, b.identifier),
+    status: (a, b) => compareStrings(a.status, b.status),
+    total: (a, b) => compareNullableNumbers(a.total, b.total),
+  });
+  const clientApprovalSort = useTableSort(approvals, {
+    title: (a, b) => compareStrings(a.title, b.title),
+    status: (a, b) => compareStrings(a.status, b.status),
+    project: (a, b) => compareStrings(a.projects?.name ?? "", b.projects?.name ?? ""),
+    created: (a, b) => compareDates(a.created_at, b.created_at),
+  });
+
+  const projectsPagination = usePagination(clientProjectSort.sortedItems);
+  const invoicesPagination = usePagination(clientInvoiceSort.sortedItems);
+  const proposalsPagination = usePagination(clientProposalSort.sortedItems);
+  const contractsPagination = usePagination(clientContractSort.sortedItems);
+  const approvalsPagination = usePagination(clientApprovalSort.sortedItems);
   const timeWeekRowsPagination = usePagination(groupedRows);
 
   const monthDayTotals = useMemo(() => {
@@ -853,15 +887,16 @@ export default function ClientDetail() {
         ) : null}
         <div className="flex items-center justify-between gap-3 pb-4">
           <div>
-            <Link
-              to={clientsReturnTo}
-              state={clientsReturnState}
-              className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              {clientsReturnTo === "/clients" ? "Back to CRM" : "Back to clients"}
-            </Link>
-            <div className="mt-2 flex items-center gap-3">
+            <PageBreadcrumb
+              items={[
+                {
+                  label: clientsReturnTo === "/clients" ? "CRM" : "Clients",
+                  href: clientsReturnTo,
+                },
+                { label: client.name },
+              ]}
+            />
+            <div className="mt-1 flex items-center gap-3">
               <ClientAvatar client={client} size="lg" />
               <h1 className="text-2xl font-bold">{client.name}</h1>
               <DropdownMenu>
@@ -1055,7 +1090,12 @@ export default function ClientDetail() {
             <Card><CardContent className="flex flex-col p-0">
               <DataTableFrame>
               <Table>
-                <TableHeader><TableRow className="hover:bg-transparent"><TableHead>Name</TableHead><TableHead>Status</TableHead><TableHead>Due</TableHead><TableHead className="text-right">Budget</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow className="hover:bg-transparent">
+                  <SortableTableHead label="Name" sortKey="name" sort={clientProjectSort} />
+                  <SortableTableHead label="Status" sortKey="status" sort={clientProjectSort} />
+                  <SortableTableHead label="Due" sortKey="due" sort={clientProjectSort} />
+                  <SortableTableHead label="Budget" sortKey="budget" sort={clientProjectSort} align="right" className="text-right" />
+                </TableRow></TableHeader>
                 <TableBody>
                   {projectsPagination.paginatedItems.map((p) => (
                     <TableRow key={p.id} className="cursor-pointer" onClick={() => navigate(`/projects/${p.id}`)}>
@@ -1423,7 +1463,12 @@ export default function ClientDetail() {
             <Card><CardContent className="flex flex-col p-0">
               <DataTableFrame>
             <Table>
-              <TableHeader><TableRow className="hover:bg-transparent"><TableHead>Invoice</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Total</TableHead><TableHead>Due</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow className="hover:bg-transparent">
+                <SortableTableHead label="Invoice" sortKey="invoice" sort={clientInvoiceSort} />
+                <SortableTableHead label="Status" sortKey="status" sort={clientInvoiceSort} />
+                <SortableTableHead label="Total" sortKey="total" sort={clientInvoiceSort} align="right" className="text-right" />
+                <SortableTableHead label="Due" sortKey="due" sort={clientInvoiceSort} />
+              </TableRow></TableHeader>
               <TableBody>
                 {invoicesPagination.paginatedItems.map((row) => (
                   <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/invoices/${row.id}`)}>
@@ -1467,7 +1512,12 @@ export default function ClientDetail() {
             <Card><CardContent className="flex flex-col p-0">
               <DataTableFrame>
             <Table>
-              <TableHeader><TableRow className="hover:bg-transparent"><TableHead>Proposal</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Total</TableHead><TableHead>Expires</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow className="hover:bg-transparent">
+                <SortableTableHead label="Proposal" sortKey="proposal" sort={clientProposalSort} />
+                <SortableTableHead label="Status" sortKey="status" sort={clientProposalSort} />
+                <SortableTableHead label="Total" sortKey="total" sort={clientProposalSort} align="right" className="text-right" />
+                <SortableTableHead label="Expires" sortKey="expires" sort={clientProposalSort} />
+              </TableRow></TableHeader>
               <TableBody>
                 {proposalsPagination.paginatedItems.map((row) => (
                   <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/proposals/${row.id}`)}>
@@ -1505,7 +1555,11 @@ export default function ClientDetail() {
             <Card><CardContent className="flex flex-col p-0">
               <DataTableFrame>
             <Table>
-              <TableHeader><TableRow className="hover:bg-transparent"><TableHead>Contract</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow className="hover:bg-transparent">
+                <SortableTableHead label="Contract" sortKey="contract" sort={clientContractSort} />
+                <SortableTableHead label="Status" sortKey="status" sort={clientContractSort} />
+                <SortableTableHead label="Total" sortKey="total" sort={clientContractSort} align="right" className="text-right" />
+              </TableRow></TableHeader>
               <TableBody>
                 {contractsPagination.paginatedItems.map((row) => (
                   <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/contracts/${row.id}`)}>
@@ -1540,7 +1594,12 @@ export default function ClientDetail() {
             <Card><CardContent className="flex flex-col p-0">
               <DataTableFrame>
             <Table>
-              <TableHeader><TableRow className="hover:bg-transparent"><TableHead>Title</TableHead><TableHead>Status</TableHead><TableHead>Project</TableHead><TableHead>Created</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow className="hover:bg-transparent">
+                <SortableTableHead label="Title" sortKey="title" sort={clientApprovalSort} />
+                <SortableTableHead label="Status" sortKey="status" sort={clientApprovalSort} />
+                <SortableTableHead label="Project" sortKey="project" sort={clientApprovalSort} />
+                <SortableTableHead label="Created" sortKey="created" sort={clientApprovalSort} />
+              </TableRow></TableHeader>
               <TableBody>
                 {approvalsPagination.paginatedItems.map((row) => (
                   <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/reviews/${row.id}`)}>
