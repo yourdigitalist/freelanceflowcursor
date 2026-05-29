@@ -33,6 +33,8 @@ import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { compareDates, compareNullableNumbers, compareStrings } from "@/lib/tableSort";
 import { TablePagination } from "@/components/ui/table-pagination";
 import { PageSummaryBar, PageSummaryStat } from "@/components/ui/page-summary-stats";
+import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
+import { listPageBreadcrumb } from "@/lib/breadcrumbs";
 
 type ProposalRow = {
   id: string;
@@ -272,6 +274,7 @@ export default function Proposals() {
       <div className="space-y-6">
         <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <PageBreadcrumb items={listPageBreadcrumb("Proposals")} />
             <h1 className="text-2xl font-bold tracking-tight">Proposals</h1>
           </div>
           <Button onClick={() => setCreateOpen(true)}><Plus className="mr-2 h-4 w-4" />Create Proposal</Button>

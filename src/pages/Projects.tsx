@@ -46,6 +46,8 @@ import { useTableSort } from '@/hooks/useTableSort';
 import { compareDates, compareNullableNumbers, compareStrings } from '@/lib/tableSort';
 import { useProfileCurrency } from '@/hooks/useProfileCurrency';
 import { LoadingInline } from '@/components/ui/spinner';
+import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
+import { listPageBreadcrumb } from '@/lib/breadcrumbs';
 
 interface Client {
   id: string;
@@ -327,6 +329,7 @@ export default function Projects() {
         {/* Header */}
         <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <PageBreadcrumb items={listPageBreadcrumb('Projects')} />
             <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
           </div>
           <div className="flex items-center gap-2">

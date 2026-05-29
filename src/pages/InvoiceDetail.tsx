@@ -15,6 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2, Loader2, ListTodo, Wallet, Download, Save, RotateCcw } from '@/components/icons';
 import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
+import { detailPageBreadcrumb } from '@/lib/breadcrumbs';
 import { MenuDotsTrigger } from '@/components/ui/menu-dots-trigger';
 import { reopenPaidInvoice } from '@/lib/invoiceStatus';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
@@ -1562,12 +1563,7 @@ export default function InvoiceDetail() {
       <AppLayout>
         <div className="space-y-4 max-w-lg">
           <p className="text-muted-foreground">Invoice not found.</p>
-          <PageBreadcrumb
-            items={[
-              { label: 'Invoices', href: '/invoices' },
-              { label: 'Invoice not found' },
-            ]}
-          />
+          <PageBreadcrumb items={detailPageBreadcrumb('Invoices', '/invoices', 'Invoice not found')} />
           <Button variant="outline" onClick={() => navigate('/invoices')}>
             View all invoices
           </Button>
@@ -1584,10 +1580,7 @@ export default function InvoiceDetail() {
         <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-4">
           <div className="min-w-0 space-y-2">
             <PageBreadcrumb
-              items={[
-                { label: 'Invoices', href: '/invoices' },
-                { label: invoice.invoice_number || 'Invoice' },
-              ]}
+              items={detailPageBreadcrumb('Invoices', '/invoices', invoice.invoice_number || 'Invoice')}
             />
             <div className="min-w-0">
               {isEditMode ? (

@@ -35,6 +35,9 @@ import { useTableSort } from "@/hooks/useTableSort";
 import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { compareNullableNumbers, compareStrings } from "@/lib/tableSort";
 import { TablePagination } from "@/components/ui/table-pagination";
+import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
+import { PageSummaryBar, PageSummaryStat } from "@/components/ui/page-summary-stats";
+import { listPageBreadcrumb } from "@/lib/breadcrumbs";
 
 function mapTasks(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -122,6 +125,7 @@ export default function Services() {
       <div className="space-y-6">
         <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <PageBreadcrumb items={listPageBreadcrumb("Services")} />
             <h1 className="text-2xl font-bold tracking-tight">Services</h1>
           </div>
           <Button

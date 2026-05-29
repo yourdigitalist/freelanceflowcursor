@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   DndContext,
@@ -93,7 +94,7 @@ const getProjectDeleteErrorMessage = (error: unknown) => {
     normalizedMessage.includes('contract is read-only after it has been sent') ||
     (normalizedMessage.includes('contract') && normalizedMessage.includes('read-only'))
   ) {
-    return 'This project is linked to a sent contract. Archive the contract first, then delete the project.';
+    return 'This project is linked to a sent or cancelled contract. Cancel or archive that contract from Contracts first, then delete the project.';
   }
 
   return rawMessage || 'Could not delete project. Please try again.';
@@ -134,6 +135,9 @@ export default function ProjectDetail() {
   const [importTaskDialogOpen, setImportTaskDialogOpen] = useState(false);
   const [importingTasks, setImportingTasks] = useState(false);
   const importTaskFileRef = useRef<HTMLInputElement>(null);
+  const [deleteProjectOpen, setDeleteProjectOpen] = useState(false);
+  const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
+  const [deleteTimeEntryId, setDeleteTimeEntryId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -370,12 +374,13 @@ export default function ProjectDetail() {
     }
   };
 
-  const handleDeleteProjectTimeEntry = async (entryId: string) => {
-    if (!confirm('Delete this time entry?')) return;
+  const confirmDeleteProjectTimeEntry = async () => {
+    if (!deleteTimeEntryId) return;
     try {
-      const { error } = await supabase.from('time_entries').delete().eq('id', entryId);
+      const { error } = await supabase.from('time_entries').delete().eq('id', deleteTimeEntryId);
       if (error) throw error;
       toast({ title: 'Time entry deleted' });
+      setDeleteTimeEntryId(null);
       void fetchProjectTimeEntries();
       void fetchTotalHours();
     } catch (error: any) {
@@ -558,13 +563,13 @@ export default function ProjectDetail() {
     }
   };
 
-  const handleDeleteTask = async (taskId: string) => {
-    if (!confirm('Are you sure you want to delete this task?')) return;
-
+  const confirmDeleteTask = async () => {
+    if (!deleteTaskId) return;
     try {
-      const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+      const { error } = await supabase.from('tasks').delete().eq('id', deleteTaskId);
       if (error) throw error;
       toast({ title: 'Task deleted successfully' });
+      setDeleteTaskId(null);
       fetchTasks();
     } catch (error: any) {
       toast({
@@ -579,11 +584,11 @@ export default function ProjectDetail() {
     navigate(`/projects?edit=${id}`);
   };
 
-  const handleDeleteProject = async () => {
-    if (!confirm('Are you sure you want to delete this project? This will also delete all tasks.')) return;
+  const confirmDeleteProject = async () => {
     try {
       const { error } = await supabase.from('projects').delete().eq('id', id);
       if (error) throw error;
+      setDeleteProjectOpen(false);
       toast({ title: 'Project deleted' });
       navigate('/projects');
     } catch (error: any) {
@@ -993,7 +998,7 @@ export default function ProjectDetail() {
           totalHours={totalHours}
           formatCurrency={fmt}
           onEdit={handleEditProject}
-          onDelete={handleDeleteProject}
+          onDelete={() => setDeleteProjectOpen(true)}
           onDownloadTaskTemplate={handleDownloadTaskTemplate}
           onExportTasksCsv={handleExportTasksCsv}
           onOpenImportTasks={() => setImportTaskDialogOpen(true)}
@@ -1054,7 +1059,7 @@ export default function ProjectDetail() {
                 onTitleChange={handleTitleChange}
                 onEstHoursChange={handleEstHoursChange}
                 onDueDateChange={handleDueDateChange}
-                onDelete={handleDeleteTask}
+                onDelete={(taskId) => setDeleteTaskId(taskId)}
                 onDuplicate={handleDuplicateTask}
                 onQuickAdd={handleQuickAddTask}
                 defaultStatusId={statuses[0]?.id || ''}
@@ -1104,7 +1109,7 @@ export default function ProjectDetail() {
                 getEntrySeconds={getProjectEntrySeconds}
                 getStatusBadge={getProjectEntryStatusBadge}
                 onEdit={(entry) => navigate(`/time?view=day&edit=${entry.id}`)}
-                onDelete={handleDeleteProjectTimeEntry}
+                onDelete={(entryId) => setDeleteTimeEntryId(entryId)}
                 showClientColumn={false}
                 showProjectColumn={false}
                 onResume={(entryId) => {
@@ -1153,7 +1158,7 @@ export default function ProjectDetail() {
           }}
           onSave={handleSaveTask}
           onDuplicate={handleDuplicateTask}
-          onDelete={handleDeleteTask}
+          onDelete={(taskId) => setDeleteTaskId(taskId)}
         />
 
         <TimeEntryLogDialog
@@ -1245,6 +1250,34 @@ export default function ProjectDetail() {
             )}
           </DialogContent>
         </Dialog>
+
+        <ConfirmDialog
+          open={deleteProjectOpen}
+          onOpenChange={setDeleteProjectOpen}
+          title="Delete project?"
+          description="Are you sure you want to delete this project? This will also delete all tasks."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={confirmDeleteProject}
+        />
+        <ConfirmDialog
+          open={!!deleteTaskId}
+          onOpenChange={(open) => !open && setDeleteTaskId(null)}
+          title="Delete task?"
+          description="Are you sure you want to delete this task?"
+          confirmLabel="Delete"
+          destructive
+          onConfirm={confirmDeleteTask}
+        />
+        <ConfirmDialog
+          open={!!deleteTimeEntryId}
+          onOpenChange={(open) => !open && setDeleteTimeEntryId(null)}
+          title="Delete time entry?"
+          description="Delete this time entry? This cannot be undone."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={confirmDeleteProjectTimeEntry}
+        />
       </div>
     </AppLayout>
   );

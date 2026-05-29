@@ -25,6 +25,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Check } from "@/components/icons";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
+import { withDashboardTrail } from "@/lib/breadcrumbs";
 import { MenuDotsTrigger } from "@/components/ui/menu-dots-trigger";
 import { addDays, addMonths, addWeeks, eachDayOfInterval, endOfDay, endOfMonth, endOfWeek, format, isSameDay, parseISO, startOfDay, startOfMonth, startOfWeek, subDays, subMonths, subWeeks } from "date-fns";
 import {
@@ -888,13 +889,13 @@ export default function ClientDetail() {
         <div className="flex items-center justify-between gap-3 pb-4">
           <div>
             <PageBreadcrumb
-              items={[
+              items={withDashboardTrail([
                 {
                   label: clientsReturnTo === "/clients" ? "CRM" : "Clients",
                   href: clientsReturnTo,
                 },
                 { label: client.name },
-              ]}
+              ])}
             />
             <div className="mt-1 flex items-center gap-3">
               <ClientAvatar client={client} size="lg" />

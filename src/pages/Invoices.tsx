@@ -69,6 +69,8 @@ import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import { compareDates, compareNullableNumbers, compareStrings } from '@/lib/tableSort';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { PageSummaryBar, PageSummaryStat } from '@/components/ui/page-summary-stats';
+import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
+import { listPageBreadcrumb } from '@/lib/breadcrumbs';
 
 interface Client {
   id: string;
@@ -752,6 +754,7 @@ export default function Invoices() {
         {/* Header */}
         <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <PageBreadcrumb items={listPageBreadcrumb('Invoices')} />
             <h1 className="text-2xl font-bold tracking-tight">Invoices</h1>
           </div>
           <div className="flex items-center gap-2">

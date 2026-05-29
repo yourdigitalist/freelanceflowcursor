@@ -21,7 +21,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Trash2, Filter } from "@/components/icons";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Filter, Archive, ArchiveRestore, XCircle, Trash2 } from "@/components/icons";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MenuDotsTrigger } from "@/components/ui/menu-dots-trigger";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import {
+  archiveContract,
+  buildArchiveContractConfirmMessage,
+  buildRestoreContractConfirmMessage,
+  isContractArchived,
+  restoreContract,
+} from "@/lib/contractLifecycle";
 import { SlotIcon } from "@/contexts/IconSlotContext";
 import { applyProposalImportToContract } from "@/lib/contractProposalImport";
 import { contractClientSnapshotFromClient } from "@/lib/clientForm";
@@ -37,12 +53,15 @@ import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { compareBooleans, compareNullableNumbers, compareStrings } from "@/lib/tableSort";
 import { TablePagination } from "@/components/ui/table-pagination";
 import { PageSummaryBar, PageSummaryStat } from "@/components/ui/page-summary-stats";
+import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
+import { listPageBreadcrumb } from "@/lib/breadcrumbs";
 
 type ContractRow = {
   id: string;
   identifier: string;
   status: string;
   total: number;
+  archived_at: string | null;
   client_id: string | null;
   project_id: string | null;
   clients: {
@@ -82,10 +101,13 @@ export default function Contracts() {
   const [createOpen, setCreateOpen] = useState(false);
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [archiveContractRow, setArchiveContractRow] = useState<ContractRow | null>(null);
+  const [restoreContractRow, setRestoreContractRow] = useState<ContractRow | null>(null);
   const [clientId, setClientId] = useState("");
   const [projectId, setProjectId] = useState<string>("none");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "pending_signatures" | "signed" | "cancelled">("all");
+  const [showArchived, setShowArchived] = useState(false);
   const [selectedProposalId, setSelectedProposalId] = useState<string>("none");
   const [activeTab, setActiveTab] = useState<"contracts" | "templates">("contracts");
   const [templates, setTemplates] = useState<TemplateCandidate[]>([]);
@@ -105,7 +127,7 @@ export default function Contracts() {
     const [{ data: contracts }, { data: allClients }, { data: allProjects }, { data: allTemplates }] = await Promise.all([
       supabase
         .from("contracts")
-        .select("id, identifier, status, total, client_id, project_id, clients(name, first_name, last_name, avatar_color, logo_url, currency), projects(name)")
+        .select("id, identifier, status, total, archived_at, client_id, project_id, clients(name, first_name, last_name, avatar_color, logo_url, currency), projects(name)")
         .order("created_at", { ascending: false }),
       supabase.from("clients").select("id, name, company, company_name, entity_type, company_registration, email, phone, address, street, street2, city, state, postal_code, country, tax_id, currency").is("archived_at", null).order("name"),
       supabase.from("projects").select("id, name, client_id").order("name"),
@@ -188,7 +210,8 @@ export default function Contracts() {
   );
 
   const counts = useMemo(() => {
-    const by = (status: string) => rows.filter((row) => row.status === status).length;
+    const activeRows = rows.filter((row) => !isContractArchived(row));
+    const by = (status: string) => activeRows.filter((row) => row.status === status).length;
     return {
       draft: by("draft"),
       pending: by("pending_signatures"),
@@ -196,15 +219,25 @@ export default function Contracts() {
     };
   }, [rows]);
 
-  const filteredRows = useMemo(() => {
+  const matchesContractFilters = (row: ContractRow) => {
     const query = searchQuery.trim().toLowerCase();
-    return rows.filter((row) => {
-      const matchesStatus = statusFilter === "all" ? true : row.status === statusFilter;
-      const matchesQuery = !query || [row.identifier, row.clients?.name || "", row.projects?.name || ""].join(" ").toLowerCase().includes(query);
-      return matchesStatus && matchesQuery;
-    });
-  }, [rows, searchQuery, statusFilter]);
-  const activeFilterCount = statusFilter !== "all" ? 1 : 0;
+    const matchesStatus = statusFilter === "all" ? true : row.status === statusFilter;
+    const matchesQuery =
+      !query || [row.identifier, row.clients?.name || "", row.projects?.name || ""].join(" ").toLowerCase().includes(query);
+    return matchesStatus && matchesQuery;
+  };
+
+  const activeRows = useMemo(
+    () => rows.filter((row) => !isContractArchived(row) && matchesContractFilters(row)),
+    [rows, searchQuery, statusFilter],
+  );
+
+  const archivedRows = useMemo(
+    () => rows.filter((row) => isContractArchived(row) && matchesContractFilters(row)),
+    [rows, searchQuery, statusFilter],
+  );
+
+  const activeFilterCount = (statusFilter !== "all" ? 1 : 0) + (showArchived ? 1 : 0);
   const contractSortComparators = useMemo(
     () => ({
       contract: (a: ContractRow, b: ContractRow) =>
@@ -220,7 +253,7 @@ export default function Contracts() {
     [],
   );
 
-  const contractSort = useTableSort(filteredRows, contractSortComparators);
+  const contractSort = useTableSort(activeRows, contractSortComparators);
   const contractsPagination = usePagination(contractSort.sortedItems);
 
   const templateSortComparators = useMemo(
@@ -311,6 +344,30 @@ export default function Contracts() {
     navigate(`/contracts/${contract.id}`);
   };
 
+  const confirmArchiveContract = async () => {
+    if (!archiveContractRow) return;
+    const { error } = await archiveContract(archiveContractRow.id);
+    if (error) {
+      toast({ title: "Could not archive contract", description: error.message, variant: "destructive" });
+      return;
+    }
+    setArchiveContractRow(null);
+    await load();
+    toast({ title: "Contract archived" });
+  };
+
+  const confirmRestoreContract = async () => {
+    if (!restoreContractRow) return;
+    const { error } = await restoreContract(restoreContractRow.id);
+    if (error) {
+      toast({ title: "Could not restore contract", description: error.message, variant: "destructive" });
+      return;
+    }
+    setRestoreContractRow(null);
+    await load();
+    toast({ title: "Contract restored" });
+  };
+
   const cancelContract = async () => {
     const reason = cancelReason.trim();
     if (!cancelId || !reason) return;
@@ -388,6 +445,7 @@ export default function Contracts() {
       <div className="space-y-6">
         <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <PageBreadcrumb items={listPageBreadcrumb("Contracts")} />
             <h1 className="text-2xl font-bold tracking-tight">Contracts</h1>
           </div>
           {activeTab === "contracts" ? (
@@ -468,8 +526,20 @@ export default function Contracts() {
                     <SelectItem value="cancelled">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
+                <label className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
+                  <Checkbox checked={showArchived} onCheckedChange={(v) => setShowArchived(!!v)} />
+                  Show archived
+                </label>
                 {activeFilterCount > 0 ? (
-                  <Button variant="ghost" size="sm" className="h-8 w-full" onClick={() => setStatusFilter("all")}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-full"
+                    onClick={() => {
+                      setStatusFilter("all");
+                      setShowArchived(false);
+                    }}
+                  >
                     Reset filters
                   </Button>
                 ) : null}
@@ -482,14 +552,25 @@ export default function Contracts() {
           <CardContent className="flex flex-col p-0">
             {loading ? (
               <div className="py-10 text-center text-sm text-muted-foreground">Loading contracts...</div>
-            ) : filteredRows.length === 0 ? (
+            ) : rows.length === 0 ? (
               <div className="py-14 text-center">
                 <h3 className="text-lg font-semibold">No contracts yet</h3>
                 <p className="text-sm text-muted-foreground">
                   Create your first contract to start working with clients professionally.
                 </p>
               </div>
-            ) : (
+            ) : activeRows.length === 0 && !(showArchived && archivedRows.length > 0) ? (
+              <div className="py-14 text-center">
+                <h3 className="text-lg font-semibold">
+                  {rows.every((row) => isContractArchived(row)) ? "No active contracts" : "No contracts match your filters"}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {rows.every((row) => isContractArchived(row))
+                    ? "Turn on “Show archived” to see archived contracts, or create a new contract."
+                    : "Try adjusting search or status filters."}
+                </p>
+              </div>
+            ) : activeRows.length > 0 ? (
               <DataTableFrame>
               <Table>
                 <TableHeader>
@@ -516,17 +597,28 @@ export default function Contracts() {
                         <TableStatusBadge status={row.status} />
                       </TableCell>
                       <TableCell className="text-right font-semibold tabular-nums">{formatMoney(row.total || 0, row.clients?.currency)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button size="icon" variant="ghost" asChild onClick={(event) => event.stopPropagation()} aria-label="Edit contract">
-                            <Link to={`/contracts/${row.id}`}>
-                              <SlotIcon slot="action_edit" className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                          <Button size="icon" variant="ghost" onClick={(event) => { event.stopPropagation(); setCancelId(row.id); }}>
-                            <SlotIcon slot="action_delete" className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                        </div>
+                      <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
+                        <DropdownMenu>
+                          <MenuDotsTrigger />
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => navigate(`/contracts/${row.id}`)}>
+                              <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            {row.status !== "cancelled" ? (
+                              <DropdownMenuItem onClick={() => setCancelId(row.id)}>
+                                <XCircle className="mr-2 h-4 w-4" />
+                                Cancel contract
+                              </DropdownMenuItem>
+                            ) : null}
+                            {!isContractArchived(row) ? (
+                              <DropdownMenuItem onClick={() => setArchiveContractRow(row)}>
+                                <Archive className="mr-2 h-4 w-4" />
+                                Archive
+                              </DropdownMenuItem>
+                            ) : null}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -544,7 +636,65 @@ export default function Contracts() {
                 onPageSizeChange={contractsPagination.setPageSize}
               />
               </DataTableFrame>
-            )}
+            ) : null}
+            {showArchived && archivedRows.length > 0 ? (
+              <div className="border-t px-4 py-4 space-y-3">
+                <h4 className="text-sm font-semibold text-muted-foreground">Archived contracts</h4>
+                <DataTableFrame>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead>Contract</TableHead>
+                        <TableHead>Client</TableHead>
+                        <TableHead>Project</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {archivedRows.map((row) => (
+                        <TableRow key={row.id} className="cursor-pointer opacity-80" onClick={() => navigate(`/contracts/${row.id}`)}>
+                          <TableCell className="font-semibold">
+                            {row.identifier}
+                            <Badge variant="secondary" className="ml-2">
+                              Archived
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <TableClientCell client={row.clients} />
+                          </TableCell>
+                          <TableCell>
+                            {row.projects?.name ? row.projects.name : <EmptyValue variant="table" field="project" />}
+                          </TableCell>
+                          <TableCell>
+                            <TableStatusBadge status={row.status} />
+                          </TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums">
+                            {formatMoney(row.total || 0, row.clients?.currency)}
+                          </TableCell>
+                          <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
+                            <DropdownMenu>
+                              <MenuDotsTrigger />
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => navigate(`/contracts/${row.id}`)}>
+                                  <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
+                                  View
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setRestoreContractRow(row)}>
+                                  <ArchiveRestore className="mr-2 h-4 w-4" />
+                                  Restore
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </DataTableFrame>
+              </div>
+            ) : null}
           </CardContent>
             </Card>
           </TabsContent>
@@ -828,6 +978,28 @@ Example 2: Breach of Clause 9."
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={!!archiveContractRow}
+        onOpenChange={(open) => !open && setArchiveContractRow(null)}
+        title="Archive contract?"
+        description={
+          archiveContractRow
+            ? buildArchiveContractConfirmMessage(archiveContractRow.identifier)
+            : ""
+        }
+        confirmLabel="Archive"
+        onConfirm={confirmArchiveContract}
+      />
+      <ConfirmDialog
+        open={!!restoreContractRow}
+        onOpenChange={(open) => !open && setRestoreContractRow(null)}
+        title="Restore contract?"
+        description={
+          restoreContractRow ? buildRestoreContractConfirmMessage(restoreContractRow.identifier) : ""
+        }
+        confirmLabel="Restore"
+        onConfirm={confirmRestoreContract}
+      />
       <LanceServiceAgreementDisclaimerDialog
         open={disclaimerOpen}
         onOpenChange={onDisclaimerOpenChange}

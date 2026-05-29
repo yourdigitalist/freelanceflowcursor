@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ServiceFormModal } from "@/components/services/ServiceFormModal";
 import { CheckCircle, Plus, Trash2, Upload } from "@/components/icons";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
+import { detailPageBreadcrumb } from "@/lib/breadcrumbs";
 import { useProfileCurrency } from "@/hooks/useProfileCurrency";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate } from "@/lib/datetime";
@@ -537,10 +538,7 @@ export default function ProposalDetail() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
           <div>
             <PageBreadcrumb
-              items={[
-                { label: 'Proposals', href: '/proposals' },
-                { label: proposal.identifier || 'Draft proposal' },
-              ]}
+              items={detailPageBreadcrumb('Proposals', '/proposals', proposal.identifier || 'Draft proposal')}
             />
             <div className="mt-1 flex items-center gap-2">
               <h1 className="text-2xl font-bold">{proposal.identifier || "Draft proposal"}</h1>

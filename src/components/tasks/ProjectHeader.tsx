@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
@@ -12,6 +11,8 @@ import { Trash2, Download, Upload } from '@/components/icons';
 import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { MenuDotsTrigger } from '@/components/ui/menu-dots-trigger';
 import { SlotIcon } from '@/contexts/IconSlotContext';
+import { PageSummaryBar, PageSummaryStat } from '@/components/ui/page-summary-stats';
+import { detailPageBreadcrumb } from '@/lib/breadcrumbs';
 import { Project, Task, ProjectStatus } from './types';
 import { formatDuration } from '@/lib/time';
 import { formatLocaleDate } from '@/lib/datetime';
@@ -70,15 +71,17 @@ export function ProjectHeader({
     }
   };
 
+  const dueDateOverdue =
+    project.due_date && new Date(project.due_date) < new Date() && project.status !== 'completed';
+
+  const rateLabel =
+    project.hourly_rate != null ? (fmt ? fmt(project.hourly_rate) : `$${project.hourly_rate}`) : '—';
+
   return (
     <div className="space-y-6">
-      {/* Top Header */}
       <div className="space-y-2 border-b pb-4">
         <PageBreadcrumb
-          items={[
-            { label: 'Projects', href: '/projects' },
-            { label: project.name },
-          ]}
+          items={detailPageBreadcrumb('Projects', '/projects', project.name)}
         />
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
@@ -158,72 +161,31 @@ export function ProjectHeader({
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <SlotIcon slot="project_clock" className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Hours</p>
-                <p className="text-xl font-semibold">{formatDuration(Math.round(totalHours * 3600))}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-success/10 rounded-lg">
-                <SlotIcon slot="project_dollar" className="h-5 w-5 text-success" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Rate</p>
-                <p className="text-xl font-semibold">
-                  {project.hourly_rate != null ? (fmt ? fmt(project.hourly_rate) : `$${project.hourly_rate}`) : '-'}
-                </p>
-                <p className="text-xs text-muted-foreground">hourly</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-warning/10 rounded-lg">
-                <SlotIcon slot="project_calendar" className="h-5 w-5 text-warning" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Due Date</p>
-                <p className="text-xl font-semibold">
-                  {project.due_date ? formatLocaleDate(project.due_date, dateFormat) : '-'}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-accent/10 rounded-lg">
-                <SlotIcon slot="project_check" className="h-5 w-5 text-accent" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Tasks</p>
-                <p className="text-xl font-semibold">
-                  {completedTasks}/{tasks.length}
-                  <span className="text-sm font-normal text-muted-foreground ml-1">completed</span>
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <PageSummaryBar columns={4}>
+        <PageSummaryStat
+          label="Total hours"
+          value={formatDuration(Math.round(totalHours * 3600))}
+          hideDot
+        />
+        <PageSummaryStat
+          label="Hourly rate"
+          value={rateLabel}
+          subtitle="per hour"
+          hideDot
+        />
+        <PageSummaryStat
+          label="Due date"
+          value={project.due_date ? formatLocaleDate(project.due_date, dateFormat) : '—'}
+          status={dueDateOverdue ? 'overdue' : project.due_date ? 'active' : undefined}
+          hideDot={!project.due_date}
+        />
+        <PageSummaryStat
+          label="Tasks"
+          value={`${completedTasks}/${tasks.length}`}
+          subtitle="completed"
+          status={tasks.length > 0 && completedTasks === tasks.length ? 'completed' : 'active'}
+        />
+      </PageSummaryBar>
     </div>
   );
 }

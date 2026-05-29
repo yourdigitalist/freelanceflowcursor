@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
+import { listPageBreadcrumb } from '@/lib/breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -497,6 +499,7 @@ export default function Notes() {
       <div className="flex flex-col min-h-[calc(100svh-4.5rem)] lg:min-h-[calc(100svh-4rem)] space-y-4">
         <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <PageBreadcrumb items={listPageBreadcrumb('Notes')} />
             <h1 className="text-2xl font-bold tracking-tight">Notes</h1>
           </div>
           <Button size="sm" onClick={handleCreateQuickNote}>

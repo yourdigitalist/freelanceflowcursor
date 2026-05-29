@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
+import { listPageBreadcrumb } from '@/lib/breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PageSearchInput } from '@/components/ui/page-search-input';
@@ -647,6 +649,7 @@ export default function ReviewRequests() {
         {/* Header */}
         <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <PageBreadcrumb items={listPageBreadcrumb('Approvals')} />
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Approvals</h1>
           </div>
           <div className="flex gap-2">

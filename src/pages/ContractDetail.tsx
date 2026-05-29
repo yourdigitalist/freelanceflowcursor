@@ -38,6 +38,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { CheckCircle, Plus, Trash2 } from "@/components/icons";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
+import { detailPageBreadcrumb } from "@/lib/breadcrumbs";
 import { LanceServiceAgreementDisclaimerDialog } from "@/components/contracts/LanceServiceAgreementDisclaimerDialog";
 import {
   CONTRACT_DOCUMENT_STYLES,
@@ -47,6 +48,13 @@ import {
 import { useLanceServiceAgreementDisclaimer } from "@/hooks/useLanceServiceAgreementDisclaimer";
 import { resolveDefaultServiceAgreementTemplate } from "@/lib/lanceServiceAgreementTemplate";
 import { resolveContractTemplateContent } from "@/lib/resolveContractTemplate";
+import {
+  archiveContract,
+  buildArchiveContractConfirmMessage,
+  buildRestoreContractConfirmMessage,
+  isContractArchived,
+  restoreContract,
+} from "@/lib/contractLifecycle";
 import type { Contract, ContractService } from "@/types/contracts";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate, formatLocaleDateTime } from "@/lib/datetime";
@@ -237,6 +245,7 @@ export default function ContractDetail() {
   }, [contract?.id, contract?.client_id, contract?.project_id, contract?.proposal_id]);
 
   const isLocked = ["pending_signatures", "signed", "cancelled"].includes(contract?.status || "");
+  const isArchived = isContractArchived(contract);
   const filteredProjects = useMemo(
     () => allProjects.filter((project) => !contract?.client_id || project.client_id === contract.client_id),
     [allProjects, contract?.client_id],
@@ -757,6 +766,30 @@ export default function ContractDetail() {
         ? "Fill in all contract details, sign it, and send to your client — they won't have access until you do."
         : null;
 
+  const handleArchiveContract = async () => {
+    if (!contract) return;
+    if (!confirm(buildArchiveContractConfirmMessage(contract.identifier))) return;
+    const { error } = await archiveContract(contract.id);
+    if (error) {
+      toast({ title: "Could not archive contract", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Contract archived" });
+    await load();
+  };
+
+  const handleRestoreContract = async () => {
+    if (!contract) return;
+    if (!confirm(buildRestoreContractConfirmMessage(contract.identifier))) return;
+    const { error } = await restoreContract(contract.id);
+    if (error) {
+      toast({ title: "Could not restore contract", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Contract restored" });
+    await load();
+  };
+
   const runProposalImport = async (proposalId: string) => {
     if (!id || !proposalId) return;
     setImportingProposal(true);
@@ -806,16 +839,14 @@ export default function ContractDetail() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
           <div>
             <PageBreadcrumb
-              items={[
-                { label: 'Contracts', href: '/contracts' },
-                { label: contract.identifier },
-              ]}
+              items={detailPageBreadcrumb('Contracts', '/contracts', contract.identifier)}
             />
             <div className="mt-1 flex items-center gap-2">
               <h1 className="text-2xl font-bold">{contract.identifier}</h1>
               <Badge variant="outline" className={getStatusBadgeClass(contract.status)}>
                 {formatStatusLabel(contract.status)}
               </Badge>
+              {isArchived ? <Badge variant="secondary">Archived</Badge> : null}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {saveStatus === "saving" && "Saving..."}
@@ -824,11 +855,20 @@ export default function ContractDetail() {
             </p>
             {lastSaveError ? <p className="text-xs text-destructive">{lastSaveError}</p> : null}
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => void save()} disabled={isLocked}>
+          <div className="flex flex-wrap gap-2">
+            {isArchived ? (
+              <Button variant="outline" onClick={() => void handleRestoreContract()}>
+                Restore contract
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={() => void handleArchiveContract()}>
+                Archive contract
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => void save()} disabled={isLocked || isArchived}>
               Save Changes
             </Button>
-            <Button onClick={() => setSendModalOpen(true)} disabled={!canSendContract}>
+            <Button onClick={() => setSendModalOpen(true)} disabled={!canSendContract || isArchived}>
               {contract.status === "draft" ? "Send Contract" : "Resend Link"}
             </Button>
           </div>

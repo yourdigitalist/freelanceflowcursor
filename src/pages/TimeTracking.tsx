@@ -32,6 +32,8 @@ import { Plus, Play, Trash2, Filter, Download, Upload, List, Check } from '@/com
 
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { PageSummaryBar, PageSummaryStat } from '@/components/ui/page-summary-stats';
+import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
+import { detailPageBreadcrumb, listPageBreadcrumb } from '@/lib/breadcrumbs';
 import {
   format,
   differenceInMinutes,
@@ -1040,6 +1042,7 @@ export default function TimeTracking() {
         <div className="space-y-6">
           <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
+              <PageBreadcrumb items={listPageBreadcrumb('Timesheet')} />
               <h1 className="text-2xl font-bold tracking-tight">Timesheet</h1>
               {(timesheetView === 'day' || timesheetView === 'week') && (
                 <p className="text-sm text-muted-foreground mt-0.5">
@@ -1421,6 +1424,13 @@ export default function TimeTracking() {
         {/* Header */}
         <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <PageBreadcrumb
+              items={
+                isTimerView
+                  ? detailPageBreadcrumb('Timesheet', '/time', 'Timer')
+                  : detailPageBreadcrumb('Timesheet', '/time', 'All logs')
+              }
+            />
             <h1 className="text-2xl font-bold tracking-tight">{isTimerView ? 'Timer' : 'All logs'}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">

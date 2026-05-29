@@ -56,6 +56,7 @@ export type Contract = {
   sent_at: string | null;
   cancelled_at: string | null;
   cancellation_reason: string | null;
+  archived_at: string | null;
   freelancer_signed_at: string | null;
   freelancer_signed_name: string | null;
   freelancer_sign_ip: string | null;

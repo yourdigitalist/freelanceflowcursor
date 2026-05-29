@@ -49,6 +49,8 @@ import {
   PlayCircle,
   Building2,
   FileSignature,
+  Archive,
+  ArchiveRestore,
   Download as LucideDownload,
   Upload as LucideUpload,
   Pencil as LucidePencil,
@@ -421,5 +423,7 @@ export {
   CheckSquare,
   PlayCircle,
   Building2,
-  FileSignature
+  FileSignature,
+  Archive,
+  ArchiveRestore,
 };

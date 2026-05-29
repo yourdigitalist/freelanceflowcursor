@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
+import { detailPageBreadcrumb } from '@/lib/breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -302,10 +303,7 @@ export default function ReviewRequestDetail() {
         {/* Header */}
         <div className="space-y-2 border-b pb-4">
           <PageBreadcrumb
-            items={[
-              { label: 'Approvals', href: '/reviews' },
-              { label: request.title },
-            ]}
+            items={detailPageBreadcrumb('Approvals', '/reviews', request.title)}
           />
           <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex-1 min-w-0">

@@ -71,6 +71,8 @@ import type { ClientListCardData } from '@/components/clients/ClientListCard';
 import { DEFAULT_CLIENT_AVATAR_COLOR } from '@/lib/clientAvatarColors';
 import { CLIENT_CRM_STAGES, getClientStageLabel } from '@/lib/clientCrmStages';
 import { buildClientsNavState, readClientsNavState } from '@/lib/clientsNavigation';
+import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
+import { listPageBreadcrumb } from '@/lib/breadcrumbs';
 import { HorizontalScroll } from '@/components/ui/horizontal-scroll';
 import {
   DndContext,
@@ -850,6 +852,7 @@ export default function Clients() {
         {/* Header */}
         <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <PageBreadcrumb items={listPageBreadcrumb('Clients')} />
             <h1 className="text-2xl font-bold tracking-tight">Clients</h1>
           </div>
           <input

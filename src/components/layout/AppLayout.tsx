@@ -24,6 +24,7 @@ import { TimerBar } from './TimerBar';
 import { StartGuide } from './StartGuide';
 import { FeedbackTab } from './FeedbackTab';
 import { SidebarNavFlyout, type SidebarFlyoutLink } from './SidebarNavFlyout';
+import { SidebarNavCollapsedTooltip } from './SidebarNavCollapsedTooltip';
 import { shellNavIcon, shellNavLink, shellSubNavLink } from './shellNav';
 
 interface AppLayoutProps {
@@ -209,6 +210,9 @@ export function AppLayout({
       />
     );
   };
+
+  const wrapCollapsedNav = (label: string, node: ReactNode) =>
+    sidebarCollapsed ? <SidebarNavCollapsedTooltip label={label}>{node}</SidebarNavCollapsedTooltip> : node;
 
   const shellIconBtn =
     'h-8 w-8 text-white/80 hover:bg-sidebar-accent hover:text-white';
@@ -400,14 +404,17 @@ export function AppLayout({
               sidebarCollapsed ? 'overflow-visible' : 'overflow-y-auto overflow-x-hidden px-3',
             )}
           >
-            <Link
-              to="/dashboard"
-              onClick={closeMobileSidebar}
-              className={shellNavLink(location.pathname === '/dashboard', sidebarCollapsed)}
-            >
-              <SlotIcon slot="sidebar_dashboard" className={shellNavIcon(location.pathname === '/dashboard')} />
-              {!sidebarCollapsed && 'Dashboard'}
-            </Link>
+            {wrapCollapsedNav(
+              'Dashboard',
+              <Link
+                to="/dashboard"
+                onClick={closeMobileSidebar}
+                className={shellNavLink(location.pathname === '/dashboard', sidebarCollapsed)}
+              >
+                <SlotIcon slot="sidebar_dashboard" className={shellNavIcon(location.pathname === '/dashboard')} />
+                {!sidebarCollapsed && 'Dashboard'}
+              </Link>,
+            )}
 
             {sidebarCollapsed ? (
               <SidebarNavFlyout
@@ -439,14 +446,17 @@ export function AppLayout({
               </Collapsible>
             )}
 
-            <Link
-              to="/projects"
-              onClick={closeMobileSidebar}
-              className={shellNavLink(isProjectsActive, sidebarCollapsed)}
-            >
-              <SlotIcon slot="sidebar_projects" className={shellNavIcon(isProjectsActive)} />
-              {!sidebarCollapsed && 'Projects'}
-            </Link>
+            {wrapCollapsedNav(
+              'Projects',
+              <Link
+                to="/projects"
+                onClick={closeMobileSidebar}
+                className={shellNavLink(isProjectsActive, sidebarCollapsed)}
+              >
+                <SlotIcon slot="sidebar_projects" className={shellNavIcon(isProjectsActive)} />
+                {!sidebarCollapsed && 'Projects'}
+              </Link>,
+            )}
 
             {sidebarCollapsed ? (
               <SidebarNavFlyout
@@ -478,57 +488,91 @@ export function AppLayout({
               </Collapsible>
             )}
 
-            {showNotes ? (
-              <Link to="/notes" onClick={closeMobileSidebar} className={shellNavLink(location.pathname === '/notes', sidebarCollapsed)}>
-                <SlotIcon slot="sidebar_notes" className={shellNavIcon(location.pathname === '/notes')} />
-                {!sidebarCollapsed && 'Notes'}
-              </Link>
-            ) : null}
-            <Link to="/invoices" onClick={closeMobileSidebar} className={shellNavLink(location.pathname === '/invoices', sidebarCollapsed)}>
-              <SlotIcon slot="sidebar_invoices" className={shellNavIcon(location.pathname === '/invoices')} />
-              {!sidebarCollapsed && 'Invoices'}
-            </Link>
-            <Link
-              to="/proposals"
-              onClick={closeMobileSidebar}
-              className={shellNavLink(location.pathname.startsWith('/proposals'), sidebarCollapsed)}
-            >
-              <SlotIcon slot="sidebar_proposals" className={shellNavIcon(location.pathname.startsWith('/proposals'))} />
-              {!sidebarCollapsed && (
-                <>
-                  Proposals
-                  <Badge className="shrink-0 bg-purple-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-purple-600">Beta</Badge>
-                </>
-              )}
-            </Link>
-            {showContracts ? (
+            {showNotes
+              ? wrapCollapsedNav(
+                  'Notes',
+                  <Link
+                    to="/notes"
+                    onClick={closeMobileSidebar}
+                    className={shellNavLink(location.pathname === '/notes', sidebarCollapsed)}
+                  >
+                    <SlotIcon slot="sidebar_notes" className={shellNavIcon(location.pathname === '/notes')} />
+                    {!sidebarCollapsed && 'Notes'}
+                  </Link>,
+                )
+              : null}
+            {wrapCollapsedNav(
+              'Invoices',
               <Link
-                to="/contracts"
+                to="/invoices"
                 onClick={closeMobileSidebar}
-                className={shellNavLink(location.pathname.startsWith('/contracts'), sidebarCollapsed)}
+                className={shellNavLink(location.pathname === '/invoices', sidebarCollapsed)}
               >
-                <SlotIcon slot="sidebar_contracts" className={shellNavIcon(location.pathname.startsWith('/contracts'))} />
+                <SlotIcon slot="sidebar_invoices" className={shellNavIcon(location.pathname === '/invoices')} />
+                {!sidebarCollapsed && 'Invoices'}
+              </Link>,
+            )}
+            {wrapCollapsedNav(
+              'Proposals',
+              <Link
+                to="/proposals"
+                onClick={closeMobileSidebar}
+                className={shellNavLink(location.pathname.startsWith('/proposals'), sidebarCollapsed)}
+              >
+                <SlotIcon slot="sidebar_proposals" className={shellNavIcon(location.pathname.startsWith('/proposals'))} />
                 {!sidebarCollapsed && (
                   <>
-                    Contracts
+                    Proposals
                     <Badge className="shrink-0 bg-purple-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-purple-600">Beta</Badge>
                   </>
                 )}
-              </Link>
-            ) : null}
-            <Link to="/services" onClick={closeMobileSidebar} className={shellNavLink(location.pathname === '/services', sidebarCollapsed)}>
-              <SlotIcon slot="sidebar_services" className={shellNavIcon(location.pathname === '/services')} />
-              {!sidebarCollapsed && 'Services'}
-            </Link>
-            <Link to="/reviews" onClick={closeMobileSidebar} className={shellNavLink(location.pathname === '/reviews', sidebarCollapsed)}>
-              <SlotIcon slot="sidebar_reviews" className={shellNavIcon(location.pathname === '/reviews')} />
-              {!sidebarCollapsed && (
-                <>
-                  Approvals
-                  <Badge className="shrink-0 bg-purple-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-purple-600">Beta</Badge>
-                </>
-              )}
-            </Link>
+              </Link>,
+            )}
+            {showContracts
+              ? wrapCollapsedNav(
+                  'Contracts',
+                  <Link
+                    to="/contracts"
+                    onClick={closeMobileSidebar}
+                    className={shellNavLink(location.pathname.startsWith('/contracts'), sidebarCollapsed)}
+                  >
+                    <SlotIcon slot="sidebar_contracts" className={shellNavIcon(location.pathname.startsWith('/contracts'))} />
+                    {!sidebarCollapsed && (
+                      <>
+                        Contracts
+                        <Badge className="shrink-0 bg-purple-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-purple-600">Beta</Badge>
+                      </>
+                    )}
+                  </Link>,
+                )
+              : null}
+            {wrapCollapsedNav(
+              'Services',
+              <Link
+                to="/services"
+                onClick={closeMobileSidebar}
+                className={shellNavLink(location.pathname === '/services', sidebarCollapsed)}
+              >
+                <SlotIcon slot="sidebar_services" className={shellNavIcon(location.pathname === '/services')} />
+                {!sidebarCollapsed && 'Services'}
+              </Link>,
+            )}
+            {wrapCollapsedNav(
+              'Approvals',
+              <Link
+                to="/reviews"
+                onClick={closeMobileSidebar}
+                className={shellNavLink(location.pathname === '/reviews', sidebarCollapsed)}
+              >
+                <SlotIcon slot="sidebar_reviews" className={shellNavIcon(location.pathname === '/reviews')} />
+                {!sidebarCollapsed && (
+                  <>
+                    Approvals
+                    <Badge className="shrink-0 bg-purple-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-purple-600">Beta</Badge>
+                  </>
+                )}
+              </Link>,
+            )}
           </nav>
 
           <div

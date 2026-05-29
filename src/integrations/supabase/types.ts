@@ -486,6 +486,7 @@ export type Database = {
           additional_clause: string | null
           cancellation_reason: string | null
           cancelled_at: string | null
+          archived_at: string | null
           client_address: string | null
           client_city: string | null
           client_company: string | null
@@ -559,6 +560,7 @@ export type Database = {
           additional_clause?: string | null
           cancellation_reason?: string | null
           cancelled_at?: string | null
+          archived_at?: string | null
           client_address?: string | null
           client_city?: string | null
           client_company?: string | null
@@ -632,6 +634,7 @@ export type Database = {
           additional_clause?: string | null
           cancellation_reason?: string | null
           cancelled_at?: string | null
+          archived_at?: string | null
           client_address?: string | null
           client_city?: string | null
           client_company?: string | null

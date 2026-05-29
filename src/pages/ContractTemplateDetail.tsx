@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { CONTRACT_VARIABLES } from "@/lib/contractVariables";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
+import { withDashboardTrail } from "@/lib/breadcrumbs";
 import ReactQuill from "react-quill";
 import type ReactQuillType from "react-quill";
 import "react-quill/dist/quill.snow.css";
@@ -134,11 +135,11 @@ export default function ContractTemplateDetail() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <PageBreadcrumb
-              items={[
+              items={withDashboardTrail([
                 { label: 'Contracts', href: '/contracts' },
                 { label: 'Templates', href: '/contracts?tab=templates' },
                 { label: row.name },
-              ]}
+              ])}
             />
           <h1 className="mt-1 text-2xl font-bold">{row.name}</h1>
           </div>
