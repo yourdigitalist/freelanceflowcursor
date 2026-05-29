@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { ViewToggle, ViewToggleButton } from '@/components/ui/view-toggle';
 import { PageSearchInput } from '@/components/ui/page-search-input';
+
 
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -159,6 +160,8 @@ export default function Projects() {
                   logo_url: client.logo_url,
                 }
               : null,
+            task_count,
+            completed_tasks,
             task_count,
             completed_tasks,
             open_task_count,
@@ -483,174 +486,41 @@ export default function Projects() {
             </CardContent>
           </Card>
         ) : viewMode === 'grid' ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredProjects.map((project) => (
-              <Card
-                key={project.id}
-                className="h-full border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
-                onClick={() => navigate(`/projects/${project.id}`)}
-              >
-                <CardContent className="flex h-full flex-col p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div
-                      className="h-10 w-10 rounded-lg flex items-center justify-center text-lg"
-                      style={{ backgroundColor: project.icon_color || '#9B63E9' }}
-                    >
-                      {project.icon_emoji || '📁'}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Badge variant="outline" className={getStatusColor(project.status)}>
-                        {formatStatus(project.status)}
-                      </Badge>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={(e) => {
-                            e.stopPropagation();
-                            openEditDialog(project);
-                          }}>
-                            <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(project.id);
-                            }}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                  <h3 className="mb-1 min-h-[2.5rem] font-semibold leading-5 text-foreground">{project.name}</h3>
-                  <div className="mb-3">
-                    {project.clients ? (
-                      <button
-                        type="button"
-                        className="text-sm text-muted-foreground underline-offset-2 hover:underline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/clients/${project.clients?.id}`);
-                        }}
-                      >
-                        {project.clients.name}
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">No client</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditDialog(project);
-                          }}
-                        >
-                          + Add client
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-auto flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      {project.due_date && (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Calendar className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
-                          <span>{formatLocaleDate(project.due_date, dateFormat)}</span>
-                        </span>
-                      )}
-                      <span className="inline-flex items-center gap-1.5">
-                        <Clock className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
-                        <span>{(project.hours || 0).toFixed(1)}h</span>
-                      </span>
-                    </div>
-                    <span className="text-sm text-muted-foreground shrink-0">{project.task_count || 0} tasks</span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="space-y-4">
+            <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {projectsPagination.paginatedItems.map((project) => (
+                <ProjectListCard
+                  key={project.id}
+                  project={project}
+                  dateFormat={dateFormat}
+                  formatMoney={formatMoney}
+                  onNavigate={() => navigate(`/projects/${project.id}`)}
+                />
+              ))}
+            </div>
+            <TablePagination
+              total={projectsPagination.total}
+              page={projectsPagination.page}
+              pageSize={projectsPagination.pageSize}
+              from={projectsPagination.from}
+              to={projectsPagination.to}
+              pageSizeOptions={projectsPagination.pageSizeOptions}
+              showPageSizeSelect={projectsPagination.showPageSizeSelect}
+              onPageChange={projectsPagination.setPage}
+              onPageSizeChange={projectsPagination.setPageSize}
+            />
           </div>
         ) : (
-          <div className="space-y-2">
-            {filteredProjects.map((project) => (
-              <Card
-                key={project.id}
-                className="border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => navigate(`/projects/${project.id}`)}
-              >
-                <CardContent className="p-4 flex items-center gap-4">
-                  <div
-                    className="h-10 w-10 rounded-lg flex items-center justify-center text-lg flex-shrink-0"
-                    style={{ backgroundColor: project.icon_color || '#9B63E9' }}
-                  >
-                    {project.icon_emoji || '📁'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3
-                      className="font-semibold text-foreground truncate"
-                      style={{ fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif' }}
-                    >
-                      {project.name}
-                    </h3>
-                    {project.clients ? (
-                      <button
-                        type="button"
-                        className="text-sm text-muted-foreground underline-offset-2 hover:underline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/clients/${project.clients?.id}`);
-                        }}
-                      >
-                        {project.clients.name}
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">No client</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditDialog(project);
-                          }}
-                        >
-                          + Add client
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    {project.due_date && (
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
-                        {formatLocaleDate(project.due_date, dateFormat)}
-                      </span>
-                    )}
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
-                      {(project.hours || 0).toFixed(1)}h
-                    </span>
-                    <span>{project.task_count || 0} tasks</span>
-                    <Badge variant="outline" className={getStatusColor(project.status)}>
-                      {formatStatus(project.status)}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <Card className="border shadow-sm">
+            <CardContent className="flex flex-col p-0">
+              <ProjectsTable
+                dateFormat={dateFormat}
+                formatMoney={formatMoney}
+                onRowClick={(id) => navigate(`/projects/${id}`)}
+                pagination={projectsPagination}
+              />
+            </CardContent>
+          </Card>
         )}
       </div>
     </AppLayout>
