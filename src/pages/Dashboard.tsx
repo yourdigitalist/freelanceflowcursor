@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useProfileCurrency } from '@/hooks/useProfileCurrency';
@@ -8,15 +9,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus } from '@/components/icons';
+import { Plus, Receipt, CheckCircle, ArrowRight, ChevronUp, ChevronDown } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
+import type { IconSlotKey } from '@/lib/iconSlots';
 import { canAccessNotes, getContractsAccessMode } from '@/lib/features';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { shellProfileDisplayName, useShellProfile } from '@/hooks/useShellProfile';
 import { formatLocaleDate } from '@/lib/datetime';
+import { getStatusBadgeClass, formatStatusLabel } from '@/lib/statusDisplay';
+import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { cn } from '@/lib/utils';
+
+type RangeKey = 'day' | 'week' | 'month';
+type HoursRangeKey = 'week' | 'month';
 
 interface DashboardStats {
-  totalClients: number;
   activeProjects: number;
   pendingInvoices: number;
   pendingProposals: number;
@@ -24,6 +31,9 @@ interface DashboardStats {
   pendingAmount: number;
   hoursThisMonth: number;
   unbilledHours: number;
+  unbilledAmount: number;
+  prevMonthHours: number;
+  collectedThisMonth: number;
 }
 
 interface RecentProject {
@@ -36,13 +46,7 @@ interface RecentProject {
   due_date: string | null;
   hours: number;
   task_count: number;
-}
-
-interface RecentActivity {
-  id: string;
-  description: string;
-  project_name: string;
-  time_ago: string;
+  completed_tasks: number;
 }
 
 interface RecentInvoice {
@@ -50,31 +54,230 @@ interface RecentInvoice {
   invoice_number: string;
   total: number;
   status: string;
+  due_date: string | null;
 }
 
-interface FollowUpClient {
+interface PriorityItem {
   id: string;
-  client_id: string;
+  label: string;
+  tone: 'overdue' | 'soon' | 'info';
   title: string;
-  due_at: string | null;
-  clients: { name: string } | null;
+  subtitle: string;
+  ctaLabel: string;
+  to: string;
+  rank: number;
+  sortDate: number;
 }
 
-interface NotificationItem {
+interface RecentItem {
   id: string;
-  title: string | null;
-  link: string | null;
-  read_at: string | null;
+  kind: 'project' | 'task' | 'time' | 'note' | 'invoice';
+  title: string;
+  subtitle: string;
+  updated_at: string;
+  to: string;
+}
+
+interface RawTimeEntry {
+  start_time: string | null;
+  hours: number;
+  billable: boolean | null;
+  billing_status: string | null;
+  hourly_rate: number | null;
+}
+
+interface RawInvoice {
+  total: number;
+  status: string;
+  issue_date: string | null;
+  paid_date: string | null;
   created_at: string;
 }
+
+interface SparkPoint {
+  v: number;
+}
+
+type ProjectTabKey = 'active' | 'on_hold' | 'completed';
+
+const TONE_STYLES: Record<PriorityItem['tone'], string> = {
+  overdue: 'bg-destructive/10 text-destructive',
+  soon: 'bg-warning/10 text-warning',
+  info: 'bg-primary/10 text-primary',
+};
+
+const RECENT_ICON_SLOT: Record<RecentItem['kind'], IconSlotKey> = {
+  project: 'sidebar_projects',
+  task: 'sidebar_reviews',
+  time: 'sidebar_time',
+  note: 'sidebar_notes',
+  invoice: 'sidebar_invoices',
+};
+
+/** Show in "Needs you today" when due/expiry is within this many days (or already past). */
+const SOON_DAYS = 2;
+
+const JUMP_BACK_KIND_LABEL: Record<RecentItem['kind'], string> = {
+  project: 'Project',
+  task: 'Task',
+  time: 'Time entry',
+  note: 'Note',
+  invoice: 'Invoice',
+};
+
+function isUnbilledTimeEntry(e: { billable: boolean | null; billing_status: string | null }): boolean {
+  if (e.billable === false) return false;
+  const status = (e.billing_status || 'unbilled').toLowerCase();
+  return status === 'unbilled';
+}
+
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function daysUntil(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null;
+  const target = new Date(dateStr);
+  if (Number.isNaN(target.getTime())) return null;
+  target.setHours(0, 0, 0, 0);
+  return Math.round((target.getTime() - startOfToday().getTime()) / 86400000);
+}
+
+function dueText(dateStr: string | null | undefined): string {
+  const d = daysUntil(dateStr);
+  if (d === null) return 'No date';
+  if (d < 0) return `${Math.abs(d)}d overdue`;
+  if (d === 0) return 'Due today';
+  if (d === 1) return 'Due tomorrow';
+  return `Due in ${d}d`;
+}
+
+function buildHoursBuckets(range: HoursRangeKey): { start: Date; end: Date; label: string }[] {
+  const base = startOfToday();
+  const buckets: { start: Date; end: Date; label: string }[] = [];
+  if (range === 'week') {
+    for (let i = 7; i >= 0; i--) {
+      const end = new Date(base);
+      end.setDate(base.getDate() - i * 7 + 1);
+      const start = new Date(end);
+      start.setDate(end.getDate() - 7);
+      buckets.push({ start, end, label: format(start, 'd MMM') });
+    }
+  } else {
+    for (let i = 5; i >= 0; i--) {
+      const start = new Date(base.getFullYear(), base.getMonth() - i, 1);
+      const end = new Date(base.getFullYear(), base.getMonth() - i + 1, 1);
+      buckets.push({ start, end, label: format(start, 'MMM') });
+    }
+  }
+  return buckets;
+}
+
+function buildBuckets(range: RangeKey): { start: Date; end: Date; label: string }[] {
+  const base = startOfToday();
+  const buckets: { start: Date; end: Date; label: string }[] = [];
+  if (range === 'day') {
+    for (let i = 6; i >= 0; i--) {
+      const start = new Date(base);
+      start.setDate(base.getDate() - i);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 1);
+      buckets.push({ start, end, label: format(start, 'EEE') });
+    }
+  } else if (range === 'week') {
+    for (let i = 7; i >= 0; i--) {
+      const end = new Date(base);
+      end.setDate(base.getDate() - i * 7 + 1);
+      const start = new Date(end);
+      start.setDate(end.getDate() - 7);
+      buckets.push({ start, end, label: format(start, 'd MMM') });
+    }
+  } else {
+    for (let i = 5; i >= 0; i--) {
+      const start = new Date(base.getFullYear(), base.getMonth() - i, 1);
+      const end = new Date(base.getFullYear(), base.getMonth() - i + 1, 1);
+      buckets.push({ start, end, label: format(start, 'MMM') });
+    }
+  }
+  return buckets;
+}
+
+function MiniSparkline({ data, color = 'hsl(var(--primary))' }: { data: SparkPoint[]; color?: string }) {
+  if (!data || data.length < 2) return null;
+  return (
+    <ResponsiveContainer width={64} height={32}>
+      <LineChart data={data}>
+        <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} dot={false} isAnimationActive={false} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+function TrendChip({ current, prev }: { current: number; prev: number }) {
+  if (prev === 0) return null;
+  const pct = Math.round(((current - prev) / prev) * 100);
+  if (pct === 0) return null;
+  const up = pct > 0;
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
+        up ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive',
+      )}
+    >
+      {up ? <ChevronUp className="h-2.5 w-2.5" /> : <ChevronDown className="h-2.5 w-2.5" />}
+      {Math.abs(pct)}%
+    </span>
+  );
+}
+
+function RangeToggle<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (r: T) => void;
+  options: { key: T; label: string }[];
+}) {
+  return (
+    <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.key}
+          onClick={() => onChange(o.key)}
+          className={cn(
+            'rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors',
+            value === o.key ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const CASH_RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
+  { key: 'day', label: 'Day' },
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
+];
+
+const HOURS_RANGE_OPTIONS: { key: HoursRangeKey; label: string }[] = [
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
+];
 
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { formatCurrency: fmt } = useProfileCurrency();
   const { dateFormat } = useLocalePreferences();
+
   const [stats, setStats] = useState<DashboardStats>({
-    totalClients: 0,
     activeProjects: 0,
     pendingInvoices: 0,
     pendingProposals: 0,
@@ -82,155 +285,120 @@ export default function Dashboard() {
     pendingAmount: 0,
     hoursThisMonth: 0,
     unbilledHours: 0,
+    unbilledAmount: 0,
+    prevMonthHours: 0,
+    collectedThisMonth: 0,
   });
-  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [allProjects, setAllProjects] = useState<RecentProject[]>([]);
+  const [projectTab, setProjectTab] = useState<ProjectTabKey>('active');
   const [recentInvoices, setRecentInvoices] = useState<RecentInvoice[]>([]);
   const [totalInvoicesCount, setTotalInvoicesCount] = useState(0);
-  const [reviewCounts, setReviewCounts] = useState({ total: 0, pending: 0, approved: 0 });
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [followUps, setFollowUps] = useState<FollowUpClient[]>([]);
+  const [priorityItems, setPriorityItems] = useState<PriorityItem[]>([]);
+  const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
+  const [hoursSparkline, setHoursSparkline] = useState<SparkPoint[]>([]);
+  const [rawTimeEntries, setRawTimeEntries] = useState<RawTimeEntry[]>([]);
+  const [rawInvoices, setRawInvoices] = useState<RawInvoice[]>([]);
+  const [hoursRange, setHoursRange] = useState<HoursRangeKey>('week');
+  const [cashRange, setCashRange] = useState<RangeKey>('week');
   const [loading, setLoading] = useState(true);
+
   const { data: shellProfile, isSuccess: profileReady } = useShellProfile(user?.id);
 
   useEffect(() => {
-    if (user) {
-      fetchDashboardData();
-    }
+    if (user) fetchDashboardData();
   }, [user]);
+
+  const toHours = (e: { duration_minutes?: number | null; total_duration_seconds?: number | null }) =>
+    e.total_duration_seconds != null ? e.total_duration_seconds / 3600 : (e.duration_minutes || 0) / 60;
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch clients count
-      const { count: clientsCount } = await supabase
-        .from('clients')
-        .select('*', { count: 'exact', head: true })
-        .is('archived_at', null);
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+      const soon = new Date(startOfToday());
+      soon.setDate(soon.getDate() + SOON_DAYS);
+      const soonStr = soon.toISOString().split('T')[0];
+      const showContracts = getContractsAccessMode() === 'on';
 
-      // Fetch active projects count
-      const { count: projectsCount } = await supabase
-        .from('projects')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'active');
+      // ── Counts ────────────────────────────────────────────────────────────
+      const [
+        { count: projectsCount },
+        { count: pendingInvoicesCount, data: sentInvoices },
+        { count: pendingProposalsCount },
+        { count: pendingContractsCount },
+      ] = await Promise.all([
+        supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+        supabase.from('invoices').select('total', { count: 'exact' }).eq('status', 'sent'),
+        supabase.from('proposals').select('*', { count: 'exact', head: true }).in('status', ['sent', 'read']),
+        supabase.from('contracts').select('*', { count: 'exact', head: true }).eq('status', 'pending_signatures'),
+      ]);
+      const pendingAmount = sentInvoices?.reduce((s, i) => s + (Number(i.total) || 0), 0) || 0;
 
-      // Pending = sent (awaiting payment), not draft. Fetch count and amount for sent only.
-      const { count: pendingInvoicesCount, data: sentInvoices } = await supabase
-        .from('invoices')
-        .select('total', { count: 'exact' })
-        .eq('status', 'sent');
-
-      const pendingAmount = sentInvoices?.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0) || 0;
-      const { count: pendingProposalsCount } = await supabase
-        .from("proposals")
-        .select("*", { count: "exact", head: true })
-        .in("status", ["sent", "read"]);
-      const { count: pendingContractsCount } = await supabase
-        .from("contracts")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pending_signatures");
-
-      // Fetch time entries for this month
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
-
+      // ── Time entries (6 months) ────────────────────────────────────────────
       const { data: timeEntries } = await supabase
         .from('time_entries')
-        .select('duration_minutes, total_duration_seconds, billable')
-        .gte('start_time', startOfMonth.toISOString());
+        .select('duration_minutes, total_duration_seconds, billable, billing_status, start_time, hourly_rate')
+        .gte('start_time', sixMonthsAgo.toISOString());
 
-      const toHours = (e: { duration_minutes?: number | null; total_duration_seconds?: number | null }) =>
-        (e.total_duration_seconds != null ? e.total_duration_seconds / 3600 : (e.duration_minutes || 0) / 60);
-      const hoursThisMonth = timeEntries?.reduce((sum, entry) => sum + toHours(entry), 0) || 0;
-      const unbilledHours = timeEntries?.filter(e => e.billable === false).reduce((sum, entry) => sum + toHours(entry), 0) || 0;
-
-      // Fetch recent projects with task counts
-      const { data: projects } = await supabase
-        .from('projects')
-        .select(`
-          id,
-          name,
-          status,
-          icon_emoji,
-          icon_color,
-          due_date,
-          clients(name)
-        `)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(4);
-
-      // Get task counts for each project
-      const projectsWithTasks = await Promise.all(
-        (projects || []).map(async (p) => {
-          const { count } = await supabase
-            .from('tasks')
-            .select('*', { count: 'exact', head: true })
-            .eq('project_id', p.id);
-
-          const { data: projectTime } = await supabase
-            .from('time_entries')
-            .select('duration_minutes, total_duration_seconds')
-            .eq('project_id', p.id);
-
-          const toHoursEntry = (e: { duration_minutes?: number | null; total_duration_seconds?: number | null }) =>
-            e.total_duration_seconds != null ? e.total_duration_seconds / 3600 : (e.duration_minutes || 0) / 60;
-          const hours = projectTime?.reduce((sum, entry) => sum + toHoursEntry(entry), 0) || 0;
-
-          return {
-            id: p.id,
-            name: p.name,
-            client_name: p.clients?.name || null,
-            status: p.status,
-            icon_emoji: p.icon_emoji,
-            icon_color: p.icon_color,
-            due_date: p.due_date,
-            hours,
-            task_count: count || 0,
-          };
-        })
-      );
-
-      // Fetch recent time entries for activity
-      const { data: recentTimeEntries } = await supabase
-        .from('time_entries')
-        .select(`
-          id,
-          description,
-          duration_minutes,
-          total_duration_seconds,
-          created_at,
-          projects(name)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      const entryHours = (e: { total_duration_seconds?: number | null; duration_minutes?: number | null }) => e.total_duration_seconds != null ? e.total_duration_seconds / 3600 : (e.duration_minutes || 0) / 60;
-      const activities = (recentTimeEntries || []).map((entry) => ({
-        id: entry.id,
-        description: `${entryHours(entry).toFixed(1)}h logged on ${entry.projects?.name || 'Unknown Project'}`,
-        project_name: entry.projects?.name || 'Unknown',
-        time_ago: getTimeAgo(new Date(entry.created_at)),
+      const rawTime: RawTimeEntry[] = (timeEntries || []).map((e) => ({
+        start_time: e.start_time,
+        hours: toHours(e),
+        billable: e.billable,
+        billing_status: e.billing_status,
+        hourly_rate: e.hourly_rate,
       }));
+      setRawTimeEntries(rawTime);
 
-      // Fetch recent invoices and total count for display
+      const thisMonth = rawTime.filter((e) => e.start_time && new Date(e.start_time) >= startOfMonth);
+      const hoursThisMonth = thisMonth.reduce((s, e) => s + e.hours, 0);
+      const unbilledEntries = thisMonth.filter(isUnbilledTimeEntry);
+      const unbilledHours = unbilledEntries.reduce((s, e) => s + e.hours, 0);
+      const unbilledAmount = unbilledEntries.reduce((s, e) => s + e.hours * (Number(e.hourly_rate) || 0), 0);
+      const prevMonthHours = rawTime
+        .filter((e) => e.start_time && new Date(e.start_time) >= startOfPrevMonth && new Date(e.start_time) <= endOfPrevMonth)
+        .reduce((s, e) => s + e.hours, 0);
+
+      // Sparkline: last 4 weeks of hours
+      const weekBuckets = [0, 0, 0, 0];
+      thisMonth.forEach((e) => {
+        if (!e.start_time) return;
+        const daysAgo = Math.floor((now.getTime() - new Date(e.start_time).getTime()) / 86400000);
+        const idx = 3 - Math.min(3, Math.floor(daysAgo / 7));
+        weekBuckets[idx] += e.hours;
+      });
+      setHoursSparkline(weekBuckets.map((v) => ({ v: +v.toFixed(1) })));
+
+      // ── Invoices (6 months for chart) ──────────────────────────────────────
+      const { data: chartInvoices } = await supabase
+        .from('invoices')
+        .select('total, status, issue_date, paid_date, created_at')
+        .gte('created_at', sixMonthsAgo.toISOString());
+      const rawInv: RawInvoice[] = (chartInvoices || []).map((i) => ({
+        total: Number(i.total) || 0,
+        status: i.status,
+        issue_date: i.issue_date,
+        paid_date: i.paid_date,
+        created_at: i.created_at,
+      }));
+      setRawInvoices(rawInv);
+
+      const collectedThisMonth = rawInv
+        .filter((i) => i.status === 'paid' && i.paid_date && new Date(i.paid_date) >= startOfMonth)
+        .reduce((s, i) => s + i.total, 0);
+
+      // ── Recent invoices list ───────────────────────────────────────────────
       const { data: invoices, count: invoicesTotalCount } = await supabase
         .from('invoices')
-        .select('id, invoice_number, total, status', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .limit(3);
-
-      // Fetch recent notifications for summary
-      const { data: notifs } = await supabase
-        .from('notifications')
-        .select('id, title, body, link, read_at, created_at')
-        .eq('user_id', user!.id)
+        .select('id, invoice_number, total, status, due_date', { count: 'exact' })
         .order('created_at', { ascending: false })
         .limit(5);
-      setNotifications((notifs as NotificationItem[]) || []);
+      setRecentInvoices((invoices as RecentInvoice[]) || []);
+      setTotalInvoicesCount(invoicesTotalCount ?? 0);
 
       setStats({
-        totalClients: clientsCount || 0,
         activeProjects: projectsCount || 0,
         pendingInvoices: pendingInvoicesCount ?? 0,
         pendingProposals: pendingProposalsCount ?? 0,
@@ -238,41 +406,319 @@ export default function Dashboard() {
         pendingAmount,
         hoursThisMonth,
         unbilledHours,
+        unbilledAmount,
+        prevMonthHours,
+        collectedThisMonth,
       });
 
-      setRecentProjects(projectsWithTasks);
-      setRecentActivity(activities);
-      setRecentInvoices(invoices || []);
-      setTotalInvoicesCount(invoicesTotalCount ?? 0);
+      // ── Projects (tabs) ────────────────────────────────────────────────────
+      const { data: projects } = await supabase
+        .from('projects')
+        .select('id, name, status, icon_emoji, icon_color, due_date, clients(name)')
+        .in('status', ['active', 'on_hold', 'completed'])
+        .order('created_at', { ascending: false })
+        .limit(30);
 
-      // Review requests counts
-      const { count: reviewTotal } = await supabase
-        .from('review_requests')
-        .select('*', { count: 'exact', head: true });
-      const { count: reviewPending } = await supabase
-        .from('review_requests')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
-      const { count: reviewApproved } = await supabase
-        .from('review_requests')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'approved');
-      setReviewCounts({
-        total: reviewTotal ?? 0,
-        pending: reviewPending ?? 0,
-        approved: reviewApproved ?? 0,
+      const projectsWithTasks = await Promise.all(
+        (projects || []).map(async (p) => {
+          const [{ count: total }, { data: doneTasks }, { data: projectTime }] = await Promise.all([
+            supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('project_id', p.id),
+            supabase
+              .from('tasks')
+              .select('id, project_statuses!status_id(is_done_status)')
+              .eq('project_id', p.id),
+            supabase.from('time_entries').select('duration_minutes, total_duration_seconds').eq('project_id', p.id),
+          ]);
+          const completed = (doneTasks || []).filter(
+            (t) => (t.project_statuses as { is_done_status?: boolean } | null)?.is_done_status === true,
+          ).length;
+          const hours = (projectTime || []).reduce((s, e) => s + toHours(e), 0);
+          return {
+            id: p.id,
+            name: p.name,
+            client_name: (p.clients as { name: string } | null)?.name || null,
+            status: p.status,
+            icon_emoji: p.icon_emoji,
+            icon_color: p.icon_color,
+            due_date: p.due_date,
+            hours,
+            task_count: total || 0,
+            completed_tasks: completed,
+          };
+        }),
+      );
+      setAllProjects(projectsWithTasks);
+
+      // ── Needs you today (smart aggregation) ────────────────────────────────
+      const [
+        { data: dueTasks },
+        { data: sentInvoicesDue },
+        { data: openProposals },
+        { data: openContracts },
+        { data: pendingReviews },
+        { data: followUps },
+      ] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('id, title, due_date, project_id, projects(name), project_statuses!status_id(is_done_status)')
+          .not('due_date', 'is', null)
+          .lte('due_date', soonStr)
+          .order('due_date', { ascending: true })
+          .limit(15),
+        supabase
+          .from('invoices')
+          .select('id, invoice_number, total, due_date, clients(name)')
+          .eq('status', 'sent')
+          .order('due_date', { ascending: true })
+          .limit(10),
+        supabase
+          .from('proposals')
+          .select('id, identifier, status, expires_at, client_name_snapshot, clients(name)')
+          .in('status', ['sent', 'read'])
+          .order('expires_at', { ascending: true, nullsFirst: false })
+          .limit(10),
+        showContracts
+          ? supabase
+              .from('contracts')
+              .select('id, identifier, client_name, sent_at, timeline_days, clients(name)')
+              .eq('status', 'pending_signatures')
+              .order('sent_at', { ascending: true, nullsFirst: false })
+              .limit(10)
+          : Promise.resolve({ data: [] as unknown[] }),
+        supabase
+          .from('review_requests')
+          .select('id, title, due_date')
+          .eq('status', 'pending')
+          .order('due_date', { ascending: true, nullsFirst: false })
+          .limit(10),
+        supabase
+          .from('client_follow_ups')
+          .select('id, client_id, title, due_at, clients!inner(name)')
+          .eq('user_id', user!.id)
+          .is('completed_at', null)
+          .is('clients.archived_at', null)
+          .order('due_at', { ascending: true, nullsFirst: false })
+          .limit(10),
+      ]);
+
+      const items: PriorityItem[] = [];
+
+      (dueTasks || []).forEach((t) => {
+        const isDone = (t.project_statuses as { is_done_status?: boolean } | null)?.is_done_status === true;
+        if (isDone) return;
+        const d = daysUntil(t.due_date);
+        const tone: PriorityItem['tone'] = d !== null && d < 0 ? 'overdue' : 'soon';
+        items.push({
+          id: `task-${t.id}`,
+          label: tone === 'overdue' ? 'Overdue task' : 'Task due',
+          tone,
+          title: t.title,
+          subtitle: `${(t.projects as { name: string } | null)?.name || 'Project'} · ${dueText(t.due_date)}`,
+          ctaLabel: 'Open task',
+          to: `/projects/${t.project_id}`,
+          rank: tone === 'overdue' ? 0 : 1,
+          sortDate: t.due_date ? new Date(t.due_date).getTime() : Infinity,
+        });
       });
 
-      // CRM follow-up todos
-      const { data: followUpClients } = await supabase
-        .from('client_follow_ups')
-        .select('id, client_id, title, due_at, clients!inner(name)')
-        .eq('user_id', user!.id)
-        .is('completed_at', null)
-        .is('clients.archived_at', null)
-        .order('due_at', { ascending: true, nullsFirst: false })
-        .limit(10);
-      setFollowUps((followUpClients as FollowUpClient[]) || []);
+      (sentInvoicesDue || []).forEach((inv) => {
+        const d = daysUntil(inv.due_date);
+        if (d === null || d > SOON_DAYS) return;
+        const tone: PriorityItem['tone'] = d < 0 ? 'overdue' : 'soon';
+        items.push({
+          id: `invoice-${inv.id}`,
+          label: tone === 'overdue' ? 'Overdue invoice' : 'Invoice due',
+          tone,
+          title: `${inv.invoice_number} · ${fmt(Number(inv.total) || 0)}`,
+          subtitle: `${(inv.clients as { name: string } | null)?.name || 'Client'} · ${dueText(inv.due_date)}`,
+          ctaLabel: 'Send reminder',
+          to: `/invoices/${inv.id}`,
+          rank: tone === 'overdue' ? 0 : 1,
+          sortDate: inv.due_date ? new Date(inv.due_date).getTime() : Infinity,
+        });
+      });
+
+      if (unbilledHours > 0) {
+        items.push({
+          id: 'unbilled',
+          label: 'Unbilled hours',
+          tone: 'info',
+          title: `${unbilledHours.toFixed(1)}h ready to invoice`,
+          subtitle: unbilledAmount > 0 ? `${fmt(unbilledAmount)} across projects` : 'Bill your tracked time',
+          ctaLabel: 'Create invoice',
+          to: '/invoices',
+          rank: 2,
+          sortDate: 0,
+        });
+      }
+
+      (openProposals || []).forEach((p) => {
+        const d = daysUntil(p.expires_at);
+        if (d === null || d > SOON_DAYS) return;
+        const tone: PriorityItem['tone'] = d < 0 ? 'overdue' : 'soon';
+        const clientName =
+          (p.clients as { name: string } | null)?.name || (p.client_name_snapshot as string | null) || 'Client';
+        items.push({
+          id: `proposal-${p.id}`,
+          label: tone === 'overdue' ? 'Proposal expired' : 'Proposal expiring',
+          tone,
+          title: `${p.identifier || 'Proposal'} — ${clientName}`,
+          subtitle: d < 0 ? 'Expired' : dueText(p.expires_at),
+          ctaLabel: 'Nudge client',
+          to: `/proposals/${p.id}`,
+          rank: tone === 'overdue' ? 0 : 1,
+          sortDate: p.expires_at ? new Date(p.expires_at).getTime() : Infinity,
+        });
+      });
+
+      ((openContracts as {
+        id: string;
+        identifier: string | null;
+        client_name: string | null;
+        sent_at: string | null;
+        timeline_days: number | null;
+        clients: { name: string } | null;
+      }[]) || []).forEach((c) => {
+        let contractDue: string | null = null;
+        if (c.sent_at && c.timeline_days) {
+          const expiry = new Date(c.sent_at);
+          expiry.setDate(expiry.getDate() + c.timeline_days);
+          contractDue = expiry.toISOString().split('T')[0];
+        }
+        const d = contractDue ? daysUntil(contractDue) : null;
+        if (d !== null && d > SOON_DAYS) return;
+        const tone: PriorityItem['tone'] = d !== null && d < 0 ? 'overdue' : 'soon';
+        items.push({
+          id: `contract-${c.id}`,
+          label: 'Awaiting signature',
+          tone,
+          title: `${c.identifier || 'Contract'} — ${c.clients?.name || c.client_name || 'Client'}`,
+          subtitle: contractDue ? dueText(contractDue) : 'Pending signatures',
+          ctaLabel: 'View contract',
+          to: `/contracts/${c.id}`,
+          rank: tone === 'overdue' ? 0 : 1,
+          sortDate: contractDue ? new Date(contractDue).getTime() : 0,
+        });
+      });
+
+      (pendingReviews || []).forEach((r) => {
+        const d = daysUntil(r.due_date);
+        if (d !== null && d > SOON_DAYS) return;
+        const tone: PriorityItem['tone'] = d !== null && d < 0 ? 'overdue' : d !== null ? 'soon' : 'info';
+        items.push({
+          id: `review-${r.id}`,
+          label: 'Awaiting approval',
+          tone,
+          title: r.title || 'Approval request',
+          subtitle: r.due_date ? dueText(r.due_date) : 'Pending client review',
+          ctaLabel: 'Review',
+          to: `/reviews/${r.id}`,
+          rank: tone === 'overdue' ? 0 : tone === 'soon' ? 1 : 2,
+          sortDate: r.due_date ? new Date(r.due_date).getTime() : Infinity,
+        });
+      });
+
+      (followUps || []).forEach((f) => {
+        const d = daysUntil(f.due_at);
+        if (d !== null && d > SOON_DAYS) return;
+        const tone: PriorityItem['tone'] = d !== null && d < 0 ? 'overdue' : d !== null ? 'soon' : 'info';
+        items.push({
+          id: `followup-${f.id}`,
+          label: 'Follow-up',
+          tone,
+          title: (f.clients as { name: string } | null)?.name || 'Client',
+          subtitle: f.title + (f.due_at ? ` · ${dueText(f.due_at)}` : ''),
+          ctaLabel: 'Open client',
+          to: `/clients?open=${f.client_id}`,
+          rank: tone === 'overdue' ? 0 : tone === 'soon' ? 1 : 2,
+          sortDate: f.due_at ? new Date(f.due_at).getTime() : Infinity,
+        });
+      });
+
+      items.sort((a, b) => a.rank - b.rank || a.sortDate - b.sortDate);
+      setPriorityItems(items.slice(0, 6));
+
+      // ── Recently edited items ──────────────────────────────────────────────
+      const [
+        { data: rProjects },
+        { data: rTasks },
+        { data: rTime },
+        { data: rNotes },
+        { data: rInvoices },
+      ] = await Promise.all([
+        supabase.from('projects').select('id, name, updated_at, clients(name)').order('updated_at', { ascending: false }).limit(4),
+        supabase.from('tasks').select('id, title, project_id, updated_at, projects(name)').order('updated_at', { ascending: false }).limit(4),
+        supabase
+          .from('time_entries')
+          .select('id, description, updated_at, start_time, projects(name), tasks(title)')
+          .order('updated_at', { ascending: false })
+          .limit(4),
+        canAccessNotes({ isAdmin: shellProfile?.is_admin === true })
+          ? supabase.from('notes').select('id, title, updated_at').order('updated_at', { ascending: false }).limit(4)
+          : Promise.resolve({ data: [] as unknown[] }),
+        supabase.from('invoices').select('id, invoice_number, updated_at').order('updated_at', { ascending: false }).limit(4),
+      ]);
+
+      const recents: RecentItem[] = [];
+      (rProjects || []).forEach((p) =>
+        recents.push({
+          id: `p-${p.id}`,
+          kind: 'project',
+          title: JUMP_BACK_KIND_LABEL.project,
+          subtitle: p.name,
+          updated_at: p.updated_at,
+          to: `/projects/${p.id}`,
+        }),
+      );
+      (rTasks || []).forEach((t) =>
+        recents.push({
+          id: `t-${t.id}`,
+          kind: 'task',
+          title: JUMP_BACK_KIND_LABEL.task,
+          subtitle: t.title,
+          updated_at: t.updated_at,
+          to: `/projects/${t.project_id}`,
+        }),
+      );
+      (rTime || []).forEach((t) => {
+        const taskTitle = (t.tasks as { title: string } | null)?.title;
+        const desc = t.description?.trim();
+        const entryName =
+          taskTitle ||
+          (desc && desc.length <= 60 ? desc : desc ? `${desc.slice(0, 57)}…` : null) ||
+          (t.projects as { name: string } | null)?.name ||
+          'Untitled entry';
+        recents.push({
+          id: `tm-${t.id}`,
+          kind: 'time',
+          title: JUMP_BACK_KIND_LABEL.time,
+          subtitle: entryName,
+          updated_at: t.updated_at,
+          to: `/time?edit=${t.id}&view=day`,
+        });
+      });
+      ((rNotes as { id: string; title: string | null; updated_at: string }[]) || []).forEach((n) =>
+        recents.push({
+          id: `n-${n.id}`,
+          kind: 'note',
+          title: JUMP_BACK_KIND_LABEL.note,
+          subtitle: n.title || 'Untitled note',
+          updated_at: n.updated_at,
+          to: '/notes',
+        }),
+      );
+      (rInvoices || []).forEach((inv) =>
+        recents.push({
+          id: `i-${inv.id}`,
+          kind: 'invoice',
+          title: JUMP_BACK_KIND_LABEL.invoice,
+          subtitle: inv.invoice_number,
+          updated_at: inv.updated_at,
+          to: `/invoices/${inv.id}`,
+        }),
+      );
+      recents.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+      setRecentItems(recents.slice(0, 6));
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -281,90 +727,96 @@ export default function Dashboard() {
   };
 
   const getTimeAgo = (date: Date) => {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-
-    if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    if (diffMins > 0) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+    const diffMs = Date.now() - date.getTime();
+    const diffDays = Math.floor(diffMs / 86400000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffDays > 0) return `${diffDays}d ago`;
+    if (diffHours > 0) return `${diffHours}h ago`;
+    if (diffMins > 0) return `${diffMins}m ago`;
     return 'Just now';
   };
 
   const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 18) return 'Good afternoon';
     return 'Good evening';
   };
 
-  const formatStatus = (status: string) => {
-    return status.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const isOverdue = (dateStr: string | null) => {
+    const d = daysUntil(dateStr);
+    return d !== null && d < 0;
   };
 
-  const getStatusBadgeStyle = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'bg-success/10 text-success border-success/20';
-      case 'paid':
-        return 'bg-success/10 text-success border-success/20';
-      case 'sent':
-        return 'bg-muted text-muted-foreground border-muted';
-      case 'draft':
-        return 'bg-warning/10 text-warning border-warning/20';
-      default:
-        return 'bg-muted text-muted-foreground border-muted';
-    }
-  };
+  // ── Derived chart data ────────────────────────────────────────────────────
+  const hoursSeries = useMemo(() => {
+    const buckets = buildHoursBuckets(hoursRange);
+    return buckets.map((b) => {
+      const value = rawTimeEntries.reduce((s, e) => {
+        if (!e.start_time) return s;
+        const t = new Date(e.start_time);
+        return t >= b.start && t < b.end ? s + e.hours : s;
+      }, 0);
+      return { label: b.label, hours: +value.toFixed(1) };
+    });
+  }, [rawTimeEntries, hoursRange]);
+
+  const hoursRangeTotal = useMemo(() => hoursSeries.reduce((s, p) => s + p.hours, 0), [hoursSeries]);
+
+  const cashSeries = useMemo(() => {
+    const buckets = buildBuckets(cashRange);
+    return buckets.map((b) => {
+      let billed = 0;
+      let paid = 0;
+      rawInvoices.forEach((inv) => {
+        const issued = new Date(inv.issue_date || inv.created_at);
+        if (issued >= b.start && issued < b.end) billed += inv.total;
+        if (inv.status === 'paid' && inv.paid_date) {
+          const pd = new Date(inv.paid_date);
+          if (pd >= b.start && pd < b.end) paid += inv.total;
+        }
+      });
+      return { label: b.label, billed: +billed.toFixed(2), paid: +paid.toFixed(2) };
+    });
+  }, [rawInvoices, cashRange]);
+
+  const cashTotals = useMemo(
+    () => ({
+      paid: cashSeries.reduce((s, p) => s + p.paid, 0),
+      billed: cashSeries.reduce((s, p) => s + p.billed, 0),
+    }),
+    [cashSeries],
+  );
 
   const displayName = profileReady ? shellProfileDisplayName(shellProfile) : null;
   const firstName = displayName?.split(' ')[0] ?? null;
-  const unreadNotifications = notifications.filter((n) => !n.read_at);
   const showContracts = getContractsAccessMode() === 'on';
   const showNotes = canAccessNotes({ isAdmin: shellProfile?.is_admin === true });
 
+  const quickActions = [
+    { label: 'Add client', slot: 'sidebar_clients' as IconSlotKey, to: '/clients?new=1' },
+    { label: 'Add project', slot: 'sidebar_projects' as IconSlotKey, to: '/projects?new=1' },
+    { label: 'Track time', slot: 'sidebar_time' as IconSlotKey, to: '/time/timer' },
+    ...(showNotes ? [{ label: 'New note', slot: 'sidebar_notes' as IconSlotKey, to: '/notes' }] : []),
+    { label: 'New proposal', slot: 'sidebar_proposals' as IconSlotKey, to: '/proposals' },
+    { label: 'New approval', slot: 'sidebar_reviews' as IconSlotKey, to: '/reviews' },
+  ];
+
+  const filteredProjects = allProjects.filter((p) => p.status === projectTab);
+  const projectTabCounts = {
+    active: allProjects.filter((p) => p.status === 'active').length,
+    on_hold: allProjects.filter((p) => p.status === 'on_hold').length,
+    completed: allProjects.filter((p) => p.status === 'completed').length,
+  };
+
   const statCards = [
-    {
-      title: 'Active Clients',
-      value: stats.totalClients,
-      subtitle: `${stats.totalClients} total`,
-      slot: 'stat_clients' as const,
-    },
-    {
-      title: 'Active Projects',
-      value: stats.activeProjects,
-      subtitle: `${stats.activeProjects} total`,
-      slot: 'stat_projects' as const,
-    },
-    {
-      title: 'Hours This Month',
-      value: stats.hoursThisMonth.toFixed(1),
-      subtitle: `${stats.unbilledHours.toFixed(1)}h unbilled`,
-      slot: 'stat_hours' as const,
-    },
-    {
-      title: 'Pending Payment',
-      value: fmt(stats.pendingAmount),
-      subtitle: `${stats.pendingInvoices} invoices`,
-      slot: 'stat_money' as const,
-    },
-    {
-      title: 'Pending Proposals',
-      value: stats.pendingProposals,
-      subtitle: 'sent + read',
-      slot: 'sidebar_proposals' as const,
-    },
+    { title: 'Active Projects', value: String(stats.activeProjects), subtitle: `${stats.activeProjects} total`, slot: 'stat_projects' as IconSlotKey, spark: null as SparkPoint[] | null, trend: null as { current: number; prev: number } | null, to: '/projects' },
+    { title: 'Hours This Month', value: stats.hoursThisMonth.toFixed(1) + 'h', subtitle: `${stats.unbilledHours.toFixed(1)}h unbilled`, slot: 'stat_hours' as IconSlotKey, spark: hoursSparkline, trend: { current: stats.hoursThisMonth, prev: stats.prevMonthHours }, to: '/time?view=month' },
+    { title: 'Pending Payment', value: fmt(stats.pendingAmount), subtitle: `${stats.pendingInvoices} invoices out`, slot: 'stat_money' as IconSlotKey, spark: null, trend: null, to: '/invoices' },
+    { title: 'Pending Proposals', value: String(stats.pendingProposals), subtitle: 'sent + read', slot: 'sidebar_proposals' as IconSlotKey, spark: null, trend: null, to: '/proposals' },
     ...(showContracts
-      ? [
-          {
-            title: 'Pending Signatures',
-            value: stats.pendingContracts,
-            subtitle: 'contracts waiting signature',
-            slot: 'sidebar_contracts' as const,
-          },
-        ]
+      ? [{ title: 'Pending Signatures', value: String(stats.pendingContracts), subtitle: 'awaiting signature', slot: 'sidebar_contracts' as IconSlotKey, spark: null as SparkPoint[] | null, trend: null as { current: number; prev: number } | null, to: '/contracts' }]
       : []),
   ];
 
@@ -382,70 +834,27 @@ export default function Dashboard() {
               <Skeleton className="h-9 w-32" />
             </div>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[1, 2, 3, 4].map((i) => (
               <Card key={i} className="border-0 shadow-sm">
-                <CardContent className="p-5">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-24" />
-                      <Skeleton className="h-8 w-16" />
-                      <Skeleton className="h-3 w-20" />
-                    </div>
-                    <Skeleton className="h-10 w-10 rounded-xl" />
+                <CardContent className="p-4">
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-7 w-16" />
+                    <Skeleton className="h-3 w-20" />
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
           <div className="grid gap-6 lg:grid-cols-3">
-            <Card className="border-0 shadow-sm lg:col-span-2">
-              <CardHeader className="pb-4">
-                <Skeleton className="h-5 w-32" />
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {[1, 2, 3, 4].map((i) => (
-                    <Skeleton key={i} className="h-40 rounded-xl" />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-            <div className="space-y-6">
-              <Card className="border-0 shadow-sm">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <Skeleton className="h-5 w-28" />
-                    <Skeleton className="h-8 w-16" />
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-10 w-full" />
-                  ))}
-                </CardContent>
-              </Card>
-              <Card className="border-0 shadow-sm">
-                <CardHeader className="pb-4">
-                  <Skeleton className="h-5 w-36" />
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className="flex gap-3">
-                      <Skeleton className="h-8 w-8 rounded-full" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-4 w-full" />
-                        <Skeleton className="h-3 w-16" />
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
+            <Skeleton className="h-64 rounded-lg lg:col-span-2" />
+            <Skeleton className="h-64 rounded-lg" />
           </div>
+          <Skeleton className="h-72 rounded-lg" />
           <div className="grid gap-6 lg:grid-cols-2">
-            <Skeleton className="h-40 rounded-lg" />
-            <Skeleton className="h-40 rounded-lg" />
+            <Skeleton className="h-56 rounded-lg" />
+            <Skeleton className="h-56 rounded-lg" />
           </div>
         </div>
       </AppLayout>
@@ -455,23 +864,20 @@ export default function Dashboard() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <div className="min-w-0 shrink-0">
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight">
               {getGreeting()}
-              {firstName ? (
-                <>, {firstName}!</>
-              ) : (
-                <>
-                  , <Skeleton className="ml-1 inline-block h-7 w-20 align-middle" />
-                </>
-              )}
+              {firstName ? <>, {firstName}!</> : <>!</>}
             </h1>
-            <p className="text-muted-foreground">
-              Here's what's happening with your business.
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {priorityItems.length > 0
+                ? `You have ${priorityItems.length} item${priorityItems.length > 1 ? 's' : ''} that need your attention.`
+                : "You're all caught up. Here's your business overview."}
             </p>
           </div>
-          <div className="flex gap-2 shrink-0 justify-center sm:justify-end">
+          <div className="flex shrink-0 justify-start gap-2 sm:justify-end">
             <Button variant="outline" size="sm" asChild>
               <Link to="/time">
                 <SlotIcon slot="stat_hours" className="mr-2 h-4 w-4" />
@@ -487,30 +893,33 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* ── Stat Cards ─────────────────────────────────────────────────── */}
+        <div className={cn('grid gap-3 sm:grid-cols-2', statCards.length === 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-4')}>
           {statCards.map((stat) => (
             <Card
               key={stat.title}
-              className="border-0 shadow-sm"
-              onClick={() => {
-                if (stat.title === "Pending Proposals") navigate("/proposals");
-                if (stat.title === "Pending Signatures") navigate("/contracts");
-              }}
+              className="group cursor-pointer border-0 shadow-sm transition-shadow hover:shadow-md"
+              onClick={() => navigate(stat.to)}
             >
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      {stat.title}
-                    </p>
-                    <p className="text-2xl font-bold mt-1 text-foreground dark:text-card-foreground">
-                      {stat.value}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{stat.subtitle}</p>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs text-muted-foreground">{stat.title}</p>
+                    <p className="mt-1 text-2xl font-bold tracking-tight text-foreground">{stat.value}</p>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <p className="text-xs text-muted-foreground">{stat.subtitle}</p>
+                      {stat.trend && <TrendChip current={stat.trend.current} prev={stat.trend.prev} />}
+                    </div>
                   </div>
-                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <SlotIcon slot={stat.slot} className="h-5 w-5 text-primary" />
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                      <SlotIcon slot={stat.slot} className="h-4 w-4 text-primary" />
+                    </div>
+                    {stat.spark && stat.spark.length >= 2 && (
+                      <div className="opacity-70">
+                        <MiniSparkline data={stat.spark} />
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -518,276 +927,375 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Active Projects (66%) + Quick Actions (33%) */}
+        {/* ── Needs you today + This month ───────────────────────────────── */}
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="border-0 shadow-sm lg:col-span-2">
-            <CardHeader className="flex flex-row items-center justify-between pb-4">
-              <CardTitle className="text-base font-semibold">Active Projects</CardTitle>
-              <Button variant="ghost" size="sm" asChild className="text-primary">
-                <Link to="/projects">View all</Link>
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {recentProjects.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <p>No active projects</p>
-                  <Button asChild className="mt-4" variant="outline">
-                    <Link to="/projects?new=1">Create your first project</Link>
-                  </Button>
-                </div>
-              ) : (
-                <div className="divide-y rounded-lg border">
-                  {recentProjects.map((project) => (
-                    <Link
-                      key={project.id}
-                      to={`/projects/${project.id}`}
-                      className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-muted/30 transition-colors"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate font-semibold text-foreground">{project.name}</p>
-                          <Badge variant="outline" className={getStatusBadgeStyle(project.status)}>
-                            {formatStatus(project.status)}
-                          </Badge>
-                        </div>
-                        <p className="truncate text-sm text-muted-foreground">
-                          {project.client_name || 'No client'}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right text-sm text-muted-foreground">
-                        <p>{project.hours.toFixed(1)}h</p>
-                        <p>{project.task_count} tasks</p>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <Link
-                to="/projects?new=1"
-                className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:shadow-md transition-shadow"
-              >
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                  <SlotIcon slot="sidebar_projects" className="h-5 w-5 text-primary" />
-                </div>
-                <span className="text-sm font-medium">Create project</span>
-              </Link>
-              <Link
-                to="/invoices"
-                className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:shadow-md transition-shadow"
-              >
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                  <SlotIcon slot="sidebar_invoices" className="h-5 w-5 text-primary" />
-                </div>
-                <span className="text-sm font-medium">Send invoice</span>
-              </Link>
-              <Link
-                to="/time"
-                className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:shadow-md transition-shadow"
-              >
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                  <SlotIcon slot="sidebar_time" className="h-5 w-5 text-primary" />
-                </div>
-                <span className="text-sm font-medium">Log time</span>
-              </Link>
-              {showNotes ? (
-                <Link
-                  to="/notes"
-                  className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:shadow-md transition-shadow"
-                >
-                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <SlotIcon slot="sidebar_notes" className="h-5 w-5 text-primary" />
-                  </div>
-                  <span className="text-sm font-medium">New note</span>
-                </Link>
-              ) : null}
-              <Link
-                to="/clients?new=1"
-                className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:shadow-md transition-shadow"
-              >
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                  <SlotIcon slot="sidebar_clients" className="h-5 w-5 text-primary" />
-                </div>
-                <span className="text-sm font-medium">New client</span>
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Notifications, Follow-ups, Recent Activity - 33% each, max 4 items */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          <Card className="border-0 shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                Notifications
-                {unreadNotifications.length > 0 && (
-                  <Badge variant="secondary" className="text-xs">
-                    {unreadNotifications.length} unread
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">
+                Needs you today
+                {priorityItems.length > 0 && (
+                  <Badge variant="secondary" className="ml-2 text-xs">
+                    {priorityItems.length}
                   </Badge>
                 )}
               </CardTitle>
-              <Button variant="ghost" size="sm" asChild className="text-primary">
-                <Link to="/notifications">View all</Link>
-              </Button>
             </CardHeader>
             <CardContent>
-                {notifications.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No notifications yet</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {notifications.slice(0, 4).map((n) => (
-                    <li key={n.id}>
-                      <Link
-                        to={n.link && n.link.startsWith('/') ? n.link : n.link ? `/${n.link}` : '/notifications'}
-                        className="flex items-start gap-2 text-sm hover:underline"
-                      >
-                        <span className={!n.read_at ? 'font-medium text-foreground' : 'text-muted-foreground'}>
-                          {n.title}
-                        </span>
-                      </Link>
-                      <p className="text-xs text-muted-foreground ml-0 truncate">
-                        {getTimeAgo(new Date(n.created_at))}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-base font-semibold">Follow-ups</CardTitle>
-              <Button variant="ghost" size="sm" asChild className="text-primary">
-                <Link to="/clients">View all</Link>
-              </Button>
-            </CardHeader>
-            <CardContent>
-                {followUps.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No follow-up tasks</p>
-                ) : (
-                  <ul className="space-y-3">
-                    {followUps.slice(0, 4).map((c) => (
-                    <li key={c.id}>
-                      <Link
-                        to={`/clients?open=${c.client_id}`}
-                        className="block text-sm font-medium text-primary hover:underline"
-                      >
-                        {c.clients?.name || 'Client'}
-                      </Link>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {c.title}
-                      </p>
-                      {c.due_at && (
-                        <p className="text-xs text-muted-foreground truncate">
-                          Due {formatLocaleDate(c.due_at, dateFormat)}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-                {recentActivity.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
-                ) : (
-                  <div className="space-y-4">
-                    {recentActivity.slice(0, 4).map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-3">
-                      <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                        <SlotIcon slot="task_clock" className="h-4 w-4 text-muted-foreground" />
+              {priorityItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
+                  <CheckCircle className="mb-2 h-8 w-8 text-success/60" />
+                  <p className="text-sm font-medium">All caught up!</p>
+                  <p className="mt-0.5 text-xs">Nothing overdue or awaiting action.</p>
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {priorityItems.map((item) => (
+                    <div key={item.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                      <span className={cn('shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider', TONE_STYLES[item.tone])}>
+                        {item.label}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
+                        <p className="truncate text-xs text-muted-foreground">{item.subtitle}</p>
                       </div>
-                      <div>
-                        <p className="text-sm">{activity.description}</p>
-                        <p className="text-xs text-muted-foreground">{activity.time_ago}</p>
-                      </div>
+                      <Button variant="ghost" size="sm" asChild className="shrink-0 text-primary">
+                        <Link to={item.to}>
+                          {item.ctaLabel}
+                          <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
                     </div>
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
+
+          {/* This month */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">This month</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">Collected</p>
+                  <p className="text-2xl font-bold text-foreground">{fmt(stats.collectedThisMonth)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Outstanding</p>
+                  <p className="text-2xl font-bold text-muted-foreground">{fmt(stats.pendingAmount)}</p>
+                  {stats.unbilledHours > 0 && (
+                    <p className="text-xs font-medium text-primary">{stats.unbilledHours.toFixed(1)}h unbilled</p>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{stats.pendingInvoices} invoice{stats.pendingInvoices !== 1 ? 's' : ''} out</span>
+                  <span>{stats.pendingProposals} proposal{stats.pendingProposals !== 1 ? 's' : ''} pending</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{
+                      width:
+                        stats.collectedThisMonth + stats.pendingAmount > 0
+                          ? `${Math.min(100, (stats.collectedThisMonth / (stats.collectedThisMonth + stats.pendingAmount)) * 100)}%`
+                          : '0%',
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" /> Collected
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground/40" /> Outstanding
+                  </span>
+                </div>
+              </div>
+              {stats.pendingAmount > 0 && (
+                <Button size="sm" variant="outline" asChild className="w-full text-xs">
+                  <Link to="/invoices">
+                    Bill now <ArrowRight className="ml-1.5 h-3 w-3" />
+                  </Link>
+                </Button>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Bottom Row */}
+        {/* ── Projects with tabs ─────────────────────────────────────────── */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-0">
+            <div className="flex items-center gap-4">
+              <CardTitle className="text-base font-semibold">Projects</CardTitle>
+              <div className="flex gap-1">
+                {(['active', 'on_hold', 'completed'] as ProjectTabKey[]).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setProjectTab(tab)}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                      projectTab === tab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    {tab === 'active' ? 'Active' : tab === 'on_hold' ? 'On hold' : 'Done'}
+                    <span className={cn('ml-1.5 rounded-full px-1 py-0.5 text-[10px]', projectTab === tab ? 'bg-white/20' : 'bg-muted')}>
+                      {projectTabCounts[tab]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" asChild className="text-primary">
+              <Link to="/projects">View all</Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="pt-4">
+            {filteredProjects.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">
+                <p className="text-sm">No {projectTab === 'on_hold' ? 'on-hold' : projectTab === 'completed' ? 'completed' : 'active'} projects</p>
+                {projectTab === 'active' && (
+                  <Button asChild className="mt-3" variant="outline" size="sm">
+                    <Link to="/projects?new=1">Create your first project</Link>
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="divide-y">
+                <div className="hidden gap-x-8 pb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(160px,1.25fr)_minmax(88px,auto)_96px_32px]">
+                  <span>Project</span>
+                  <span>Progress</span>
+                  <span>Hours</span>
+                  <span>Due</span>
+                  <span />
+                </div>
+                {filteredProjects.map((project) => {
+                  const progressPct = project.task_count > 0 ? Math.round((project.completed_tasks / project.task_count) * 100) : 0;
+                  const overdue = isOverdue(project.due_date);
+                  return (
+                    <Link
+                      key={project.id}
+                      to={`/projects/${project.id}`}
+                      className="group/row -mx-2 grid grid-cols-1 items-center gap-2 rounded-lg px-2 py-3 transition-colors hover:bg-muted/30 sm:grid-cols-[minmax(0,1fr)_minmax(160px,1.25fr)_minmax(88px,auto)_96px_32px] sm:gap-x-8 sm:gap-y-2"
+                    >
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <div
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sm"
+                          style={{ backgroundColor: project.icon_color ? `${project.icon_color}20` : 'hsl(var(--muted))' }}
+                        >
+                          {project.icon_emoji ? (
+                            <span>{project.icon_emoji}</span>
+                          ) : (
+                            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: project.icon_color || 'hsl(var(--muted-foreground))' }} />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">{project.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">{project.client_name || 'No client'}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                          <span>{progressPct}%</span>
+                          <span>{project.completed_tasks}/{project.task_count} tasks</span>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progressPct}%` }} />
+                        </div>
+                      </div>
+                      <div className="text-sm font-medium text-foreground">{project.hours.toFixed(1)}h</div>
+                      <div className={cn('text-xs font-medium', overdue ? 'text-destructive' : 'text-muted-foreground')}>
+                        {project.due_date ? formatLocaleDate(project.due_date, dateFormat) : <span className="text-muted-foreground/50">—</span>}
+                      </div>
+                      <div className="hidden justify-end sm:flex">
+                        <ArrowRight className="h-4 w-4 text-muted-foreground/40 transition-colors group-hover/row:text-primary" />
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── Cash flow + Hours ──────────────────────────────────────────── */}
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Approvals */}
+          {/* Cash flow */}
           <Card className="border-0 shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between pb-4">
-              <CardTitle className="text-base font-semibold">Approvals</CardTitle>
-              <Button variant="ghost" size="sm" asChild className="text-primary">
-                <Link to="/reviews">View all</Link>
-              </Button>
+            <CardHeader className="flex flex-row items-start justify-between pb-2">
+              <div>
+                <CardTitle className="text-base font-semibold">Cash flow</CardTitle>
+                <div className="mt-1 flex items-center gap-3 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-success" /> Paid
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-primary" /> Billed
+                  </span>
+                </div>
+              </div>
+              <RangeToggle value={cashRange} onChange={setCashRange} options={CASH_RANGE_OPTIONS} />
             </CardHeader>
             <CardContent>
-              <div className="flex items-baseline gap-2 mb-3">
-                <span className="text-3xl font-bold">{reviewCounts.total}</span>
-                <span className="text-sm text-muted-foreground">Approval requests</span>
+              <div className="mb-3 flex gap-6">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Paid</p>
+                  <p className="text-lg font-bold text-success">{fmt(cashTotals.paid)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Billed</p>
+                  <p className="text-lg font-bold text-foreground">{fmt(cashTotals.billed)}</p>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <Badge variant="outline" className="bg-muted">{reviewCounts.pending} pending</Badge>
-                <Badge variant="outline" className="bg-success/10 text-success border-success/20">{reviewCounts.approved} approved</Badge>
-              </div>
+              <ResponsiveContainer width="100%" height={140}>
+                <AreaChart data={cashSeries} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="cfPaid" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--success))" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="hsl(var(--success))" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="cfBilled" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={40} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
+                  <Tooltip
+                    contentStyle={{ fontSize: 11, border: '1px solid hsl(var(--border))', borderRadius: 8 }}
+                    formatter={(value: number, name: string) => [fmt(value), name === 'paid' ? 'Paid' : 'Billed']}
+                  />
+                  <Area type="monotone" dataKey="billed" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#cfBilled)" />
+                  <Area type="monotone" dataKey="paid" stroke="hsl(var(--success))" strokeWidth={2} fill="url(#cfPaid)" />
+                </AreaChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
 
-          {/* Recent Invoices */}
+          {/* Hours */}
           <Card className="border-0 shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between pb-4">
-              <CardTitle className="text-base font-semibold">Recent Invoices</CardTitle>
+            <CardHeader className="flex flex-row items-start justify-between pb-2">
+              <div>
+                <CardTitle className="text-base font-semibold">Hours tracked</CardTitle>
+                <p className="mt-1 text-lg font-bold text-foreground">
+                  {hoursRangeTotal.toFixed(1)}h{' '}
+                  <span className="text-xs font-normal text-muted-foreground">this {hoursRange}</span>
+                </p>
+              </div>
+              <RangeToggle value={hoursRange} onChange={setHoursRange} options={HOURS_RANGE_OPTIONS} />
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={172}>
+                <BarChart data={hoursSeries} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={32} />
+                  <Tooltip
+                    cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }}
+                    contentStyle={{ fontSize: 11, border: '1px solid hsl(var(--border))', borderRadius: 8 }}
+                    formatter={(value: number) => [`${value}h`, 'Hours']}
+                  />
+                  <Bar dataKey="hours" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ── Recent items + Invoices + Notifications ────────────────────── */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Recently edited */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">Jump back in</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {recentItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nothing edited recently</p>
+              ) : (
+                <div className="space-y-1">
+                  {recentItems.map((item) => (
+                    <Link
+                      key={item.id}
+                      to={item.to}
+                      className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/50"
+                    >
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted">
+                        <SlotIcon slot={RECENT_ICON_SLOT[item.kind]} className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {item.subtitle} · {getTimeAgo(new Date(item.updated_at))}
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent invoices */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="text-base font-semibold">Recent invoices</CardTitle>
               <Button variant="ghost" size="sm" asChild className="text-primary">
                 <Link to="/invoices">View all</Link>
               </Button>
             </CardHeader>
             <CardContent>
-              <div className="flex items-baseline gap-2 mb-3">
-                <span className="text-3xl font-bold">{totalInvoicesCount}</span>
-                <span className="text-sm text-muted-foreground">Total invoices</span>
-              </div>
-              <div className="flex gap-2 mb-4">
-                <Badge variant="outline" className="bg-muted">
-                  {recentInvoices.filter(i => i.status === 'sent').length} sent
-                </Badge>
-                <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-                  {recentInvoices.filter(i => i.status === 'paid').length} paid
-                </Badge>
-              </div>
-              {recentInvoices.length > 0 && (
-                <div className="space-y-2">
-                  {recentInvoices.slice(0, 2).map((invoice) => (
+              {recentInvoices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No invoices yet</p>
+              ) : (
+                <div className="space-y-1">
+                  {recentInvoices.map((invoice) => (
                     <Link
                       key={invoice.id}
                       to={`/invoices/${invoice.id}`}
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                      className="-mx-2 flex items-center justify-between gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-muted/50"
                     >
-                      <div className="flex items-center gap-2">
-                        <SlotIcon slot="sidebar_invoices" className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm font-medium">{invoice.invoice_number}</p>
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted">
+                          <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">{invoice.invoice_number}</p>
                           <p className="text-xs text-muted-foreground">{fmt(Number(invoice.total ?? 0))}</p>
                         </div>
                       </div>
-                      <Badge variant="outline" className={getStatusBadgeStyle(invoice.status)}>
-                        {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                      <Badge variant="outline" className={cn('shrink-0 text-[10px]', getStatusBadgeClass(invoice.status))}>
+                        {formatStatusLabel(invoice.status)}
                       </Badge>
                     </Link>
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Quick actions */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">Quick actions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5">
+              {quickActions.map((action) => (
+                <Link
+                  key={action.label}
+                  to={action.to}
+                  className="flex items-center gap-3 rounded-lg border border-border/60 px-3 py-2.5 transition-colors hover:bg-muted/50 hover:shadow-sm"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <SlotIcon slot={action.slot} className="h-4 w-4 text-primary" />
+                  </div>
+                  <span className="text-sm font-medium text-foreground">{action.label}</span>
+                </Link>
+              ))}
             </CardContent>
           </Card>
         </div>

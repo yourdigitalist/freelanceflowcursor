@@ -774,76 +774,75 @@ export default function ProjectDetail() {
     }
   };
 
-  // Drag and drop
+  // Drag and drop — track status at drag start; dragOver updates UI but must not skip persist on dragEnd
+  const dragStartStatusRef = useRef<string | null>(null);
+
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
+    const task = tasks.find((t) => t.id === event.active.id);
+    dragStartStatusRef.current = task?.status_id ?? null;
   };
 
-  const handleDragOver = async (event: DragOverEvent) => {
+  const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
     if (!over) return;
 
     const activeTask = tasks.find((t) => t.id === active.id);
     if (!activeTask) return;
 
-    // Check if dropped on a status column
     const overStatus = statuses.find((s) => s.id === over.id);
-    if (overStatus && activeTask.status_id !== overStatus.id) {
-      // Update task status immediately for visual feedback
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === active.id ? { ...t, status_id: overStatus.id } : t
-        )
-      );
-    }
+    const overTask = tasks.find((t) => t.id === over.id);
+    const targetStatusId = overStatus?.id ?? overTask?.status_id;
+    if (!targetStatusId || activeTask.status_id === targetStatusId) return;
+
+    setTasks((prev) =>
+      prev.map((t) => (t.id === active.id ? { ...t, status_id: targetStatusId } : t)),
+    );
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     setActiveId(null);
     const { active, over } = event;
+    const originStatusId = dragStartStatusRef.current;
+    dragStartStatusRef.current = null;
+
     if (!over) return;
 
     const activeTask = tasks.find((t) => t.id === active.id);
     if (!activeTask) return;
 
-    // Check if dropped on a status column (for Kanban)
     const overStatus = statuses.find((s) => s.id === over.id);
-    if (overStatus) {
-      if (activeTask.status_id !== overStatus.id) {
-        try {
-          await supabase
-            .from('tasks')
-            .update({ status_id: overStatus.id })
-            .eq('id', String(active.id));
-          fetchTasks();
-        } catch (error) {
-          console.error('Error updating task status:', error);
-          fetchTasks(); // Revert on error
-        }
+    const overTask = tasks.find((t) => t.id === over.id);
+    const targetStatusId = overStatus?.id ?? overTask?.status_id ?? null;
+
+    if (targetStatusId && originStatusId !== targetStatusId) {
+      try {
+        const { error } = await supabase
+          .from('tasks')
+          .update({ status_id: targetStatusId })
+          .eq('id', String(active.id));
+        if (error) throw error;
+        await fetchTasks();
+      } catch (error) {
+        console.error('Error updating task status:', error);
+        fetchTasks();
       }
       return;
     }
 
-    // Handle reordering within same column/list
-    const overTask = tasks.find((t) => t.id === over.id);
     if (overTask && active.id !== over.id) {
       const oldIndex = tasks.findIndex((t) => t.id === active.id);
       const newIndex = tasks.findIndex((t) => t.id === over.id);
-
       const reorderedTasks = arrayMove(tasks, oldIndex, newIndex);
       setTasks(reorderedTasks);
 
-      // Update positions in database
       try {
         for (let i = 0; i < reorderedTasks.length; i++) {
-          await supabase
-            .from('tasks')
-            .update({ position: i })
-            .eq('id', reorderedTasks[i].id);
+          await supabase.from('tasks').update({ position: i }).eq('id', reorderedTasks[i].id);
         }
       } catch (error) {
         console.error('Error updating task positions:', error);
-        fetchTasks(); // Revert on error
+        fetchTasks();
       }
     }
   };

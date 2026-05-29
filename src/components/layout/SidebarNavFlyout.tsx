@@ -56,7 +56,7 @@ export function SidebarNavFlyout({
       >
         <div className="w-3 shrink-0" aria-hidden />
         <div className="min-w-[220px] rounded-2xl border border-white/10 bg-[#333333] p-3 shadow-xl">
-          <p className="mb-2 px-2 text-xs font-semibold text-white">{title}</p>
+          <p className="mb-2 px-2 text-[13px] font-semibold text-white">{title}</p>
           <nav className="space-y-1.5">
             {links.map((link) => (
               <Link

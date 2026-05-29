@@ -38,8 +38,8 @@ const SHELL_SIDEBAR_EXPANDED = 'w-[232px]';
 const SHELL_SIDEBAR_COLLAPSED = 'w-14';
 const SHELL_SIDEBAR_LEFT_EXPANDED = 'lg:left-[232px]';
 
-/** White wordmark for expanded dark shell only (not user-uploaded sidebar logo). */
-const SHELL_LOGO_FULL = '/lance-logo-white-shell.png';
+/** White wordmark + colour icon for expanded dark shell only (not user-uploaded sidebar logo). */
+const SHELL_LOGO_FULL = '/lance-logo-white-colour.png';
 
 function getPlanBadgeLabel(
   status: string | null | undefined,
@@ -179,7 +179,7 @@ export function AppLayout({
       return sidebarCollapsed ? (
         <Skeleton className="h-7 w-7 shrink-0 rounded-lg bg-white/20" />
       ) : (
-        <Skeleton className="h-5 w-24 shrink-0 rounded-md bg-white/20" />
+        <Skeleton className="h-5 w-[100px] shrink-0 rounded-md bg-white/20" />
       );
     }
 
@@ -204,8 +204,8 @@ export function AppLayout({
       <ShellImageWithSkeleton
         src={SHELL_LOGO_FULL}
         alt="Lance"
-        className="h-5 w-[85px] shrink-0"
-        skeletonClassName="h-5 w-[85px]"
+        className="h-5 w-[100px] shrink-0"
+        skeletonClassName="h-5 w-[100px]"
       />
     );
   };

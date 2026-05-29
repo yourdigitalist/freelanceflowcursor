@@ -24,7 +24,7 @@ const buttonVariants = cva(
         primary: "bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50",
         /** Default outline (design: plain btn / Cancel) */
         outline:
-          "border border-border bg-card text-foreground hover:bg-muted disabled:opacity-50",
+          "border border-foreground/20 bg-card text-foreground hover:bg-muted disabled:opacity-50",
         /** Subtle filled action for low emphasis toolbars */
         subtle: "bg-muted text-foreground hover:bg-muted/80 disabled:opacity-50",
         ghost: "text-foreground hover:bg-muted disabled:opacity-50",

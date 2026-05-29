@@ -1,9 +1,12 @@
 import { cn } from '@/lib/utils';
 
-/** Nav link styles for #333 shell only — does not affect page content. (text-xs = 12px, 2px below text-sm) */
+/** Nav link styles for #333 shell only — does not affect page content. */
+const shellNavText = 'text-[13px]';
+
 export const shellNavLink = (active: boolean, collapsed?: boolean) =>
   cn(
-    'group/nav flex w-full items-center gap-3 rounded-full text-xs font-medium transition-colors',
+    'group/nav flex w-full items-center gap-3 rounded-full font-medium transition-colors',
+    shellNavText,
     collapsed ? 'min-h-[2.25rem] justify-center px-0 py-2' : 'px-3 py-2',
     active
       ? 'bg-sidebar-accent !text-white'
@@ -18,7 +21,8 @@ export const shellNavIcon = (active: boolean) =>
 
 export const shellSubNavLink = (active: boolean) =>
   cn(
-    'block rounded-full px-3 py-1.5 text-xs transition-colors',
+    'block rounded-full px-3 py-1.5 transition-colors',
+    shellNavText,
     active
       ? 'bg-sidebar-accent font-medium !text-white'
       : 'text-white/75 hover:bg-sidebar-accent hover:!text-white',
@@ -26,7 +30,8 @@ export const shellSubNavLink = (active: boolean) =>
 
 export const shellFlyoutLink = (active: boolean) =>
   cn(
-    'block rounded-full px-3 py-1.5 text-xs transition-colors',
+    'block rounded-full px-3 py-1.5 transition-colors',
+    shellNavText,
     active
       ? 'bg-sidebar-accent font-medium !text-white'
       : 'text-white/75 hover:bg-sidebar-accent hover:!text-white',

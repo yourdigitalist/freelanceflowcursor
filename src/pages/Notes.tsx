@@ -39,6 +39,7 @@ import { formatLocaleDateTime } from '@/lib/datetime';
 import { EmojiPicker } from '@/components/ui/emoji-picker';
 import { FolderPlus } from '@/components/icons';
 import { cn } from '@/lib/utils';
+import { formatDistanceToNow } from 'date-fns';
 
 interface NoteFolder {
   id: string;
@@ -498,7 +499,7 @@ export default function Notes() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Notes</h1>
           </div>
-          <Button onClick={handleCreateQuickNote}>
+          <Button size="sm" onClick={handleCreateQuickNote}>
             <Plus className="mr-2 h-4 w-4" />
             New note
           </Button>
@@ -509,11 +510,20 @@ export default function Notes() {
         <aside className="w-80 border-r bg-muted/50 flex flex-col shrink-0 self-stretch">
           <div className="px-3 py-3 border-b">
             <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 shrink-0" onClick={() => { resetFolderForm(); setFolderDialogOpen(true); }} title="Create folder">
+              <Button
+                size="icon-sm"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => {
+                  resetFolderForm();
+                  setFolderDialogOpen(true);
+                }}
+                title="Create folder"
+              >
                 <FolderPlus className="h-4 w-4" />
               </Button>
               <Select value={folderFilter} onValueChange={setFolderFilter}>
-                <SelectTrigger className="h-8 text-xs w-[140px]">
+                <SelectTrigger className="h-9 w-[156px] text-sm">
                   <SelectValue placeholder="Folder" />
                 </SelectTrigger>
                 <SelectContent>
@@ -527,7 +537,7 @@ export default function Notes() {
               {folderFilter !== 'all' && folderFilter !== 'none' && (() => {
                 const folder = folders.find((f) => f.id === folderFilter);
                 return folder ? (
-                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Edit folder" onClick={() => handleEditFolder(folder)}>
+                  <Button type="button" variant="ghost" size="icon-sm" className="shrink-0" title="Edit folder" onClick={() => handleEditFolder(folder)}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
                 ) : null;
@@ -537,7 +547,7 @@ export default function Notes() {
                   value={tagFilter.length === 0 ? 'all' : tagFilter[0]}
                   onValueChange={(v) => setTagFilter(v === 'all' ? [] : [v])}
                 >
-                  <SelectTrigger className="h-8 text-xs w-[120px]">
+                  <SelectTrigger className="h-9 w-[132px] text-sm">
                     <SelectValue placeholder="Tag" />
                   </SelectTrigger>
                   <SelectContent>
@@ -549,7 +559,7 @@ export default function Notes() {
                 </Select>
               )}
               {(folderFilter !== 'all' || tagFilter.length > 0) && (
-                <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setFolderFilter('all'); setTagFilter([]); }}>
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setFolderFilter('all'); setTagFilter([]); }}>
                   Clear filters
                 </Button>
               )}
@@ -563,18 +573,20 @@ export default function Notes() {
                 <p className="text-sm text-muted-foreground p-2">{notes.length === 0 ? 'No notes yet' : 'No notes in this folder'}</p>
               ) : (
                 filteredNotes.map((note) => {
-                  const folder = note.folder_id ? folders.find((f) => f.id === note.folder_id) : null;
                   const excerpt = noteCardExcerpt(note);
+                  const relativeUpdated = note.updated_at
+                    ? formatDistanceToNow(new Date(note.updated_at), { addSuffix: true })
+                    : null;
                   return (
                     <div
                       key={note.id}
                       role="button"
                       tabIndex={0}
                       className={cn(
-                        'group rounded-lg border px-3 py-2.5 text-left cursor-pointer transition-colors',
+                        'group cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-colors',
                         selectedId === note.id
-                          ? 'border-primary/40 bg-white shadow-md ring-1 ring-primary/15'
-                          : 'border-border/80 bg-white hover:bg-muted/60 hover:border-muted-foreground/25 shadow-sm'
+                          ? 'border-primary/30 bg-white shadow-sm ring-1 ring-primary/10'
+                          : 'border-border/80 bg-white hover:border-muted-foreground/25 hover:bg-muted/40'
                       )}
                       onClick={() => setSelectedId(note.id)}
                       onKeyDown={(e) => e.key === 'Enter' && setSelectedId(note.id)}
@@ -583,31 +595,27 @@ export default function Notes() {
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-sm truncate">{noteCardTitle(note)}</p>
                           {excerpt ? (
-                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 min-h-[2rem]">{excerpt}</p>
+                            <p className="mt-0.5 line-clamp-2 min-h-[2rem] text-xs text-muted-foreground">{excerpt}</p>
                           ) : (
-                            <p className="text-xs text-muted-foreground/50 mt-0.5 line-clamp-2 min-h-[2rem] italic">No preview</p>
+                            <p className="mt-0.5 line-clamp-2 min-h-[2rem] text-xs italic text-muted-foreground/50">No preview</p>
                           )}
-                          <div className="flex flex-wrap items-center gap-1 mt-1.5">
-                            {folder && (
-                              <span className="inline-flex items-center text-[10px] px-1.5 py-0 rounded bg-muted text-muted-foreground">
-                                {folder.emoji || '📁'} {folder.name}
-                              </span>
-                            )}
-                            {note.tags?.slice(0, 2).map((tag) => (
-                              <span key={tag} className="text-[10px] px-1.5 py-0 rounded bg-muted text-muted-foreground">
-                                {tag}
-                              </span>
-                            ))}
-                            {note.tags?.length > 2 ? (
-                              <span className="text-[10px] text-muted-foreground">+{note.tags.length - 2}</span>
+                          <div className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                            {relativeUpdated ? (
+                              <span className="tabular-nums">{relativeUpdated}</span>
+                            ) : null}
+                            {note.tags?.length ? (
+                              <span>{note.tags.length} tag{note.tags.length === 1 ? '' : 's'}</span>
                             ) : null}
                           </div>
                         </div>
                         <Button
                           type="button"
                           variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          size="icon-sm"
+                          className={cn(
+                            'shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive',
+                            selectedId === note.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+                          )}
                           onPointerDown={(e) => e.stopPropagation()}
                           onClick={(e) => {
                             e.preventDefault();
@@ -632,11 +640,10 @@ export default function Notes() {
           <div className="flex flex-1 flex-col min-h-0 max-w-3xl w-full mx-auto px-4 pb-5 lg:px-8 lg:pb-8">
             {selectedNote ? (
               <div className="flex flex-1 flex-col min-h-0">
-                {/* Saving indicator + Folder + Download as doc */}
-                <div className="h-9 mb-1 flex shrink-0 items-center justify-between gap-2 flex-wrap">
+                <div className="mb-2 flex h-10 shrink-0 items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     {saving && (
-                      <p className="text-xs text-muted-foreground">Saving…</p>
+                      <p className="text-sm text-muted-foreground">Saving…</p>
                     )}
                     <Select
                       value={folderIdInNote || 'none'}
@@ -646,7 +653,7 @@ export default function Notes() {
                         if (selectedId) patchNoteInList(selectedId, { folder_id: next });
                       }}
                     >
-                      <SelectTrigger className="w-[180px] h-8 text-xs">
+                      <SelectTrigger className="h-9 w-[190px] text-sm">
                         <SelectValue placeholder="Folder" />
                       </SelectTrigger>
                       <SelectContent>

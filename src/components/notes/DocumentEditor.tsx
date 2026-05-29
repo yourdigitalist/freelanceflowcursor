@@ -205,7 +205,7 @@ function ToolbarButton({ Icon, onClick, title }: { Icon: LucideIcon; onClick: ()
       type="button"
       onClick={onClick}
       title={title}
-      className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
     >
       <Icon className="h-4 w-4" strokeWidth={2} />
     </button>
@@ -645,10 +645,10 @@ export function DocumentEditor({
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             placeholder="Untitled"
-            className="flex-1 min-w-0 text-3xl font-semibold bg-transparent border-none outline-none placeholder:text-muted-foreground py-0 leading-tight"
+            className="flex-1 min-w-0 bg-transparent py-0 text-2xl font-semibold leading-tight placeholder:text-muted-foreground focus:outline-none"
           />
           {formattedDate && (
-            <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 pt-2 tabular-nums">
+            <span className="shrink-0 whitespace-nowrap pt-1.5 text-sm tabular-nums text-muted-foreground">
               {formattedDate}
             </span>
           )}
@@ -700,12 +700,12 @@ export function DocumentEditor({
           )}
           {suggestedTags
             .filter((t) => !tags.includes(t))
-            .slice(0, 6)
+            .slice(0, 3)
             .map((t) => (
               <button
                 key={t}
                 type="button"
-                className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground hover:text-foreground"
+                className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
                 onClick={() => onTagsChange([...tags, t])}
               >
                 {formatTag(t)}
@@ -714,7 +714,7 @@ export function DocumentEditor({
         </div>
 
         {(clientName || projectName) && (
-          <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-3 text-sm text-muted-foreground">
             {clientName && <span>Client: {clientName}</span>}
             {clientName && projectName && <span aria-hidden>·</span>}
             {projectName && <span>Project: {projectName}</span>}
@@ -730,7 +730,7 @@ export function DocumentEditor({
         >
           {/* Custom toolbar: mousedown keeps editor focus so selection is preserved for Link/Image/Code/Clear */}
           <div
-            className="ql-toolbar ql-snow flex flex-wrap items-center gap-0.5 p-2 border-b border-muted rounded-t-lg bg-muted/30"
+            className="ql-toolbar ql-snow flex flex-wrap items-center gap-0.5 rounded-t-lg border-b border-muted bg-muted/30 p-2"
             onMouseDown={(e) => {
               saveSelection();
               if ((e.target as HTMLElement).closest?.('select')) return;
@@ -738,7 +738,7 @@ export function DocumentEditor({
             }}
           >
             <select
-              className="ql-header h-8 min-w-[6rem] rounded border border-transparent bg-transparent text-sm px-2 text-muted-foreground hover:text-foreground"
+              className="ql-header h-8 min-w-[6rem] rounded-md border border-transparent bg-transparent px-2 text-sm text-muted-foreground hover:text-foreground"
               defaultValue=""
               onChange={(e) => handleHeaderChange(e.target.value)}
             >
