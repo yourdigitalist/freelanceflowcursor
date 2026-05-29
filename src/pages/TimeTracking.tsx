@@ -8,7 +8,7 @@ import { notifyStartGuideRefresh } from '@/components/layout/startGuideUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { TableStatusBadge } from '@/components/ui/table-status-badge';
 import {
   Dialog,
   DialogContent,
@@ -29,7 +29,9 @@ import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Play, Trash2, Filter, Download, Upload, List, Check } from '@/components/icons';
+
 import { SlotIcon } from '@/contexts/IconSlotContext';
+import { PageSummaryBar, PageSummaryStat } from '@/components/ui/page-summary-stats';
 import {
   format,
   differenceInMinutes,
@@ -380,7 +382,7 @@ export default function TimeTracking() {
     try {
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name, archived_at')
+        .select('id, name, first_name, last_name, avatar_color, logo_url, archived_at')
         .order('name');
 
       if (error) throw error;
@@ -502,15 +504,15 @@ export default function TimeTracking() {
 
   const getStatusBadge = (entry: TimeEntry) => {
     if (!entry.billable) {
-      return <Badge variant="secondary">Not Billable</Badge>;
+      return <TableStatusBadge status="inactive" label="Not billable" />;
     }
     switch (entry.billing_status) {
       case 'paid':
-        return <Badge className="bg-success/10 text-success">Paid</Badge>;
+        return <TableStatusBadge status="paid" />;
       case 'billed':
-        return <Badge className="bg-primary/10 text-primary">Billed</Badge>;
+        return <TableStatusBadge status="billed" label="Billed" />;
       default:
-        return <Badge className="bg-warning/10 text-warning">Billable</Badge>;
+        return <TableStatusBadge status="unbilled" label="Unbilled" />;
     }
   };
 
@@ -1766,48 +1768,26 @@ export default function TimeTracking() {
           </div>
         ) : (
           <div className="space-y-6">
-        {/* Stats */}
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-primary/10">
-                  <SlotIcon slot="stat_hours" className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Hours</p>
-                  <p className="text-2xl font-bold">{formatDuration(historyStats.totalSeconds, true)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-success/10">
-                  <SlotIcon slot="stat_money" className="h-5 w-5 text-success" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Billable Hours</p>
-                  <p className="text-2xl font-bold">{formatDuration(historyStats.billableSeconds, true)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-primary/10">
-                  <SlotIcon slot="task_calendar" className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Entries</p>
-                  <p className="text-2xl font-bold">{historyStats.count}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <PageSummaryBar columns={3}>
+          <PageSummaryStat
+            label="Total hours"
+            value={formatDuration(historyStats.totalSeconds, true)}
+            subtitle={`${historyStats.count} entr${historyStats.count === 1 ? 'y' : 'ies'}`}
+            hideDot
+          />
+          <PageSummaryStat
+            label="Billable hours"
+            value={formatDuration(historyStats.billableSeconds, true)}
+            subtitle="Billable time logged"
+            status="paid"
+          />
+          <PageSummaryStat
+            label="Entries"
+            value={String(historyStats.count)}
+            subtitle="Time logs in range"
+            hideDot
+          />
+        </PageSummaryBar>
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           {renderHistoryDateRangeBar()}
@@ -1815,7 +1795,7 @@ export default function TimeTracking() {
         </div>
 
         <Card className="border-0 shadow-sm">
-          <CardContent className="p-0">
+          <CardContent className="flex flex-col p-0">
             {selectionMode && filteredEntries.length > 0 && (
               <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-b">
                 <Button variant="ghost" size="sm" onClick={selectAllFiltered}>

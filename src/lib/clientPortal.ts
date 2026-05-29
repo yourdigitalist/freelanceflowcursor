@@ -1,3 +1,5 @@
+import { emptyDisplayText } from "@/lib/emptyDisplay";
+
 export type PortalTimeVisibility = "billable" | "non_billable" | "both";
 
 export type ClientPortalSections = {
@@ -79,7 +81,9 @@ export function formatPortalMoney(
   clientCurrency?: string | null,
   profileCurrency?: string | null,
 ): string {
-  if (amount == null || Number.isNaN(Number(amount))) return "—";
+  if (amount == null || Number.isNaN(Number(amount))) {
+    return emptyDisplayText({ variant: "table", dash: true });
+  }
   const code = resolveMoneyCurrency(clientCurrency, profileCurrency);
   try {
     return new Intl.NumberFormat(undefined, {

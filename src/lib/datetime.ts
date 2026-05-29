@@ -1,4 +1,5 @@
 import { format, parseISO } from "date-fns";
+import { emptyDisplayText } from "@/lib/emptyDisplay";
 
 export const DEFAULT_DATE_FORMAT = "DD/MM/YYYY";
 export const DEFAULT_TIME_FORMAT: "12h" | "24h" = "12h";
@@ -20,7 +21,7 @@ export const formatLocaleDate = (
   dateFormat: string = DEFAULT_DATE_FORMAT,
 ): string => {
   const d = toDate(value);
-  if (!d) return "—";
+  if (!d) return emptyDisplayText({ variant: "table", dash: true });
   return format(d, toDateFnsPattern(dateFormat));
 };
 
@@ -29,7 +30,7 @@ export const formatLocaleTime = (
   timeFormat: string = DEFAULT_TIME_FORMAT,
 ): string => {
   const d = toDate(value);
-  if (!d) return "—";
+  if (!d) return emptyDisplayText({ variant: "table", dash: true });
   return format(d, timeFormat === "24h" ? "HH:mm" : "h:mm a");
 };
 
@@ -39,6 +40,6 @@ export const formatLocaleDateTime = (
   timeFormat: string = DEFAULT_TIME_FORMAT,
 ): string => {
   const d = toDate(value);
-  if (!d) return "—";
+  if (!d) return emptyDisplayText({ variant: "table", dash: true });
   return `${format(d, toDateFnsPattern(dateFormat))} ${format(d, timeFormat === "24h" ? "HH:mm" : "h:mm a")}`;
 };

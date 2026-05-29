@@ -57,6 +57,7 @@ import { formatLocaleDate, formatLocaleDateTime } from '@/lib/datetime';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { format, parseISO } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
+import { TableStatusBadge } from '@/components/ui/table-status-badge';
 
 interface ProjectTimeEntry {
   id: string;
@@ -358,14 +359,14 @@ export default function ProjectDetail() {
     entry.total_duration_seconds != null ? entry.total_duration_seconds : (entry.duration_minutes || 0) * 60;
 
   const getProjectEntryStatusBadge = (entry: TimeEntriesTableEntry) => {
-    if (!entry.billable) return <Badge variant="secondary">Not Billable</Badge>;
+    if (!entry.billable) return <TableStatusBadge status="inactive" label="Not billable" />;
     switch (entry.billing_status) {
       case 'paid':
-        return <Badge className="bg-success/10 text-success">Paid</Badge>;
+        return <TableStatusBadge status="paid" />;
       case 'billed':
-        return <Badge className="bg-primary/10 text-primary">Billed</Badge>;
+        return <TableStatusBadge status="billed" label="Billed" />;
       default:
-        return <Badge className="bg-warning/10 text-warning">Billable</Badge>;
+        return <TableStatusBadge status="unbilled" label="Unbilled" />;
     }
   };
 

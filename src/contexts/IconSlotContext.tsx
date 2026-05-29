@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Megaphone,
   Mail,
+  Send,
   Palette,
   LayoutGrid,
   User,
@@ -51,6 +52,7 @@ import {
 } from '@/components/icons';
 import { supabase } from '@/integrations/supabase/client';
 import type { IconSlotKey } from '@/lib/iconSlots';
+import { cn } from '@/lib/utils';
 
 type IconComponent = React.ComponentType<{ className?: string }>;
 
@@ -141,7 +143,7 @@ const DEFAULT_ICONS: Record<IconSlotKey, IconComponent> = {
   action_preview: Eye,
   action_more: MoreVertical,
   action_print: Printer,
-  action_send: Mail,
+  action_send: Send,
   action_copy_link: ExternalLink,
   action_delete: Trash2,
   notes_add_icon: Smile,
@@ -167,7 +169,16 @@ const IconSlotContext = createContext<ContextValue | null>(null);
 const ICON_SLOTS_QUERY_KEY = ['app_icon_slots'] as const;
 const ICON_UPLOADS_QUERY_KEY = ['app_icon_uploads'] as const;
 const BUCKET = 'app-icons';
-const FORCE_DEFAULT_ACTION_SLOTS = new Set<IconSlotKey>(['action_edit', 'action_delete']);
+const FORCE_DEFAULT_ACTION_SLOTS = new Set<IconSlotKey>([
+  'action_edit',
+  'action_delete',
+  'action_duplicate',
+  'action_send',
+  'action_preview',
+  'action_copy_link',
+  'action_more',
+  'action_print',
+]);
 
 /** Replace only actual colors with currentColor; keep fill="none" and stroke="none" so line icons stay outline */
 function normalizeSvgForCurrentColor(innerSvg: string): string {
@@ -344,5 +355,13 @@ export function SlotIcon({
     return <IconSkeleton className={className} />;
   }
   const Icon = getIcon(slot) ?? DEFAULT_ICONS[slot] ?? HelpCircle;
-  return <Icon className={className} />;
+  const isAction = slot.startsWith('action_');
+  return (
+    <Icon
+      className={cn(
+        className,
+        isAction && 'h-3.5 w-3.5 shrink-0 text-muted-foreground',
+      )}
+    />
+  );
 }

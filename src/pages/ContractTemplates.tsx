@@ -1,16 +1,19 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { EmptyValue } from "@/components/ui/empty-value";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTableFrame, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Plus, Star, Trash2, Copy } from "@/components/icons";
 import { DEFAULT_CONTRACT_TEMPLATE_CONTENT } from "@/lib/contractTemplate";
+import { usePagination } from "@/hooks/usePagination";
+import { TablePagination } from "@/components/ui/table-pagination";
 
 type ContractTemplateRow = {
   id: string;
@@ -27,6 +30,7 @@ export default function ContractTemplates() {
   const [templates, setTemplates] = useState<ContractTemplateRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const templatesPagination = usePagination(templates);
 
   const load = async () => {
     if (!user) return;
@@ -111,7 +115,7 @@ export default function ContractTemplates() {
         </div>
 
         <Card className="border-0 shadow-sm">
-          <CardContent className="p-0">
+          <CardContent className="flex flex-col p-0">
             {loading ? (
               <div className="py-10 text-center text-sm text-muted-foreground">Loading templates...</div>
             ) : templates.length === 0 ? (
@@ -120,9 +124,10 @@ export default function ContractTemplates() {
                 <p className="text-sm text-muted-foreground">Create your first reusable template to speed up contract creation.</p>
               </div>
             ) : (
+              <DataTableFrame>
               <Table>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="hover:bg-transparent">
                     <TableHead>Name</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead>Default</TableHead>
@@ -130,11 +135,22 @@ export default function ContractTemplates() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {templates.map((row) => (
+                  {templatesPagination.paginatedItems.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell className="font-medium">{row.name}</TableCell>
-                      <TableCell className="max-w-[300px] truncate">{row.description || "—"}</TableCell>
-                      <TableCell>{row.is_default ? <Badge variant="secondary"><Star className="mr-1 h-3 w-3" />Default</Badge> : "—"}</TableCell>
+                      <TableCell className="font-semibold">{row.name}</TableCell>
+                      <TableCell className="max-w-[300px] truncate">
+                        {row.description ? row.description : <EmptyValue variant="table" field="description" />}
+                      </TableCell>
+                      <TableCell>
+                        {row.is_default ? (
+                          <Badge variant="secondary">
+                            <Star className="mr-1 h-3 w-3" />
+                            Default
+                          </Badge>
+                        ) : (
+                          <EmptyValue variant="table" />
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="sm" asChild><Link to={`/contract-templates/${row.id}`}>Edit</Link></Button>
@@ -147,6 +163,18 @@ export default function ContractTemplates() {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                total={templatesPagination.total}
+                page={templatesPagination.page}
+                pageSize={templatesPagination.pageSize}
+                from={templatesPagination.from}
+                to={templatesPagination.to}
+                pageSizeOptions={templatesPagination.pageSizeOptions}
+                showPageSizeSelect={templatesPagination.showPageSizeSelect}
+                onPageChange={templatesPagination.setPage}
+                onPageSizeChange={templatesPagination.setPageSize}
+              />
+              </DataTableFrame>
             )}
           </CardContent>
         </Card>

@@ -5,9 +5,9 @@ import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { ViewToggle, ViewToggleButton } from '@/components/ui/view-toggle';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { PageSearchInput } from '@/components/ui/page-search-input';
+
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -24,8 +24,8 @@ import {
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, MoreVertical, Trash2, LayoutGrid, List, Download, Upload, Calendar, Clock, Filter } from '@/components/icons';
-import { SlotIcon } from '@/contexts/IconSlotContext';
+import { Plus, LayoutGrid, List, Download, Upload, Filter } from '@/components/icons';
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,8 +35,13 @@ import {
 import { format } from 'date-fns';
 import { downloadCsv, getProjectsTemplateRows, PROJECTS_CSV_HEADERS, parseCsv } from '@/lib/csv';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
-import { formatLocaleDate } from '@/lib/datetime';
+
 import { ProjectFormDialog } from '@/components/projects/ProjectFormDialog';
+import { ProjectListCard, type ProjectListCardData } from '@/components/projects/ProjectListCard';
+import { ProjectsTable } from '@/components/projects/ProjectsTable';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { usePagination } from '@/hooks/usePagination';
+import { useProfileCurrency } from '@/hooks/useProfileCurrency';
 
 interface Client {
   id: string;
@@ -45,39 +50,9 @@ interface Client {
   company?: string | null;
 }
 
-interface Project {
-  id: string;
-  name: string;
+type Project = ProjectListCardData & {
   description: string | null;
-  status: string;
-  budget: number | null;
-  hourly_rate: number | null;
-  start_date: string | null;
-  due_date: string | null;
-  client_id: string | null;
-  clients: Client | null;
   created_at: string;
-  icon_emoji: string | null;
-  icon_color: string | null;
-  hours?: number;
-  task_count?: number;
-}
-
-const getProjectDeleteErrorMessage = (error: unknown) => {
-  const rawMessage =
-    typeof error === 'object' && error !== null && 'message' in error
-      ? String((error as { message?: unknown }).message ?? '')
-      : '';
-  const normalizedMessage = rawMessage.toLowerCase();
-
-  if (
-    normalizedMessage.includes('contract is read-only after it has been sent') ||
-    (normalizedMessage.includes('contract') && normalizedMessage.includes('read-only'))
-  ) {
-    return 'This project is linked to a sent contract. Archive the contract first, then delete the project.';
-  }
-
-  return rawMessage || 'Could not delete project. Please try again.';
 };
 
 const PROJECT_STATUSES: Array<{ value: string; label: string }> = [
@@ -105,6 +80,7 @@ export default function Projects() {
   const [importingProjects, setImportingProjects] = useState(false);
   const projectsCsvInputRef = useRef<HTMLInputElement>(null);
   const { dateFormat } = useLocalePreferences();
+  const { formatCurrency: formatMoney } = useProfileCurrency();
 
   useEffect(() => {
     if (user) {
@@ -141,35 +117,54 @@ export default function Projects() {
         .from('projects')
         .select(`
           *,
-          clients(id, name)
+          clients(id, name, first_name, last_name, avatar_color, logo_url)
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      // Get task counts and hours for each project
+      const toHours = (e: { duration_minutes?: number | null; total_duration_seconds?: number | null }) =>
+        e.total_duration_seconds != null ? e.total_duration_seconds / 3600 : (e.duration_minutes || 0) / 60;
+
       const projectsWithData = await Promise.all(
         (data || []).map(async (project) => {
-          const { count } = await supabase
-            .from('tasks')
-            .select('*', { count: 'exact', head: true })
-            .eq('project_id', project.id);
+          const [{ data: taskRows }, { data: timeData }] = await Promise.all([
+            supabase
+              .from('tasks')
+              .select('id, project_statuses!status_id(is_done_status)')
+              .eq('project_id', project.id),
+            supabase
+              .from('time_entries')
+              .select('duration_minutes, total_duration_seconds')
+              .eq('project_id', project.id),
+          ]);
 
-          const { data: timeData } = await supabase
-            .from('time_entries')
-            .select('duration_minutes, total_duration_seconds')
-            .eq('project_id', project.id);
+          const task_count = taskRows?.length || 0;
+          const completed_tasks = (taskRows || []).filter(
+            (t) => (t.project_statuses as { is_done_status?: boolean } | null)?.is_done_status === true,
+          ).length;
+          const open_task_count = task_count - completed_tasks;
 
-          const toHours = (e: { duration_minutes?: number | null; total_duration_seconds?: number | null }) =>
-            e.total_duration_seconds != null ? e.total_duration_seconds / 3600 : (e.duration_minutes || 0) / 60;
           const hours = timeData?.reduce((sum, entry) => sum + toHours(entry), 0) || 0;
+          const client = project.clients as ProjectListCardData['clients'];
 
           return {
             ...project,
-            task_count: count || 0,
+            clients: client
+              ? {
+                  name: client.name,
+                  first_name: client.first_name,
+                  last_name: client.last_name,
+                  avatar_color: client.avatar_color,
+                  logo_url: client.logo_url,
+                }
+              : null,
+            task_count,
+            completed_tasks,
+            open_task_count,
             hours,
-          };
-        })
+          } satisfies Project;
+        }),
       );
 
       setProjects(projectsWithData);
@@ -195,26 +190,6 @@ export default function Projects() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this project?')) return;
-    
-    try {
-      const { error } = await supabase
-        .from('projects')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
-      toast({ title: 'Project deleted successfully' });
-      fetchProjects();
-    } catch (error: any) {
-      toast({
-        title: 'Error deleting project',
-        description: getProjectDeleteErrorMessage(error),
-        variant: 'destructive',
-      });
-    }
-  };
-
   const filteredProjects = projects.filter((project) => {
     const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       project.clients?.name?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -222,30 +197,7 @@ export default function Projects() {
     return matchesSearch && matchesStatus;
   });
   const activeFilterCount = statusFilter !== 'all' ? 1 : 0;
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'bg-success/10 text-success border-success/20';
-      case 'completed':
-        return 'bg-primary/10 text-primary border-primary/20';
-      case 'on_hold':
-        return 'bg-warning/10 text-warning border-warning/20';
-      case 'cancelled':
-        return 'bg-destructive/10 text-destructive border-destructive/20';
-      default:
-        return 'bg-muted text-muted-foreground';
-    }
-  };
-
-  const formatStatus = (status: string) => {
-    return status.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
-  };
-
-  const openEditDialog = (project: Project) => {
-    setEditingProject(project);
-    setIsDialogOpen(true);
-  };
+  const projectsPagination = usePagination(filteredProjects);
 
   const downloadProjectsTemplate = () => {
     downloadCsv('projects_template.csv', getProjectsTemplateRows());
@@ -316,8 +268,6 @@ export default function Projects() {
           start_date: startDate ? new Date(startDate).toISOString().slice(0, 10) : null,
           due_date: dueDate ? new Date(dueDate).toISOString().slice(0, 10) : null,
           client_id: clientId,
-          icon_emoji: '📁',
-          icon_color: '#9B63E9',
           user_id: user.id,
         };
         const { error } = await supabase.from('projects').insert(projectData);
@@ -449,15 +399,11 @@ export default function Projects() {
 
         {/* Search + View + Filters */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search projects..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-card"
-            />
-          </div>
+          <PageSearchInput
+            placeholder="Search projects..."
+            value={searchQuery}
+            onChange={setSearchQuery}
+          />
           <div className="flex items-center gap-2">
             <ViewToggle>
               <ViewToggleButton

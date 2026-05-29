@@ -15,7 +15,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useIconSlots } from '@/contexts/IconSlotContext';
 import { ICON_SLOT_GROUPS } from '@/lib/iconSlots';
-import { Loader2, Search } from '@/components/icons';
+import { Loader2 } from '@/components/icons';
+import { PageSearchInput } from '@/components/ui/page-search-input';
 import type { IconSlotKey } from '@/lib/iconSlots';
 import type { SlotAssignmentValue } from '@/contexts/IconSlotContext';
 import { listAllIconPaths, getAppIconPublicUrl, displayNameForIconPath } from '@/lib/appIcons';
@@ -151,15 +152,12 @@ export default function AdminIcons() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 flex-1 min-h-0">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search icons by name…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+            <PageSearchInput
+              placeholder="Search icons by name…"
+              value={search}
+              onChange={setSearch}
+              wrapperClassName="max-w-none"
+            />
             <div className="flex-1 overflow-auto rounded-md border bg-muted/30 p-4">
               {loadingPaths ? (
                 <div className="flex items-center justify-center py-12">

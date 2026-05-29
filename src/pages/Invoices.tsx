@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -6,8 +6,10 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { notifyStartGuideRefresh } from '@/components/layout/startGuideUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PageSearchInput } from '@/components/ui/page-search-input';
+import { MenuDotsTrigger } from '@/components/ui/menu-dots-trigger';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+
 import {
   Dialog,
   DialogContent,
@@ -26,10 +28,10 @@ import {
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, MoreVertical, Trash2, Send, Download, Upload, RotateCcw, Filter } from '@/components/icons';
+import { Plus, Trash2, Download, Upload, RotateCcw, Filter } from '@/components/icons';
 import { reopenPaidInvoice } from '@/lib/invoiceStatus';
 import { formatLocaleDate } from '@/lib/datetime';
-import { formatStatusLabel, getStatusBadgeClass } from '@/lib/statusDisplay';
+
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import {
   DropdownMenu,
@@ -39,6 +41,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, parseISO, addDays } from 'date-fns';
 import {
+  DataTableFrame,
   Table,
   TableBody,
   TableCell,
@@ -46,6 +49,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { TableClientCell } from '@/components/ui/table-client-cell';
+import { TableStatusBadge } from '@/components/ui/table-status-badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from '@/components/icons';
 import {
@@ -58,6 +63,9 @@ import { formatCurrency } from '@/lib/locale-data';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { ClientFormDialog } from '@/components/clients/ClientFormDialog';
 import { ProjectFormDialog } from '@/components/projects/ProjectFormDialog';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { PageSummaryBar, PageSummaryStat } from '@/components/ui/page-summary-stats';
 
 interface Client {
   id: string;
@@ -92,7 +100,15 @@ interface Invoice {
   total: number;
   client_id: string | null;
   project_id: string | null;
-  clients: { name: string; company?: string | null; currency?: string | null } | null;
+  clients: {
+    name: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    avatar_color?: string | null;
+    logo_url?: string | null;
+    company?: string | null;
+    currency?: string | null;
+  } | null;
   projects: { name: string } | null;
   notes?: string | null;
   created_at: string;
@@ -215,7 +231,7 @@ export default function Invoices() {
         .from('invoices')
         .select(`
           *,
-          clients(name, company, currency),
+          clients(name, first_name, last_name, avatar_color, logo_url, company, currency),
           projects(name)
         `)
         .order('created_at', { ascending: false });
@@ -459,6 +475,79 @@ export default function Invoices() {
     (filterProjectId !== 'all' ? 1 : 0) +
     (filterStatus !== 'all' ? 1 : 0);
 
+  const invoicesPagination = usePagination(filteredInvoices);
+
+  const duplicateInvoice = async (invoice: Invoice) => {
+    if (!user) return;
+    try {
+      const invoiceNumber = await getNextInvoiceNumber();
+      const { data: source, error: fetchError } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('id', invoice.id)
+        .single();
+      if (fetchError || !source) throw fetchError ?? new Error('Invoice not found');
+
+      const { data: items } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', invoice.id)
+        .order('created_at');
+
+      const { data: copy, error: insertError } = await supabase
+        .from('invoices')
+        .insert({
+          user_id: user.id,
+          client_id: source.client_id,
+          project_id: source.project_id,
+          invoice_number: invoiceNumber,
+          issue_date: source.issue_date,
+          due_date: source.due_date,
+          status: 'draft',
+          notes: source.notes,
+          invoice_footer: source.invoice_footer,
+          bank_details: source.bank_details,
+          subtotal: source.subtotal,
+          tax_rate: source.tax_rate,
+          tax_amount: source.tax_amount,
+          total: source.total,
+          paid_date: null,
+        })
+        .select('id')
+        .single();
+
+      if (insertError || !copy) throw insertError ?? new Error('Could not duplicate');
+
+      if (items?.length) {
+        const { error: itemsError } = await supabase.from('invoice_items').insert(
+          items.map((row) => ({
+            invoice_id: copy.id,
+            description: row.description,
+            quantity: row.quantity,
+            unit_price: row.unit_price,
+            amount: row.amount,
+            line_date: row.line_date,
+            line_description: row.line_description,
+          })),
+        );
+        if (itemsError) {
+          toast({
+            title: 'Invoice duplicated without line items',
+            description: itemsError.message,
+            variant: 'destructive',
+          });
+        }
+      }
+
+      toast({ title: 'Invoice duplicated' });
+      fetchInvoices();
+      navigate(`/invoices/${copy.id}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Could not duplicate invoice';
+      toast({ title: 'Could not duplicate', description: message, variant: 'destructive' });
+    }
+  };
+
   const handleDownloadTemplate = () => {
     downloadCsv('invoices_template.csv', getInvoicesTemplateRows());
     toast({ title: 'Template downloaded' });
@@ -617,12 +706,27 @@ export default function Invoices() {
     }
   };
 
-  const stats = {
-    total: filteredInvoices.reduce((sum, i) => sum + Number(i.total), 0),
-    paid: filteredInvoices.filter((i) => i.status === 'paid').reduce((sum, i) => sum + Number(i.total), 0),
-    pending: filteredInvoices.filter((i) => ['sent', 'draft'].includes(i.status)).reduce((sum, i) => sum + Number(i.total), 0),
-    overdue: filteredInvoices.filter((i) => i.status === 'overdue').reduce((sum, i) => sum + Number(i.total), 0),
-  };
+  const invoiceSummary = useMemo(() => {
+    const totalAmount = filteredInvoices.reduce((sum, i) => sum + Number(i.total), 0);
+    const paidInvoices = filteredInvoices.filter((i) => i.status === 'paid');
+    const pendingInvoices = filteredInvoices.filter((i) => ['sent', 'draft'].includes(i.status));
+    const overdueInvoices = filteredInvoices.filter((i) => i.status === 'overdue');
+    const sentCount = filteredInvoices.filter((i) => i.status === 'sent').length;
+    const paidAmount = paidInvoices.reduce((sum, i) => sum + Number(i.total), 0);
+    const pendingAmount = pendingInvoices.reduce((sum, i) => sum + Number(i.total), 0);
+    const overdueAmount = overdueInvoices.reduce((sum, i) => sum + Number(i.total), 0);
+    const count = filteredInvoices.length;
+    return {
+      totalAmount,
+      paidAmount,
+      pendingAmount,
+      overdueAmount,
+      count,
+      sentCount,
+      overdueCount: overdueInvoices.length,
+      collectedPct: totalAmount > 0 ? Math.round((paidAmount / totalAmount) * 100) : 0,
+    };
+  }, [filteredInvoices]);
 
   return (
     <AppLayout>
@@ -882,73 +986,40 @@ export default function Invoices() {
           </DialogContent>
         </Dialog>
 
-        {/* Stats */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-primary/10">
-                  <SlotIcon slot="invoice_stat_total" className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Invoiced</p>
-                  <p className="text-2xl font-bold">{fmt(stats.total)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-success/10">
-                  <SlotIcon slot="invoice_stat_paid" className="h-5 w-5 text-success" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Paid</p>
-                  <p className="text-2xl font-bold">{fmt(stats.paid)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-warning/10">
-                  <SlotIcon slot="invoice_stat_pending" className="h-5 w-5 text-warning" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Pending</p>
-                  <p className="text-2xl font-bold">{fmt(stats.pending)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-destructive/10">
-                  <SlotIcon slot="invoice_stat_overdue" className="h-5 w-5 text-destructive" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Overdue</p>
-                  <p className="text-2xl font-bold">{fmt(stats.overdue)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <PageSummaryBar columns={4}>
+          <PageSummaryStat
+            label="Total invoiced"
+            value={fmt(invoiceSummary.totalAmount)}
+            subtitle={`${invoiceSummary.count} invoice${invoiceSummary.count === 1 ? '' : 's'}`}
+            hideDot
+          />
+          <PageSummaryStat
+            label="Paid"
+            value={fmt(invoiceSummary.paidAmount)}
+            subtitle={`${invoiceSummary.collectedPct}% collected`}
+            status="paid"
+          />
+          <PageSummaryStat
+            label="Pending"
+            value={fmt(invoiceSummary.pendingAmount)}
+            subtitle={`${invoiceSummary.sentCount} sent`}
+            dotClassName="bg-amber-500"
+          />
+          <PageSummaryStat
+            label="Overdue"
+            value={fmt(invoiceSummary.overdueAmount)}
+            subtitle={`${invoiceSummary.overdueCount} overdue`}
+            status="rejected"
+          />
+        </PageSummaryBar>
 
         {/* Search + Filters */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search invoices..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-card"
-            />
-          </div>
+          <PageSearchInput
+            placeholder="Search invoices..."
+            value={searchQuery}
+            onChange={setSearchQuery}
+          />
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="relative h-8 w-8 p-0 ml-auto" aria-label="Filters">
@@ -1039,7 +1110,7 @@ export default function Invoices() {
 
         {/* Invoices Table */}
         <Card className="border-0 shadow-sm">
-          <CardContent className="p-0">
+          <CardContent className="flex flex-col p-0">
             {filteredInvoices.length === 0 ? (
               <div className="text-center py-12">
                 <h3 className="text-lg font-semibold mb-1">No invoices yet</h3>
@@ -1052,60 +1123,64 @@ export default function Invoices() {
                 </Button>
               </div>
             ) : (
+              <DataTableFrame>
               <Table>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="hover:bg-transparent">
                     <TableHead>Invoice</TableHead>
                     <TableHead>Client</TableHead>
-                    <TableHead>Issue Date</TableHead>
-                    <TableHead>Due Date</TableHead>
-                    <TableHead>Amount</TableHead>
+                    <TableHead>Issued</TableHead>
+                    <TableHead>Due</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-10"></TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredInvoices.map((invoice) => (
+                  {invoicesPagination.paginatedItems.map((invoice) => (
                     <TableRow
                       key={invoice.id}
                       className="cursor-pointer"
                       onClick={() => navigate(`/invoices/${invoice.id}`)}
                     >
-                      <TableCell className="font-medium">
+                      <TableCell className="font-semibold">
                         {invoice.invoice_number}
                       </TableCell>
                       <TableCell>
-                        {invoice.clients?.name || <span className="text-muted-foreground">—</span>}
+                        <TableClientCell client={invoice.clients} />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-muted-foreground">
                         {formatLocaleDate(invoice.issue_date, dateFormat)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-muted-foreground">
                         {formatLocaleDate(invoice.due_date, dateFormat)}
                       </TableCell>
-                      <TableCell className="font-medium">
-                        {fmtForClient(Number(invoice.total), invoice.clients?.currency)}
-                      </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={getStatusBadgeClass(invoice.status || 'draft')}>
-                          {formatStatusLabel(invoice.status || 'draft')}
-                        </Badge>
+                        <TableStatusBadge status={invoice.status || 'draft'} />
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {fmtForClient(Number(invoice.total), invoice.clients?.currency)}
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
+                          <MenuDotsTrigger />
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => navigate(`/invoices/${invoice.id}`)}>
                               <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void duplicateInvoice(invoice);
+                              }}
+                            >
+                              <SlotIcon slot="action_duplicate" className="mr-2 h-4 w-4" />
+                              Duplicate
+                            </DropdownMenuItem>
                             {invoice.status === 'draft' && (
                               <DropdownMenuItem onClick={() => handleStatusChange(invoice.id, 'sent')}>
-                                <Send className="mr-2 h-4 w-4" />
+                                <SlotIcon slot="action_send" className="mr-2" />
                                 Mark as Sent
                               </DropdownMenuItem>
                             )}
@@ -1135,6 +1210,18 @@ export default function Invoices() {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                total={invoicesPagination.total}
+                page={invoicesPagination.page}
+                pageSize={invoicesPagination.pageSize}
+                from={invoicesPagination.from}
+                to={invoicesPagination.to}
+                pageSizeOptions={invoicesPagination.pageSizeOptions}
+                showPageSizeSelect={invoicesPagination.showPageSizeSelect}
+                onPageChange={invoicesPagination.setPage}
+                onPageSizeChange={invoicesPagination.setPageSize}
+              />
+              </DataTableFrame>
             )}
           </CardContent>
         </Card>

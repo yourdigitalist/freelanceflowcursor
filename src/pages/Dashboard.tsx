@@ -16,9 +16,13 @@ import { canAccessNotes, getContractsAccessMode } from '@/lib/features';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { shellProfileDisplayName, useShellProfile } from '@/hooks/useShellProfile';
 import { formatLocaleDate } from '@/lib/datetime';
-import { getStatusBadgeClass, formatStatusLabel } from '@/lib/statusDisplay';
+import { TableStatusBadge } from '@/components/ui/table-status-badge';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { cn } from '@/lib/utils';
+import { usePagination, DASHBOARD_PAGE_SIZE } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { PageSummaryStat } from '@/components/ui/page-summary-stats';
+import { EmptyValue } from '@/components/ui/empty-value';
 
 type RangeKey = 'day' | 'week' | 'month';
 type HoursRangeKey = 'week' | 'month';
@@ -41,8 +45,6 @@ interface RecentProject {
   name: string;
   client_name: string | null;
   status: string;
-  icon_emoji: string | null;
-  icon_color: string | null;
   due_date: string | null;
   hours: number;
   task_count: number;
@@ -57,10 +59,15 @@ interface RecentInvoice {
   due_date: string | null;
 }
 
+type PriorityCategory = 'delivery' | 'finance' | 'approval' | 'crm';
+
+type PriorityFilter = 'overdue' | 'due_soon' | 'finance';
+
 interface PriorityItem {
   id: string;
   label: string;
   tone: 'overdue' | 'soon' | 'info';
+  category: PriorityCategory;
   title: string;
   subtitle: string;
   ctaLabel: string;
@@ -68,6 +75,23 @@ interface PriorityItem {
   rank: number;
   sortDate: number;
 }
+
+function matchesPriorityFilter(item: PriorityItem, filter: PriorityFilter): boolean {
+  switch (filter) {
+    case 'overdue':
+      return item.tone === 'overdue';
+    case 'due_soon':
+      return item.tone === 'soon' || (item.tone === 'info' && item.category !== 'finance');
+    case 'finance':
+      return item.category === 'finance';
+  }
+}
+
+const PRIORITY_FILTER_LABELS: Record<PriorityFilter, string> = {
+  overdue: 'Overdue',
+  due_soon: 'Due soon',
+  finance: 'Finance',
+};
 
 interface RecentItem {
   id: string;
@@ -294,6 +318,7 @@ export default function Dashboard() {
   const [recentInvoices, setRecentInvoices] = useState<RecentInvoice[]>([]);
   const [totalInvoicesCount, setTotalInvoicesCount] = useState(0);
   const [priorityItems, setPriorityItems] = useState<PriorityItem[]>([]);
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('overdue');
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
   const [hoursSparkline, setHoursSparkline] = useState<SparkPoint[]>([]);
   const [rawTimeEntries, setRawTimeEntries] = useState<RawTimeEntry[]>([]);
@@ -394,7 +419,7 @@ export default function Dashboard() {
         .from('invoices')
         .select('id, invoice_number, total, status, due_date', { count: 'exact' })
         .order('created_at', { ascending: false })
-        .limit(5);
+        .limit(50);
       setRecentInvoices((invoices as RecentInvoice[]) || []);
       setTotalInvoicesCount(invoicesTotalCount ?? 0);
 
@@ -414,7 +439,7 @@ export default function Dashboard() {
       // ── Projects (tabs) ────────────────────────────────────────────────────
       const { data: projects } = await supabase
         .from('projects')
-        .select('id, name, status, icon_emoji, icon_color, due_date, clients(name)')
+        .select('id, name, status, due_date, clients(name)')
         .in('status', ['active', 'on_hold', 'completed'])
         .order('created_at', { ascending: false })
         .limit(30);
@@ -438,8 +463,6 @@ export default function Dashboard() {
             name: p.name,
             client_name: (p.clients as { name: string } | null)?.name || null,
             status: p.status,
-            icon_emoji: p.icon_emoji,
-            icon_color: p.icon_color,
             due_date: p.due_date,
             hours,
             task_count: total || 0,
@@ -507,11 +530,13 @@ export default function Dashboard() {
         const isDone = (t.project_statuses as { is_done_status?: boolean } | null)?.is_done_status === true;
         if (isDone) return;
         const d = daysUntil(t.due_date);
-        const tone: PriorityItem['tone'] = d !== null && d < 0 ? 'overdue' : 'soon';
+        if (d === null || d > SOON_DAYS) return;
+        const tone: PriorityItem['tone'] = d < 0 ? 'overdue' : 'soon';
         items.push({
           id: `task-${t.id}`,
           label: tone === 'overdue' ? 'Overdue task' : 'Task due',
           tone,
+          category: 'delivery',
           title: t.title,
           subtitle: `${(t.projects as { name: string } | null)?.name || 'Project'} · ${dueText(t.due_date)}`,
           ctaLabel: 'Open task',
@@ -521,6 +546,26 @@ export default function Dashboard() {
         });
       });
 
+      projectsWithTasks
+        .filter((p) => p.status === 'active' && p.due_date)
+        .forEach((p) => {
+          const d = daysUntil(p.due_date);
+          if (d === null || d > SOON_DAYS) return;
+          const tone: PriorityItem['tone'] = d < 0 ? 'overdue' : 'soon';
+          items.push({
+            id: `project-${p.id}`,
+            label: tone === 'overdue' ? 'Overdue project' : 'Project due',
+            tone,
+            category: 'delivery',
+            title: p.name,
+            subtitle: `${p.client_name || 'No client'} · ${dueText(p.due_date)}`,
+            ctaLabel: 'Open project',
+            to: `/projects/${p.id}`,
+            rank: tone === 'overdue' ? 0 : 1,
+            sortDate: p.due_date ? new Date(p.due_date).getTime() : Infinity,
+          });
+        });
+
       (sentInvoicesDue || []).forEach((inv) => {
         const d = daysUntil(inv.due_date);
         if (d === null || d > SOON_DAYS) return;
@@ -529,6 +574,7 @@ export default function Dashboard() {
           id: `invoice-${inv.id}`,
           label: tone === 'overdue' ? 'Overdue invoice' : 'Invoice due',
           tone,
+          category: 'finance',
           title: `${inv.invoice_number} · ${fmt(Number(inv.total) || 0)}`,
           subtitle: `${(inv.clients as { name: string } | null)?.name || 'Client'} · ${dueText(inv.due_date)}`,
           ctaLabel: 'Send reminder',
@@ -543,6 +589,7 @@ export default function Dashboard() {
           id: 'unbilled',
           label: 'Unbilled hours',
           tone: 'info',
+          category: 'finance',
           title: `${unbilledHours.toFixed(1)}h ready to invoice`,
           subtitle: unbilledAmount > 0 ? `${fmt(unbilledAmount)} across projects` : 'Bill your tracked time',
           ctaLabel: 'Create invoice',
@@ -562,6 +609,7 @@ export default function Dashboard() {
           id: `proposal-${p.id}`,
           label: tone === 'overdue' ? 'Proposal expired' : 'Proposal expiring',
           tone,
+          category: 'finance',
           title: `${p.identifier || 'Proposal'} — ${clientName}`,
           subtitle: d < 0 ? 'Expired' : dueText(p.expires_at),
           ctaLabel: 'Nudge client',
@@ -592,6 +640,7 @@ export default function Dashboard() {
           id: `contract-${c.id}`,
           label: 'Awaiting signature',
           tone,
+          category: 'finance',
           title: `${c.identifier || 'Contract'} — ${c.clients?.name || c.client_name || 'Client'}`,
           subtitle: contractDue ? dueText(contractDue) : 'Pending signatures',
           ctaLabel: 'View contract',
@@ -609,6 +658,7 @@ export default function Dashboard() {
           id: `review-${r.id}`,
           label: 'Awaiting approval',
           tone,
+          category: 'approval',
           title: r.title || 'Approval request',
           subtitle: r.due_date ? dueText(r.due_date) : 'Pending client review',
           ctaLabel: 'Review',
@@ -626,6 +676,7 @@ export default function Dashboard() {
           id: `followup-${f.id}`,
           label: 'Follow-up',
           tone,
+          category: 'crm',
           title: (f.clients as { name: string } | null)?.name || 'Client',
           subtitle: f.title + (f.due_at ? ` · ${dueText(f.due_at)}` : ''),
           ctaLabel: 'Open client',
@@ -636,7 +687,7 @@ export default function Dashboard() {
       });
 
       items.sort((a, b) => a.rank - b.rank || a.sortDate - b.sortDate);
-      setPriorityItems(items.slice(0, 6));
+      setPriorityItems(items);
 
       // ── Recently edited items ──────────────────────────────────────────────
       const [
@@ -804,6 +855,24 @@ export default function Dashboard() {
   ];
 
   const filteredProjects = allProjects.filter((p) => p.status === projectTab);
+  const dashboardPageOpts = { defaultPageSize: DASHBOARD_PAGE_SIZE, pageSizeOptions: [DASHBOARD_PAGE_SIZE] as const };
+  const projectsPagination = usePagination(filteredProjects, dashboardPageOpts);
+  const filteredPriorityItems = useMemo(
+    () => priorityItems.filter((item) => matchesPriorityFilter(item, priorityFilter)),
+    [priorityItems, priorityFilter],
+  );
+
+  const priorityFilterCounts = useMemo(
+    () => ({
+      overdue: priorityItems.filter((item) => matchesPriorityFilter(item, 'overdue')).length,
+      due_soon: priorityItems.filter((item) => matchesPriorityFilter(item, 'due_soon')).length,
+      finance: priorityItems.filter((item) => matchesPriorityFilter(item, 'finance')).length,
+    }),
+    [priorityItems],
+  );
+
+  const priorityPagination = usePagination(filteredPriorityItems, dashboardPageOpts);
+  const recentInvoicesPagination = usePagination(recentInvoices, dashboardPageOpts);
   const projectTabCounts = {
     active: allProjects.filter((p) => p.status === 'active').length,
     on_hold: allProjects.filter((p) => p.status === 'on_hold').length,
@@ -811,12 +880,12 @@ export default function Dashboard() {
   };
 
   const statCards = [
-    { title: 'Active Projects', value: String(stats.activeProjects), subtitle: `${stats.activeProjects} total`, slot: 'stat_projects' as IconSlotKey, spark: null as SparkPoint[] | null, trend: null as { current: number; prev: number } | null, to: '/projects' },
-    { title: 'Hours This Month', value: stats.hoursThisMonth.toFixed(1) + 'h', subtitle: `${stats.unbilledHours.toFixed(1)}h unbilled`, slot: 'stat_hours' as IconSlotKey, spark: hoursSparkline, trend: { current: stats.hoursThisMonth, prev: stats.prevMonthHours }, to: '/time?view=month' },
-    { title: 'Pending Payment', value: fmt(stats.pendingAmount), subtitle: `${stats.pendingInvoices} invoices out`, slot: 'stat_money' as IconSlotKey, spark: null, trend: null, to: '/invoices' },
-    { title: 'Pending Proposals', value: String(stats.pendingProposals), subtitle: 'sent + read', slot: 'sidebar_proposals' as IconSlotKey, spark: null, trend: null, to: '/proposals' },
+    { title: 'Active projects', value: String(stats.activeProjects), subtitle: `${stats.activeProjects} total`, hideDot: true, spark: null as SparkPoint[] | null, trend: null as { current: number; prev: number } | null, to: '/projects' },
+    { title: 'Hours this month', value: stats.hoursThisMonth.toFixed(1) + 'h', subtitle: `${stats.unbilledHours.toFixed(1)}h unbilled`, hideDot: true, spark: hoursSparkline, trend: { current: stats.hoursThisMonth, prev: stats.prevMonthHours }, to: '/time?view=month' },
+    { title: 'Pending payment', value: fmt(stats.pendingAmount), subtitle: `${stats.pendingInvoices} invoice${stats.pendingInvoices === 1 ? '' : 's'} out`, dotClassName: 'bg-amber-500', spark: null, trend: null, to: '/invoices' },
+    { title: 'Pending proposals', value: String(stats.pendingProposals), subtitle: 'sent + read', status: 'sent', spark: null, trend: null, to: '/proposals' },
     ...(showContracts
-      ? [{ title: 'Pending Signatures', value: String(stats.pendingContracts), subtitle: 'awaiting signature', slot: 'sidebar_contracts' as IconSlotKey, spark: null as SparkPoint[] | null, trend: null as { current: number; prev: number } | null, to: '/contracts' }]
+      ? [{ title: 'Pending signatures', value: String(stats.pendingContracts), subtitle: 'awaiting signature', status: 'pending_signatures', spark: null as SparkPoint[] | null, trend: null as { current: number; prev: number } | null, to: '/contracts' }]
       : []),
   ];
 
@@ -893,35 +962,43 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── Stat Cards ─────────────────────────────────────────────────── */}
-        <div className={cn('grid gap-3 sm:grid-cols-2', statCards.length === 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-4')}>
+        <div
+          className={cn(
+            'grid gap-4 sm:grid-cols-2',
+            statCards.length === 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-4',
+          )}
+        >
           {statCards.map((stat) => (
             <Card
               key={stat.title}
-              className="group cursor-pointer border-0 shadow-sm transition-shadow hover:shadow-md"
+              className="cursor-pointer border-0 shadow-sm transition-shadow hover:shadow-md"
               onClick={() => navigate(stat.to)}
             >
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-xs text-muted-foreground">{stat.title}</p>
-                    <p className="mt-1 text-2xl font-bold tracking-tight text-foreground">{stat.value}</p>
-                    <div className="mt-1 flex items-center gap-1.5">
-                      <p className="text-xs text-muted-foreground">{stat.subtitle}</p>
-                      {stat.trend && <TrendChip current={stat.trend.current} prev={stat.trend.prev} />}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                      <SlotIcon slot={stat.slot} className="h-4 w-4 text-primary" />
-                    </div>
-                    {stat.spark && stat.spark.length >= 2 && (
+              <CardContent className="p-4 sm:p-5">
+                <PageSummaryStat
+                  label={stat.title}
+                  value={stat.value}
+                  subtitle={
+                    <span className="inline-flex flex-wrap items-center gap-1.5">
+                      {stat.subtitle}
+                      {stat.trend ? (
+                        <TrendChip current={stat.trend.current} prev={stat.trend.prev} />
+                      ) : null}
+                    </span>
+                  }
+                  hideDot={stat.hideDot}
+                  status={'status' in stat ? (stat as { status?: string }).status : undefined}
+                  dotClassName={
+                    'dotClassName' in stat ? (stat as { dotClassName?: string }).dotClassName : undefined
+                  }
+                  trailing={
+                    stat.spark && stat.spark.length >= 2 ? (
                       <div className="opacity-70">
                         <MiniSparkline data={stat.spark} />
                       </div>
-                    )}
-                  </div>
-                </div>
+                    ) : undefined
+                  }
+                />
               </CardContent>
             </Card>
           ))}
@@ -931,14 +1008,40 @@ export default function Dashboard() {
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="border-0 shadow-sm lg:col-span-2">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold">
-                Needs you today
-                {priorityItems.length > 0 && (
-                  <Badge variant="secondary" className="ml-2 text-xs">
-                    {priorityItems.length}
-                  </Badge>
-                )}
-              </CardTitle>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle className="text-base font-semibold">
+                  Needs you today
+                  {filteredPriorityItems.length > 0 && (
+                    <Badge variant="secondary" className="ml-2 text-xs">
+                      {filteredPriorityItems.length}
+                    </Badge>
+                  )}
+                </CardTitle>
+                {priorityItems.length > 0 ? (
+                  <div className="flex flex-wrap gap-0.5 rounded-lg border border-border bg-card p-0.5">
+                    {(['overdue', 'due_soon', 'finance'] as const).map((key) => (
+                      <Button
+                        key={key}
+                        type="button"
+                        variant={priorityFilter === key ? 'secondary' : 'ghost'}
+                        size="xs"
+                        className={cn(
+                          'h-8 rounded-md px-2.5',
+                          priorityFilter === key && 'bg-muted shadow-none',
+                        )}
+                        onClick={() => setPriorityFilter(key)}
+                      >
+                        {PRIORITY_FILTER_LABELS[key]}
+                        {priorityFilterCounts[key] > 0 ? (
+                          <span className="ml-1 tabular-nums text-muted-foreground">
+                            {priorityFilterCounts[key]}
+                          </span>
+                        ) : null}
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </CardHeader>
             <CardContent>
               {priorityItems.length === 0 ? (
@@ -947,26 +1050,54 @@ export default function Dashboard() {
                   <p className="text-sm font-medium">All caught up!</p>
                   <p className="mt-0.5 text-xs">Nothing overdue or awaiting action.</p>
                 </div>
+              ) : filteredPriorityItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
+                  <p className="text-sm font-medium">Nothing in {PRIORITY_FILTER_LABELS[priorityFilter].toLowerCase()}</p>
+                  <p className="mt-0.5 text-xs">Try another filter above.</p>
+                </div>
               ) : (
+                <>
                 <div className="divide-y">
-                  {priorityItems.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                      <span className={cn('shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider', TONE_STYLES[item.tone])}>
-                        {item.label}
-                      </span>
-                      <div className="min-w-0 flex-1">
+                  {priorityPagination.paginatedItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="grid grid-cols-[7.25rem_minmax(0,1fr)_auto] items-center gap-x-3 py-3 first:pt-0 last:pb-0"
+                    >
+                      <div>
+                        <span
+                          className={cn(
+                            'inline-flex rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider',
+                            TONE_STYLES[item.tone],
+                          )}
+                        >
+                          {item.label}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
                         <p className="truncate text-xs text-muted-foreground">{item.subtitle}</p>
                       </div>
-                      <Button variant="ghost" size="sm" asChild className="shrink-0 text-primary">
+                      <Button variant="outline" size="xs" asChild className="shrink-0">
                         <Link to={item.to}>
                           {item.ctaLabel}
-                          <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                          <ArrowRight className="ml-1 h-3 w-3" />
                         </Link>
                       </Button>
                     </div>
                   ))}
                 </div>
+                <TablePagination
+                  total={priorityPagination.total}
+                  page={priorityPagination.page}
+                  pageSize={priorityPagination.pageSize}
+                  from={priorityPagination.from}
+                  to={priorityPagination.to}
+                  showPageSizeSelect={false}
+                  onPageChange={priorityPagination.setPage}
+                  onPageSizeChange={priorityPagination.setPageSize}
+                  className="border-t-0 px-0 pt-3"
+                />
+                </>
               )}
             </CardContent>
           </Card>
@@ -1072,7 +1203,7 @@ export default function Dashboard() {
                   <span>Due</span>
                   <span />
                 </div>
-                {filteredProjects.map((project) => {
+                {projectsPagination.paginatedItems.map((project) => {
                   const progressPct = project.task_count > 0 ? Math.round((project.completed_tasks / project.task_count) * 100) : 0;
                   const overdue = isOverdue(project.due_date);
                   return (
@@ -1081,21 +1212,9 @@ export default function Dashboard() {
                       to={`/projects/${project.id}`}
                       className="group/row -mx-2 grid grid-cols-1 items-center gap-2 rounded-lg px-2 py-3 transition-colors hover:bg-muted/30 sm:grid-cols-[minmax(0,1fr)_minmax(160px,1.25fr)_minmax(88px,auto)_96px_32px] sm:gap-x-8 sm:gap-y-2"
                     >
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <div
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sm"
-                          style={{ backgroundColor: project.icon_color ? `${project.icon_color}20` : 'hsl(var(--muted))' }}
-                        >
-                          {project.icon_emoji ? (
-                            <span>{project.icon_emoji}</span>
-                          ) : (
-                            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: project.icon_color || 'hsl(var(--muted-foreground))' }} />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-foreground">{project.name}</p>
-                          <p className="truncate text-xs text-muted-foreground">{project.client_name || 'No client'}</p>
-                        </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">{project.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{project.client_name || 'No client'}</p>
                       </div>
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
@@ -1108,7 +1227,7 @@ export default function Dashboard() {
                       </div>
                       <div className="text-sm font-medium text-foreground">{project.hours.toFixed(1)}h</div>
                       <div className={cn('text-xs font-medium', overdue ? 'text-destructive' : 'text-muted-foreground')}>
-                        {project.due_date ? formatLocaleDate(project.due_date, dateFormat) : <span className="text-muted-foreground/50">—</span>}
+                        {project.due_date ? formatLocaleDate(project.due_date, dateFormat) : <EmptyValue variant="table" />}
                       </div>
                       <div className="hidden justify-end sm:flex">
                         <ArrowRight className="h-4 w-4 text-muted-foreground/40 transition-colors group-hover/row:text-primary" />
@@ -1117,6 +1236,19 @@ export default function Dashboard() {
                   );
                 })}
               </div>
+            )}
+            {filteredProjects.length > 0 && (
+              <TablePagination
+                total={projectsPagination.total}
+                page={projectsPagination.page}
+                pageSize={projectsPagination.pageSize}
+                from={projectsPagination.from}
+                to={projectsPagination.to}
+                showPageSizeSelect={false}
+                onPageChange={projectsPagination.setPage}
+                onPageSizeChange={projectsPagination.setPageSize}
+                className="mt-2 border-t-0 px-0"
+              />
             )}
           </CardContent>
         </Card>
@@ -1252,8 +1384,9 @@ export default function Dashboard() {
               {recentInvoices.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No invoices yet</p>
               ) : (
+                <>
                 <div className="space-y-1">
-                  {recentInvoices.map((invoice) => (
+                  {recentInvoicesPagination.paginatedItems.map((invoice) => (
                     <Link
                       key={invoice.id}
                       to={`/invoices/${invoice.id}`}
@@ -1268,12 +1401,22 @@ export default function Dashboard() {
                           <p className="text-xs text-muted-foreground">{fmt(Number(invoice.total ?? 0))}</p>
                         </div>
                       </div>
-                      <Badge variant="outline" className={cn('shrink-0 text-[10px]', getStatusBadgeClass(invoice.status))}>
-                        {formatStatusLabel(invoice.status)}
-                      </Badge>
+                      <TableStatusBadge status={invoice.status} className="shrink-0" />
                     </Link>
                   ))}
                 </div>
+                <TablePagination
+                  total={recentInvoicesPagination.total}
+                  page={recentInvoicesPagination.page}
+                  pageSize={recentInvoicesPagination.pageSize}
+                  from={recentInvoicesPagination.from}
+                  to={recentInvoicesPagination.to}
+                  showPageSizeSelect={false}
+                  onPageChange={recentInvoicesPagination.setPage}
+                  onPageSizeChange={recentInvoicesPagination.setPageSize}
+                  className="border-t-0 px-0 pt-3"
+                />
+                </>
               )}
             </CardContent>
           </Card>

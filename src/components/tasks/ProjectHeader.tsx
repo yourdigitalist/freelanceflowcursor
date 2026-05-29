@@ -8,7 +8,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ArrowLeft, MoreVertical, Trash2, Download, Upload } from '@/components/icons';
+import { ArrowLeft, Trash2, Download, Upload } from '@/components/icons';
+import { MenuDotsTrigger } from '@/components/ui/menu-dots-trigger';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { Project, Task, ProjectStatus } from './types';
 import { formatDuration } from '@/lib/time';
@@ -78,14 +79,7 @@ export function ProjectHeader({
           </Link>
         </Button>
 
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div
-            className="w-10 h-10 rounded-lg flex items-center justify-center text-lg shrink-0"
-            style={{ backgroundColor: project.icon_color || '#9B63E9' }}
-          >
-            {project.icon_emoji || '📁'}
-          </div>
-
+        <div className="flex flex-1 min-w-0 items-center gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold tracking-tight truncate">{project.name}</h1>
@@ -125,11 +119,7 @@ export function ProjectHeader({
           </Button>
           {(onEdit || onDelete) && (
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
+              <MenuDotsTrigger />
               <DropdownMenuContent align="end">
                 {onEdit && (
                   <DropdownMenuItem onClick={onEdit}>

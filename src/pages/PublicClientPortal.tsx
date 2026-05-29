@@ -7,7 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { appendPortalParam, formatPortalMoney, parsePortalSections, resolveMoneyCurrency } from "@/lib/clientPortal";
 import { loadClientPortalData } from "@/lib/loadClientPortal";
-import { formatStatusLabel, getStatusBadgeClass } from "@/lib/statusDisplay";
+import { TableStatusBadge } from "@/components/ui/table-status-badge";
+import { EmptyValue, valueOrEmpty } from "@/components/ui/empty-value";
+import { DataTableFrame } from "@/components/ui/table";
 import {
   formatDuration,
   sumMonthSecondsFromDayTotals,
@@ -191,10 +193,10 @@ function PortalTimeSection({ entries, dateFormat }: { entries: TimeEntryRow[]; d
       </div>
       {timeView === "week" ? (
         <Card>
-          <CardContent className="p-0 overflow-x-auto">
+          <CardContent className="flex flex-col p-0 overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="hover:bg-transparent">
                   <TableHead>Project / Task</TableHead>
                   {days.map((day) => (
                     <TableHead key={day.toISOString()}>{format(day, "EEE d")}</TableHead>
@@ -217,7 +219,7 @@ function PortalTimeSection({ entries, dateFormat }: { entries: TimeEntryRow[]; d
                           className="font-mono cursor-pointer hover:bg-muted/40"
                           onClick={() => setSelectedTimeDay(new Date(`${k}T12:00:00`))}
                         >
-                          {row.byDay[k] ? formatHm(row.byDay[k]) : "—"}
+                          {row.byDay[k] ? formatHm(row.byDay[k]) : <EmptyValue variant="table" />}
                         </TableCell>
                       ))}
                       <TableCell className="font-mono font-medium">{formatHm(rowTotal)}</TableCell>
@@ -228,7 +230,7 @@ function PortalTimeSection({ entries, dateFormat }: { entries: TimeEntryRow[]; d
                   <TableCell className="font-semibold">Total</TableCell>
                   {dayKeys.map((k) => (
                     <TableCell key={k} className="font-mono font-semibold">
-                      {dayTotals[k] ? formatHm(dayTotals[k]) : "—"}
+                      {dayTotals[k] ? formatHm(dayTotals[k]) : <EmptyValue variant="table" />}
                     </TableCell>
                   ))}
                   <TableCell className="font-mono font-semibold">
@@ -299,16 +301,16 @@ function PortalTimeSection({ entries, dateFormat }: { entries: TimeEntryRow[]; d
             Entries on {fmtDate(selectedTimeDay)}
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="flex flex-col p-0">
           {selectedDayEntries.length === 0 ? (
             <div className="px-4 pb-4 text-sm text-muted-foreground">No entries for this day.</div>
           ) : (
             <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="hover:bg-transparent">
                   <TableHead>Project / Task</TableHead>
                   <TableHead>Notes</TableHead>
-                  <TableHead>Duration</TableHead>
+                  <TableHead className="text-right">Duration</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -318,7 +320,13 @@ function PortalTimeSection({ entries, dateFormat }: { entries: TimeEntryRow[]; d
                       <div className="font-medium">{entry.projects?.name || "No project"}</div>
                       <div className="text-xs text-muted-foreground">{entry.tasks?.title || "No task"}</div>
                     </TableCell>
-                    <TableCell>{entry.description || <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell>
+                      {entry.description ? (
+                        entry.description
+                      ) : (
+                        <EmptyValue variant="detail" field="description" />
+                      )}
+                    </TableCell>
                     <TableCell className="font-mono">{formatHm(toSeconds(entry))}</TableCell>
                   </TableRow>
                 ))}
@@ -453,25 +461,28 @@ export default function PublicClientPortal() {
                   </CardHeader>
                   <CardContent className="grid gap-2 sm:grid-cols-2 text-sm">
                     <p>
-                      <strong>Name:</strong> {c.name || "—"}
+                      <strong>Name:</strong> {c.name || <EmptyValue variant="detail" />}
                     </p>
                     <p>
-                      <strong>Company:</strong> {c.company || "—"}
+                      <strong>Company:</strong> {valueOrEmpty(c.company, { variant: 'detail', field: 'company' })}
                     </p>
                     <p>
-                      <strong>Email:</strong> {c.email || "—"}
+                      <strong>Email:</strong> {valueOrEmpty(c.email, { variant: 'detail', field: 'email' })}
                     </p>
                     <p>
-                      <strong>Phone:</strong> {c.phone || "—"}
+                      <strong>Phone:</strong> {valueOrEmpty(c.phone, { variant: 'detail', field: 'phone' })}
                     </p>
                     <p>
-                      <strong>Tax ID:</strong> {c.tax_id || "—"}
+                      <strong>Tax ID:</strong> {valueOrEmpty(c.tax_id, { variant: 'detail', field: 'tax_id' })}
                     </p>
                     <p className="sm:col-span-2">
-                      <strong>Address:</strong>{" "}
-                      {[c.street, c.street2, c.city, c.state, c.postal_code, countryLabel(c.country)]
-                        .filter(Boolean)
-                        .join(", ") || "—"}
+                      <strong>Address:</strong>{' '}
+                      {valueOrEmpty(
+                        [c.street, c.street2, c.city, c.state, c.postal_code, countryLabel(c.country)]
+                          .filter(Boolean)
+                          .join(', '),
+                        { variant: 'detail', field: 'address' },
+                      )}
                     </p>
                     <p className="sm:col-span-2 text-muted-foreground text-xs">
                       If anything looks incorrect, contact {data.business.business_name || "your provider"}.
@@ -484,13 +495,14 @@ export default function PublicClientPortal() {
             {sections.invoices ? (
               <TabsContent value="invoices">
                 <Card>
-                  <CardContent className="p-0">
+                  <CardContent className="flex flex-col p-0">
+                    <DataTableFrame>
                     <Table>
                       <TableHeader>
-                        <TableRow>
+                        <TableRow className="hover:bg-transparent">
                           <TableHead>Invoice</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead>Total</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
                           <TableHead>Due</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -500,19 +512,21 @@ export default function PublicClientPortal() {
                             <TableCell>
                               <Link
                                 to={`/portal/${pt}/invoice/${row.id}?portal=${encodeURIComponent(pt)}`}
-                                className="font-medium text-primary hover:underline"
+                                className="font-semibold text-primary hover:underline"
                               >
                                 {row.invoice_number}
                               </Link>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline" className={getStatusBadgeClass(row.status)}>
-                                {formatStatusLabel(row.status)}
-                              </Badge>
+                              <TableStatusBadge status={row.status} />
                             </TableCell>
-                            <TableCell className="tabular-nums">{fmtMoney(row.total)}</TableCell>
-                            <TableCell>
-                              {row.due_date ? formatLocaleDate(row.due_date, portalDateFormat) : "—"}
+                            <TableCell className="text-right font-semibold tabular-nums">{fmtMoney(row.total)}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {row.due_date ? (
+                                formatLocaleDate(row.due_date, portalDateFormat)
+                              ) : (
+                                <EmptyValue variant="table" />
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -525,6 +539,7 @@ export default function PublicClientPortal() {
                         ) : null}
                       </TableBody>
                     </Table>
+                    </DataTableFrame>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -533,13 +548,14 @@ export default function PublicClientPortal() {
             {sections.proposals ? (
               <TabsContent value="proposals">
                 <Card>
-                  <CardContent className="p-0">
+                  <CardContent className="flex flex-col p-0">
+                    <DataTableFrame>
                     <Table>
                       <TableHeader>
-                        <TableRow>
+                        <TableRow className="hover:bg-transparent">
                           <TableHead>Proposal</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead>Total</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -548,7 +564,7 @@ export default function PublicClientPortal() {
                             <TableCell>
                               <a
                                 href={appendPortalParam(`/proposal/${row.public_token}`, pt)}
-                                className="font-medium text-primary hover:underline"
+                                className="font-semibold text-primary hover:underline"
                                 target="_blank"
                                 rel="noopener noreferrer"
                               >
@@ -556,11 +572,9 @@ export default function PublicClientPortal() {
                               </a>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline" className={getStatusBadgeClass(row.status)}>
-                                {formatStatusLabel(row.status)}
-                              </Badge>
+                              <TableStatusBadge status={row.status} />
                             </TableCell>
-                            <TableCell className="tabular-nums">{fmtMoney(row.total)}</TableCell>
+                            <TableCell className="text-right font-semibold tabular-nums">{fmtMoney(row.total)}</TableCell>
                           </TableRow>
                         ))}
                         {(data.proposals || []).length === 0 ? (
@@ -572,6 +586,7 @@ export default function PublicClientPortal() {
                         ) : null}
                       </TableBody>
                     </Table>
+                    </DataTableFrame>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -580,13 +595,14 @@ export default function PublicClientPortal() {
             {sections.contracts ? (
               <TabsContent value="contracts">
                 <Card>
-                  <CardContent className="p-0">
+                  <CardContent className="flex flex-col p-0">
+                    <DataTableFrame>
                     <Table>
                       <TableHeader>
-                        <TableRow>
+                        <TableRow className="hover:bg-transparent">
                           <TableHead>Contract</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead>Total</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -595,7 +611,7 @@ export default function PublicClientPortal() {
                             <TableCell>
                               <a
                                 href={appendPortalParam(`/contract/${row.public_token}`, pt)}
-                                className="font-medium text-primary hover:underline"
+                                className="font-semibold text-primary hover:underline"
                                 target="_blank"
                                 rel="noopener noreferrer"
                               >
@@ -603,11 +619,9 @@ export default function PublicClientPortal() {
                               </a>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline" className={getStatusBadgeClass(row.status)}>
-                                {formatStatusLabel(row.status)}
-                              </Badge>
+                              <TableStatusBadge status={row.status} />
                             </TableCell>
-                            <TableCell className="tabular-nums">{fmtMoney(row.total)}</TableCell>
+                            <TableCell className="text-right font-semibold tabular-nums">{fmtMoney(row.total)}</TableCell>
                           </TableRow>
                         ))}
                         {(data.contracts || []).length === 0 ? (
@@ -619,6 +633,7 @@ export default function PublicClientPortal() {
                         ) : null}
                       </TableBody>
                     </Table>
+                    </DataTableFrame>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -627,10 +642,11 @@ export default function PublicClientPortal() {
             {sections.approvals ? (
               <TabsContent value="approvals">
                 <Card>
-                  <CardContent className="p-0">
+                  <CardContent className="flex flex-col p-0">
+                    <DataTableFrame>
                     <Table>
                       <TableHeader>
-                        <TableRow>
+                        <TableRow className="hover:bg-transparent">
                           <TableHead>Title</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Project</TableHead>
@@ -643,7 +659,7 @@ export default function PublicClientPortal() {
                             <TableCell>
                               <a
                                 href={appendPortalParam(`/review/${row.share_token}`, pt)}
-                                className="font-medium text-primary hover:underline"
+                                className="font-semibold text-primary hover:underline"
                                 target="_blank"
                                 rel="noopener noreferrer"
                               >
@@ -651,12 +667,12 @@ export default function PublicClientPortal() {
                               </a>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline" className={getStatusBadgeClass(row.status)}>
-                                {formatStatusLabel(row.status)}
-                              </Badge>
+                              <TableStatusBadge status={row.status} />
                             </TableCell>
-                            <TableCell>{row.projects?.name || "—"}</TableCell>
-                            <TableCell>{formatLocaleDate(row.created_at, portalDateFormat)}</TableCell>
+                            <TableCell>
+                              {row.projects?.name ? row.projects.name : <EmptyValue variant="table" field="project" />}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">{formatLocaleDate(row.created_at, portalDateFormat)}</TableCell>
                           </TableRow>
                         ))}
                         {(data.approvals || []).length === 0 ? (
@@ -668,6 +684,7 @@ export default function PublicClientPortal() {
                         ) : null}
                       </TableBody>
                     </Table>
+                    </DataTableFrame>
                   </CardContent>
                 </Card>
               </TabsContent>

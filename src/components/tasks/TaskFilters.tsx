@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ViewToggle, ViewToggleButton } from '@/components/ui/view-toggle';
+
 import { LayoutGrid, List, Settings2, Plus, EyeOff, Filter } from '@/components/icons';
 import { ProjectStatus, PRIORITY_OPTIONS } from './types';
 

@@ -23,7 +23,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Check, MoreVertical } from "@/components/icons";
+import { ArrowLeft, Check } from "@/components/icons";
+import { MenuDotsTrigger } from "@/components/ui/menu-dots-trigger";
 import { addDays, addMonths, addWeeks, eachDayOfInterval, endOfDay, endOfMonth, endOfWeek, format, isSameDay, parseISO, startOfDay, startOfMonth, startOfWeek, subDays, subMonths, subWeeks } from "date-fns";
 import {
   formatDuration,
@@ -32,7 +33,9 @@ import {
   timeMonthCalendarDurationClassName,
 } from "@/lib/time";
 import { formatPortalMoney, resolveMoneyCurrency } from "@/lib/clientPortal";
-import { formatStatusLabel, getStatusBadgeClass } from "@/lib/statusDisplay";
+import { EmptyValue, valueOrEmpty } from "@/components/ui/empty-value";
+import { TableStatusBadge } from "@/components/ui/table-status-badge";
+import { DataTableFrame } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import {
@@ -49,6 +52,8 @@ import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate, formatLocaleDateTime } from "@/lib/datetime";
 import { ClientPortalSettings } from "@/components/clients/ClientPortalSettings";
 import { TimeEntriesTable, type TimeEntriesTableEntry } from "@/components/time/TimeEntriesTable";
+import { usePagination } from "@/hooks/usePagination";
+import { TablePagination } from "@/components/ui/table-pagination";
 import { readClientsNavState } from "@/lib/clientsNavigation";
 import {
   archiveClient,
@@ -318,6 +323,13 @@ export default function ClientDetail() {
     return out;
   }, [groupedRows, dayKeys]);
 
+  const projectsPagination = usePagination(projects);
+  const invoicesPagination = usePagination(invoices);
+  const proposalsPagination = usePagination(proposals);
+  const contractsPagination = usePagination(contracts);
+  const approvalsPagination = usePagination(approvals);
+  const timeWeekRowsPagination = usePagination(groupedRows);
+
   const monthDayTotals = useMemo(() => {
     const out: Record<string, number> = {};
     timeEntries.forEach((entry) => {
@@ -424,20 +436,28 @@ export default function ClientDetail() {
   );
 
   const clientTimeClientById = useMemo(() => {
-    const map = new Map<string, { name: string }>();
-    if (client?.id && client?.name) map.set(client.id, { name: client.name });
+    const map = new Map<string, import("@/components/clients/ClientAvatar").ClientAvatarClient>();
+    if (client?.id && client?.name) {
+      map.set(client.id, {
+        name: client.name,
+        first_name: client.first_name,
+        last_name: client.last_name,
+        avatar_color: client.avatar_color,
+        logo_url: client.logo_url,
+      });
+    }
     return map;
-  }, [client?.id, client?.name]);
+  }, [client]);
 
   const getClientEntryStatusBadge = (entry: TimeEntriesTableEntry) => {
-    if (!entry.billable) return <Badge variant="secondary">Not Billable</Badge>;
+    if (!entry.billable) return <TableStatusBadge status="inactive" label="Not billable" />;
     switch (entry.billing_status) {
       case "paid":
-        return <Badge className="bg-success/10 text-success">Paid</Badge>;
+        return <TableStatusBadge status="paid" />;
       case "billed":
-        return <Badge className="bg-primary/10 text-primary">Billed</Badge>;
+        return <TableStatusBadge status="billed" label="Billed" />;
       default:
-        return <Badge className="bg-warning/10 text-warning">Billable</Badge>;
+        return <TableStatusBadge status="unbilled" label="Unbilled" />;
     }
   };
 
@@ -865,11 +885,7 @@ export default function ClientDetail() {
               Client added on {formatUserDate(client.created_at, true)}
             </p>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
+              <MenuDotsTrigger />
               <DropdownMenuContent align="end">
                 {clientArchived ? (
                   <DropdownMenuItem onClick={() => void handleRestoreClient()}>Restore client</DropdownMenuItem>
@@ -938,24 +954,40 @@ export default function ClientDetail() {
                   <div className="grid gap-2 sm:grid-cols-2">
                     <p><strong>Name:</strong> {client.name}</p>
                     <p><strong>Status:</strong> {getClientStageLabel(client.status)}</p>
-                    <p><strong>Company:</strong> {client.company || "—"}</p>
-                    <p><strong>Email:</strong> {client.email || "—"}</p>
-                    <p><strong>Phone:</strong> {client.phone || "—"}</p>
-                    <p><strong>Tax ID:</strong> {client.tax_id || "—"}</p>
+                    <p><strong>Company:</strong> {valueOrEmpty(client.company, { variant: 'detail', field: 'company' })}</p>
+                    <p><strong>Email:</strong> {valueOrEmpty(client.email, { variant: 'detail', field: 'email' })}</p>
+                    <p><strong>Phone:</strong> {valueOrEmpty(client.phone, { variant: 'detail', field: 'phone' })}</p>
+                    <p><strong>Tax ID:</strong> {valueOrEmpty(client.tax_id, { variant: 'detail', field: 'tax_id' })}</p>
                     <p><strong>Currency:</strong> {clientMoneyCurrency}</p>
-                    <p><strong>Lead source:</strong> {client.lead_source || "—"}</p>
+                    <p><strong>Lead source:</strong> {valueOrEmpty(client.lead_source, { variant: 'detail', field: 'lead_source' })}</p>
                     <p>
-                      <strong>Estimated value:</strong>{" "}
-                      {formatClientMoney(client.estimated_value)}
+                      <strong>Estimated value:</strong>{' '}
+                      {client.estimated_value != null && !Number.isNaN(Number(client.estimated_value)) ? (
+                        formatClientMoney(client.estimated_value)
+                      ) : (
+                        <EmptyValue variant="detail" field="value" />
+                      )}
                     </p>
-                    <p><strong>Next follow-up:</strong> {client.next_follow_up_at ? formatUserDate(client.next_follow_up_at) : "—"}</p>
-                    <p><strong>Next action:</strong> {client.next_action || "—"}</p>
+                    <p>
+                      <strong>Next follow-up:</strong>{' '}
+                      {client.next_follow_up_at ? (
+                        formatUserDate(client.next_follow_up_at)
+                      ) : (
+                        <EmptyValue variant="detail" field="next_follow_up" />
+                      )}
+                    </p>
+                    <p><strong>Next action:</strong> {valueOrEmpty(client.next_action, { variant: 'detail', field: 'next_action' })}</p>
                     <p className="sm:col-span-2">
-                      <strong>Address:</strong>{" "}
-                      {[client.street, client.street2, client.city, client.state, client.postal_code, countryLabel(client.country)].filter(Boolean).join(", ") || "—"}
+                      <strong>Address:</strong>{' '}
+                      {valueOrEmpty(
+                        [client.street, client.street2, client.city, client.state, client.postal_code, countryLabel(client.country)]
+                          .filter(Boolean)
+                          .join(', '),
+                        { variant: 'detail', field: 'address' },
+                      )}
                     </p>
                     <p className="sm:col-span-2 whitespace-pre-wrap">
-                      <strong>Notes:</strong> {client.notes || "—"}
+                      <strong>Notes:</strong> {valueOrEmpty(client.notes, { variant: 'detail', field: 'notes' })}
                     </p>
                   </div>
                 )}
@@ -1020,21 +1052,42 @@ export default function ClientDetail() {
               <h3 className="text-base font-semibold">Projects</h3>
               <Button asChild><Link to={`/projects?new=1&client=${client.id}`}>Add Project</Link></Button>
             </div>
-            <Card><CardContent className="p-0">
+            <Card><CardContent className="flex flex-col p-0">
+              <DataTableFrame>
               <Table>
-                <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Status</TableHead><TableHead>Due</TableHead><TableHead>Budget</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow className="hover:bg-transparent"><TableHead>Name</TableHead><TableHead>Status</TableHead><TableHead>Due</TableHead><TableHead className="text-right">Budget</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {projects.map((p) => (
+                  {projectsPagination.paginatedItems.map((p) => (
                     <TableRow key={p.id} className="cursor-pointer" onClick={() => navigate(`/projects/${p.id}`)}>
-                      <TableCell className="font-medium">{p.name}</TableCell>
-                      <TableCell><Badge variant="outline" className={getStatusBadgeClass(p.status)}>{formatStatusLabel(p.status || "active")}</Badge></TableCell>
-                      <TableCell>{p.due_date ? formatUserDate(p.due_date) : "—"}</TableCell>
-                      <TableCell className="tabular-nums">{formatClientMoney(p.budget)}</TableCell>
+                      <TableCell className="font-semibold">{p.name}</TableCell>
+                      <TableCell><TableStatusBadge status={p.status || "active"} /></TableCell>
+                      <TableCell>
+                        {p.due_date ? formatUserDate(p.due_date) : <EmptyValue variant="table" />}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {p.budget != null && !Number.isNaN(Number(p.budget)) ? (
+                          formatClientMoney(p.budget)
+                        ) : (
+                          <EmptyValue variant="table" />
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
-                  {projects.length === 0 ? <TableRow><TableCell colSpan={4} className="text-muted-foreground">No projects yet.</TableCell></TableRow> : null}
+                  {projectsPagination.total === 0 ? <TableRow><TableCell colSpan={4} className="text-muted-foreground">No projects yet.</TableCell></TableRow> : null}
                 </TableBody>
               </Table>
+              <TablePagination
+                total={projectsPagination.total}
+                page={projectsPagination.page}
+                pageSize={projectsPagination.pageSize}
+                from={projectsPagination.from}
+                to={projectsPagination.to}
+                pageSizeOptions={projectsPagination.pageSizeOptions}
+                showPageSizeSelect={projectsPagination.showPageSizeSelect}
+                onPageChange={projectsPagination.setPage}
+                onPageSizeChange={projectsPagination.setPageSize}
+              />
+              </DataTableFrame>
             </CardContent></Card>
           </TabsContent>
 
@@ -1165,10 +1218,11 @@ export default function ClientDetail() {
               </div>
             </div>
             {timeView === "week" ? (
-              <Card><CardContent className="p-0 overflow-x-auto">
+              <Card><CardContent className="flex flex-col p-0 overflow-x-auto">
+                <DataTableFrame>
                 <Table>
                   <TableHeader>
-                    <TableRow>
+                    <TableRow className="hover:bg-transparent">
                       <TableHead>Project / Task</TableHead>
                       {days.map((day) => <TableHead key={day.toISOString()}>{format(day, "EEE d")}</TableHead>)}
                       <TableHead>Total</TableHead>
@@ -1176,7 +1230,7 @@ export default function ClientDetail() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {groupedRows.map((row, idx) => {
+                    {timeWeekRowsPagination.paginatedItems.map((row, idx) => {
                       const rowTotal = dayKeys.reduce((sum, k) => sum + (row.byDay[k] || 0), 0);
                       const rowTimerHref = row.projectId
                         ? `/time/timer?project=${row.projectId}${row.taskId ? `&task=${row.taskId}` : ""}`
@@ -1204,7 +1258,7 @@ export default function ClientDetail() {
                                 setTimeView("day");
                               }}
                             >
-                              {row.byDay[k] ? formatHm(row.byDay[k]) : "—"}
+                              {row.byDay[k] ? formatHm(row.byDay[k]) : <EmptyValue variant="table" />}
                             </TableCell>
                           ))}
                           <TableCell className="font-mono font-medium">{formatHm(rowTotal)}</TableCell>
@@ -1218,12 +1272,28 @@ export default function ClientDetail() {
                     })}
                     <TableRow>
                       <TableCell className="font-semibold">Total</TableCell>
-                      {dayKeys.map((k) => <TableCell key={k} className="font-mono font-semibold">{dayTotals[k] ? formatHm(dayTotals[k]) : "—"}</TableCell>)}
+                      {dayKeys.map((k) => (
+                        <TableCell key={k} className="font-mono font-semibold">
+                          {dayTotals[k] ? formatHm(dayTotals[k]) : <EmptyValue variant="table" />}
+                        </TableCell>
+                      ))}
                       <TableCell className="font-mono font-semibold">{formatHm(Object.values(dayTotals).reduce((s, v) => s + v, 0))}</TableCell>
                       <TableCell />
                     </TableRow>
                   </TableBody>
                 </Table>
+                <TablePagination
+                  total={timeWeekRowsPagination.total}
+                  page={timeWeekRowsPagination.page}
+                  pageSize={timeWeekRowsPagination.pageSize}
+                  from={timeWeekRowsPagination.from}
+                  to={timeWeekRowsPagination.to}
+                  pageSizeOptions={timeWeekRowsPagination.pageSizeOptions}
+                  showPageSizeSelect={timeWeekRowsPagination.showPageSizeSelect}
+                  onPageChange={timeWeekRowsPagination.setPage}
+                  onPageSizeChange={timeWeekRowsPagination.setPageSize}
+                />
+                </DataTableFrame>
               </CardContent></Card>
             ) : timeView === "month" ? (
               <Card><CardContent className="p-4">
@@ -1297,7 +1367,7 @@ export default function ClientDetail() {
                       : `Entries for ${format(monthStart, "MMMM yyyy")}`}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="flex flex-col p-0">
                 {visibleTimeEntries.length === 0 ? (
                   <div className="px-4 pb-4 text-sm text-muted-foreground">
                     {timeView === "day"
@@ -1350,20 +1420,43 @@ export default function ClientDetail() {
               <h3 className="text-base font-semibold">Invoices</h3>
               <Button asChild><Link to={`/invoices?client=${client.id}`}>Create Invoice</Link></Button>
             </div>
-            <Card><CardContent className="p-0"><Table>
-              <TableHeader><TableRow><TableHead>Invoice</TableHead><TableHead>Status</TableHead><TableHead>Total</TableHead><TableHead>Due</TableHead></TableRow></TableHeader>
+            <Card><CardContent className="flex flex-col p-0">
+              <DataTableFrame>
+            <Table>
+              <TableHeader><TableRow className="hover:bg-transparent"><TableHead>Invoice</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Total</TableHead><TableHead>Due</TableHead></TableRow></TableHeader>
               <TableBody>
-                {invoices.map((row) => (
+                {invoicesPagination.paginatedItems.map((row) => (
                   <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/invoices/${row.id}`)}>
-                    <TableCell className="font-medium">{row.invoice_number}</TableCell>
-                    <TableCell><Badge variant="outline" className={getStatusBadgeClass(row.status)}>{formatStatusLabel(row.status)}</Badge></TableCell>
-                    <TableCell className="tabular-nums">{formatClientMoney(row.total)}</TableCell>
-                    <TableCell>{row.due_date ? formatUserDate(row.due_date) : "—"}</TableCell>
+                    <TableCell className="font-semibold">{row.invoice_number}</TableCell>
+                    <TableCell><TableStatusBadge status={row.status} /></TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">
+                      {row.total != null && !Number.isNaN(Number(row.total)) ? (
+                        formatClientMoney(row.total)
+                      ) : (
+                        <EmptyValue variant="table" />
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {row.due_date ? formatUserDate(row.due_date) : <EmptyValue variant="table" />}
+                    </TableCell>
                   </TableRow>
                 ))}
-                {invoices.length === 0 ? <TableRow><TableCell colSpan={4} className="text-muted-foreground">No invoices yet.</TableCell></TableRow> : null}
+                {invoicesPagination.total === 0 ? <TableRow><TableCell colSpan={4} className="text-muted-foreground">No invoices yet.</TableCell></TableRow> : null}
               </TableBody>
-            </Table></CardContent></Card>
+            </Table>
+            <TablePagination
+              total={invoicesPagination.total}
+              page={invoicesPagination.page}
+              pageSize={invoicesPagination.pageSize}
+              from={invoicesPagination.from}
+              to={invoicesPagination.to}
+              pageSizeOptions={invoicesPagination.pageSizeOptions}
+              showPageSizeSelect={invoicesPagination.showPageSizeSelect}
+              onPageChange={invoicesPagination.setPage}
+              onPageSizeChange={invoicesPagination.setPageSize}
+            />
+            </DataTableFrame>
+            </CardContent></Card>
           </TabsContent>
 
           <TabsContent value="proposals" className="space-y-3">
@@ -1371,20 +1464,37 @@ export default function ClientDetail() {
               <h3 className="text-base font-semibold">Proposals</h3>
               <Button asChild><Link to={`/proposals?client=${client.id}`}>Create Proposal</Link></Button>
             </div>
-            <Card><CardContent className="p-0"><Table>
-              <TableHeader><TableRow><TableHead>Proposal</TableHead><TableHead>Status</TableHead><TableHead>Total</TableHead><TableHead>Expires</TableHead></TableRow></TableHeader>
+            <Card><CardContent className="flex flex-col p-0">
+              <DataTableFrame>
+            <Table>
+              <TableHeader><TableRow className="hover:bg-transparent"><TableHead>Proposal</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Total</TableHead><TableHead>Expires</TableHead></TableRow></TableHeader>
               <TableBody>
-                {proposals.map((row) => (
+                {proposalsPagination.paginatedItems.map((row) => (
                   <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/proposals/${row.id}`)}>
-                    <TableCell className="font-medium">{row.identifier}</TableCell>
-                    <TableCell><Badge variant="outline" className={getStatusBadgeClass(row.status)}>{formatStatusLabel(row.status)}</Badge></TableCell>
-                    <TableCell className="tabular-nums">{formatClientMoney(row.total)}</TableCell>
-                    <TableCell>{row.expires_at ? formatUserDate(row.expires_at) : "—"}</TableCell>
+                    <TableCell className="font-semibold">{row.identifier}</TableCell>
+                    <TableCell><TableStatusBadge status={row.status} /></TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">{formatClientMoney(row.total)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {row.expires_at ? formatUserDate(row.expires_at) : <EmptyValue variant="table" />}
+                    </TableCell>
                   </TableRow>
                 ))}
-                {proposals.length === 0 ? <TableRow><TableCell colSpan={4} className="text-muted-foreground">No proposals yet.</TableCell></TableRow> : null}
+                {proposalsPagination.total === 0 ? <TableRow><TableCell colSpan={4} className="text-muted-foreground">No proposals yet.</TableCell></TableRow> : null}
               </TableBody>
-            </Table></CardContent></Card>
+            </Table>
+            <TablePagination
+              total={proposalsPagination.total}
+              page={proposalsPagination.page}
+              pageSize={proposalsPagination.pageSize}
+              from={proposalsPagination.from}
+              to={proposalsPagination.to}
+              pageSizeOptions={proposalsPagination.pageSizeOptions}
+              showPageSizeSelect={proposalsPagination.showPageSizeSelect}
+              onPageChange={proposalsPagination.setPage}
+              onPageSizeChange={proposalsPagination.setPageSize}
+            />
+            </DataTableFrame>
+            </CardContent></Card>
           </TabsContent>
 
           <TabsContent value="contracts" className="space-y-3">
@@ -1392,19 +1502,34 @@ export default function ClientDetail() {
               <h3 className="text-base font-semibold">Contracts</h3>
               <Button asChild><Link to={`/contracts?new=1&client=${client.id}`}>Create Contract</Link></Button>
             </div>
-            <Card><CardContent className="p-0"><Table>
-              <TableHeader><TableRow><TableHead>Contract</TableHead><TableHead>Status</TableHead><TableHead>Total</TableHead></TableRow></TableHeader>
+            <Card><CardContent className="flex flex-col p-0">
+              <DataTableFrame>
+            <Table>
+              <TableHeader><TableRow className="hover:bg-transparent"><TableHead>Contract</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
               <TableBody>
-                {contracts.map((row) => (
+                {contractsPagination.paginatedItems.map((row) => (
                   <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/contracts/${row.id}`)}>
-                    <TableCell className="font-medium">{row.identifier}</TableCell>
-                    <TableCell><Badge variant="outline" className={getStatusBadgeClass(row.status)}>{formatStatusLabel(row.status)}</Badge></TableCell>
-                    <TableCell className="tabular-nums">{formatClientMoney(row.total)}</TableCell>
+                    <TableCell className="font-semibold">{row.identifier}</TableCell>
+                    <TableCell><TableStatusBadge status={row.status} /></TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">{formatClientMoney(row.total)}</TableCell>
                   </TableRow>
                 ))}
-                {contracts.length === 0 ? <TableRow><TableCell colSpan={3} className="text-muted-foreground">No contracts yet.</TableCell></TableRow> : null}
+                {contractsPagination.total === 0 ? <TableRow><TableCell colSpan={3} className="text-muted-foreground">No contracts yet.</TableCell></TableRow> : null}
               </TableBody>
-            </Table></CardContent></Card>
+            </Table>
+            <TablePagination
+              total={contractsPagination.total}
+              page={contractsPagination.page}
+              pageSize={contractsPagination.pageSize}
+              from={contractsPagination.from}
+              to={contractsPagination.to}
+              pageSizeOptions={contractsPagination.pageSizeOptions}
+              showPageSizeSelect={contractsPagination.showPageSizeSelect}
+              onPageChange={contractsPagination.setPage}
+              onPageSizeChange={contractsPagination.setPageSize}
+            />
+            </DataTableFrame>
+            </CardContent></Card>
           </TabsContent>
 
           <TabsContent value="approvals" className="space-y-3">
@@ -1412,20 +1537,37 @@ export default function ClientDetail() {
               <h3 className="text-base font-semibold">Approvals</h3>
               <Button asChild><Link to={`/reviews?client=${client.id}`}>Create Approval</Link></Button>
             </div>
-            <Card><CardContent className="p-0"><Table>
-              <TableHeader><TableRow><TableHead>Title</TableHead><TableHead>Status</TableHead><TableHead>Project</TableHead><TableHead>Created</TableHead></TableRow></TableHeader>
+            <Card><CardContent className="flex flex-col p-0">
+              <DataTableFrame>
+            <Table>
+              <TableHeader><TableRow className="hover:bg-transparent"><TableHead>Title</TableHead><TableHead>Status</TableHead><TableHead>Project</TableHead><TableHead>Created</TableHead></TableRow></TableHeader>
               <TableBody>
-                {approvals.map((row) => (
+                {approvalsPagination.paginatedItems.map((row) => (
                   <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/reviews/${row.id}`)}>
-                    <TableCell className="font-medium">{row.title}</TableCell>
-                    <TableCell><Badge variant="outline" className={getStatusBadgeClass(row.status)}>{formatStatusLabel(row.status)}</Badge></TableCell>
-                    <TableCell>{row.projects?.name || "—"}</TableCell>
-                    <TableCell>{formatUserDate(row.created_at)}</TableCell>
+                    <TableCell className="font-semibold">{row.title}</TableCell>
+                    <TableCell><TableStatusBadge status={row.status} /></TableCell>
+                    <TableCell>
+                      {row.projects?.name ? row.projects.name : <EmptyValue variant="table" field="project" />}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{formatUserDate(row.created_at)}</TableCell>
                   </TableRow>
                 ))}
-                {approvals.length === 0 ? <TableRow><TableCell colSpan={4} className="text-muted-foreground">No approvals yet.</TableCell></TableRow> : null}
+                {approvalsPagination.total === 0 ? <TableRow><TableCell colSpan={4} className="text-muted-foreground">No approvals yet.</TableCell></TableRow> : null}
               </TableBody>
-            </Table></CardContent></Card>
+            </Table>
+            <TablePagination
+              total={approvalsPagination.total}
+              page={approvalsPagination.page}
+              pageSize={approvalsPagination.pageSize}
+              from={approvalsPagination.from}
+              to={approvalsPagination.to}
+              pageSizeOptions={approvalsPagination.pageSizeOptions}
+              showPageSizeSelect={approvalsPagination.showPageSizeSelect}
+              onPageChange={approvalsPagination.setPage}
+              onPageSizeChange={approvalsPagination.setPageSize}
+            />
+            </DataTableFrame>
+            </CardContent></Card>
           </TabsContent>
 
           <TabsContent value="portal" className="space-y-3">

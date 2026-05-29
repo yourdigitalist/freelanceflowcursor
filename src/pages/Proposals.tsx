@@ -6,23 +6,30 @@ import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTableFrame, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableClientCell } from "@/components/ui/table-client-cell";
+import { TableStatusBadge } from "@/components/ui/table-status-badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import { PageSearchInput } from "@/components/ui/page-search-input";
+import { EmptyValue } from "@/components/ui/empty-value";
+
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Trash2, Search, Filter } from "@/components/icons";
+import { Plus, Trash2, Filter } from "@/components/icons";
 import { SlotIcon } from "@/contexts/IconSlotContext";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate } from "@/lib/datetime";
 import { proposalSnapshotsFromClientId } from "@/lib/clientLifecycle";
 import { displayProposalClientName } from "@/lib/proposalClientDisplay";
-import { formatStatusLabel, getStatusBadgeClass } from "@/lib/statusDisplay";
+
 import { ClientFormDialog } from "@/components/clients/ClientFormDialog";
 import { ProjectFormDialog } from "@/components/projects/ProjectFormDialog";
+import { usePagination } from "@/hooks/usePagination";
+import { TablePagination } from "@/components/ui/table-pagination";
+import { PageSummaryBar, PageSummaryStat } from "@/components/ui/page-summary-stats";
 
 type ProposalRow = {
   id: string;
@@ -34,7 +41,14 @@ type ProposalRow = {
   project_id: string | null;
   client_name_snapshot?: string | null;
   client_company_snapshot?: string | null;
-  clients: { name: string; currency?: string | null } | null;
+  clients: {
+    name: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    avatar_color?: string | null;
+    logo_url?: string | null;
+    currency?: string | null;
+  } | null;
   projects: { name: string } | null;
 };
 
@@ -73,7 +87,7 @@ export default function Proposals() {
     const [{ data: proposals }, { data: allClients }, { data: allProjects }, { data: profileDefaults }] = await Promise.all([
       supabase
         .from("proposals")
-        .select("id, identifier, status, total, expires_at, client_id, project_id, client_name_snapshot, client_company_snapshot, clients(name, currency), projects(name)")
+        .select("id, identifier, status, total, expires_at, client_id, project_id, client_name_snapshot, client_company_snapshot, clients(name, first_name, last_name, avatar_color, logo_url, currency), projects(name)")
         .order("created_at", { ascending: false }),
       supabase.from("clients").select("id, name, currency, email, company").is("archived_at", null).order("name"),
       supabase.from("projects").select("id, name, client_id").order("name"),
@@ -130,6 +144,7 @@ export default function Proposals() {
     });
   }, [rows, searchQuery, statusFilter]);
   const activeFilterCount = statusFilter !== "all" ? 1 : 0;
+  const proposalsPagination = usePagination(filteredRows);
 
   const createProposal = async () => {
     if (!user || !clientId) return;
@@ -244,29 +259,34 @@ export default function Proposals() {
 
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-muted-foreground">Your proposals in negotiation</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            ["Draft", counts.draft],
-            ["Sent", counts.sent],
-            ["Read", counts.read],
-          ].map(([label, value]) => (
-            <Card key={label as string} className="border-0 shadow-sm">
-              <CardContent className="p-5"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-bold">{value as number}</p></CardContent>
-            </Card>
-          ))}
-        </div>
+          <PageSummaryBar columns={3}>
+            <PageSummaryStat
+              label="Draft"
+              value={String(counts.draft)}
+              subtitle={`${counts.draft} proposal${counts.draft === 1 ? '' : 's'}`}
+              status="draft"
+            />
+            <PageSummaryStat
+              label="Sent"
+              value={String(counts.sent)}
+              subtitle={`${counts.sent} sent`}
+              status="sent"
+            />
+            <PageSummaryStat
+              label="Read"
+              value={String(counts.read)}
+              subtitle={`${counts.read} read`}
+              status="read"
+            />
+          </PageSummaryBar>
         </div>
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Find a proposal..."
-              className="pl-10 bg-card"
-            />
-          </div>
+          <PageSearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Find a proposal..."
+          />
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="relative h-8 w-8 p-0 ml-auto" aria-label="Filters">
@@ -303,7 +323,7 @@ export default function Proposals() {
         </div>
 
         <Card className="border-0 shadow-sm">
-          <CardContent className="p-0">
+          <CardContent className="flex flex-col p-0">
             {loading ? (
               <div className="py-10 text-center text-sm text-muted-foreground">Loading proposals...</div>
             ) : filteredRows.length === 0 ? (
@@ -312,25 +332,34 @@ export default function Proposals() {
                 <p className="text-sm text-muted-foreground">Create your first proposal to get started.</p>
               </div>
             ) : (
+              <DataTableFrame>
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Identifier</TableHead><TableHead>Client</TableHead><TableHead>Project</TableHead><TableHead>Status</TableHead><TableHead>Total</TableHead><TableHead>Expiry</TableHead><TableHead className="text-right">Actions</TableHead>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Proposal</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Project</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Expires</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRows.map((row) => (
+                  {proposalsPagination.paginatedItems.map((row) => (
                     <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/proposals/${row.id}`)}>
-                      <TableCell className="font-medium">{row.identifier}</TableCell>
-                      <TableCell>{displayProposalClientName(row)}</TableCell>
-                      <TableCell>{row.projects?.name || "—"}</TableCell>
+                      <TableCell className="font-semibold">{row.identifier}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={getStatusBadgeClass(row.status)}>
-                          {formatStatusLabel(row.status)}
-                        </Badge>
+                        <TableClientCell client={row.clients} fallbackName={displayProposalClientName(row)} />
                       </TableCell>
-                      <TableCell>{formatMoney(row.total || 0, row.clients?.currency)}</TableCell>
-                      <TableCell>{formatLocaleDate(row.expires_at, dateFormat)}</TableCell>
+                      <TableCell>
+                        {row.projects?.name ? row.projects.name : <EmptyValue variant="table" field="project" />}
+                      </TableCell>
+                      <TableCell>
+                        <TableStatusBadge status={row.status} />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{formatLocaleDate(row.expires_at, dateFormat)}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{formatMoney(row.total || 0, row.clients?.currency)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button size="icon" variant="ghost" asChild onClick={(event) => event.stopPropagation()} aria-label="Edit proposal">
@@ -348,6 +377,18 @@ export default function Proposals() {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                total={proposalsPagination.total}
+                page={proposalsPagination.page}
+                pageSize={proposalsPagination.pageSize}
+                from={proposalsPagination.from}
+                to={proposalsPagination.to}
+                pageSizeOptions={proposalsPagination.pageSizeOptions}
+                showPageSizeSelect={proposalsPagination.showPageSizeSelect}
+                onPageChange={proposalsPagination.setPage}
+                onPageSizeChange={proposalsPagination.setPageSize}
+              />
+              </DataTableFrame>
             )}
           </CardContent>
         </Card>

@@ -11,6 +11,11 @@ describe("formatStatusLabel", () => {
   it("formats underscored statuses", () => {
     expect(formatStatusLabel("pending_signatures")).toBe("Pending signatures");
   });
+
+  it("returns friendly copy for empty status", () => {
+    expect(formatStatusLabel(null)).toBe("No status");
+    expect(formatStatusLabel("")).toBe("No status");
+  });
 });
 
 describe("getStatusBadgeClass", () => {

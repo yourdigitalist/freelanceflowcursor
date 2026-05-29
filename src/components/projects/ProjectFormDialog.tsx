@@ -21,8 +21,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
-import { EmojiPicker } from '@/components/ui/emoji-picker';
 import { ClientFormDialog, type ClientFormDialogClient } from '@/components/clients/ClientFormDialog';
 
 export interface ProjectFormDialogClient {
@@ -42,13 +40,7 @@ export interface ProjectFormDialogProject {
   start_date: string | null;
   due_date: string | null;
   client_id: string | null;
-  icon_emoji: string | null;
-  icon_color: string | null;
 }
-
-const ICON_COLORS = [
-  '#9B63E9', '#22C55E', '#3B82F6', '#F59E0B', '#EF4444', '#EC4899', '#06B6D4', '#8B5CF6',
-];
 
 interface ProjectFormDialogProps {
   open: boolean;
@@ -72,8 +64,6 @@ export function ProjectFormDialog({
   const { user } = useAuth();
   const { toast } = useToast();
   const [dialogClientId, setDialogClientId] = useState<string>('none');
-  const [selectedEmoji, setSelectedEmoji] = useState('📁');
-  const [selectedColor, setSelectedColor] = useState('#9B63E9');
   const [createClientOpen, setCreateClientOpen] = useState(false);
   const [availableClients, setAvailableClients] = useState<ProjectFormDialogClient[]>(clients);
 
@@ -84,15 +74,11 @@ export function ProjectFormDialog({
   useEffect(() => {
     if (!open) return;
     setDialogClientId(editingProject?.client_id || initialClientId || 'none');
-    setSelectedEmoji(editingProject?.icon_emoji || '📁');
-    setSelectedColor(editingProject?.icon_color || '#9B63E9');
   }, [open, editingProject, initialClientId]);
 
   const resetAndClose = () => {
     onOpenChange(false);
     setDialogClientId('none');
-    setSelectedEmoji('📁');
-    setSelectedColor('#9B63E9');
     setCreateClientOpen(false);
   };
 
@@ -128,8 +114,6 @@ export function ProjectFormDialog({
       client_id: (formData.get('client_id') as string) === 'none'
         ? null
         : (formData.get('client_id') as string) || null,
-      icon_emoji: selectedEmoji,
-      icon_color: selectedColor,
       user_id: user.id,
     };
 
@@ -179,38 +163,6 @@ export function ProjectFormDialog({
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Project Icon</Label>
-              <div className="flex items-center gap-3">
-                <EmojiPicker value={selectedEmoji} onChange={setSelectedEmoji}>
-                  <button
-                    type="button"
-                    className="h-12 w-12 rounded-lg flex items-center justify-center text-xl cursor-pointer border-2 border-border hover:border-muted-foreground/40 hover:bg-muted/50 transition-colors"
-                    style={{ backgroundColor: selectedColor }}
-                  >
-                    {selectedEmoji}
-                  </button>
-                </EmojiPicker>
-                <div className="flex-1 space-y-2">
-                  <p className="text-sm text-muted-foreground">Click the icon to choose an emoji</p>
-                  <div className="flex gap-1">
-                    {ICON_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        onClick={() => setSelectedColor(color)}
-                        className={cn(
-                          'h-6 w-6 rounded-full transition-transform',
-                          selectedColor === color && 'ring-2 ring-offset-2 ring-primary scale-110',
-                        )}
-                        style={{ backgroundColor: color }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="project-dialog-name">Project Name *</Label>
               <Input

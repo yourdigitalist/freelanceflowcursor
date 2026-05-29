@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  DataTableFrame,
   Table,
   TableBody,
   TableCell,
@@ -24,10 +25,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ServiceFormModal } from "@/components/services/ServiceFormModal";
 import { useProfileCurrency } from "@/hooks/useProfileCurrency";
+import { EmptyValue } from "@/components/ui/empty-value";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2 } from "@/components/icons";
 import { SlotIcon } from "@/contexts/IconSlotContext";
 import type { Service } from "@/types/services";
+import { usePagination } from "@/hooks/usePagination";
+import { TablePagination } from "@/components/ui/table-pagination";
 
 function mapTasks(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -44,6 +48,7 @@ export default function Services() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [deletingService, setDeletingService] = useState<Service | null>(null);
+  const servicesPagination = usePagination(services);
 
   const fetchServices = async () => {
     try {
@@ -113,23 +118,23 @@ export default function Services() {
           </Button>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-6">
-              <p className="text-sm text-muted-foreground">Total services</p>
-              <p className="text-2xl font-bold">{stats.total}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-6">
-              <p className="text-sm text-muted-foreground">Recurring services</p>
-              <p className="text-2xl font-bold">{stats.recurring}</p>
-            </CardContent>
-          </Card>
-        </div>
+        <PageSummaryBar columns={2}>
+          <PageSummaryStat
+            label="Total services"
+            value={String(stats.total)}
+            subtitle={`${stats.total} service${stats.total === 1 ? '' : 's'}`}
+            hideDot
+          />
+          <PageSummaryStat
+            label="Recurring services"
+            value={String(stats.recurring)}
+            subtitle={`${stats.recurring} recurring`}
+            status="active"
+          />
+        </PageSummaryBar>
 
         <Card className="border-0 shadow-sm">
-          <CardContent className="p-0">
+          <CardContent className="flex flex-col p-0">
             {loading ? (
               <div className="py-10 text-center text-sm text-muted-foreground">Loading services...</div>
             ) : services.length === 0 ? (
@@ -150,9 +155,10 @@ export default function Services() {
                 </Button>
               </div>
             ) : (
+              <DataTableFrame>
               <Table>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="hover:bg-transparent">
                     <TableHead>Service</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead>Price</TableHead>
@@ -161,7 +167,7 @@ export default function Services() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {services.map((service) => (
+                  {servicesPagination.paginatedItems.map((service) => (
                     <TableRow
                       key={service.id}
                       className="cursor-pointer"
@@ -172,7 +178,7 @@ export default function Services() {
                     >
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{service.name}</span>
+                          <span className="font-semibold">{service.name}</span>
                           {service.is_recurring && (
                             <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/40 dark:text-purple-200">
                               {service.recurrence_period === "annually" ? "Recurring · Yearly" : "Recurring · Monthly"}
@@ -181,13 +187,13 @@ export default function Services() {
                         </div>
                       </TableCell>
                       <TableCell className="max-w-[320px] truncate text-muted-foreground">
-                        {service.description || "—"}
+                        {service.description ? service.description : <EmptyValue variant="table" field="description" />}
+                      </TableCell>
+                      <TableCell className="font-semibold tabular-nums">
+                        {service.price == null ? <EmptyValue variant="table" field="value" /> : formatCurrency(service.price)}
                       </TableCell>
                       <TableCell>
-                        {service.price == null ? "—" : formatCurrency(service.price)}
-                      </TableCell>
-                      <TableCell>
-                        {service.default_tasks.length > 0 ? `${service.default_tasks.length} tasks` : "—"}
+                        {service.default_tasks.length > 0 ? `${service.default_tasks.length} tasks` : <EmptyValue variant="table" />}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-1">
@@ -221,6 +227,18 @@ export default function Services() {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                total={servicesPagination.total}
+                page={servicesPagination.page}
+                pageSize={servicesPagination.pageSize}
+                from={servicesPagination.from}
+                to={servicesPagination.to}
+                pageSizeOptions={servicesPagination.pageSizeOptions}
+                showPageSizeSelect={servicesPagination.showPageSizeSelect}
+                onPageChange={servicesPagination.setPage}
+                onPageSizeChange={servicesPagination.setPageSize}
+              />
+              </DataTableFrame>
             )}
           </CardContent>
         </Card>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Input } from '@/components/ui/input';
+import { PageSearchInput } from '@/components/ui/page-search-input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -135,11 +135,11 @@ export function EntityLinkPopover({
         <TabsTrigger value="task" className="rounded-none">Tasks</TabsTrigger>
       </TabsList>
       <div className="p-2 border-b">
-        <Input
+        <PageSearchInput
           placeholder={`Search ${tab}...`}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="h-9"
+          onChange={setQuery}
+          wrapperClassName="max-w-none"
         />
       </div>
       <ScrollArea className="h-[240px]">
@@ -174,7 +174,7 @@ export function EntityLinkPopover({
                 className="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-muted flex items-center gap-2"
                 onClick={() => pickProject(p)}
               >
-                <span>{p.icon_emoji || '📁'}</span>
+
                 <span className="truncate">{p.name}</span>
               </button>
             ))
@@ -273,7 +273,12 @@ export function EntityLinkPickerContent({
         <TabsTrigger value="task" className="rounded-none">Tasks</TabsTrigger>
       </TabsList>
       <div className="p-2 border-b">
-        <Input placeholder={`Search ${tab}...`} value={query} onChange={(e) => setQuery(e.target.value)} className="h-9" />
+        <PageSearchInput
+          placeholder={`Search ${tab}...`}
+          value={query}
+          onChange={setQuery}
+          wrapperClassName="max-w-none"
+        />
       </div>
       <ScrollArea className="h-[240px]">
         <TabsContent value="client" className="mt-0 p-1">

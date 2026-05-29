@@ -14,6 +14,12 @@ import { SlotIcon } from '@/contexts/IconSlotContext';
 import { cn } from '@/lib/utils';
 import { getEntryClientName } from '@/lib/timeEntryFilters';
 import { formatDuration } from '@/lib/time';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { TableClientCell } from '@/components/ui/table-client-cell';
+import { EmptyValue } from '@/components/ui/empty-value';
+import type { ClientAvatarClient } from '@/components/clients/ClientAvatar';
+import { DataTableFrame } from '@/components/ui/table';
 
 export interface TimeEntriesTableEntry {
   id: string;
@@ -35,7 +41,7 @@ type TimeEntriesTableVariant = 'default' | 'timesheetDay';
 
 interface TimeEntriesTableProps {
   entries: TimeEntriesTableEntry[];
-  clientById: Map<string, { name: string }>;
+  clientById: Map<string, ClientAvatarClient>;
   formatUserDate: (value: Date | string) => string;
   getEntrySeconds: (entry: TimeEntriesTableEntry) => number;
   getStatusBadge: (entry: TimeEntriesTableEntry) => React.ReactNode;
@@ -78,6 +84,7 @@ export function TimeEntriesTable({
   showProjectColumn = true,
 }: TimeEntriesTableProps) {
   const isTimesheetDay = variant === 'timesheetDay';
+  const pagination = usePagination(entries);
 
   if (entries.length === 0) {
     return (
@@ -96,9 +103,10 @@ export function TimeEntriesTable({
   }
 
   return (
+    <DataTableFrame>
     <Table>
       <TableHeader>
-        <TableRow className={isTimesheetDay ? 'hover:bg-transparent' : undefined}>
+        <TableRow className="hover:bg-transparent">
           {selectionMode && <TableHead className="w-10" />}
           <TableHead>Date</TableHead>
           {showClientColumn ? <TableHead>Client</TableHead> : null}
@@ -113,7 +121,7 @@ export function TimeEntriesTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {entries.map((entry) => {
+        {pagination.paginatedItems.map((entry) => {
           const seconds = getEntrySeconds(entry);
           const clientName = getEntryClientName(entry, clientById);
           const taskTitle = entry.tasks?.title;
@@ -137,8 +145,19 @@ export function TimeEntriesTable({
                 {formatUserDate(entry.started_at || entry.start_time)}
               </TableCell>
               {showClientColumn ? (
-                <TableCell className={isTimesheetDay ? 'px-4 py-3 text-[13px] font-medium' : undefined}>
-                  {clientName || <span className="text-muted-foreground">—</span>}
+                <TableCell className={isTimesheetDay ? 'px-4 py-3' : undefined}>
+                  {clientName ? (
+                    <TableClientCell
+                      client={
+                        entry.projects?.client_id
+                          ? clientById.get(entry.projects.client_id)
+                          : undefined
+                      }
+                      fallbackName={clientName}
+                    />
+                  ) : (
+                    <EmptyValue variant="table" field="client" />
+                  )}
                 </TableCell>
               ) : null}
               {showProjectColumn ? (
@@ -166,7 +185,7 @@ export function TimeEntriesTable({
                     {taskTitle ? (
                       <p className="text-[13px] font-normal leading-snug text-foreground">{taskTitle}</p>
                     ) : (
-                      <p className="text-[13px] text-muted-foreground">—</p>
+                      <EmptyValue variant="table" field="task" className="text-[13px]" />
                     )}
                     {notes ? (
                       <p className="text-[13px] font-normal leading-snug text-muted-foreground">{notes}</p>
@@ -175,7 +194,7 @@ export function TimeEntriesTable({
                     )}
                   </div>
                 ) : (
-                  entry.tasks?.title || <span className="text-muted-foreground">—</span>
+                  entry.tasks?.title || <EmptyValue variant="table" field="task" />
                 )}
               </TableCell>
               {!isTimesheetDay && (
@@ -185,8 +204,8 @@ export function TimeEntriesTable({
                   )}
                 </TableCell>
               )}
-              <TableCell className={isTimesheetDay ? 'px-4 py-3 text-[13px] font-medium' : undefined}>
-                {seconds > 0 ? formatDuration(seconds, true) : '—'}
+              <TableCell className={cn(isTimesheetDay && 'px-4 py-3', 'font-semibold tabular-nums')}>
+                {seconds > 0 ? formatDuration(seconds, true) : <EmptyValue variant="table" />}
               </TableCell>
               <TableCell className={isTimesheetDay ? 'px-4 py-3' : undefined}>{getStatusBadge(entry)}</TableCell>
               <TableCell
@@ -232,5 +251,17 @@ export function TimeEntriesTable({
         })}
       </TableBody>
     </Table>
+    <TablePagination
+      total={pagination.total}
+      page={pagination.page}
+      pageSize={pagination.pageSize}
+      from={pagination.from}
+      to={pagination.to}
+      pageSizeOptions={pagination.pageSizeOptions}
+      showPageSizeSelect={pagination.showPageSizeSelect}
+      onPageChange={pagination.setPage}
+      onPageSizeChange={pagination.setPageSize}
+    />
+    </DataTableFrame>
   );
 }

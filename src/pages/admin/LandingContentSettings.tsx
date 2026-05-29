@@ -15,7 +15,8 @@ import {
 } from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, Upload, Search } from '@/components/icons';
+import { Loader2, Upload } from '@/components/icons';
+import { PageSearchInput } from '@/components/ui/page-search-input';
 import {
   Dialog,
   DialogContent,
@@ -765,15 +766,12 @@ export default function LandingContentSettings() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 flex-1 min-h-0">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search icons by name…"
-                value={problemIconSearch}
-                onChange={(e) => setProblemIconSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+            <PageSearchInput
+              placeholder="Search icons by name…"
+              value={problemIconSearch}
+              onChange={setProblemIconSearch}
+              wrapperClassName="max-w-none"
+            />
             <div className="flex-1 overflow-auto rounded-md border bg-muted/30 p-4 min-h-[280px]">
               {loadingIconPaths ? (
                 <div className="flex items-center justify-center py-12">

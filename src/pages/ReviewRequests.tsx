@@ -4,8 +4,17 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
-import { ViewToggle, ViewToggleButton } from '@/components/ui/view-toggle';
 import { Input } from '@/components/ui/input';
+import { PageSearchInput } from '@/components/ui/page-search-input';
+import { MenuDotsTrigger } from '@/components/ui/menu-dots-trigger';
+import { DataTableFrame, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TableClientCell } from '@/components/ui/table-client-cell';
+import { TableStatusBadge } from '@/components/ui/table-status-badge';
+import { EmptyValue } from '@/components/ui/empty-value';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { useLocalePreferences } from '@/hooks/useLocalePreferences';
+import { formatLocaleDate } from '@/lib/datetime';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -45,7 +54,6 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import {
   Plus,
-  MoreVertical,
   Upload,
   X,
   CheckCircle,
@@ -57,13 +65,12 @@ import {
   ChevronLeft,
   LayoutGrid,
   List,
-  Search,
+
   Filter,
+  Image,
 } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
-import { EmojiPicker } from '@/components/ui/emoji-picker';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { cn } from '@/lib/utils';
+
 import { getSiteUrl } from '@/lib/site-url';
 import { uploadReviewFile } from '@/lib/reviewFileUpload';
 import { sendReviewRequestEmail } from '@/lib/sendReviewRequest';
@@ -72,8 +79,6 @@ import { ProjectFormDialog } from '@/components/projects/ProjectFormDialog';
 interface ReviewFolder {
   id: string;
   name: string;
-  emoji: string;
-  color: string;
 }
 
 interface ReviewRequest {
@@ -116,15 +121,12 @@ function FileThumbnail({ file }: { file: File }) {
   return <img src={url} alt="" className="h-8 w-8 rounded object-cover bg-background" />;
 }
 
-const FOLDER_COLORS = [
-  '#9B63E9', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#8B5CF6', '#06B6D4'
-];
-
 export default function ReviewRequests() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
+  const { dateFormat } = useLocalePreferences();
   
   const [folders, setFolders] = useState<ReviewFolder[]>([]);
   const [requests, setRequests] = useState<ReviewRequest[]>([]);
@@ -140,8 +142,6 @@ export default function ReviewRequests() {
   
   // Folder form
   const [folderName, setFolderName] = useState('');
-  const [folderEmoji, setFolderEmoji] = useState('📁');
-  const [folderColor, setFolderColor] = useState('#9B63E9');
   
   // Request form
   const [requestTitle, setRequestTitle] = useState('');
@@ -158,8 +158,6 @@ export default function ReviewRequests() {
 
   const [showCreateFolderInline, setShowCreateFolderInline] = useState(false);
   const [inlineFolderName, setInlineFolderName] = useState('');
-  const [inlineFolderEmoji, setInlineFolderEmoji] = useState('📁');
-  const [inlineFolderColor, setInlineFolderColor] = useState('#9B63E9');
   const [creatingFolderInline, setCreatingFolderInline] = useState(false);
 
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
@@ -170,12 +168,6 @@ export default function ReviewRequests() {
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [folderFilter, setFolderFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  // Collapsible folder sections: which are open (default open for "none" and first folder)
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
-  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
-  /** In cards view: null = showing folder list; 'none' = inside "No folder"; folder.id = inside that folder */
-  const [openedFolderId, setOpenedFolderId] = useState<string | null>(null);
-
   // When creating a new request, auto-fill recipients with the selected client's email
   useEffect(() => {
     if (editingRequest || !requestClientId) return;
@@ -236,8 +228,6 @@ export default function ReviewRequests() {
 
   const resetFolderForm = () => {
     setFolderName('');
-    setFolderEmoji('📁');
-    setFolderColor('#9B63E9');
     setEditingFolder(null);
   };
 
@@ -255,8 +245,6 @@ export default function ReviewRequests() {
     setEditingRequest(null);
     setShowCreateFolderInline(false);
     setInlineFolderName('');
-    setInlineFolderEmoji('📁');
-    setInlineFolderColor('#9B63E9');
     setCreateProjectDialogOpen(false);
   };
 
@@ -272,10 +260,8 @@ export default function ReviewRequests() {
         .insert({
           user_id: user.id,
           name: inlineFolderName.trim(),
-          emoji: inlineFolderEmoji,
-          color: inlineFolderColor,
         })
-        .select('id, name, emoji, color')
+        .select('id, name')
         .single();
       if (error) throw error;
       if (!data) throw new Error('Folder was not created');
@@ -283,8 +269,6 @@ export default function ReviewRequests() {
       setRequestFolderId(data.id);
       setShowCreateFolderInline(false);
       setInlineFolderName('');
-      setInlineFolderEmoji('📁');
-      setInlineFolderColor('#9B63E9');
       toast({ title: 'Folder created' });
     } catch (err: any) {
       toast({ title: 'Could not create folder', description: err?.message, variant: 'destructive' });
@@ -299,7 +283,7 @@ export default function ReviewRequests() {
     if (editingFolder) {
       const { error } = await supabase
         .from('review_folders')
-        .update({ name: folderName, emoji: folderEmoji, color: folderColor })
+        .update({ name: folderName })
         .eq('id', editingFolder.id);
       
       if (error) {
@@ -309,7 +293,7 @@ export default function ReviewRequests() {
     } else {
       const { error } = await supabase
         .from('review_folders')
-        .insert({ user_id: user.id, name: folderName, emoji: folderEmoji, color: folderColor });
+        .insert({ user_id: user.id, name: folderName });
       
       if (error) {
         toast({ title: 'Error creating folder', variant: 'destructive' });
@@ -337,8 +321,6 @@ export default function ReviewRequests() {
   const handleEditFolder = (folder: ReviewFolder) => {
     setEditingFolder(folder);
     setFolderName(folder.name);
-    setFolderEmoji(folder.emoji);
-    setFolderColor(folder.color);
     setFolderDialogOpen(true);
   };
 
@@ -601,19 +583,6 @@ export default function ReviewRequests() {
   const pdfFiles = requestFiles.filter((f) => f.type === 'application/pdf');
   const wordFiles = requestFiles.filter((f) => WORD_TYPES.includes(f.type));
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return <Badge className="bg-success/10 text-success border-success/20"><CheckCircle className="h-3 w-3 mr-1" />Approved</Badge>;
-      case 'rejected':
-        return <Badge className="bg-destructive/10 text-destructive border-destructive/20"><XCircle className="h-3 w-3 mr-1" />Rejected</Badge>;
-      case 'commented':
-        return <Badge className="bg-primary/10 text-primary border-primary/20"><MessageSquare className="h-3 w-3 mr-1" />Commented</Badge>;
-      default:
-        return <Badge className="bg-muted text-muted-foreground"><SlotIcon slot="task_clock" className="h-3 w-3 mr-1" />Pending</Badge>;
-    }
-  };
-
   const filteredRequests = requests.filter((r) => {
     const matchesSearch =
       r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -631,21 +600,15 @@ export default function ReviewRequests() {
     (projectFilter !== 'all' ? 1 : 0) +
     (folderFilter !== 'all' ? 1 : 0);
 
-  // Group filtered requests by folder for collapsible directory
-  const requestsByFolder = (() => {
-    const none: ReviewRequest[] = [];
-    const byId: Record<string, ReviewRequest[]> = {};
-    folders.forEach((f) => { byId[f.id] = []; });
-    filteredRequests.forEach((r) => {
-      if (!r.folder_id) none.push(r);
-      else (byId[r.folder_id] = byId[r.folder_id] || []).push(r);
+  const folderById = useMemo(() => {
+    const map: Record<string, ReviewFolder> = {};
+    folders.forEach((f) => {
+      map[f.id] = f;
     });
-    return { none, byId };
-  })();
+    return map;
+  }, [folders]);
 
-  const setSectionOpen = (id: string, open: boolean) => {
-    setOpenSections((prev) => ({ ...prev, [id]: open }));
-  };
+  const approvalsPagination = usePagination(filteredRequests);
 
   if (loading) {
     return (
@@ -665,7 +628,6 @@ export default function ReviewRequests() {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => { resetFolderForm(); setFolderDialogOpen(true); }}>
-              <SlotIcon slot="approval_folder" className="h-4 w-4 mr-2" />
               Create Folder
             </Button>
             <Button onClick={() => { resetRequestForm(); setRequestDialogOpen(true); }}>
@@ -675,47 +637,24 @@ export default function ReviewRequests() {
           </div>
         </div>
 
-        {/* Search + View + Filters */}
+        {/* Search + Filters */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search approvals..."
-              className="pl-10 bg-card"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <ViewToggle>
-              <ViewToggleButton
-                active={viewMode === 'list'}
-                onClick={() => { setViewMode('list'); setOpenedFolderId(null); }}
-                aria-label="List view"
-                title="List view"
-              >
-                <List className="h-4 w-4" />
-              </ViewToggleButton>
-              <ViewToggleButton
-                active={viewMode === 'cards'}
-                onClick={() => { setViewMode('cards'); setOpenedFolderId(null); }}
-                aria-label="Cards view"
-                title="Cards view"
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </ViewToggleButton>
-            </ViewToggle>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="relative h-8 w-8 p-0" aria-label="Filters">
-                  <Filter className="h-4 w-4" />
-                  {activeFilterCount > 0 ? (
-                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
-                      {activeFilterCount}
-                    </span>
-                  ) : null}
-                </Button>
-              </PopoverTrigger>
+          <PageSearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search approvals..."
+          />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="relative h-8 w-8 p-0 ml-auto" aria-label="Filters">
+                <Filter className="h-4 w-4" />
+                {activeFilterCount > 0 ? (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
+              </Button>
+            </PopoverTrigger>
               <PopoverContent className="w-[300px] p-4" align="end">
                 <div className="space-y-3">
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -761,7 +700,7 @@ export default function ReviewRequests() {
                       <SelectItem value="none">No folder</SelectItem>
                       {folders.map((f) => (
                         <SelectItem key={f.id} value={f.id}>
-                          <span className="mr-1">{f.emoji}</span>{f.name}
+                          {f.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -783,358 +722,144 @@ export default function ReviewRequests() {
                   ) : null}
                 </div>
               </PopoverContent>
-            </Popover>
-          </div>
+          </Popover>
         </div>
 
-        {/* Folder list (accordion in list view) or folder-as-cards (click to open in cards view) */}
-        {filteredRequests.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              No approval requests yet
-            </CardContent>
-          </Card>
-        ) : viewMode === 'cards' && openedFolderId === null ? (
-          /* Cards view: folder grid – click a folder to open it (empty folders always visible) */
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            <Card
-              className="cursor-pointer hover:shadow-md transition-shadow border-2 border-dashed hover:border-border hover:bg-muted/40"
-              onClick={() => setOpenedFolderId('none')}
-            >
-              <CardContent className="p-6 flex flex-col items-center justify-center min-h-[120px] gap-2">
-                <SlotIcon slot="approval_folder" className="h-10 w-10 text-muted-foreground" />
-                <span className="font-medium">No folder</span>
-                <span className="text-sm text-muted-foreground">{requestsByFolder.none.length} request{requestsByFolder.none.length !== 1 ? 's' : ''}</span>
-              </CardContent>
-            </Card>
-            {folders.map((folder) => {
-              const folderRequests = requestsByFolder.byId[folder.id] || [];
-              return (
-                <Card
-                  key={folder.id}
-                  className="cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => setOpenedFolderId(folder.id)}
-                >
-                  <CardContent className="p-6 flex flex-col items-center justify-center min-h-[120px] gap-2">
-                    <span className="text-3xl" style={{ color: folder.color }}>{folder.emoji}</span>
-                    <span className="font-medium text-center truncate w-full">{folder.name}</span>
-                    <span className="text-sm text-muted-foreground">{folderRequests.length} request{folderRequests.length !== 1 ? 's' : ''}</span>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        ) : viewMode === 'cards' && openedFolderId !== null ? (
-          /* Cards view: inside a folder – back button + request cards */
-          (() => {
-            const isNone = openedFolderId === 'none';
-            const folder = isNone ? null : folders.find((f) => f.id === openedFolderId);
-            const requestsInFolder = isNone ? requestsByFolder.none : (requestsByFolder.byId[openedFolderId] || []);
-            const isEmpty = requestsInFolder.length === 0;
-            return (
-              <div className="space-y-4">
-                <Button variant="ghost" className="gap-2 -ml-2" onClick={() => setOpenedFolderId(null)}>
-                  <ChevronLeft className="h-4 w-4" />
-                  Back to folders
+        <Card className="border-0 shadow-sm">
+          <CardContent className="flex flex-col p-0">
+            {requests.length === 0 ? (
+              <div className="py-14 text-center">
+                <h3 className="text-lg font-semibold">No approval requests yet</h3>
+                <p className="text-sm text-muted-foreground mb-4">Create your first approval request to get started.</p>
+                <Button onClick={() => { resetRequestForm(); setRequestDialogOpen(true); }}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New approval
                 </Button>
-                <div className="flex items-center gap-2 pb-2">
-                  {isNone ? (
-                    <>
-                      <SlotIcon slot="approval_folder" className="h-5 w-5 text-muted-foreground" />
-                      <h2 className="font-semibold">No folder</h2>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-2xl" style={{ color: folder?.color }}>{folder?.emoji}</span>
-                      <h2 className="font-semibold">{folder?.name}</h2>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => folder && handleEditFolder(folder)}>
-                            <SlotIcon slot="action_edit" className="h-4 w-4 mr-2" />Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => folder && handleDeleteFolder(folder)} className="text-destructive">
-                            <SlotIcon slot="action_delete" className="h-4 w-4 mr-2 text-muted-foreground" />Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </>
-                  )}
-                </div>
-                {isEmpty ? (
-                  <div className="flex flex-col items-center justify-center py-12 px-4 rounded-lg border border-dashed bg-muted/30">
-                    <p className="text-sm text-muted-foreground mb-3">No approval requests in this folder yet</p>
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
-                        resetRequestForm();
-                        setRequestFolderId(isNone ? '' : openedFolderId);
-                        setRequestDialogOpen(true);
-                      }}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add approval request
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {requestsInFolder.map((request) => (
-                      <Card
-                        key={request.id}
-                        className="hover:shadow-md transition-shadow cursor-pointer group border-0 shadow-sm"
-                        onClick={() => navigate(`/reviews/${request.id}`)}
-                      >
-                        <CardContent className="p-4 space-y-3">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-medium truncate">{request.title}</h3>
-                              <p className="text-sm text-muted-foreground">
-                                v{request.version} • {request.clients?.name || 'No client'}
-                              </p>
+              </div>
+            ) : filteredRequests.length === 0 ? (
+              <div className="py-14 text-center text-sm text-muted-foreground">
+                No approvals match your search or filters.
+              </div>
+            ) : (
+              <DataTableFrame>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Approval</TableHead>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Project</TableHead>
+                      <TableHead>Folder</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Due</TableHead>
+                      <TableHead>Sent</TableHead>
+                      <TableHead className="w-10" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {approvalsPagination.paginatedItems.map((request) => {
+                      const folder = request.folder_id ? folderById[request.folder_id] : null;
+                      return (
+                        <TableRow
+                          key={request.id}
+                          className="cursor-pointer"
+                          onClick={() => navigate(`/reviews/${request.id}`)}
+                        >
+                          <TableCell className="font-semibold">
+                            <div className="min-w-0">
+                              <p className="truncate">{request.title}</p>
+                              <p className="text-xs font-normal text-muted-foreground">v{request.version}</p>
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            <TableClientCell
+                              client={request.clients?.name ? { name: request.clients.name } : null}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {request.projects?.name ? (
+                              request.projects.name
+                            ) : (
+                              <EmptyValue variant="table" field="project" />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {folder ? (
+                              <span className="truncate text-sm">{folder.name}</span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">No folder</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <TableStatusBadge status={request.status} />
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {request.due_date ? (
+                              formatLocaleDate(request.due_date, dateFormat)
+                            ) : (
+                              <EmptyValue variant="table" field="due_date" />
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {request.sent_at ? (
+                              formatLocaleDate(request.sent_at, dateFormat)
+                            ) : (
+                              <EmptyValue variant="table" field="sent_at" />
+                            )}
+                          </TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
                             <DropdownMenu>
-                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
+                              <MenuDotsTrigger />
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/reviews/${request.id}`); }}>
-                                  <SlotIcon slot="approval_documents" className="h-4 w-4 mr-2" />View Details
+                                <DropdownMenuItem onClick={() => navigate(`/reviews/${request.id}`)}>
+                                  <SlotIcon slot="approval_documents" className="mr-2 h-4 w-4" />
+                                  View Details
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditRequest(request); }}>
-                                  <SlotIcon slot="action_edit" className="h-4 w-4 mr-2" />Edit
+                                <DropdownMenuItem onClick={() => handleEditRequest(request)}>
+                                  <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
+                                  Edit
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); copyShareLink(request); }}>
-                                  <SlotIcon slot="action_copy_link" className="h-4 w-4 mr-2" />Copy Link
+                                <DropdownMenuItem onClick={() => copyShareLink(request)}>
+                                  <SlotIcon slot="action_copy_link" className="mr-2 h-4 w-4" />
+                                  Copy Link
                                 </DropdownMenuItem>
                                 {!request.sent_at && (
-                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleSendRequest(request); }}>
-                                    <SlotIcon slot="action_send" className="h-4 w-4 mr-2" />Mark as Sent
+                                  <DropdownMenuItem onClick={() => handleSendRequest(request)}>
+                                    <SlotIcon slot="action_send" className="mr-2 h-4 w-4" />
+                                    Mark as Sent
                                   </DropdownMenuItem>
                                 )}
-                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDeleteRequest(request); }} className="text-destructive">
-                                  <SlotIcon slot="action_delete" className="h-4 w-4 mr-2 text-muted-foreground" />Delete
+                                <DropdownMenuItem
+                                  onClick={() => handleDeleteRequest(request)}
+                                  className="text-destructive"
+                                >
+                                  <SlotIcon slot="action_delete" className="mr-2 h-4 w-4 text-muted-foreground" />
+                                  Delete
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {getStatusBadge(request.status)}
-                            {request.sent_at && (
-                              <Badge variant="outline" className="text-xs">
-                                <SlotIcon slot="action_send" className="h-3 w-3 mr-1" />Sent
-                              </Badge>
-                            )}
-                          </div>
-                          {request.due_date && (
-                            <p className="text-xs text-muted-foreground">
-                              Due: {format(new Date(request.due_date), 'MMM d, yyyy')}
-                            </p>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })()
-        ) : (
-          <div className="space-y-2">
-            {/* List view: No folder section */}
-            {requestsByFolder.none.length > 0 && (
-              <Collapsible
-                open={openSections['none'] !== false}
-                onOpenChange={(open) => setSectionOpen('none', open)}
-              >
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" className="w-full justify-start gap-2 h-9 font-medium">
-                    {openSections['none'] === false ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    <SlotIcon slot="approval_folder" className="h-4 w-4 text-muted-foreground" />
-                    No folder
-                    <span className="text-muted-foreground text-sm ml-1">({requestsByFolder.none.length})</span>
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="pl-6 pt-2 space-y-1">
-                    {requestsByFolder.none.map((request) => (
-                      <div
-                        key={request.id}
-                        className="flex items-center gap-3 py-2 px-3 rounded-lg border bg-card hover:bg-muted/50 cursor-pointer group"
-                        onClick={() => navigate(`/reviews/${request.id}`)}
-                      >
-                        <div className="flex-1 min-w-0 grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center">
-                          <div className="min-w-0">
-                            <p className="font-medium truncate">{request.title}</p>
-                            <p className="text-sm text-muted-foreground">v{request.version} • {request.clients?.name || 'No client'}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {getStatusBadge(request.status)}
-                            {request.sent_at && (
-                              <Badge variant="outline" className="text-xs">
-                                <SlotIcon slot="action_send" className="h-3 w-3 mr-1" />Sent
-                              </Badge>
-                            )}
-                          </div>
-                          {request.due_date ? (
-                            <span className="text-sm text-muted-foreground whitespace-nowrap">
-                              Due {format(new Date(request.due_date), 'MMM d, yyyy')}
-                            </span>
-                          ) : <span />}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/reviews/${request.id}`); }}>
-                                <SlotIcon slot="approval_documents" className="h-4 w-4 mr-2" />View Details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditRequest(request); }}>
-                                <SlotIcon slot="action_edit" className="h-4 w-4 mr-2" />Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); copyShareLink(request); }}>
-                                <SlotIcon slot="action_copy_link" className="h-4 w-4 mr-2" />Copy Link
-                              </DropdownMenuItem>
-                              {!request.sent_at && (
-                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleSendRequest(request); }}>
-                                  <SlotIcon slot="action_send" className="h-4 w-4 mr-2" />Mark as Sent
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDeleteRequest(request); }} className="text-destructive">
-                                <SlotIcon slot="action_delete" className="h-4 w-4 mr-2 text-muted-foreground" />Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                <TablePagination
+                  total={approvalsPagination.total}
+                  page={approvalsPagination.page}
+                  pageSize={approvalsPagination.pageSize}
+                  from={approvalsPagination.from}
+                  to={approvalsPagination.to}
+                  pageSizeOptions={approvalsPagination.pageSizeOptions}
+                  showPageSizeSelect={approvalsPagination.showPageSizeSelect}
+                  onPageChange={approvalsPagination.setPage}
+                  onPageSizeChange={approvalsPagination.setPageSize}
+                />
+              </DataTableFrame>
             )}
-            {/* Each folder section (list view) */}
-            {folders.map((folder) => {
-              const folderRequests = requestsByFolder.byId[folder.id] || [];
-              const sectionId = folder.id;
-              const isEmpty = folderRequests.length === 0;
-              return (
-                <Collapsible
-                  key={folder.id}
-                  open={openSections[sectionId] !== false}
-                  onOpenChange={(open) => setSectionOpen(sectionId, open)}
-                >
-                  <div className="flex items-center gap-1 w-full">
-                    <CollapsibleTrigger asChild>
-                      <Button variant="ghost" className="flex-1 justify-start gap-2 h-9 font-medium">
-                        {openSections[sectionId] === false ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                        <span className="text-lg" style={{ color: folder.color }}>{folder.emoji}</span>
-                        {folder.name}
-                        <span className="text-muted-foreground text-sm ml-1">({folderRequests.length})</span>
-                      </Button>
-                    </CollapsibleTrigger>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
-                          <MoreVertical className="h-3 w-3" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEditFolder(folder)}>
-                          <SlotIcon slot="action_edit" className="h-4 w-4 mr-2" />Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDeleteFolder(folder)} className="text-destructive">
-                          <SlotIcon slot="action_delete" className="h-4 w-4 mr-2 text-muted-foreground" />Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  <CollapsibleContent>
-                    {isEmpty ? (
-                      <div className="pl-6 pt-2 flex flex-col items-center justify-center py-8 px-4 rounded-lg border border-dashed bg-muted/30">
-                        <p className="text-sm text-muted-foreground mb-3">No approval requests in this folder yet</p>
-                        <Button
-                          variant="secondary"
-                          onClick={() => {
-                            resetRequestForm();
-                            setRequestFolderId(folder.id);
-                            setRequestDialogOpen(true);
-                          }}
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add approval request
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="pl-6 pt-2 space-y-1">
-                        {folderRequests.map((request) => (
-                          <div
-                            key={request.id}
-                            className="flex items-center gap-3 py-2 px-3 rounded-lg border bg-card hover:bg-muted/50 cursor-pointer group"
-                            onClick={() => navigate(`/reviews/${request.id}`)}
-                          >
-                            <div className="flex-1 min-w-0 grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center">
-                              <div className="min-w-0">
-                                <p className="font-medium truncate">{request.title}</p>
-                                <p className="text-sm text-muted-foreground">v{request.version} • {request.clients?.name || 'No client'}</p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {getStatusBadge(request.status)}
-                                {request.sent_at && (
-                                  <Badge variant="outline" className="text-xs">
-                                    <SlotIcon slot="action_send" className="h-3 w-3 mr-1" />Sent
-                                  </Badge>
-                                )}
-                              </div>
-                              {request.due_date ? (
-                                <span className="text-sm text-muted-foreground whitespace-nowrap">
-                                  Due {format(new Date(request.due_date), 'MMM d, yyyy')}
-                                </span>
-                              ) : <span />}
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/reviews/${request.id}`); }}>
-                                    <SlotIcon slot="approval_documents" className="h-4 w-4 mr-2" />View Details
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditRequest(request); }}>
-                                    <SlotIcon slot="action_edit" className="h-4 w-4 mr-2" />Edit
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); copyShareLink(request); }}>
-                                    <SlotIcon slot="action_copy_link" className="h-4 w-4 mr-2" />Copy Link
-                                  </DropdownMenuItem>
-                                  {!request.sent_at && (
-                                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleSendRequest(request); }}>
-                                      <SlotIcon slot="action_send" className="h-4 w-4 mr-2" />Mark as Sent
-                                    </DropdownMenuItem>
-                                  )}
-                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDeleteRequest(request); }} className="text-destructive">
-                                    <SlotIcon slot="action_delete" className="h-4 w-4 mr-2 text-muted-foreground" />Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CollapsibleContent>
-                </Collapsible>
-              );
-            })}
-          </div>
-        )}
+          </CardContent>
+        </Card>
       </div>
+
 
       {/* Folder Dialog */}
       <Dialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
@@ -1146,28 +871,6 @@ export default function ReviewRequests() {
             <div className="space-y-2">
               <Label>Folder Name</Label>
               <Input value={folderName} onChange={e => setFolderName(e.target.value)} placeholder="e.g., Website Designs" />
-            </div>
-            <div className="flex gap-4">
-              <div className="space-y-2">
-                <Label>Emoji</Label>
-                <EmojiPicker value={folderEmoji} onChange={setFolderEmoji} />
-              </div>
-              <div className="space-y-2 flex-1">
-                <Label>Color</Label>
-                <div className="flex gap-2 flex-wrap">
-                  {FOLDER_COLORS.map(color => (
-                    <button
-                      key={color}
-                      className={cn(
-                        "h-8 w-8 rounded-full border-2 transition-transform",
-                        folderColor === color ? "scale-110 border-foreground" : "border-transparent hover:scale-105"
-                      )}
-                      style={{ backgroundColor: color }}
-                      onClick={() => setFolderColor(color)}
-                    />
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
           <DialogFooter>
@@ -1272,7 +975,7 @@ export default function ReviewRequests() {
                     <SelectItem value="none">No folder</SelectItem>
                     {folders.map(folder => (
                       <SelectItem key={folder.id} value={folder.id}>
-                        <span className="mr-1">{folder.emoji}</span>{folder.name}
+                        {folder.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1284,29 +987,6 @@ export default function ReviewRequests() {
                       onChange={(e) => setInlineFolderName(e.target.value)}
                       placeholder="Folder name *"
                     />
-                    <div className="flex gap-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs">Emoji</Label>
-                        <EmojiPicker value={inlineFolderEmoji} onChange={setInlineFolderEmoji} />
-                      </div>
-                      <div className="space-y-1 flex-1">
-                        <Label className="text-xs">Color</Label>
-                        <div className="flex gap-1.5 flex-wrap">
-                          {FOLDER_COLORS.map((color) => (
-                            <button
-                              key={color}
-                              type="button"
-                              className={cn(
-                                'h-6 w-6 rounded-full border-2 transition-transform',
-                                inlineFolderColor === color ? 'scale-110 border-foreground' : 'border-transparent',
-                              )}
-                              style={{ backgroundColor: color }}
-                              onClick={() => setInlineFolderColor(color)}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
                     <div className="flex justify-end">
                       <Button
                         type="button"
@@ -1355,7 +1035,7 @@ export default function ReviewRequests() {
                     <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-border hover:bg-muted/40 transition-colors">
                       <input type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleImageFileChange} className="hidden" id="upload-images" />
                       <label htmlFor="upload-images" className="cursor-pointer block">
-                        <SlotIcon slot="approval_images" className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                        <Image className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                         <p className="text-sm font-medium">Images</p>
                         <p className="text-xs text-muted-foreground">JPG, PNG, GIF, WebP (max {MAX_FILE_SIZE_MB}MB)</p>
                       </label>

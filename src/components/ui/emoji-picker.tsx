@@ -8,8 +8,7 @@ import {
 } from './popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 import { ScrollArea } from './scroll-area';
-import { Input } from './input';
-import { Search } from '@/components/icons';
+import { PageSearchInput } from '@/components/ui/page-search-input';
 
 // Comprehensive emoji categories
 const emojiCategories = {
@@ -250,16 +249,13 @@ export function EmojiPicker({ value, onChange, children, className }: EmojiPicke
         )}
       </PopoverTrigger>
       <PopoverContent className="w-[320px] p-0" align="start">
-        <div className="p-3 border-b">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search emojis..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+        <div className="p-2 border-b">
+          <PageSearchInput
+            placeholder="Search emojis..."
+            value={search}
+            onChange={setSearch}
+            wrapperClassName="max-w-none"
+          />
         </div>
         
         {search ? (

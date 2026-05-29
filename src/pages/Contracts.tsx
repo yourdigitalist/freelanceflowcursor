@@ -7,25 +7,33 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTableFrame, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableClientCell } from "@/components/ui/table-client-cell";
+import { TableStatusBadge } from "@/components/ui/table-status-badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import { PageSearchInput } from "@/components/ui/page-search-input";
+import { EmptyValue } from "@/components/ui/empty-value";
+
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Trash2, Search, Filter } from "@/components/icons";
+import { Plus, Trash2, Filter } from "@/components/icons";
 import { SlotIcon } from "@/contexts/IconSlotContext";
 import { applyProposalImportToContract } from "@/lib/contractProposalImport";
 import { contractClientSnapshotFromClient } from "@/lib/clientForm";
-import { formatStatusLabel, getStatusBadgeClass } from "@/lib/statusDisplay";
+
 import { LanceServiceAgreementDisclaimerDialog } from "@/components/contracts/LanceServiceAgreementDisclaimerDialog";
 import { DEFAULT_CONTRACT_TEMPLATE_CONTENT } from "@/lib/contractTemplate";
 import { useLanceServiceAgreementDisclaimer } from "@/hooks/useLanceServiceAgreementDisclaimer";
 import { ClientFormDialog } from "@/components/clients/ClientFormDialog";
 import { ProjectFormDialog } from "@/components/projects/ProjectFormDialog";
+import { usePagination } from "@/hooks/usePagination";
+import { TablePagination } from "@/components/ui/table-pagination";
+import { PageSummaryBar, PageSummaryStat } from "@/components/ui/page-summary-stats";
 
 type ContractRow = {
   id: string;
@@ -34,7 +42,14 @@ type ContractRow = {
   total: number;
   client_id: string | null;
   project_id: string | null;
-  clients: { name: string; currency?: string | null } | null;
+  clients: {
+    name: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    avatar_color?: string | null;
+    logo_url?: string | null;
+    currency?: string | null;
+  } | null;
   projects: { name: string } | null;
 };
 
@@ -87,7 +102,7 @@ export default function Contracts() {
     const [{ data: contracts }, { data: allClients }, { data: allProjects }, { data: allTemplates }] = await Promise.all([
       supabase
         .from("contracts")
-        .select("id, identifier, status, total, client_id, project_id, clients(name, currency), projects(name)")
+        .select("id, identifier, status, total, client_id, project_id, clients(name, first_name, last_name, avatar_color, logo_url, currency), projects(name)")
         .order("created_at", { ascending: false }),
       supabase.from("clients").select("id, name, company, company_name, entity_type, company_registration, email, phone, address, street, street2, city, state, postal_code, country, tax_id, currency").is("archived_at", null).order("name"),
       supabase.from("projects").select("id, name, client_id").order("name"),
@@ -187,12 +202,12 @@ export default function Contracts() {
     });
   }, [rows, searchQuery, statusFilter]);
   const activeFilterCount = statusFilter !== "all" ? 1 : 0;
+  const contractsPagination = usePagination(filteredRows);
+  const templatesPagination = usePagination(templateRows);
 
   const formatMoney = (amount: number, currencyCode?: string | null) =>
     new Intl.NumberFormat(undefined, { style: "currency", currency: currencyCode || "USD" }).format(amount || 0);
 
-  const statusBadgeClass = getStatusBadgeClass;
-  const formatStatus = formatStatusLabel;
 
   const handleCreateTemplateChange = async (nextTemplateId: string) => {
     const selected = templateRows.find((t) => t.id === nextTemplateId) || templates.find((t) => t.id === nextTemplateId);
@@ -369,29 +384,33 @@ export default function Contracts() {
             <TabsTrigger value="templates" className="rounded-none border-b-2 border-transparent px-4 pb-3 pt-0 data-[state=active]:border-primary data-[state=active]:bg-transparent">Contract Templates</TabsTrigger>
           </TabsList>
           <TabsContent value="contracts" className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[["Draft", counts.draft], ["Pending Signatures", counts.pending], ["Signed", counts.signed]].map(
-            ([label, value]) => (
-              <Card key={String(label)} className="border-0 shadow-sm">
-                <CardContent className="p-5">
-                  <p className="text-sm text-muted-foreground">{String(label)}</p>
-                  <p className="mt-1 text-2xl font-bold">{Number(value)}</p>
-                </CardContent>
-              </Card>
-            ),
-          )}
-            </div>
+            <PageSummaryBar columns={3}>
+              <PageSummaryStat
+                label="Draft"
+                value={String(counts.draft)}
+                subtitle={`${counts.draft} contract${counts.draft === 1 ? '' : 's'}`}
+                status="draft"
+              />
+              <PageSummaryStat
+                label="Pending signatures"
+                value={String(counts.pending)}
+                subtitle={`${counts.pending} awaiting`}
+                status="pending_signatures"
+              />
+              <PageSummaryStat
+                label="Signed"
+                value={String(counts.signed)}
+                subtitle={`${counts.signed} signed`}
+                status="signed"
+              />
+            </PageSummaryBar>
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Find a contract..."
-              className="pl-10 bg-card"
-            />
-          </div>
+          <PageSearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Find a contract..."
+          />
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="relative h-8 w-8 p-0 ml-auto" aria-label="Filters">
@@ -428,7 +447,7 @@ export default function Contracts() {
             </div>
 
             <Card className="border-0 shadow-sm">
-          <CardContent className="p-0">
+          <CardContent className="flex flex-col p-0">
             {loading ? (
               <div className="py-10 text-center text-sm text-muted-foreground">Loading contracts...</div>
             ) : filteredRows.length === 0 ? (
@@ -439,29 +458,32 @@ export default function Contracts() {
                 </p>
               </div>
             ) : (
+              <DataTableFrame>
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Identifier</TableHead>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Contract</TableHead>
                     <TableHead>Client</TableHead>
                     <TableHead>Project</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Total</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRows.map((row) => (
+                  {contractsPagination.paginatedItems.map((row) => (
                     <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/contracts/${row.id}`)}>
-                      <TableCell className="font-medium">{row.identifier}</TableCell>
-                      <TableCell>{row.clients?.name || "—"}</TableCell>
-                      <TableCell>{row.projects?.name || "—"}</TableCell>
+                      <TableCell className="font-semibold">{row.identifier}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={statusBadgeClass(row.status)}>
-                          {formatStatus(row.status)}
-                        </Badge>
+                        <TableClientCell client={row.clients} />
                       </TableCell>
-                      <TableCell>{formatMoney(row.total || 0, row.clients?.currency)}</TableCell>
+                      <TableCell>
+                        {row.projects?.name ? row.projects.name : <EmptyValue variant="table" field="project" />}
+                      </TableCell>
+                      <TableCell>
+                        <TableStatusBadge status={row.status} />
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{formatMoney(row.total || 0, row.clients?.currency)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button size="icon" variant="ghost" asChild onClick={(event) => event.stopPropagation()} aria-label="Edit contract">
@@ -478,13 +500,25 @@ export default function Contracts() {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                total={contractsPagination.total}
+                page={contractsPagination.page}
+                pageSize={contractsPagination.pageSize}
+                from={contractsPagination.from}
+                to={contractsPagination.to}
+                pageSizeOptions={contractsPagination.pageSizeOptions}
+                showPageSizeSelect={contractsPagination.showPageSizeSelect}
+                onPageChange={contractsPagination.setPage}
+                onPageSizeChange={contractsPagination.setPageSize}
+              />
+              </DataTableFrame>
             )}
           </CardContent>
             </Card>
           </TabsContent>
           <TabsContent value="templates">
             <Card className="border-0 shadow-sm">
-              <CardContent className="p-0">
+              <CardContent className="flex flex-col p-0">
                 {loading ? (
                   <div className="py-10 text-center text-sm text-muted-foreground">Loading templates...</div>
                 ) : templateRows.length === 0 ? (
@@ -493,9 +527,10 @@ export default function Contracts() {
                     <p className="text-sm text-muted-foreground">Create your first reusable contract template.</p>
                   </div>
                 ) : (
+                  <DataTableFrame>
                   <Table>
                     <TableHeader>
-                      <TableRow>
+                      <TableRow className="hover:bg-transparent">
                         <TableHead>Name</TableHead>
                         <TableHead>Description</TableHead>
                         <TableHead>Default</TableHead>
@@ -503,11 +538,15 @@ export default function Contracts() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {templateRows.map((row) => (
+                      {templatesPagination.paginatedItems.map((row) => (
                         <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/contracts/templates/${row.id}`)}>
-                          <TableCell className="font-medium">{row.name}</TableCell>
-                          <TableCell className="max-w-[360px] truncate">{row.description || "—"}</TableCell>
-                          <TableCell>{row.is_default ? <Badge variant="secondary">Default</Badge> : "—"}</TableCell>
+                          <TableCell className="font-semibold">{row.name}</TableCell>
+                          <TableCell className="max-w-[360px] truncate">
+                            {row.description ? row.description : <EmptyValue variant="table" field="description" />}
+                          </TableCell>
+                          <TableCell>
+                            {row.is_default ? <Badge variant="secondary">Default</Badge> : <EmptyValue variant="table" />}
+                          </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
                               <Button variant="ghost" size="icon" onClick={(event) => { event.stopPropagation(); navigate(`/contracts/templates/${row.id}`); }} aria-label="Edit template">
@@ -524,6 +563,18 @@ export default function Contracts() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    total={templatesPagination.total}
+                    page={templatesPagination.page}
+                    pageSize={templatesPagination.pageSize}
+                    from={templatesPagination.from}
+                    to={templatesPagination.to}
+                    pageSizeOptions={templatesPagination.pageSizeOptions}
+                    showPageSizeSelect={templatesPagination.showPageSizeSelect}
+                    onPageChange={templatesPagination.setPage}
+                    onPageSizeChange={templatesPagination.setPageSize}
+                  />
+                  </DataTableFrame>
                 )}
               </CardContent>
             </Card>

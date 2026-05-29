@@ -10,6 +10,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { EmptyValue } from '@/components/ui/empty-value';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -32,6 +33,9 @@ import { format } from 'date-fns';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { cn } from '@/lib/utils';
 import { QuickAddTask } from './QuickAddTask';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { DataTableFrame } from '@/components/ui/table';
 import { formatDuration } from '@/lib/time';
 
 export type TaskListSortKey = 'title' | 'status' | 'priority' | 'estimated_hours' | 'due_date';
@@ -237,7 +241,7 @@ function SortableRow({
             className="text-muted-foreground cursor-text hover:text-foreground"
             onClick={() => setIsEditingHours(true)}
           >
-            {task.estimated_hours ? `${task.estimated_hours}h` : '—'}
+            {task.estimated_hours ? `${task.estimated_hours}h` : <EmptyValue variant="table" />}
           </span>
         )}
       </TableCell>
@@ -245,7 +249,7 @@ function SortableRow({
         {trackedSeconds > 0 ? (
           <span className="text-primary">{formatDuration(trackedSeconds, true)}</span>
         ) : (
-          <span className="text-muted-foreground">—</span>
+          <EmptyValue variant="table" />
         )}
       </TableCell>
       <TableCell>
@@ -259,7 +263,7 @@ function SortableRow({
                 !task.due_date && "text-muted-foreground"
               )}
             >
-              {task.due_date ? format(new Date(task.due_date), 'dd-MM-yyyy') : '—'}
+              {task.due_date ? format(new Date(task.due_date), 'dd-MM-yyyy') : <EmptyValue variant="table" />}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
@@ -406,11 +410,14 @@ export function TaskListView({
     return [...tasks].sort(cmp);
   }, [tasks, sortKey, sortDir, statuses]);
 
+  const tasksPagination = usePagination(sortedTasks);
+
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
+    <div className="flex flex-col overflow-hidden rounded-lg border bg-card">
+      <DataTableFrame>
       <Table>
         <TableHeader>
-          <TableRow>
+          <TableRow className="hover:bg-transparent">
             <TableHead className="w-8"></TableHead>
             <SortableHead label="Title" sortKey="title" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
             <SortableHead label="Status" sortKey="status" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="w-[180px]" />
@@ -422,8 +429,8 @@ export function TaskListView({
           </TableRow>
         </TableHeader>
         <TableBody>
-          <SortableContext items={sortedTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            {sortedTasks.map((task) => (
+          <SortableContext items={tasksPagination.paginatedItems.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+            {tasksPagination.paginatedItems.map((task) => (
               <SortableRow
                 key={task.id}
                 task={task}
@@ -441,7 +448,7 @@ export function TaskListView({
               />
             ))}
           </SortableContext>
-          {sortedTasks.length === 0 && !showQuickAdd && (
+          {tasksPagination.total === 0 && !showQuickAdd && (
             <TableRow>
               <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                 No tasks yet. Add your first task to get started.
@@ -450,7 +457,21 @@ export function TaskListView({
           )}
         </TableBody>
       </Table>
-      
+      {tasksPagination.total > 0 && (
+        <TablePagination
+          total={tasksPagination.total}
+          page={tasksPagination.page}
+          pageSize={tasksPagination.pageSize}
+          from={tasksPagination.from}
+          to={tasksPagination.to}
+          pageSizeOptions={tasksPagination.pageSizeOptions}
+          showPageSizeSelect={tasksPagination.showPageSizeSelect}
+          onPageChange={tasksPagination.setPage}
+          onPageSizeChange={tasksPagination.setPageSize}
+        />
+      )}
+      </DataTableFrame>
+
       {/* Add task button */}
       <div className="p-3 border-t">
         {showQuickAdd ? (

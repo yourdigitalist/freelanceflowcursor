@@ -21,6 +21,9 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { ViewToggle, ViewToggleButton } from '@/components/ui/view-toggle';
 import { Input } from '@/components/ui/input';
+import { PageSearchInput } from '@/components/ui/page-search-input';
+
+import { EmptyValue, valueOrEmpty } from '@/components/ui/empty-value';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -47,7 +50,7 @@ import {
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, MoreVertical, Trash2, Grid, List, PanelLeft, Download, Upload, GripVertical, Filter } from '@/components/icons';
+import { Plus, Trash2, Grid, List, PanelLeft, Download, Upload, GripVertical, Filter } from '@/components/icons';
 import { downloadCsv, parseCsv, getClientsTemplateRows, CLIENTS_CSV_HEADERS } from '@/lib/csv';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import {
@@ -57,7 +60,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ClientAvatar } from '@/components/clients/ClientAvatar';
+import { ClientListCard } from '@/components/clients/ClientListCard';
+import { ClientsTable } from '@/components/clients/ClientsTable';
 import { ClientFormDialog } from '@/components/clients/ClientFormDialog';
+import { useProfileCurrency } from '@/hooks/useProfileCurrency';
+import { usePagination } from '@/hooks/usePagination';
 import { DEFAULT_CLIENT_AVATAR_COLOR } from '@/lib/clientAvatarColors';
 import { CLIENT_CRM_STAGES, getClientStageLabel } from '@/lib/clientCrmStages';
 import { buildClientsNavState, readClientsNavState } from '@/lib/clientsNavigation';
@@ -108,6 +115,7 @@ interface Client {
   created_at: string;
   archived_at: string | null;
   project_count?: number;
+  projects_value?: number;
 }
 
 interface ClientActivity {
@@ -130,28 +138,6 @@ interface ClientFollowUp {
   created_at: string;
 }
 
-function getClientStatusColor(status: string) {
-  switch (status) {
-    case 'active':
-    case 'won':
-      return 'bg-success/10 text-success';
-    case 'onboarding':
-      return 'bg-primary/10 text-primary';
-    case 'proposal_sent':
-    case 'negotiation':
-    case 'lead_new':
-    case 'lead_contacted':
-    case 'lead_qualified':
-      return 'bg-warning/10 text-warning';
-    case 'inactive':
-    case 'closed_lost':
-    case 'paused':
-      return 'bg-muted text-muted-foreground';
-    default:
-      return 'bg-muted text-muted-foreground';
-  }
-}
-
 function DraggableClientCard({
   client,
   onOpen,
@@ -159,7 +145,7 @@ function DraggableClientCard({
   onArchive,
   onRestore,
   onDelete,
-  formatDate,
+  formatMoney,
   isOverlay = false,
 }: {
   client: Client;
@@ -168,10 +154,9 @@ function DraggableClientCard({
   onArchive: () => void;
   onRestore: () => void;
   onDelete: () => void;
-  formatDate: (value: string | null | undefined) => string;
+  formatMoney: (amount: number) => string;
   isOverlay?: boolean;
 }) {
-  const archived = isClientArchived(client);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: client.id,
     data: { clientId: client.id, currentStatus: client.status || 'active' },
@@ -180,95 +165,30 @@ function DraggableClientCard({
     transform: CSS.Transform.toString(transform),
     transition,
   };
+
   return (
-    <Card
+    <ClientListCard
       ref={setNodeRef}
       style={style}
-      className={`border border-border/70 bg-background shadow-sm hover:shadow-md transition-all ${
-        isDragging || isOverlay ? 'opacity-70 shadow-lg' : ''
-      }`}
-      onClick={onOpen}
-    >
-      <CardContent className="p-3 space-y-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div
-              className="touch-none cursor-grab active:cursor-grabbing rounded-md p-1.5 hover:bg-muted/80 shrink-0"
-              onClick={(e) => e.stopPropagation()}
-              {...attributes}
-              {...listeners}
-            >
-              <GripVertical className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <ClientAvatar client={client} size="sm" />
-            <div className="min-w-0">
-              <p className="font-medium text-sm truncate leading-tight">{client.name}</p>
-              {client.company && <p className="text-xs text-muted-foreground truncate mt-0.5">{client.company}</p>}
-            </div>
-          </div>
-          <div onClick={(e) => e.stopPropagation()}>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7">
-                  <MoreVertical className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={onEdit}>
-                  <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
-                  Edit
-                </DropdownMenuItem>
-                {archived ? (
-                  <DropdownMenuItem onClick={onRestore}>Restore client</DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem onClick={onArchive}>Archive client</DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={onDelete} className="text-destructive">
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+      client={client}
+      formatMoney={formatMoney}
+      onOpen={onOpen}
+      onEdit={onEdit}
+      onArchive={onArchive}
+      onRestore={onRestore}
+      onDelete={onDelete}
+      className={isDragging || isOverlay ? 'opacity-70 shadow-lg' : undefined}
+      dragHandle={
+        <div
+          className="touch-none shrink-0 cursor-grab rounded-md p-1 hover:bg-muted/80 active:cursor-grabbing"
+          onClick={(e) => e.stopPropagation()}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
         </div>
-
-        <div className="space-y-1.5 text-xs text-muted-foreground">
-          {client.email && (
-            <p className="truncate flex items-center gap-1.5">
-              <SlotIcon slot="client_email" className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{client.email}</span>
-            </p>
-          )}
-          {client.phone && (
-            <p className="truncate flex items-center gap-1.5">
-              <SlotIcon slot="client_phone" className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{client.phone}</span>
-            </p>
-          )}
-        </div>
-
-        <div className="space-y-1.5 text-xs text-muted-foreground">
-          {client.next_follow_up_at && (
-            <p className="truncate flex items-center gap-1.5">
-              <SlotIcon slot="task_calendar" className="h-3.5 w-3.5 shrink-0" />
-              <span>Follow-up {formatDate(client.next_follow_up_at)}</span>
-            </p>
-          )}
-          {client.next_action && (
-            <p className="truncate" title={client.next_action}>
-              Next: {client.next_action}
-            </p>
-          )}
-        </div>
-
-        <div className="pt-1 flex items-center justify-between border-t border-border/60">
-          <Badge className={getClientStatusColor(client.status || 'active')}>
-            {getClientStageLabel(client.status || 'active')}
-          </Badge>
-          <p className="text-xs text-muted-foreground">{client.project_count || 0} projects</p>
-        </div>
-      </CardContent>
-    </Card>
+      }
+    />
   );
 }
 
@@ -320,6 +240,7 @@ export default function Clients() {
   const [activeDragClient, setActiveDragClient] = useState<Client | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
   const { dateFormat, timeFormat } = useLocalePreferences();
+  const { formatCurrency: formatMoney } = useProfileCurrency();
 
   useEffect(() => {
     if (user) {
@@ -398,22 +319,25 @@ export default function Clients() {
 
       if (clientsError) throw clientsError;
 
-      // Fetch project counts
-      const { data: projectCounts, error: projectError } = await supabase
+      const { data: projectRows, error: projectError } = await supabase
         .from('projects')
-        .select('client_id');
+        .select('client_id, budget');
 
-      if (!projectError && projectCounts) {
-        const countMap = projectCounts.reduce((acc, p) => {
-          if (p.client_id) {
-            acc[p.client_id] = (acc[p.client_id] || 0) + 1;
+      if (!projectError && projectRows) {
+        const countMap: Record<string, number> = {};
+        const valueMap: Record<string, number> = {};
+        for (const row of projectRows) {
+          if (!row.client_id) continue;
+          countMap[row.client_id] = (countMap[row.client_id] || 0) + 1;
+          if (row.budget != null && row.budget > 0) {
+            valueMap[row.client_id] = (valueMap[row.client_id] || 0) + row.budget;
           }
-          return acc;
-        }, {} as Record<string, number>);
+        }
 
-        const clientsWithCounts = (clientsData || []).map(c => ({
+        const clientsWithCounts = (clientsData || []).map((c) => ({
           ...c,
-          project_count: countMap[c.id] || 0
+          project_count: countMap[c.id] || 0,
+          projects_value: valueMap[c.id] || 0,
         }));
         setClients(clientsWithCounts);
       } else {
@@ -509,6 +433,8 @@ export default function Clients() {
     (b.archived_at || '').localeCompare(a.archived_at || ''),
   );
 
+  const clientsPagination = usePagination(sortedClients);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
@@ -532,13 +458,6 @@ export default function Clients() {
       default:
         return 'bg-muted text-muted-foreground';
     }
-  };
-
-  const getStatusBorderClass = (status: string | null) => {
-    const s = status || 'active';
-    if (['active', 'won'].includes(s)) return 'border-l-success';
-    if (['lead_new', 'lead_contacted', 'lead_qualified', 'proposal_sent', 'negotiation', 'onboarding'].includes(s)) return 'border-l-warning';
-    return 'border-l-muted-foreground/50';
   };
 
   const getStageHeaderClass = (status: string) => {
@@ -1002,15 +921,11 @@ export default function Clients() {
 
         {/* Search + View + Filters */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search clients..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-card"
-            />
-          </div>
+          <PageSearchInput
+            placeholder="Search clients..."
+            value={searchQuery}
+            onChange={setSearchQuery}
+          />
           <div className="flex flex-wrap items-center gap-2">
             <ViewToggle>
               <ViewToggleButton
@@ -1176,7 +1091,7 @@ export default function Clients() {
                                   onArchive={() => handleArchive(client.id)}
                                   onRestore={() => handleRestore(client.id)}
                                   onDelete={() => handleDelete(client.id)}
-                                  formatDate={fmtDate}
+                                  formatMoney={formatMoney}
                                 />
                               ))}
                             </SortableContext>
@@ -1211,124 +1126,40 @@ export default function Clients() {
                         onArchive={() => {}}
                         onRestore={() => {}}
                         onDelete={() => {}}
-                        formatDate={fmtDate}
+                        formatMoney={formatMoney}
                         isOverlay
                       />
                     </div>
                   ) : null}
                 </DragOverlay>
               </DndContext>
+            ) : viewMode === 'list' ? (
+              <Card className="border shadow-sm">
+                <CardContent className="flex flex-col p-0">
+                  <ClientsTable
+                    clients={clientsPagination.paginatedItems}
+                    dateFormat={dateFormat}
+                    formatMoney={formatMoney}
+                    onRowClick={openClientDetail}
+                    pagination={clientsPagination}
+                  />
+                </CardContent>
+              </Card>
             ) : (
-            <div className={viewMode === 'grid' ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3" : "space-y-3"}>
-              {sortedClients.map((client) => (
-                <Card
-                  key={client.id}
-                  className={`${viewMode === 'list' ? 'border-l-4 ' + getStatusBorderClass(client.status) : 'border-0'} shadow-sm hover:shadow-md transition-shadow cursor-pointer`}
-                  onClick={() => (viewMode === 'grid' || viewMode === 'list') && openClientDetail(client.id)}
-                >
-                  <CardContent className={viewMode === 'grid' ? "p-5 relative" : "p-4 flex items-center justify-between"}>
-                    {viewMode === 'grid' && (
-                      <div className="absolute top-3 right-3" onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEditDialog(client)}>
-                              <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleArchive(client.id)}>Archive client</DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(client.id)}
-                              className="text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    )}
-                    <div className={viewMode === 'grid' ? "space-y-3" : "flex items-center gap-4"}>
-                      <div className="flex items-center gap-3">
-                        <ClientAvatar client={client} size="md" />
-                        <div>
-                          <p className="font-semibold">{client.name}</p>
-                          {client.company && (
-                            <p className="text-sm text-muted-foreground flex items-center gap-1">
-                              <SlotIcon slot="client_company" className="h-3 w-3" />
-                              {client.company}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      {viewMode === 'grid' && (
-                        <>
-                          {client.email && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <SlotIcon slot="client_email" className="h-4 w-4" />
-                              <a href={`mailto:${client.email}`} className="hover:text-primary truncate" onClick={(e) => e.stopPropagation()}>
-                                {client.email}
-                              </a>
-                            </div>
-                          )}
-                          {client.phone && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <SlotIcon slot="client_phone" className="h-4 w-4" />
-                              <a href={`tel:${client.phone}`} className="hover:text-primary" onClick={(e) => e.stopPropagation()}>
-                                {client.phone}
-                              </a>
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between pt-2">
-                            <Badge className={getStatusColor(client.status || 'active')}>
-                              {getClientStageLabel(client.status)}
-                            </Badge>
-                            <span className="text-sm text-muted-foreground">
-                              {client.project_count || 0} projects
-                            </span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                    {viewMode === 'list' && (
-                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        <span className="text-sm text-muted-foreground hidden md:block">
-                          {client.email}
-                        </span>
-                        <Badge className={getStatusColor(client.status)}>
-                          {getClientStageLabel(client.status)}
-                        </Badge>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEditDialog(client)}>
-                              <SlotIcon slot="action_edit" className="mr-2 h-4 w-4" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleArchive(client.id)}>Archive client</DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(client.id)}
-                              className="text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+              <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {sortedClients.map((client) => (
+                  <ClientListCard
+                    key={client.id}
+                    client={client}
+                    formatMoney={formatMoney}
+                    onOpen={() => openClientDetail(client.id)}
+                    onEdit={() => openEditDialog(client)}
+                    onArchive={() => handleArchive(client.id)}
+                    onRestore={() => handleRestore(client.id)}
+                    onDelete={() => handleDelete(client.id)}
+                  />
+                ))}
+              </div>
             )}
 
             {showArchived && sortedArchivedClients.length > 0 ? (
@@ -1383,14 +1214,18 @@ export default function Clients() {
                       <div>
                         <p className="text-sm text-muted-foreground">Next follow-up</p>
                         <p className="text-sm">
-                          {viewingClient.next_follow_up_at
-                            ? fmtDate(viewingClient.next_follow_up_at)
-                            : '—'}
+                          {viewingClient.next_follow_up_at ? (
+                            fmtDate(viewingClient.next_follow_up_at)
+                          ) : (
+                            <EmptyValue variant="detail" field="next_follow_up" />
+                          )}
                         </p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Lead source</p>
-                        <p className="text-sm">{viewingClient.lead_source || '—'}</p>
+                        <p className="text-sm">
+                          {valueOrEmpty(viewingClient.lead_source, { variant: 'detail', field: 'lead_source' })}
+                        </p>
                       </div>
                     </div>
                     <div className="pt-2 border-t">

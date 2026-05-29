@@ -6,13 +6,15 @@ import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PageSearchInput } from '@/components/ui/page-search-input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Trash2, Send, Loader2, ListTodo, Wallet, Download, Save, RotateCcw } from '@/components/icons';
+import { ArrowLeft, Plus, Trash2, Loader2, ListTodo, Wallet, Download, Save, RotateCcw } from '@/components/icons';
+import { MenuDotsTrigger } from '@/components/ui/menu-dots-trigger';
 import { reopenPaidInvoice } from '@/lib/invoiceStatus';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDate } from '@/lib/datetime';
@@ -1663,11 +1665,7 @@ export default function InvoiceDetail() {
               </Button>
             )}
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="h-9 w-9">
-                  <SlotIcon slot="action_more" className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
+              <MenuDotsTrigger />
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={handleDownloadPdf} disabled={downloadingPdf}>
                   {downloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
@@ -1675,7 +1673,7 @@ export default function InvoiceDetail() {
                 </DropdownMenuItem>
                 {invoice.status === 'draft' && (
                   <DropdownMenuItem onClick={markAsSent}>
-                    <Send className="mr-2 h-4 w-4" />
+                    <SlotIcon slot="action_send" className="mr-2" />
                     Mark as Sent
                   </DropdownMenuItem>
                 )}
@@ -2351,11 +2349,11 @@ export default function InvoiceDetail() {
                 <SelectItem value="detailed">Detailed (one line per entry)</SelectItem>
               </SelectContent>
             </Select>
-            <Input
+            <PageSearchInput
               value={importSearch}
-              onChange={(e) => setImportSearch(e.target.value)}
+              onChange={setImportSearch}
               placeholder="Search notes/task/project"
-              className="h-9 min-w-0"
+              wrapperClassName="max-w-none min-w-0"
             />
           </div>
           {importLoading ? (

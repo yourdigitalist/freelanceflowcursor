@@ -54,7 +54,7 @@ interface ReviewRequest {
   project_id: string | null;
   clients?: { name: string; email: string } | null;
   projects?: { name: string } | null;
-  review_folders?: { name: string; emoji: string; color: string } | null;
+  review_folders?: { name: string } | null;
 }
 
 interface ReviewFile {
@@ -83,8 +83,6 @@ interface ReviewRecipient {
 interface ReviewFolder {
   id: string;
   name: string;
-  emoji: string;
-  color: string;
 }
 
 export default function ReviewRequestDetail() {
@@ -113,12 +111,12 @@ export default function ReviewRequestDetail() {
         *,
         clients(name, email),
         projects(name),
-        review_folders(name, emoji, color)
+        review_folders(name)
       `).eq('id', id).eq('user_id', user.id).single(),
       supabase.from('review_files').select('*').eq('review_request_id', id),
       supabase.from('review_comments').select('*').eq('review_request_id', id).order('created_at', { ascending: false }),
       supabase.from('review_recipients').select('*').eq('review_request_id', id),
-      supabase.from('review_folders').select('*').eq('user_id', user.id).order('name'),
+      supabase.from('review_folders').select('id, name').eq('user_id', user.id).order('name'),
     ]);
     
     if (requestRes.error) {
@@ -711,7 +709,7 @@ export default function ReviewRequestDetail() {
                         <SelectItem value="none">No folder</SelectItem>
                         {folders.map((f) => (
                           <SelectItem key={f.id} value={f.id}>
-                            {f.emoji} {f.name}
+                            {f.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

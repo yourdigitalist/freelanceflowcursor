@@ -24,7 +24,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  DataTableFrame,
 } from '@/components/ui/table';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/table-pagination';
 
 const MERGE_TAGS = [
   { tag: '{{client_name}}', label: 'Client Name' },
@@ -73,6 +76,7 @@ export default function InvoiceSettings() {
     reminder_body_default: string | null;
   } | null>(null);
   const [taxes, setTaxes] = useState<Tax[]>([]);
+  const taxesPagination = usePagination(taxes);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -669,9 +673,10 @@ export default function InvoiceSettings() {
 
           {/* Tax list */}
           {taxes.length > 0 && (
+            <DataTableFrame>
             <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
                   <TableHead>Rate</TableHead>
                   <TableHead>Default</TableHead>
@@ -679,7 +684,7 @@ export default function InvoiceSettings() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {taxes.map((tax) => (
+                {taxesPagination.paginatedItems.map((tax) => (
                   <TableRow key={tax.id}>
                     <TableCell>
                       {editingTax?.id === tax.id ? (
@@ -689,7 +694,7 @@ export default function InvoiceSettings() {
                           className="h-8"
                         />
                       ) : (
-                        tax.name
+                        <span className="font-semibold">{tax.name}</span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -759,6 +764,18 @@ export default function InvoiceSettings() {
                 ))}
               </TableBody>
             </Table>
+            <TablePagination
+              total={taxesPagination.total}
+              page={taxesPagination.page}
+              pageSize={taxesPagination.pageSize}
+              from={taxesPagination.from}
+              to={taxesPagination.to}
+              pageSizeOptions={taxesPagination.pageSizeOptions}
+              showPageSizeSelect={taxesPagination.showPageSizeSelect}
+              onPageChange={taxesPagination.setPage}
+              onPageSizeChange={taxesPagination.setPageSize}
+            />
+            </DataTableFrame>
           )}
 
           {taxes.length === 0 && (
