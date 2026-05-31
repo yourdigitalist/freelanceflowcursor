@@ -65,7 +65,7 @@ import { RecoveryHashRedirect } from "@/components/RecoveryHashRedirect";
 import { TimerProvider } from "@/contexts/TimerContext";
 import { IconSlotProvider } from "@/contexts/IconSlotContext";
 import { CrispChat } from "@/components/CrispChat";
-import { canAccessContracts, canAccessNotes, getContractsAccessMode } from "@/lib/features";
+import { canAccessContracts, canAccessNotes } from "@/lib/features";
 
 const queryClient = new QueryClient();
 
@@ -182,13 +182,6 @@ function NotesRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function PublicContractsRoute({ children }: { children: React.ReactNode }) {
-  if (getContractsAccessMode() !== "on") {
-    return <NotFound />;
-  }
-  return <>{children}</>;
-}
-
 function OnboardingRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
@@ -268,7 +261,7 @@ function AppRoutes() {
       <Route path="/reviews/:id" element={<ProtectedRoute><ReviewRequestDetail /></ProtectedRoute>} />
       <Route path="/review/:token" element={<ClientReview />} />
       <Route path="/proposal/:token" element={<PublicProposal />} />
-      <Route path="/contract/:token" element={<PublicContractsRoute><PublicContract /></PublicContractsRoute>} />
+      <Route path="/contract/:token" element={<PublicContract />} />
       <Route path="/portal/:token" element={<PublicClientPortal />} />
       <Route path="/portal/:portalToken/invoice/:invoiceId" element={<PublicPortalInvoice />} />
         <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
