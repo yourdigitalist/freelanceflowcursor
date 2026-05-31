@@ -958,7 +958,7 @@ export default function Dashboard() {
           <div className="flex shrink-0 justify-start gap-2 sm:justify-end">
             <Button variant="outline" size="sm" asChild>
               <Link to="/time">
-                <SlotIcon slot="stat_hours" className="mr-2 h-4 w-4" />
+                <Plus className="mr-2 h-4 w-4" />
                 Log Time
               </Link>
             </Button>
