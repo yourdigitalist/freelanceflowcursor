@@ -1,0 +1,169 @@
+.feature-solar {
+  position: relative;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.feature-solar-bg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.feature-solar-pills {
+  pointer-events: none;
+}
+
+.feature-solar-pills--overlay {
+  position: absolute;
+  inset: 0;
+}
+
+.feature-solar-pill-anchor {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  z-index: 1;
+}
+
+.feature-solar-pill-anchor:hover,
+.feature-solar-pill-anchor:has(.feature-solar-popover) {
+  z-index: 10;
+}
+
+.feature-solar-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 20px;
+  border-radius: 999px;
+  background: #f8f6ff;
+  border: 1px solid #e7e0f4;
+  box-shadow: 0 2px 12px rgba(155, 99, 233, 0.12);
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a2e;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  cursor: pointer;
+  position: relative;
+  pointer-events: auto;
+}
+
+.feature-solar-pill-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  color: #9b63e9;
+}
+
+.feature-solar-popover {
+  position: absolute;
+  z-index: 20;
+  width: min(280px, 72vw);
+  padding: 18px 18px 16px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1.5px solid #e7e0f4;
+  box-shadow: 0 12px 40px rgba(155, 99, 233, 0.18);
+  text-align: left;
+  outline: none;
+  pointer-events: auto;
+}
+
+.feature-solar-popover h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #9b63e9;
+  margin: 0 28px 8px 0;
+  letter-spacing: -0.3px;
+}
+
+.feature-solar-popover p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #64647a;
+  margin: 0;
+  font-weight: 500;
+}
+
+.feature-solar-popover-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: #f8f6ff;
+  color: #9b63e9;
+  cursor: pointer;
+}
+
+.feature-solar-popover-close:hover {
+  background: #e7e0f4;
+}
+
+.feature-solar-mobile-detail {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .feature-solar--mobile .feature-solar-pill {
+    padding: 7px 11px;
+    font-size: 11px;
+    gap: 6px;
+    letter-spacing: -0.15px;
+    box-shadow: 0 2px 10px rgba(155, 99, 233, 0.14);
+  }
+
+  .feature-solar--mobile .feature-solar-pill-icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .feature-solar--mobile .feature-solar-mobile-detail {
+    display: block;
+    position: relative;
+    margin-top: 16px;
+    padding: 18px 18px 16px;
+    border-radius: 14px;
+    background: #fff;
+    border: 1.5px solid #e7e0f4;
+    box-shadow: 0 12px 40px rgba(155, 99, 233, 0.12);
+    text-align: left;
+  }
+
+  .feature-solar--mobile .feature-solar-mobile-detail h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #9b63e9;
+    margin: 0 28px 8px 0;
+  }
+
+  .feature-solar--mobile .feature-solar-mobile-detail p {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #64647a;
+    margin: 0;
+    font-weight: 500;
+  }
+}
+
+@media (max-width: 400px) {
+  .feature-solar--mobile .feature-solar-pill {
+    padding: 6px 9px;
+    font-size: 10px;
+    gap: 5px;
+  }
+
+  .feature-solar--mobile .feature-solar-pill-icon {
+    width: 13px;
+    height: 13px;
+  }
+}

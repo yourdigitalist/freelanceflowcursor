@@ -1,0 +1,20 @@
+.dashboard-zoom {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  position: relative;
+  background: #f8f6ff;
+}
+
+.dashboard-zoom-motion {
+  width: 100%;
+  will-change: transform;
+  transform-origin: center center;
+}
+
+.dashboard-zoom-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  vertical-align: top;
+}

@@ -28,6 +28,18 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html { scroll-behavior: smooth; }
 
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   body {
     font-family: 'Plus Jakarta Sans', sans-serif;
     color: var(--body);
@@ -181,14 +193,56 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    color: transparent;
+  }
+
+  .hero-headline-inner {
     display: inline;
+  }
+
+  .hero-headline-nowrap {
+    white-space: nowrap;
+  }
+
+  .hero-role-slot {
+    display: inline-block;
+    vertical-align: baseline;
+    position: relative;
+    height: 1.18em;
+    line-height: 1.18;
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  .hero-role-slot .hero-role-word {
+    font: inherit;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    line-height: 1.18;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.45s ease;
+    pointer-events: none;
+  }
+
+  .hero-role-slot .hero-role-word.is-active {
+    position: relative;
+    opacity: 1;
+    display: inline-block;
+    vertical-align: baseline;
+  }
+
+  .hero-role-slot .hero-role-word:not(.is-active) {
+    position: absolute;
+    left: 0;
+    top: 0;
   }
 
   .hero-sub {
     font-size: 18px;
     font-weight: 500;
     color: var(--muted);
-    max-width: 520px;
+    max-width: 640px;
     margin: 0 auto;
     line-height: 1.65;
     position: relative;
@@ -1348,15 +1402,15 @@
 <body>
 
 <!-- NAV -->
-<nav id="nav">
+<nav id="nav" class="landing-part-top">
   <div class="nav-logo">
     <img src="uploads/logo-1776927478688.png" alt="Lance">
   </div>
   <ul class="nav-links">
-    <li><a href="#features">Features</a></li>
-    <li><a href="#compare">Pricing vs. tools</a></li>
-    <li><a href="#how">How it works</a></li>
-    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="#features" target="_parent">Features</a></li>
+    <li><a href="#compare" target="_parent">Pricing vs. tools</a></li>
+    <li><a href="#how" target="_parent">How it works</a></li>
+    <li><a href="#pricing" target="_parent">Pricing</a></li>
   </ul>
   <div class="nav-cta">
     <a href="/auth" target="_top" class="btn-ghost">Log in</a>
@@ -1368,17 +1422,17 @@
     </svg>
   </button>
 </nav>
-<div class="mobile-menu" id="mobile-menu">
-  <a href="#features">Features</a>
-  <a href="#compare">Pricing vs. tools</a>
-  <a href="#how">How it works</a>
-  <a href="#pricing">Pricing</a>
+<div class="mobile-menu landing-part-top" id="mobile-menu">
+  <a href="#features" target="_parent">Features</a>
+  <a href="#compare" target="_parent">Pricing vs. tools</a>
+  <a href="#how" target="_parent">How it works</a>
+  <a href="#pricing" target="_parent">Pricing</a>
   <a href="/auth" target="_top" class="btn-ghost">Log in</a>
   <a href="/auth?tab=signup" target="_top" class="btn-primary">Try Lance Free</a>
 </div>
 
 <!-- HERO -->
-<section class="hero" id="hero">
+<section class="hero landing-part-top" id="hero">
   <div class="hero-bg-blob blob1"></div>
   <div class="hero-bg-blob blob2"></div>
 
@@ -1387,9 +1441,10 @@
     Built for solo freelancers
   </div>
 
-  <h1>One tool. Every client. <span class="highlight">No excuses.</span></h1>
+  <h1><span class="hero-headline-inner"><span class="hero-headline-nowrap">Organised <span class="hero-role-slot" id="hero-role-slot"><span class="hero-role-word highlight is-active">Freelancers</span><span class="hero-role-word highlight">Designers</span><span class="hero-role-word highlight">Developers</span><span class="hero-role-word highlight">Consultants</span><span class="hero-role-word highlight">Photographers</span><span class="hero-role-word highlight">Copywriters</span><span class="hero-role-word highlight">Strategists</span></span></span> earn more.</span></h1>
+  <p class="hero-sub visually-hidden" id="hero-role-sr">Organised Freelancers earn more.</p>
 
-  <p class="hero-sub" style="margin-top:0;">Stop paying for five apps to run one business. Lance gives designers, developers, and freelancers a single workspace for clients, projects, time tracking, approvals, and invoices.</p>
+  <p class="hero-sub" style="margin-top:0;">The average freelancer loses 6 hours a week to admin. Lance gives it back, and makes your business look exactly as professional as your work.</p>
 
   <div class="hero-actions">
     <a href="/auth?tab=signup" target="_top" class="btn-hero">Try Lance Free</a>
@@ -1416,53 +1471,12 @@
 
 
 
-<!-- FEATURES GRID -->
-<section class="features-section section-enter" id="features">
-  <div class="features-inner centered">
-    <span class="section-label">✦ Features</span>
-    <h2 class="section-title">Your entire freelance stack. $29/month.</h2>
-    <p class="section-sub">Lance replaces the scattered pile of tools freelancers actually pay for — without the overlap, the logins, or the monthly guilt.</p>
-    <div class="features-grid">
-      <div class="feature-card reveal">
-        <div class="feature-icon" style="background:rgba(155,99,233,0.10);">🗂</div>
-        <h3>Clients & Projects</h3>
-        <p>Manage your full client pipeline in one place — from new lead to active project. Track contacts, set follow-ups, and log activity without digging through email threads.</p>
-      </div>
-      <div class="feature-card reveal">
-        <div class="feature-icon" style="background:rgba(254,142,1,0.10);">⏱</div>
-        <h3>Time Tracking</h3>
-        <p>Log billable hours with one click. Lance tracks time against projects and feeds it straight into your invoices.</p>
-      </div>
-      <div class="feature-card reveal">
-        <div class="feature-icon" style="background:rgba(255,216,0,0.16);">✅</div>
-        <h3>Client Approvals</h3>
-        <p>Share a link. Your client clicks, comments, approves — no account, no app, no "did you get my email?" Pin feedback directly on your files.</p>
-      </div>
-      <div class="feature-card reveal">
-        <div class="feature-icon" style="background:rgba(155,99,233,0.10);">🧾</div>
-        <h3>Invoicing</h3>
-        <p>Turn completed work into a polished invoice in seconds. Track payments and send reminders automatically.</p>
-      </div>
-      <div class="feature-card reveal">
-        <div class="feature-icon" style="background:rgba(254,142,1,0.10);">📋</div>
-        <h3>Task Management</h3>
-        <p>A kanban board built for service teams. Priorities, due dates, statuses — exactly what you need, nothing more.</p>
-      </div>
-      <div class="feature-card reveal">
-        <div class="feature-icon" style="background:rgba(255,216,0,0.16);">📝</div>
-        <h3>Notes</h3>
-        <p>A rich text workspace for briefs, meeting notes, and ideas. Link notes to clients and projects, and turn highlighted text into tasks in one click.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- FEATURE SHOWCASES -->
-<section class="showcase-section section-enter">
+<!-- FEATURE SHOWCASES (features solar system rendered by React in app shell) -->
+<section class="showcase-section section-enter landing-part-bottom">
 
   <div class="showcase-divider"></div>
 
-  <div class="showcase-item reveal">
+  <div class="showcase-item reveal landing-part-showcase-zoom">
     <div class="showcase-text">
       <span class="section-label">✦ Project overview</span>
       <h3>Your entire business at a glance</h3>
@@ -1479,7 +1493,7 @@
     </div>
   </div>
 
-  <div class="showcase-divider"></div>
+  <div class="showcase-divider landing-part-showcase-zoom"></div>
 
   <div class="showcase-item reverse reveal">
     <div class="showcase-text">
@@ -1519,7 +1533,7 @@
 </section>
 
 <!-- HOW IT WORKS -->
-<section class="how-section section-enter" id="how">
+<section class="how-section section-enter landing-part-bottom" id="how">
   <div class="how-inner centered">
     <span class="section-label">✦ How it works</span>
     <h2 class="section-title">From kickoff to paid<br>in three steps.</h2>
@@ -1545,7 +1559,7 @@
 </section>
 
 <!-- COMPARISON -->
-<section class="compare-section section-enter" id="compare">
+<section class="compare-section section-enter landing-part-bottom" id="compare">
   <div class="compare-inner">
     <div class="centered" style="margin-bottom:56px;">
       <span class="section-label">✦ The math is simple</span>
@@ -1722,7 +1736,7 @@
 </section>
 
 <!-- PRICING -->
-<section class="pricing-section section-enter" id="pricing">
+<section class="pricing-section section-enter landing-part-bottom" id="pricing">
   <div class="pricing-inner centered">
     <span class="section-label">✦ Pricing</span>
     <h2 class="section-title">Simple, honest pricing.</h2>
@@ -1770,7 +1784,7 @@
 </section>
 
 <!-- TESTIMONIALS -->
-<section class="testi-section section-enter" id="testimonials">
+<section class="testi-section section-enter landing-part-bottom" id="testimonials">
   <div class="testi-header">
     <span class="section-label">✦ Testimonials</span>
     <h2 class="section-title">What our beta testers say.</h2>
@@ -1795,7 +1809,7 @@
 </section>
 
 <!-- FAQ -->
-<section class="faq-section section-enter" id="faq">
+<section class="faq-section section-enter landing-part-bottom" id="faq">
   <div class="faq-inner centered">
     <span class="section-label">✦ FAQ</span>
     <h2 class="section-title">Got questions?</h2>
@@ -1826,7 +1840,7 @@
 </section>
 
 <!-- CTA BAND -->
-<div class="cta-band-outer">
+<div class="cta-band-outer landing-part-bottom">
   <div class="cta-band reveal">
     <h2>Ready to cancel four subscriptions?</h2>
     <p>Join thousands of freelancers running their business with Lance.</p>
@@ -1836,7 +1850,7 @@
 </div>
 
 <!-- FOOTER -->
-<footer>
+<footer class="landing-part-bottom">
   <div class="footer-inner" style="grid-template-columns: 1fr auto;">
     <div class="footer-brand">
       <img src="uploads/logo-1776927478688.png" alt="Lance" class="footer-logo">
@@ -1884,6 +1898,25 @@
 </div>
 
 <script>
+  // Split landing for React features section (/?part=top|bottom via parent shell)
+  (function applyLandingPart() {
+    const part = new URLSearchParams(location.search).get('part');
+    if (part === 'top') {
+      document.querySelectorAll('.landing-part-bottom').forEach((el) => {
+        el.style.display = 'none';
+      });
+    } else if (part === 'bottom') {
+      document.querySelectorAll('.landing-part-top').forEach((el) => {
+        el.style.display = 'none';
+      });
+      document.querySelectorAll('.landing-part-showcase-zoom').forEach((el) => {
+        el.style.display = 'none';
+      });
+      const mobileMenu = document.getElementById('mobile-menu');
+      if (mobileMenu) mobileMenu.style.display = 'none';
+    }
+  })();
+
   // Nav scroll
   const nav = document.getElementById('nav');
   window.addEventListener('scroll', () => {
@@ -1901,6 +1934,56 @@
     });
   }, { threshold: 0.08 });
   reveals.forEach(r => observer.observe(r));
+
+  // Hero rotating profession (inline fade — no overflow clip)
+  (function initHeroRoleRotate() {
+    const slot = document.getElementById('hero-role-slot');
+    const srEl = document.getElementById('hero-role-sr');
+    const h1 = document.querySelector('.hero h1');
+    if (!slot || !h1) return;
+    const words = Array.from(slot.querySelectorAll('.hero-role-word'));
+    const roles = words.map((w) => w.textContent.trim());
+    let index = 0;
+
+    const measureSlot = () => {
+      const probe = document.createElement('span');
+      probe.className = 'hero-role-word highlight';
+      probe.setAttribute('aria-hidden', 'true');
+      probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;pointer-events:none;';
+      const cs = getComputedStyle(h1);
+      probe.style.font = `${cs.fontWeight} ${cs.fontSize} / ${cs.lineHeight} ${cs.fontFamily}`;
+      probe.style.letterSpacing = cs.letterSpacing;
+      h1.appendChild(probe);
+      let maxW = 0;
+      roles.forEach((role) => {
+        probe.textContent = role;
+        maxW = Math.max(maxW, probe.offsetWidth);
+      });
+      probe.remove();
+      slot.style.width = `${maxW}px`;
+    };
+
+    const setSr = (role) => {
+      if (srEl) srEl.textContent = `Organised ${role} earn more.`;
+    };
+
+    const show = (nextIndex) => {
+      words[index].classList.remove('is-active');
+      index = nextIndex;
+      words[index].classList.add('is-active');
+      setSr(roles[index]);
+    };
+
+    measureSlot();
+    setSr(roles[0]);
+    window.addEventListener('resize', measureSlot);
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    setInterval(() => {
+      show((index + 1) % words.length);
+    }, 2000);
+  })();
 
   // Counter animation for comparison total
   const counterEl = document.getElementById('counter-total');
