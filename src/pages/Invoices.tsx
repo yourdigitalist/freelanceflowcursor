@@ -30,6 +30,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2, Download, Upload, RotateCcw, Filter } from '@/components/icons';
 import { reopenPaidInvoice } from '@/lib/invoiceStatus';
+import {
+  formatInvoicePaymentMethod,
+  markInvoicePaid,
+  type MarkInvoicePaidInput,
+} from '@/lib/invoicePayment';
+import { MarkInvoicePaidDialog } from '@/components/invoices/MarkInvoicePaidDialog';
+import { SendReceiptPromptDialog } from '@/components/invoices/SendReceiptPromptDialog';
 import { formatLocaleDate } from '@/lib/datetime';
 
 import { SlotIcon } from '@/contexts/IconSlotContext';
@@ -116,6 +123,8 @@ interface Invoice {
   } | null;
   projects: { name: string } | null;
   notes?: string | null;
+  paid_date?: string | null;
+  payment_method?: string | null;
   created_at: string;
 }
 
@@ -149,6 +158,8 @@ export default function Invoices() {
   const [profileCurrency, setProfileCurrency] = useState<string | null>(null);
   const [profileCurrencyDisplay, setProfileCurrencyDisplay] = useState<string | null>(null);
   const [invoiceSetupMissing, setInvoiceSetupMissing] = useState<string[] | null>(null);
+  const [markPaidInvoice, setMarkPaidInvoice] = useState<Invoice | null>(null);
+  const [sendReceiptInvoice, setSendReceiptInvoice] = useState<Invoice | null>(null);
   const [invoiceCreateDefaults, setInvoiceCreateDefaults] = useState<{
     invoice_notes_default: string | null;
     invoice_footer: string | null;
@@ -375,19 +386,22 @@ export default function Invoices() {
   };
 
   const handleStatusChange = async (id: string, status: string) => {
+    if (status === 'paid') {
+      const inv = invoices.find((row) => row.id === id);
+      if (inv) setMarkPaidInvoice(inv);
+      return;
+    }
     try {
       const currentStatus = invoices.find((inv) => inv.id === id)?.status;
       const { error } = await supabase
         .from('invoices')
-        .update({ status, ...(currentStatus === 'paid' && status !== 'paid' ? { paid_date: null } : {}) })
+        .update({
+          status,
+          ...(currentStatus === 'paid' && status !== 'paid' ? { paid_date: null, payment_method: null } : {}),
+        })
         .eq('id', id);
       if (error) throw error;
-      if (status === 'paid') {
-        await supabase
-          .from('time_entries')
-          .update({ billing_status: 'paid' })
-          .eq('invoice_id', id);
-      } else if (currentStatus === 'paid') {
+      if (currentStatus === 'paid') {
         await supabase
           .from('time_entries')
           .update({ billing_status: 'billed' })
@@ -405,10 +419,29 @@ export default function Invoices() {
     }
   };
 
+  const handleMarkPaidConfirm = async (input: MarkInvoicePaidInput) => {
+    if (!markPaidInvoice) return;
+    try {
+      await markInvoicePaid(supabase, markPaidInvoice.id, input);
+      toast({ title: 'Invoice marked as paid' });
+      await fetchInvoices();
+      setSendReceiptInvoice(markPaidInvoice);
+      setMarkPaidInvoice(null);
+    } catch (error: any) {
+      toast({
+        title: 'Error updating invoice',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleReopenInvoice = async (inv: (typeof invoices)[0]) => {
     const paidOn = formatLocaleDate(inv.paid_date ?? undefined, dateFormat);
-    const msg = paidOn
-      ? `Reopen invoice ${inv.invoice_number}? It was marked paid on ${paidOn}.`
+    const method = formatInvoicePaymentMethod(inv.payment_method);
+    const paidDetails = [paidOn && `paid on ${paidOn}`, method && `via ${method}`].filter(Boolean).join(' ');
+    const msg = paidDetails
+      ? `Reopen invoice ${inv.invoice_number}? It was marked ${paidDetails}.`
       : `Reopen invoice ${inv.invoice_number}? It will show as sent again.`;
     if (!window.confirm(msg)) return;
     try {
@@ -532,6 +565,7 @@ export default function Invoices() {
           tax_amount: source.tax_amount,
           total: source.total,
           paid_date: null,
+          payment_method: null,
         })
         .select('id')
         .single();
@@ -1247,6 +1281,26 @@ export default function Invoices() {
           </CardContent>
         </Card>
       </div>
+      <MarkInvoicePaidDialog
+        open={!!markPaidInvoice}
+        onOpenChange={(open) => {
+          if (!open) setMarkPaidInvoice(null);
+        }}
+        invoiceNumber={markPaidInvoice?.invoice_number}
+        onConfirm={handleMarkPaidConfirm}
+      />
+      <SendReceiptPromptDialog
+        open={!!sendReceiptInvoice}
+        onOpenChange={(open) => {
+          if (!open) setSendReceiptInvoice(null);
+        }}
+        invoiceNumber={sendReceiptInvoice?.invoice_number}
+        onSendReceipt={() => {
+          if (!sendReceiptInvoice) return;
+          navigate(`/invoices/${sendReceiptInvoice.id}?sendReceipt=1`);
+          setSendReceiptInvoice(null);
+        }}
+      />
     </AppLayout>
   );
 }

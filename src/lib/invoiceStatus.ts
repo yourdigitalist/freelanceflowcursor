@@ -7,14 +7,14 @@ export async function reopenPaidInvoice(
 ): Promise<void> {
   const { error: invoiceError } = await supabase
     .from('invoices')
-    .update({ status: 'sent', paid_date: null })
+    .update({ status: 'sent', paid_date: null, payment_method: null })
     .eq('id', invoiceId);
 
   if (invoiceError) {
-    if (/paid_date/i.test(invoiceError.message)) {
+    if (/paid_date|payment_method/i.test(invoiceError.message)) {
       const { error: statusOnly } = await supabase
         .from('invoices')
-        .update({ status: 'sent' })
+        .update({ status: 'sent', paid_date: null })
         .eq('id', invoiceId);
       if (statusOnly) throw statusOnly;
     } else {

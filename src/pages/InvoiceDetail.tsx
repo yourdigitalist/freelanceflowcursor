@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useAuth } from '@/lib/auth';
@@ -18,6 +18,14 @@ import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { detailPageBreadcrumb } from '@/lib/breadcrumbs';
 import { MenuDotsTrigger } from '@/components/ui/menu-dots-trigger';
 import { reopenPaidInvoice } from '@/lib/invoiceStatus';
+import {
+  buildReceiptEmailMessage,
+  formatInvoicePaymentMethod,
+  markInvoicePaid,
+  type MarkInvoicePaidInput,
+} from '@/lib/invoicePayment';
+import { MarkInvoicePaidDialog } from '@/components/invoices/MarkInvoicePaidDialog';
+import { SendReceiptPromptDialog } from '@/components/invoices/SendReceiptPromptDialog';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDate } from '@/lib/datetime';
 import { formatStatusLabel, getStatusBadgeClass } from '@/lib/statusDisplay';
@@ -81,6 +89,7 @@ interface Invoice {
   invoice_number: string;
   status: string;
   paid_date?: string | null;
+  payment_method?: string | null;
   issue_date: string;
   due_date: string | null;
   subtotal: number;
@@ -191,6 +200,7 @@ const INVOICE_PREVIEW_STYLES = `
   .invoice-preview-root .invoice-body .invoice-total-amount p { font-weight: 700; color: #0F172A; font-size: 18px; }
   .invoice-preview-root .paid-badge { display: inline-block; margin-left: 8px; padding: 3px 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: #fff; background: #10B981; border-radius: 4px; vertical-align: middle; }
   .invoice-preview-root .invoice-information .paid-on { color: #10B981; font-weight: 600; }
+  .invoice-preview-root .invoice-information .payment-method { color: #666; font-size: 13px; margin-top: 2px; }
   .invoice-preview-root .invoice-body .balance-due-paid { margin-top: 8px; font-size: 15px; font-weight: 700; color: #10B981; }
   .invoice-preview-root .invoice-body .amount-paid-line { margin-top: 6px; font-size: 13px; font-weight: 500; color: #666; }
   .invoice-preview-root .invoice-notes, .invoice-preview-root .invoice-bank-details { margin-top: 30px; padding: 16px; background-color: #f8f9fa; border-left: 3px solid #0F172A; }
@@ -251,6 +261,7 @@ export default function InvoiceDetail() {
   const { dateFormat } = useLocalePreferences();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -282,6 +293,8 @@ export default function InvoiceDetail() {
   
   // Preview modal state
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [markPaidDialogOpen, setMarkPaidDialogOpen] = useState(false);
+  const [sendReceiptPromptOpen, setSendReceiptPromptOpen] = useState(false);
 
   // Edit mode: draft starts editable; after save or when sent/paid, read-only until "Edit Invoice" is clicked
   const [isEditMode, setIsEditMode] = useState(true);
@@ -1191,39 +1204,18 @@ export default function InvoiceDetail() {
     }
   };
 
-  const updateInvoicePaidStatus = async () => {
-    const paidAt = new Date().toISOString();
-    const { error: withPaidDate } = await supabase
-      .from('invoices')
-      .update({ status: 'paid', paid_date: paidAt })
-      .eq('id', id);
-    if (!withPaidDate) return;
-    if (/paid_date/i.test(withPaidDate.message)) {
-      const { error: statusOnly } = await supabase.from('invoices').update({ status: 'paid' }).eq('id', id);
-      if (statusOnly) throw statusOnly;
-      return;
-    }
-    throw withPaidDate;
-  };
-
-  const markAsPaid = async () => {
+  const handleMarkPaidConfirm = async (input: MarkInvoicePaidInput) => {
+    if (!id) return;
     try {
-      await updateInvoicePaidStatus();
-
-      // Update linked time entries to paid
-      const { error: entriesError } = await supabase
-        .from('time_entries')
-        .update({ billing_status: 'paid' })
-        .eq('invoice_id', id);
-
-      if (entriesError) throw entriesError;
-
+      await markInvoicePaid(supabase, id, input);
       toast({ title: 'Invoice marked as paid' });
-      fetchInvoice();
-    } catch (error: any) {
+      await fetchInvoice();
+      setSendReceiptPromptOpen(true);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Could not mark invoice as paid';
       toast({
         title: 'Error updating invoice',
-        description: error.message,
+        description: message,
         variant: 'destructive',
       });
     }
@@ -1271,16 +1263,20 @@ export default function InvoiceDetail() {
       return;
     }
 
+    if (sendModalMode === 'receipt' && invoice?.status !== 'paid') {
+      toast({
+        title: 'Invoice not paid',
+        description: 'Mark the invoice as paid before sending a receipt.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setSendingInvoice(true);
     let sendResponse: { data?: { error?: string }; error?: { message?: string } } | null = null;
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-
-      if (sendModalMode === 'receipt') {
-        await updateInvoicePaidStatus();
-        await fetchInvoice();
-      }
 
       sendResponse = await supabase.functions.invoke('send-invoice', {
         body: {
@@ -1367,10 +1363,19 @@ export default function InvoiceDetail() {
       .replace(/\{\{project_name\}\}/gi, invoice?.projects?.name ?? '');
   };
 
-  const applySendModalDefaults = (mode: 'send' | 'reminder' | 'receipt') => {
+  const applySendModalDefaults = (mode: 'send' | 'reminder' | 'receipt', invoiceForReceipt?: Invoice | null) => {
+    const inv = invoiceForReceipt ?? invoice;
     if (mode === 'receipt') {
-      setEmailSubject(`Receipt for Invoice ${invoice?.invoice_number ?? ''} – Paid`);
-      setEmailMessage(`This invoice has been paid. Balance due: ${fmt(0)}. Thank you for your business.`);
+      const paidDateDisplay = formatLocaleDate(inv?.paid_date ?? undefined, dateFormat);
+      const paymentMethodDisplay = formatInvoicePaymentMethod(inv?.payment_method);
+      setEmailSubject(`Receipt for Invoice ${inv?.invoice_number ?? ''} – Paid`);
+      setEmailMessage(
+        buildReceiptEmailMessage({
+          totalFormatted: fmt(Number(inv?.total ?? 0)),
+          paidDateDisplay: paidDateDisplay || '—',
+          paymentMethodDisplay,
+        }),
+      );
       return;
     }
 
@@ -1403,6 +1408,16 @@ export default function InvoiceDetail() {
     setEmailSubject(resolveEmailMessage(subjectTpl));
     setEmailMessage(resolveEmailMessage(bodyTpl));
   };
+
+  useEffect(() => {
+    if (searchParams.get('sendReceipt') !== '1' || !invoice || invoice.status !== 'paid' || loading) return;
+    setSendModalMode('receipt');
+    applySendModalDefaults('receipt');
+    setIsSendModalOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('sendReceipt');
+    setSearchParams(next, { replace: true });
+  }, [invoice, loading, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!isSendModalOpen) {
@@ -1478,10 +1493,14 @@ export default function InvoiceDetail() {
   const dueDate = formatLocaleDate(invoice?.due_date, dateFormat);
   const isPaidReceipt = invoice?.status === 'paid';
   const paidDateDisplay = formatLocaleDate(invoice?.paid_date ?? undefined, dateFormat);
+  const paymentMethodDisplay = formatInvoicePaymentMethod(invoice?.payment_method);
   const handleReopenInvoice = async () => {
     if (!id) return;
-    const msg = paidDateDisplay
-      ? `Reopen this invoice? It was marked paid on ${paidDateDisplay}. It will show as sent again; any receipt already emailed stays with your client.`
+    const paidDetails = [paidDateDisplay && `paid on ${paidDateDisplay}`, paymentMethodDisplay && `via ${paymentMethodDisplay}`]
+      .filter(Boolean)
+      .join(' ');
+    const msg = paidDetails
+      ? `Reopen this invoice? It was marked ${paidDetails}. It will show as sent again; any receipt already emailed stays with your client.`
       : 'Reopen this invoice? It will show as sent again; any receipt already emailed stays with your client.';
     if (!window.confirm(msg)) return;
     try {
@@ -1591,11 +1610,20 @@ export default function InvoiceDetail() {
                   placeholder="Invoice number"
                 />
               ) : (
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-bold truncate">{invoice.invoice_number}</h1>
-                  <Badge variant="outline" className={getStatusBadgeClass(invoice.status || 'draft')}>
-                    {formatStatusLabel(invoice.status || 'draft')}
-                  </Badge>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-2xl font-bold truncate">{invoice.invoice_number}</h1>
+                    <Badge variant="outline" className={getStatusBadgeClass(invoice.status || 'draft')}>
+                      {formatStatusLabel(invoice.status || 'draft')}
+                    </Badge>
+                  </div>
+                  {invoice.status === 'paid' && (paidDateDisplay || paymentMethodDisplay) ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {paidDateDisplay ? <>Paid {paidDateDisplay}</> : null}
+                      {paidDateDisplay && paymentMethodDisplay ? ' · ' : null}
+                      {paymentMethodDisplay ? <>{paymentMethodDisplay}</> : null}
+                    </p>
+                  ) : null}
                 </div>
               )}
               {isEditMode && (
@@ -1686,7 +1714,7 @@ export default function InvoiceDetail() {
                   </DropdownMenuItem>
                 )}
                 {invoice.status === 'sent' && (
-                  <DropdownMenuItem onClick={markAsPaid}>
+                  <DropdownMenuItem onClick={() => setMarkPaidDialogOpen(true)}>
                     <SlotIcon slot="invoice_stat_paid" className="mr-2 h-4 w-4" />
                     Mark as Paid
                   </DropdownMenuItem>
@@ -2181,7 +2209,12 @@ export default function InvoiceDetail() {
                       </p>
                       <p><b>Date</b> {createdDate}</p>
                       {isPaidReceipt && paidDateDisplay ? (
-                        <p className="paid-on"><b>Paid on</b> {paidDateDisplay}</p>
+                        <>
+                          <p className="paid-on"><b>Paid on</b> {paidDateDisplay}</p>
+                          {paymentMethodDisplay ? (
+                            <p className="payment-method"><b>Payment method</b> {paymentMethodDisplay}</p>
+                          ) : null}
+                        </>
                       ) : (
                         <p><b>Due Date</b> {dueDate}</p>
                       )}
@@ -2626,9 +2659,14 @@ export default function InvoiceDetail() {
               <p className="font-medium text-foreground mb-1">Invoice Summary</p>
               <p>Invoice: {invoice.invoice_number}</p>
               <p>Amount: {fmt(total)}</p>
-              {invoice.due_date && (
+              {sendModalMode === 'receipt' ? (
+                <>
+                  {paidDateDisplay ? <p>Paid: {paidDateDisplay}</p> : null}
+                  {paymentMethodDisplay ? <p>Method: {paymentMethodDisplay}</p> : null}
+                </>
+              ) : invoice.due_date ? (
                 <p>Due: {formatDisplayDate(invoice.due_date)}</p>
-              )}
+              ) : null}
             </div>
           </div>
           <div className="flex gap-2 justify-end">
@@ -2651,6 +2689,23 @@ export default function InvoiceDetail() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <MarkInvoicePaidDialog
+        open={markPaidDialogOpen}
+        onOpenChange={setMarkPaidDialogOpen}
+        invoiceNumber={invoice.invoice_number}
+        onConfirm={handleMarkPaidConfirm}
+      />
+      <SendReceiptPromptDialog
+        open={sendReceiptPromptOpen}
+        onOpenChange={setSendReceiptPromptOpen}
+        invoiceNumber={invoice.invoice_number}
+        onSendReceipt={() => {
+          setSendModalMode('receipt');
+          applySendModalDefaults('receipt');
+          setIsSendModalOpen(true);
+        }}
+      />
       </TooltipProvider>
     </AppLayout>
   );

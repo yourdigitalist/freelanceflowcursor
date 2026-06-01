@@ -2,6 +2,7 @@
 /** Generate invoice PDF via CustomJS (shared by send-invoice and view-invoice-pdf). */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { formatLocaleDate } from "./format-locale-date.ts";
+import { formatInvoicePaymentMethod } from "./format-invoice-payment.ts";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: "$", EUR: "€", GBP: "£", JPY: "¥", CAD: "C$", AUD: "A$", CHF: "CHF",
@@ -125,6 +126,7 @@ export async function generateInvoicePdfBase64(
     isPaidReceipt,
     balanceDue: isPaidReceipt ? 0 : Number(invoice.total) || 0,
     paidDate: paidDateFormatted,
+    paidMethod: isPaidReceipt ? formatInvoicePaymentMethod(invoice.payment_method) : "",
   };
 
   const customJsUrl = Deno.env.get("CUSTOMJS_ENDPOINT_URL");

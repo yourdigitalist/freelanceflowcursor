@@ -49,7 +49,7 @@
     </div>
     <div class="header-right">
       <p>Issue Date: {{ createdDate }}</p>
-      {% if isPaidReceipt and paidDate %}<p class="paid-on">Paid on: {{ paidDate }}</p>{% else %}<p>Due Date: {{ dueDate }}</p>{% endif %}
+      {% if isPaidReceipt and paidDate %}<p class="paid-on">Paid on: {{ paidDate }}</p>{% if paidMethod %}<p class="paid-on">Payment method: {{ paidMethod }}</p>{% endif %}{% else %}<p>Due Date: {{ dueDate }}</p>{% endif %}
     </div>
   </div>
   <div class="from-to">

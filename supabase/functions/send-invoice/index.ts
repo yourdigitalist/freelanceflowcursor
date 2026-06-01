@@ -8,6 +8,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import { getLanceSignature } from "../_shared/lance-email.ts";
 import { formatLocaleDate } from "../_shared/format-locale-date.ts";
+import { formatInvoicePaymentMethod } from "../_shared/format-invoice-payment.ts";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
@@ -346,6 +347,7 @@ serve(async (req) => {
       isPaidReceipt,
       balanceDue: isPaidReceipt ? 0 : Number(invoice.total) || 0,
       paidDate: paidDateFormatted,
+      paidMethod: isPaidReceipt ? formatInvoicePaymentMethod(invoice.payment_method) : "",
     };
 
     const customJsUrl = Deno.env.get("CUSTOMJS_ENDPOINT_URL");

@@ -974,6 +974,7 @@ export type Database = {
           issue_date: string
           notes: string | null
           paid_date: string | null
+          payment_method: string | null
           project_id: string | null
           status: string | null
           subtotal: number | null

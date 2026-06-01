@@ -95,7 +95,8 @@ const content = nunjucks.renderString(variables["HTML Template"], {
   showLineDescription: input.showLineDescription === "true" || input.showLineDescription === true,
   isPaidReceipt: input.isPaidReceipt === "true" || input.isPaidReceipt === true,
   balanceDue: Number(input.balanceDue) || 0,
-  paidDate: input.paidDate || ""
+  paidDate: input.paidDate || "",
+  paidMethod: input.paidMethod || ""
 });
 
 return await HTML2PDF(content);
