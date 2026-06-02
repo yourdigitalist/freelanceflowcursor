@@ -235,11 +235,12 @@ function buildBuckets(range: RangeKey): { start: Date; end: Date; label: string 
 }
 
 function MiniSparkline({ data, color = 'hsl(var(--primary))' }: { data: SparkPoint[]; color?: string }) {
-  if (!data || data.length < 2) return null;
+  const safeData = (data || []).filter((point) => point && Number.isFinite(point.v));
+  if (safeData.length < 2) return null;
   return (
     <ResponsiveContainer width={64} height={32}>
-      <LineChart data={data}>
-        <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} dot={false} isAnimationActive={false} />
+      <LineChart data={safeData}>
+        <Line type="linear" dataKey="v" stroke={color} strokeWidth={1.5} dot={false} isAnimationActive={false} />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -852,6 +853,26 @@ export default function Dashboard() {
     [cashSeries],
   );
 
+  const safeCashSeries = useMemo(
+    () =>
+      cashSeries.filter(
+        (point) =>
+          point &&
+          typeof point.label === 'string' &&
+          Number.isFinite(point.billed) &&
+          Number.isFinite(point.paid),
+      ),
+    [cashSeries],
+  );
+
+  const safeHoursSeries = useMemo(
+    () =>
+      hoursSeries.filter(
+        (point) => point && typeof point.label === 'string' && Number.isFinite(point.hours),
+      ),
+    [hoursSeries],
+  );
+
   const displayName = profileReady ? shellProfileDisplayName(shellProfile) : null;
   const firstName = displayName?.split(' ')[0] ?? null;
   const showContracts = getContractsAccessMode() === 'on';
@@ -1299,7 +1320,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={140}>
-                <AreaChart data={cashSeries} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                <AreaChart data={safeCashSeries} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="cfPaid" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="hsl(var(--success))" stopOpacity={0.2} />
@@ -1317,8 +1338,8 @@ export default function Dashboard() {
                     contentStyle={{ fontSize: 11, border: '1px solid hsl(var(--border))', borderRadius: 8 }}
                     formatter={(value: number, name: string) => [fmt(value), name === 'paid' ? 'Paid' : 'Billed']}
                   />
-                  <Area type="monotone" dataKey="billed" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#cfBilled)" />
-                  <Area type="monotone" dataKey="paid" stroke="hsl(var(--success))" strokeWidth={2} fill="url(#cfPaid)" />
+                  <Area type="linear" dataKey="billed" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#cfBilled)" isAnimationActive={false} connectNulls />
+                  <Area type="linear" dataKey="paid" stroke="hsl(var(--success))" strokeWidth={2} fill="url(#cfPaid)" isAnimationActive={false} connectNulls />
                 </AreaChart>
               </ResponsiveContainer>
             </CardContent>
@@ -1338,7 +1359,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={172}>
-                <BarChart data={hoursSeries} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                <BarChart data={safeHoursSeries} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.5} />
                   <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={32} />
