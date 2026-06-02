@@ -33,7 +33,7 @@ interface UserProfile {
 }
 
 export default function UserSettings() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const dirtyContext = useSettingsDirty();
@@ -131,7 +131,7 @@ export default function UserSettings() {
         throw new Error(data?.error || 'Failed to delete account');
       }
 
-      await supabase.auth.signOut();
+      await signOut();
       navigate('/auth', { replace: true });
       toast({
         title: 'Account deleted',

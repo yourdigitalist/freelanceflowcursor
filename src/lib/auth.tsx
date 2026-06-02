@@ -41,6 +41,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  const clearSupabaseAuthStorage = () => {
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        if (key === "supabase.auth.token" || (key.startsWith("sb-") && key.includes("-auth-token"))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
+    } catch {
+      // ignore storage failures (private mode / restricted browser policies)
+    }
+  };
+
   const signUp = async (email: string, password: string, fullName?: string, firstName?: string, lastName?: string) => {
     const { error } = await supabase.auth.signUp({
       email,
@@ -76,7 +92,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    // Local first for reliability on localhost, then best-effort global revoke.
+    const localResult = await supabase.auth.signOut({ scope: "local" });
+    if (localResult.error) {
+      console.warn("Local sign-out reported an error:", localResult.error.message);
+    }
+    const globalResult = await supabase.auth.signOut({ scope: "global" });
+    if (globalResult.error) {
+      console.warn("Global sign-out reported an error:", globalResult.error.message);
+    }
+    clearSupabaseAuthStorage();
+    setSession(null);
+    setUser(null);
   };
 
   const resetPassword = async (email: string) => {

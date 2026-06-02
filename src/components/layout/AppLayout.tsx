@@ -122,7 +122,7 @@ export function AppLayout({
   }, [location.pathname]);
   const handleSignOut = async () => {
     await signOut();
-    navigate('/');
+    navigate('/auth', { replace: true });
   };
   const displayName = profileReady ? shellProfileDisplayName(profile) : null;
   const userInitials = displayName ? displayName.slice(0, 2).toUpperCase() : '';
