@@ -90,6 +90,7 @@ import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDate, formatLocaleDateTime } from '@/lib/datetime';
+import { cn } from '@/lib/utils';
 
 interface Client {
   id: string;
@@ -143,6 +144,20 @@ interface ClientFollowUp {
   created_at: string;
 }
 
+function pushClientActivityTimestamp(
+  map: Record<string, string>,
+  clientId: string | null | undefined,
+  timestamp: string | null | undefined,
+) {
+  if (!clientId || !timestamp) return;
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) return;
+  const nextIso = parsed.toISOString();
+  if (!map[clientId] || new Date(map[clientId]).getTime() < parsed.getTime()) {
+    map[clientId] = nextIso;
+  }
+}
+
 function DraggableClientCard({
   client,
   onOpen,
@@ -182,7 +197,7 @@ function DraggableClientCard({
       onArchive={onArchive}
       onRestore={onRestore}
       onDelete={onDelete}
-      className={isDragging || isOverlay ? 'opacity-70 shadow-lg' : undefined}
+      className={cn('h-[176px]', (isDragging || isOverlay) && 'opacity-70 shadow-lg')}
       dragHandle={
         <div
           className="touch-none shrink-0 cursor-grab rounded-md p-1 hover:bg-muted/80 active:cursor-grabbing"
@@ -317,36 +332,102 @@ export default function Clients() {
 
   const fetchClients = async () => {
     try {
-      const { data: clientsData, error: clientsError } = await supabase
-        .from('clients')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [
+        { data: clientsData, error: clientsError },
+        { data: projectRows, error: projectError },
+        { data: activitiesRows, error: activitiesError },
+        { data: invoicesRows, error: invoicesError },
+        { data: proposalsRows, error: proposalsError },
+        { data: contractsRows, error: contractsError },
+        { data: approvalsRows, error: approvalsError },
+        { data: notesRows, error: notesError },
+        { data: followUpsRows, error: followUpsError },
+      ] = await Promise.all([
+        supabase.from('clients').select('*').order('created_at', { ascending: false }),
+        supabase.from('projects').select('client_id, budget'),
+        supabase.from('client_activities').select('client_id, occurred_at'),
+        supabase.from('invoices').select('client_id, status, created_at, updated_at'),
+        supabase.from('proposals').select('client_id, status, created_at, sent_at, accepted_at'),
+        supabase.from('contracts').select('client_id, status, created_at, sent_at'),
+        supabase.from('review_requests').select('client_id, created_at'),
+        supabase.from('notes').select('client_id, created_at'),
+        supabase.from('client_follow_ups').select('client_id, created_at, completed_at'),
+      ]);
 
       if (clientsError) throw clientsError;
+      if (projectError) throw projectError;
+      if (activitiesError) throw activitiesError;
+      if (invoicesError) throw invoicesError;
+      if (proposalsError) throw proposalsError;
+      if (contractsError) throw contractsError;
+      if (approvalsError) throw approvalsError;
+      if (notesError) throw notesError;
+      if (followUpsError) throw followUpsError;
 
-      const { data: projectRows, error: projectError } = await supabase
-        .from('projects')
-        .select('client_id, budget');
-
-      if (!projectError && projectRows) {
-        const countMap: Record<string, number> = {};
-        const valueMap: Record<string, number> = {};
-        for (const row of projectRows) {
-          if (!row.client_id) continue;
-          countMap[row.client_id] = (countMap[row.client_id] || 0) + 1;
-          if (row.budget != null && row.budget > 0) {
-            valueMap[row.client_id] = (valueMap[row.client_id] || 0) + row.budget;
-          }
+      const countMap: Record<string, number> = {};
+      const valueMap: Record<string, number> = {};
+      for (const row of projectRows || []) {
+        if (!row.client_id) continue;
+        countMap[row.client_id] = (countMap[row.client_id] || 0) + 1;
+        if (row.budget != null && row.budget > 0) {
+          valueMap[row.client_id] = (valueMap[row.client_id] || 0) + row.budget;
         }
+      }
 
-        const clientsWithCounts = (clientsData || []).map((c) => ({
-          ...c,
-          project_count: countMap[c.id] || 0,
-          projects_value: valueMap[c.id] || 0,
-        }));
-        setClients(clientsWithCounts);
-      } else {
-        setClients(clientsData || []);
+      const lastActivityByClientId: Record<string, string> = {};
+
+      (activitiesRows || []).forEach((row) => {
+        pushClientActivityTimestamp(lastActivityByClientId, row.client_id, row.occurred_at);
+      });
+      (invoicesRows || []).forEach((row) => {
+        if (!['sent', 'paid', 'overdue'].includes(row.status || '')) return;
+        pushClientActivityTimestamp(lastActivityByClientId, row.client_id, row.updated_at || row.created_at);
+      });
+      (proposalsRows || []).forEach((row) => {
+        if (['sent', 'read', 'accepted', 'archived'].includes(row.status || '')) {
+          pushClientActivityTimestamp(lastActivityByClientId, row.client_id, row.sent_at || row.created_at);
+        }
+        if ((row.status || '') === 'accepted') {
+          pushClientActivityTimestamp(lastActivityByClientId, row.client_id, row.accepted_at);
+        }
+      });
+      (contractsRows || []).forEach((row) => {
+        if ((row.status || '') === 'draft') return;
+        pushClientActivityTimestamp(lastActivityByClientId, row.client_id, row.sent_at || row.created_at);
+      });
+      (approvalsRows || []).forEach((row) => {
+        pushClientActivityTimestamp(lastActivityByClientId, row.client_id, row.created_at);
+      });
+      (notesRows || []).forEach((row) => {
+        pushClientActivityTimestamp(lastActivityByClientId, row.client_id, row.created_at);
+      });
+      (followUpsRows || []).forEach((row) => {
+        pushClientActivityTimestamp(lastActivityByClientId, row.client_id, row.completed_at || row.created_at);
+      });
+
+      const clientsWithCounts = (clientsData || []).map((c) => ({
+        ...c,
+        project_count: countMap[c.id] || 0,
+        projects_value: valueMap[c.id] || 0,
+        last_contacted_at: lastActivityByClientId[c.id] || c.last_contacted_at,
+      }));
+      setClients(clientsWithCounts);
+
+      const staleClientIds = clientsWithCounts
+        .filter((client) => {
+          const computed = lastActivityByClientId[client.id];
+          if (!computed) return false;
+          const current = client.last_contacted_at;
+          if (!current) return true;
+          return new Date(current).getTime() !== new Date(computed).getTime();
+        })
+        .map((client) => client.id);
+      if (staleClientIds.length > 0) {
+        await Promise.all(
+          staleClientIds.map((clientId) =>
+            supabase.from('clients').update({ last_contacted_at: lastActivityByClientId[clientId] }).eq('id', clientId),
+          ),
+        );
       }
     } catch (error) {
       console.error('Error fetching clients:', error);
@@ -1104,7 +1185,7 @@ export default function Clients() {
                           </div>
                           <DroppableColumn
                             id={stage.value}
-                            className="p-3 flex flex-col gap-3 overflow-y-auto max-h-[60vh] bg-card/80 backdrop-blur-[1px] border border-t-0 rounded-b-xl min-h-[420px] transition-colors"
+                            className="p-3 flex flex-col gap-3 overflow-y-auto max-h-[60vh] bg-card/80 backdrop-blur-[1px] border border-t-0 rounded-b-xl min-h-[420px] transition-colors [scrollbar-width:none] [&::-webkit-scrollbar]:w-0 hover:[scrollbar-width:thin] hover:[&::-webkit-scrollbar]:w-2 focus-within:[scrollbar-width:thin] focus-within:[&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/70 hover:[&::-webkit-scrollbar-thumb]:bg-border focus-within:[&::-webkit-scrollbar-thumb]:bg-border"
                           >
                             <SortableContext items={columnClients.map((c) => c.id)} strategy={verticalListSortingStrategy}>
                               {columnClients.map((client) => (

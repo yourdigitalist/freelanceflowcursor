@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Receipt, CheckCircle, ArrowRight, ChevronUp, ChevronDown, Table, CheckSquare, Clock as ClockIcon, FileText } from '@/components/icons';
+import { Plus, Receipt, CheckCircle, ArrowRight, ChevronUp, ChevronDown, CheckSquare, Clock as ClockIcon, FileText } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import type { IconSlotKey } from '@/lib/iconSlots';
 import { canAccessNotes, getContractsAccessMode } from '@/lib/features';
@@ -147,7 +147,7 @@ function getTimeEntryDate(entry: Pick<RawTimeEntry, 'started_at' | 'start_time'>
 function RecentItemIcon({ kind }: { kind: RecentItem['kind'] }) {
   const Icon =
     kind === 'project'
-      ? Table
+      ? FileText
       : kind === 'task'
         ? CheckSquare
         : kind === 'time'
@@ -155,7 +155,7 @@ function RecentItemIcon({ kind }: { kind: RecentItem['kind'] }) {
           : kind === 'note'
             ? FileText
             : Receipt;
-  return <Icon className="h-3.5 w-3.5 text-primary" />;
+  return <Icon className="h-4 w-4 text-muted-foreground" />;
 }
 
 /** Show in "Needs you today" when due/expiry is within this many days (or already past). */
@@ -669,7 +669,7 @@ export default function Dashboard() {
         const tone: PriorityItem['tone'] = d !== null && d < 0 ? 'overdue' : 'soon';
         items.push({
           id: `contract-${c.id}`,
-          label: 'Awaiting signature',
+          label: 'Needs signature',
           tone,
           category: 'finance',
           title: `${c.identifier || 'Contract'} — ${c.clients?.name || c.client_name || 'Client'}`,
@@ -1074,23 +1074,23 @@ export default function Dashboard() {
                   )}
                 </CardTitle>
                 {priorityItems.length > 0 ? (
-                  <div className="flex flex-wrap justify-end gap-1 sm:ml-auto">
+                  <div className="flex w-full flex-wrap items-center justify-start gap-1 sm:ml-auto sm:w-auto sm:justify-end">
                     {PRIORITY_FILTERS.map((key) => (
                       <button
                         key={key}
                         type="button"
                         onClick={() => setPriorityFilter(key)}
                         className={cn(
-                          'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                          'inline-flex min-w-0 items-center rounded-md px-2 py-1 text-[11px] font-medium leading-none transition-colors sm:px-2.5 sm:text-xs',
                           priorityFilter === key
                             ? 'bg-primary text-primary-foreground'
                             : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                         )}
                       >
-                        {PRIORITY_FILTER_LABELS[key]}
+                        <span className="truncate">{PRIORITY_FILTER_LABELS[key]}</span>
                         <span
                           className={cn(
-                            'ml-1.5 rounded-full px-1 py-0.5 text-[10px]',
+                            'ml-1 rounded-full px-1 py-0.5 text-[9px] leading-none sm:ml-1.5 sm:text-[10px]',
                             priorityFilter === key ? 'bg-white/20' : 'bg-muted',
                           )}
                         >
@@ -1122,12 +1122,12 @@ export default function Dashboard() {
                   {priorityPagination.paginatedItems.map((item) => (
                     <div
                       key={item.id}
-                      className="grid grid-cols-[7.25rem_minmax(0,1fr)_7.5rem] items-center gap-x-3 py-3 first:pt-0 last:pb-0"
+                      className="grid grid-cols-[8.5rem_minmax(0,1fr)_7.5rem] items-center gap-x-3 py-3 first:pt-0 last:pb-0"
                     >
-                      <div>
+                      <div className="w-[8.5rem]">
                         <span
                           className={cn(
-                            'inline-flex rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider',
+                            'inline-flex whitespace-nowrap rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider',
                             TONE_STYLES[item.tone],
                           )}
                         >
@@ -1415,7 +1415,7 @@ export default function Dashboard() {
                       to={item.to}
                       className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/50"
                     >
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
                         <RecentItemIcon kind={item.kind} />
                       </div>
                       <div className="min-w-0 flex-1">

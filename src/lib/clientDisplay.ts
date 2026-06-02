@@ -1,6 +1,7 @@
 import { formatDistanceToNow, format } from 'date-fns';
 import { getClientStageLabel } from '@/lib/clientCrmStages';
 import { EMPTY_DASH, emptyDisplayText } from '@/lib/emptyDisplay';
+import { toDateFnsPattern } from '@/lib/datetime';
 
 export function formatClientCardFooter(
   projectCount: number,
@@ -59,7 +60,11 @@ export function formatClientLastActivity(
     return formatDistanceToNow(date, { addSuffix: true });
   }
   if (dateFormat) {
-    return format(date, dateFormat);
+    try {
+      return format(date, toDateFnsPattern(dateFormat));
+    } catch {
+      return format(date, 'MMM yyyy');
+    }
   }
   return format(date, 'MMM yyyy');
 }
