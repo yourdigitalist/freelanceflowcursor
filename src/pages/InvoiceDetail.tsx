@@ -2330,7 +2330,7 @@ export default function InvoiceDetail() {
 
       {/* Import Time Entries Modal */}
       <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
+        <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
             <DialogTitle>Import Time Entries</DialogTitle>
           </DialogHeader>
@@ -2417,7 +2417,7 @@ export default function InvoiceDetail() {
             </div>
           </div>
           </div>
-          <ScrollArea className="flex-1 min-h-0 px-6 max-h-[min(50vh,420px)]">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-2">
             {importEntries.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No entries match current filters
@@ -2481,7 +2481,7 @@ export default function InvoiceDetail() {
                 ))}
               </div>
             )}
-          </ScrollArea>
+          </div>
           <div className="mx-6 mb-3 rounded-lg border bg-muted/20 p-3 text-sm shrink-0">
             <div className="flex flex-wrap items-center gap-3">
               <span className="font-medium">Import preview</span>
