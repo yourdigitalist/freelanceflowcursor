@@ -1,4 +1,5 @@
 import LandingFeaturesSolarSection from "@/components/landing/LandingFeaturesSolarSection";
+import LandingPricingEverythingIncluded from "@/components/landing/LandingPricingEverythingIncluded";
 import LandingShowcaseProjectOverview from "@/components/landing/LandingShowcaseProjectOverview";
 import { useIframeAutoHeight } from "@/hooks/useIframeAutoHeight";
 
@@ -27,6 +28,8 @@ const LpTest: React.FC = () => {
       <LandingFeaturesSolarSection />
       <LandingShowcaseProjectOverview />
       <LandingIframe src="/lance-landing-identical.html?part=bottom" title="Lance landing continued" />
+      <LandingPricingEverythingIncluded />
+      <LandingIframe src="/lance-landing-identical.html?part=bottom-tail" title="Lance landing footer" />
     </div>
   );
 };

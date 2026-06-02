@@ -45,6 +45,11 @@ import {
   pickFallbackStatusId,
   type StatusRowRef,
 } from '@/lib/projectStatusSave';
+import {
+  getDefaultStatusId,
+  resolveImportedTaskStatusId,
+  resolveStatusId,
+} from '@/lib/taskStatus';
 import { ProjectHeader } from '@/components/tasks/ProjectHeader';
 import { TaskFilters } from '@/components/tasks/TaskFilters';
 import { TaskKanbanView } from '@/components/tasks/TaskKanbanView';
@@ -144,6 +149,13 @@ export default function ProjectDetail() {
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
+  );
+
+  const defaultStatusId = useMemo(() => getDefaultStatusId(statuses), [statuses]);
+
+  const effectiveTaskStatusId = useCallback(
+    (task: Task) => task.status_id ?? defaultStatusId,
+    [defaultStatusId],
   );
 
   const timeBillingSummary = useMemo(() => {
@@ -409,22 +421,27 @@ export default function ProjectDetail() {
 
     try {
       if (editingTask) {
+        const resolvedStatusId = resolveStatusId(taskData.status_id, statuses);
+
         const { error } = await supabase
           .from('tasks')
           .update({
             ...taskData,
+            status_id: resolvedStatusId,
             status: undefined, // Don't update legacy status field
           })
           .eq('id', editingTask.id);
         if (error) throw error;
         toast({ title: 'Task updated successfully' });
       } else {
+        const resolvedStatusId = resolveStatusId(taskData.status_id, statuses);
+
         const { error } = await supabase
           .from('tasks')
           .insert([{
             title: taskData.title || '',
             description: taskData.description,
-            status_id: taskData.status_id,
+            status_id: resolvedStatusId,
             priority: taskData.priority || null,
             due_date: taskData.due_date,
             estimated_hours: taskData.estimated_hours,
@@ -454,10 +471,20 @@ export default function ProjectDetail() {
   const handleQuickAddTask = async (title: string, statusId: string) => {
     if (!user || !id) return;
 
+    const resolvedStatusId = resolveStatusId(statusId, statuses);
+    if (!resolvedStatusId) {
+      toast({
+        title: 'No task statuses',
+        description: 'Add at least one column in Manage Statuses before creating tasks.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase.from('tasks').insert([{
         title,
-        status_id: statusId,
+        status_id: resolvedStatusId,
         status: 'todo',
         priority: null,
         project_id: id,
@@ -479,10 +506,13 @@ export default function ProjectDetail() {
   };
 
   const handleStatusChange = async (taskId: string, statusId: string) => {
+    const resolvedStatusId = resolveStatusId(statusId, statuses);
+    if (!resolvedStatusId) return;
+
     try {
       const { error } = await supabase
         .from('tasks')
-        .update({ status_id: statusId })
+        .update({ status_id: resolvedStatusId })
         .eq('id', taskId);
       if (error) throw error;
       fetchTasks();
@@ -607,7 +637,7 @@ export default function ProjectDetail() {
       const { error } = await supabase.from('tasks').insert({
         title: `${task.title} (copy)`,
         description: task.description,
-        status_id: task.status_id,
+        status_id: resolveStatusId(task.status_id, statuses),
         status: task.status,
         priority: task.priority,
         due_date: task.due_date,
@@ -786,7 +816,7 @@ export default function ProjectDetail() {
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
     const task = tasks.find((t) => t.id === event.active.id);
-    dragStartStatusRef.current = task?.status_id ?? null;
+    dragStartStatusRef.current = task?.status_id ?? defaultStatusId ?? null;
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -798,8 +828,10 @@ export default function ProjectDetail() {
 
     const overStatus = statuses.find((s) => s.id === over.id);
     const overTask = tasks.find((t) => t.id === over.id);
-    const targetStatusId = overStatus?.id ?? overTask?.status_id;
-    if (!targetStatusId || activeTask.status_id === targetStatusId) return;
+    const targetStatusId =
+      overStatus?.id ?? (overTask ? overTask.status_id ?? defaultStatusId : null);
+    const activeEffective = activeTask.status_id ?? defaultStatusId;
+    if (!targetStatusId || activeEffective === targetStatusId) return;
 
     setTasks((prev) =>
       prev.map((t) => (t.id === active.id ? { ...t, status_id: targetStatusId } : t)),
@@ -819,7 +851,8 @@ export default function ProjectDetail() {
 
     const overStatus = statuses.find((s) => s.id === over.id);
     const overTask = tasks.find((t) => t.id === over.id);
-    const targetStatusId = overStatus?.id ?? overTask?.status_id ?? null;
+    const targetStatusId =
+      overStatus?.id ?? (overTask ? overTask.status_id ?? defaultStatusId : null);
 
     if (targetStatusId && originStatusId !== targetStatusId) {
       try {
@@ -897,44 +930,13 @@ export default function ProjectDetail() {
         toast({ title: 'CSV must have title column', variant: 'destructive' });
         return;
       }
-      const resolveStatusId = (rawStatus: string): string | null => {
-        if (!rawStatus || statuses.length === 0) return statuses[0]?.id ?? null;
-        const slug = rawStatus.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-        const byExact = statuses.find((s) => s.name === rawStatus.trim());
-        if (byExact) return byExact.id;
-        const statusSlug = (s: { name: string }) => s.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-        const bySlug = statuses.find((s) => statusSlug(s) === slug);
-        if (bySlug) return bySlug.id;
-        if (['completed', 'done', 'closed'].includes(slug)) {
-          const done = statuses.find((s) => s.is_done_status);
-          if (done) return done.id;
-        }
-        if (['in_progress', 'inprogress', 'progress', 'active'].includes(slug)) {
-          const progress = statuses.find((s) => statusSlug(s).includes('progress'));
-          if (progress) return progress.id;
-        }
-        if (['in_review', 'inreview', 'review'].includes(slug)) {
-          const review = statuses.find((s) => statusSlug(s).includes('review'));
-          if (review) return review.id;
-        }
-        if (['todo', 'not_started', 'haven\'t_started', 'havent_started', 'pending', 'open'].includes(slug)) {
-          const first = statuses.find((s) => !s.is_done_status) ?? statuses[0];
-          if (first) return first.id;
-        }
-        if (['cancelled', 'canceled'].includes(slug)) {
-          const cancelled = statuses.find((s) => statusSlug(s).includes('cancel'));
-          if (cancelled) return cancelled.id;
-          return statuses[0]?.id ?? null;
-        }
-        return statuses[0]?.id ?? null;
-      };
       let created = 0;
       for (const row of dataRows) {
         const title = row[titleIdx]?.trim();
         if (!title) continue;
         const description = descIdx >= 0 ? row[descIdx]?.trim() || null : null;
         const statusRaw = statusIdx >= 0 ? row[statusIdx]?.trim() : '';
-        const statusId = resolveStatusId(statusRaw);
+        const statusId = resolveImportedTaskStatusId(statusRaw, statuses);
         const priority = (priorityIdx >= 0 ? row[priorityIdx]?.trim() : 'medium') || 'medium';
         const dueDate = dueDateIdx >= 0 ? row[dueDateIdx]?.trim() || null : null;
         const estimatedHours = estIdx >= 0 ? (parseFloat(row[estIdx]) || null) : null;
@@ -966,11 +968,12 @@ export default function ProjectDetail() {
 
   // Filter tasks
   const filteredTasks = tasks.filter((task) => {
-    if (selectedStatus !== 'all' && task.status_id !== selectedStatus) return false;
+    const statusId = effectiveTaskStatusId(task);
+    if (selectedStatus !== 'all' && statusId !== selectedStatus) return false;
     if (selectedPriority !== 'all' && task.priority !== selectedPriority) return false;
     if (hideDone) {
       const doneStatusIds = statuses.filter((s) => s.is_done_status).map((s) => s.id);
-      if (task.status_id && doneStatusIds.includes(task.status_id)) return false;
+      if (statusId && doneStatusIds.includes(statusId)) return false;
     }
     return true;
   });
@@ -1036,6 +1039,7 @@ export default function ProjectDetail() {
               <TaskKanbanView
                 tasks={filteredTasks}
                 statuses={statuses}
+                defaultStatusId={defaultStatusId}
                 commentCounts={commentCounts}
                 trackedSecondsByTask={trackedSecondsByTask}
                 onTaskClick={(task) => {
@@ -1062,7 +1066,7 @@ export default function ProjectDetail() {
                 onDelete={(taskId) => setDeleteTaskId(taskId)}
                 onDuplicate={handleDuplicateTask}
                 onQuickAdd={handleQuickAddTask}
-                defaultStatusId={statuses[0]?.id || ''}
+                defaultStatusId={defaultStatusId ?? ''}
               />
             )}
           </DndContext>

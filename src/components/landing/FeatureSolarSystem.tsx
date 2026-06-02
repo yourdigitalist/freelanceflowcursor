@@ -27,19 +27,43 @@ type FeatureItem = {
   popoverPlacement: "top" | "bottom" | "left" | "right";
 };
 
-/** Pull coordinates toward diagram center (50%, 50%). */
-function towardCenter(left: number, top: number, factor = 0.72) {
+/** Elliptical orbit on feature-solar-system.png (0° = top, 36° spokes). */
+function orbitOnEllipse(angleDeg: number, rx: number, ry: number) {
+  const rad = (angleDeg * Math.PI) / 180;
   return {
-    left: Math.round((50 + (left - 50) * factor) * 10) / 10,
-    top: Math.round((50 + (top - 50) * factor) * 10) / 10,
+    left: Math.round((ORBIT_CENTER_X + rx * Math.sin(rad)) * 10) / 10,
+    top: Math.round((ORBIT_CENTER_Y - ry * Math.cos(rad)) * 10) / 10,
   };
 }
 
-const FEATURES: FeatureItem[] = [
+const ORBIT_CENTER_X = 50;
+const ORBIT_CENTER_Y = 49.9;
+const SPOKE_STEP_DEG = 36;
+/** Inner dashed ring (top arc). */
+const INNER_ORBIT = { rx: 8.5, ry: 11 };
+/** Outer dashed ring. */
+const OUTER_ORBIT = { rx: 23.5, ry: 26.5 };
+
+type OrbitRing = "inner" | "outer";
+
+const FEATURE_ORBIT: Record<string, { spoke: number; ring: OrbitRing }> = {
+  clients: { spoke: 0, ring: "inner" },
+  time: { spoke: 1, ring: "inner" },
+  projects: { spoke: 8, ring: "inner" },
+  invoices: { spoke: 2, ring: "outer" },
+  proposals: { spoke: 3, ring: "outer" },
+  contracts: { spoke: 4, ring: "outer" },
+  approvals: { spoke: 5, ring: "outer" },
+  tasks: { spoke: 6, ring: "outer" },
+  portal: { spoke: 7, ring: "outer" },
+};
+
+type FeatureDef = Omit<FeatureItem, "top" | "left">;
+
+const FEATURE_DEFS: FeatureDef[] = [
   {
     id: "clients",
     label: "Clients",
-    ...towardCenter(48, 14),
     icon: Users,
     description:
       "Manage your full client pipeline in one place — from new lead to active project. Track contacts, set follow-ups, and log activity without digging through email threads.",
@@ -47,19 +71,8 @@ const FEATURES: FeatureItem[] = [
     popoverPlacement: "bottom",
   },
   {
-    id: "projects",
-    label: "Projects",
-    ...towardCenter(24, 24),
-    icon: FolderKanban,
-    description:
-      "Keep every engagement organised with clear statuses, timelines, and deliverables. Tie work to clients so nothing slips between tools.",
-    float: { duration: 3.6, delay: 0.4, distance: 4 },
-    popoverPlacement: "right",
-  },
-  {
     id: "time",
     label: "Time Tracking",
-    ...towardCenter(71, 24),
     icon: Clock,
     description:
       "Log billable hours with one click. Lance tracks time against projects and feeds it straight into your invoices.",
@@ -67,19 +80,8 @@ const FEATURES: FeatureItem[] = [
     popoverPlacement: "left",
   },
   {
-    id: "portal",
-    label: "Client Portal",
-    ...towardCenter(12, 48),
-    icon: Globe,
-    description:
-      "Give clients a polished hub to view projects, files, and updates — without handing them your whole back office or another login to forget.",
-    float: { duration: 3.4, delay: 0.2, distance: 3 },
-    popoverPlacement: "right",
-  },
-  {
     id: "invoices",
     label: "Invoices",
-    ...towardCenter(85, 48),
     icon: Receipt,
     description:
       "Turn completed work into a polished invoice in seconds. Track payments and send reminders automatically.",
@@ -87,19 +89,8 @@ const FEATURES: FeatureItem[] = [
     popoverPlacement: "left",
   },
   {
-    id: "tasks",
-    label: "Tasks",
-    ...towardCenter(24, 63),
-    icon: CheckSquare,
-    description:
-      "A kanban board built for service teams. Priorities, due dates, and statuses — exactly what you need, nothing more.",
-    float: { duration: 3.8, delay: 0.6, distance: 4 },
-    popoverPlacement: "top",
-  },
-  {
     id: "proposals",
     label: "Proposals",
-    ...towardCenter(71, 63),
     icon: FileText,
     description:
       "Send professional proposals clients can review and accept online. Win work faster with less back-and-forth in email.",
@@ -107,9 +98,17 @@ const FEATURES: FeatureItem[] = [
     popoverPlacement: "top",
   },
   {
+    id: "contracts",
+    label: "Contracts",
+    icon: FileSignature,
+    description:
+      "Create, send, and store contracts linked to clients and projects. Keep terms and signatures where the rest of your work lives.",
+    float: { duration: 4.6, delay: 0.3, distance: 5 },
+    popoverPlacement: "top",
+  },
+  {
     id: "approvals",
     label: "Approvals",
-    ...towardCenter(36, 82),
     icon: BadgeCheck,
     description:
       "Share a link. Your client clicks, comments, and approves — no account, no app. Pin feedback directly on your files.",
@@ -117,16 +116,40 @@ const FEATURES: FeatureItem[] = [
     popoverPlacement: "top",
   },
   {
-    id: "contracts",
-    label: "Contracts",
-    ...towardCenter(60, 82),
-    icon: FileSignature,
+    id: "tasks",
+    label: "Tasks",
+    icon: CheckSquare,
     description:
-      "Create, send, and store contracts linked to clients and projects. Keep terms and signatures where the rest of your work lives.",
-    float: { duration: 4.6, delay: 0.3, distance: 5 },
+      "A kanban board built for service teams. Priorities, due dates, and statuses — exactly what you need, nothing more.",
+    float: { duration: 3.8, delay: 0.6, distance: 4 },
     popoverPlacement: "top",
   },
+  {
+    id: "portal",
+    label: "Client Portal",
+    icon: Globe,
+    description:
+      "Give clients a polished hub to view projects, files, and updates — without handing them your whole back office or another login to forget.",
+    float: { duration: 3.4, delay: 0.2, distance: 3 },
+    popoverPlacement: "right",
+  },
+  {
+    id: "projects",
+    label: "Projects",
+    icon: FolderKanban,
+    description:
+      "Keep every engagement organised with clear statuses, timelines, and deliverables. Tie work to clients so nothing slips between tools.",
+    float: { duration: 3.6, delay: 0.4, distance: 4 },
+    popoverPlacement: "right",
+  },
 ];
+
+const FEATURES: FeatureItem[] = FEATURE_DEFS.map((def) => {
+  const orbit = FEATURE_ORBIT[def.id];
+  if (!orbit) throw new Error(`Missing solar orbit for ${def.id}`);
+  const { rx, ry } = orbit.ring === "inner" ? INNER_ORBIT : OUTER_ORBIT;
+  return { ...def, ...orbitOnEllipse(orbit.spoke * SPOKE_STEP_DEG, rx, ry) };
+});
 
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(() =>
@@ -321,16 +344,17 @@ export default function FeatureSolarSystem() {
       className={`feature-solar${isMobile ? " feature-solar--mobile" : ""}`}
       ref={containerRef}
     >
-      <img
-        src={FEATURE_SOLAR_BG}
-        alt=""
-        className="feature-solar-bg"
-        width={1200}
-        height={900}
-        decoding="async"
-      />
+      <div className="feature-solar-stage">
+        <img
+          src={FEATURE_SOLAR_BG}
+          alt=""
+          className="feature-solar-bg"
+          width={1024}
+          height={611}
+          decoding="async"
+        />
 
-      <div className="feature-solar-pills feature-solar-pills--overlay" aria-label="Lance features">
+        <div className="feature-solar-pills feature-solar-pills--overlay" aria-label="Lance features">
         {FEATURES.map((feature) => (
           <div
             key={feature.id}
@@ -360,6 +384,7 @@ export default function FeatureSolarSystem() {
             </AnimatePresence>
           </div>
         ))}
+        </div>
       </div>
 
       <AnimatePresence>

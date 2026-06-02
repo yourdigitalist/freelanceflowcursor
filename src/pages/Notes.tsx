@@ -38,6 +38,8 @@ import {
 import { Label } from '@/components/ui/label';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDateTime } from '@/lib/datetime';
+import { getDefaultStatusId } from '@/lib/taskStatus';
+import type { ProjectStatus } from '@/components/tasks/types';
 import { EmojiPicker } from '@/components/ui/emoji-picker';
 import { FolderPlus } from '@/components/icons';
 import { cn } from '@/lib/utils';
@@ -322,13 +324,12 @@ export default function Notes() {
     if (!createTaskProjectId || !createTaskTitle.trim() || !user) return;
     setCreateTaskSubmitting(true);
     try {
-      const { data: statuses } = await supabase
+      const { data: statusRows } = await supabase
         .from('project_statuses')
-        .select('id')
+        .select('id, name, color, is_done_status, position, project_id, user_id')
         .eq('project_id', createTaskProjectId)
-        .order('sort_order', { ascending: true })
-        .limit(1);
-      const statusId = statuses?.[0]?.id ?? null;
+        .order('position');
+      const statusId = getDefaultStatusId((statusRows ?? []) as ProjectStatus[]);
       const { error } = await supabase.from('tasks').insert({
         title: createTaskTitle.trim(),
         project_id: createTaskProjectId,

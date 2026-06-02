@@ -723,8 +723,8 @@ export default function Dashboard() {
         recents.push({
           id: `p-${p.id}`,
           kind: 'project',
-          title: JUMP_BACK_KIND_LABEL.project,
-          subtitle: p.name,
+          title: p.name,
+          subtitle: (p.clients as { name: string } | null)?.name || JUMP_BACK_KIND_LABEL.project,
           updated_at: p.updated_at,
           to: `/projects/${p.id}`,
         }),
@@ -733,8 +733,8 @@ export default function Dashboard() {
         recents.push({
           id: `t-${t.id}`,
           kind: 'task',
-          title: JUMP_BACK_KIND_LABEL.task,
-          subtitle: t.title,
+          title: t.title,
+          subtitle: (t.projects as { name: string } | null)?.name || JUMP_BACK_KIND_LABEL.task,
           updated_at: t.updated_at,
           to: `/projects/${t.project_id}`,
         }),
@@ -750,8 +750,9 @@ export default function Dashboard() {
         recents.push({
           id: `tm-${t.id}`,
           kind: 'time',
-          title: JUMP_BACK_KIND_LABEL.time,
-          subtitle: entryName,
+          title: entryName,
+          subtitle:
+            (t.projects as { name: string } | null)?.name || JUMP_BACK_KIND_LABEL.time,
           updated_at: t.updated_at,
           to: `/time?edit=${t.id}&view=day`,
         });
@@ -760,8 +761,8 @@ export default function Dashboard() {
         recents.push({
           id: `n-${n.id}`,
           kind: 'note',
-          title: JUMP_BACK_KIND_LABEL.note,
-          subtitle: n.title || 'Untitled note',
+          title: n.title || 'Untitled note',
+          subtitle: JUMP_BACK_KIND_LABEL.note,
           updated_at: n.updated_at,
           to: '/notes',
         }),
@@ -770,8 +771,8 @@ export default function Dashboard() {
         recents.push({
           id: `i-${inv.id}`,
           kind: 'invoice',
-          title: JUMP_BACK_KIND_LABEL.invoice,
-          subtitle: inv.invoice_number,
+          title: inv.invoice_number,
+          subtitle: JUMP_BACK_KIND_LABEL.invoice,
           updated_at: inv.updated_at,
           to: `/invoices/${inv.id}`,
         }),
@@ -1369,7 +1370,10 @@ export default function Dashboard() {
                       className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/50"
                     >
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted">
-                        <SlotIcon slot={RECENT_ICON_SLOT[item.kind]} className="h-3.5 w-3.5 text-muted-foreground" />
+                        <SlotIcon
+                          slot={RECENT_ICON_SLOT[item.kind]}
+                          className="h-3.5 w-3.5 text-primary"
+                        />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-foreground">{item.title}</p>

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus } from '@/components/icons';
 import { Task, ProjectStatus } from './types';
+import { taskMatchesStatusColumn } from '@/lib/taskStatus';
 import { TaskCard } from './TaskCard';
 import { QuickAddTask } from './QuickAddTask';
 import { useState } from 'react';
@@ -15,6 +16,7 @@ import { HorizontalScroll } from '@/components/ui/horizontal-scroll';
 interface TaskKanbanViewProps {
   tasks: Task[];
   statuses: ProjectStatus[];
+  defaultStatusId: string | null;
   commentCounts: Record<string, number>;
   trackedSecondsByTask: Record<string, number>;
   onTaskClick: (task: Task) => void;
@@ -102,6 +104,7 @@ function KanbanColumn({ status, tasks, commentCounts, trackedSecondsByTask, onTa
 export function TaskKanbanView({
   tasks,
   statuses,
+  defaultStatusId,
   commentCounts,
   trackedSecondsByTask,
   onTaskClick,
@@ -110,7 +113,9 @@ export function TaskKanbanView({
   return (
     <HorizontalScroll contentClassName="flex gap-4 min-w-max">
       {statuses.map((status) => {
-        const statusTasks = tasks.filter((t) => t.status_id === status.id);
+        const statusTasks = tasks.filter((t) =>
+          taskMatchesStatusColumn(t, status.id, defaultStatusId),
+        );
         return (
           <KanbanColumn
             key={status.id}

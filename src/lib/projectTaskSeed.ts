@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
-import { DEFAULT_STATUSES } from "@/components/tasks/types";
+import { DEFAULT_STATUSES, type ProjectStatus } from "@/components/tasks/types";
+import { getDefaultStatusId } from "@/lib/taskStatus";
 import { mapDefaultTasks } from "@/lib/serviceUtils";
 
 export type SeedProjectTasksResult = {
@@ -79,7 +80,7 @@ async function ensureDefaultProjectStatuses(
 ): Promise<string | null> {
   const { data: existing, error: fetchError } = await supabase
     .from("project_statuses")
-    .select("id, is_done_status, position")
+    .select("id, name, is_done_status, position, project_id, user_id")
     .eq("project_id", projectId)
     .order("position");
 
@@ -98,15 +99,13 @@ async function ensureDefaultProjectStatuses(
     const { data: inserted, error: insertError } = await supabase
       .from("project_statuses")
       .insert(defaultStatuses)
-      .select("id, is_done_status, position");
+      .select("id, name, is_done_status, position, project_id, user_id");
 
     if (insertError) throw insertError;
     statuses = inserted ?? [];
   }
 
-  const initial =
-    statuses.find((status) => !status.is_done_status) ?? statuses[0] ?? null;
-  return initial?.id ?? null;
+  return getDefaultStatusId(statuses as ProjectStatus[]);
 }
 
 /**

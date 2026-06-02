@@ -20,6 +20,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Send, MessageSquare, Trash2, Copy, Pencil } from '@/components/icons';
 import { Task, ProjectStatus, TaskComment } from './types';
+import { getDefaultStatusId } from '@/lib/taskStatus';
 import { PrioritySelect } from './PrioritySelect';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -97,7 +98,7 @@ export function TaskEditSheet({
       setFormData({
         title: '',
         description: '',
-        status_id: statuses[0]?.id || '',
+        status_id: getDefaultStatusId(statuses) || '',
         priority: null as string | null,
         due_date: '',
         estimated_hours: '',

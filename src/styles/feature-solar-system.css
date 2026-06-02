@@ -1,14 +1,22 @@
 .feature-solar {
   position: relative;
   width: 100%;
-  max-width: 1100px;
+  max-width: 720px;
   margin: 0 auto;
+}
+
+.feature-solar-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1024 / 611;
 }
 
 .feature-solar-bg {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: contain;
+  margin: 0 auto;
 }
 
 .feature-solar-pills {
@@ -35,14 +43,14 @@
 .feature-solar-pill {
   display: inline-flex;
   align-items: center;
-  gap: 11px;
-  padding: 11px 20px;
+  gap: 7px;
+  padding: 7px 13px;
   border-radius: 999px;
   background: #f8f6ff;
   border: 1px solid #e7e0f4;
   box-shadow: 0 2px 12px rgba(155, 99, 233, 0.12);
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: #1a1a2e;
   letter-spacing: -0.2px;
@@ -53,8 +61,8 @@
 }
 
 .feature-solar-pill-icon {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   color: #9b63e9;
 }

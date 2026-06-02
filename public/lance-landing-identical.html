@@ -1472,7 +1472,7 @@
 
 
 <!-- FEATURE SHOWCASES (features solar system rendered by React in app shell) -->
-<section class="showcase-section section-enter landing-part-bottom">
+<section class="showcase-section section-enter landing-part-bottom-main">
 
   <div class="showcase-divider"></div>
 
@@ -1533,7 +1533,7 @@
 </section>
 
 <!-- HOW IT WORKS -->
-<section class="how-section section-enter landing-part-bottom" id="how">
+<section class="how-section section-enter landing-part-bottom-main" id="how">
   <div class="how-inner centered">
     <span class="section-label">✦ How it works</span>
     <h2 class="section-title">From kickoff to paid<br>in three steps.</h2>
@@ -1559,7 +1559,7 @@
 </section>
 
 <!-- COMPARISON -->
-<section class="compare-section section-enter landing-part-bottom" id="compare">
+<section class="compare-section section-enter landing-part-bottom-main" id="compare">
   <div class="compare-inner">
     <div class="centered" style="margin-bottom:56px;">
       <span class="section-label">✦ The math is simple</span>
@@ -1736,7 +1736,7 @@
 </section>
 
 <!-- PRICING -->
-<section class="pricing-section section-enter landing-part-bottom" id="pricing">
+<section class="pricing-section section-enter landing-part-bottom-main" id="pricing">
   <div class="pricing-inner centered">
     <span class="section-label">✦ Pricing</span>
     <h2 class="section-title">Simple, honest pricing.</h2>
@@ -1761,7 +1761,7 @@
         <a href="/auth?tab=signup" target="_top" class="btn-plan outline">Start free trial</a>
       </div>
       <div class="price-card featured reveal">
-        <div class="price-badge" style="color: rgb(255, 255, 255);">⭐ Best Value</div>
+        <div class="price-badge" style="color: rgb(255, 255, 255);">Best Value</div>
         <p class="price-label">Yearly</p>
         <div class="price-amount">
           <span class="price-currency">$</span>
@@ -1779,12 +1779,12 @@
         <a href="/auth?tab=signup" target="_top" class="btn-plan filled">Start free trial</a>
       </div>
     </div>
-    <p class="pricing-note">🔒 Cancel anytime</p>
+    <p class="pricing-note">Cancel anytime</p>
   </div>
 </section>
 
 <!-- TESTIMONIALS -->
-<section class="testi-section section-enter landing-part-bottom" id="testimonials">
+<section class="testi-section section-enter landing-part-bottom-tail" id="testimonials">
   <div class="testi-header">
     <span class="section-label">✦ Testimonials</span>
     <h2 class="section-title">What our beta testers say.</h2>
@@ -1809,7 +1809,7 @@
 </section>
 
 <!-- FAQ -->
-<section class="faq-section section-enter landing-part-bottom" id="faq">
+<section class="faq-section section-enter landing-part-bottom-tail" id="faq">
   <div class="faq-inner centered">
     <span class="section-label">✦ FAQ</span>
     <h2 class="section-title">Got questions?</h2>
@@ -1840,7 +1840,7 @@
 </section>
 
 <!-- CTA BAND -->
-<div class="cta-band-outer landing-part-bottom">
+<div class="cta-band-outer landing-part-bottom-tail">
   <div class="cta-band reveal">
     <h2>Ready to cancel four subscriptions?</h2>
     <p>Join thousands of freelancers running their business with Lance.</p>
@@ -1850,7 +1850,7 @@
 </div>
 
 <!-- FOOTER -->
-<footer class="landing-part-bottom">
+<footer class="landing-part-bottom-tail">
   <div class="footer-inner" style="grid-template-columns: 1fr auto;">
     <div class="footer-brand">
       <img src="uploads/logo-1776927478688.png" alt="Lance" class="footer-logo">
@@ -1902,7 +1902,7 @@
   (function applyLandingPart() {
     const part = new URLSearchParams(location.search).get('part');
     if (part === 'top') {
-      document.querySelectorAll('.landing-part-bottom').forEach((el) => {
+      document.querySelectorAll('.landing-part-bottom-main, .landing-part-bottom-tail').forEach((el) => {
         el.style.display = 'none';
       });
     } else if (part === 'bottom') {
@@ -1910,6 +1910,21 @@
         el.style.display = 'none';
       });
       document.querySelectorAll('.landing-part-showcase-zoom').forEach((el) => {
+        el.style.display = 'none';
+      });
+      document.querySelectorAll('.landing-part-bottom-tail').forEach((el) => {
+        el.style.display = 'none';
+      });
+      const mobileMenu = document.getElementById('mobile-menu');
+      if (mobileMenu) mobileMenu.style.display = 'none';
+    } else if (part === 'bottom-tail') {
+      document.querySelectorAll('.landing-part-top').forEach((el) => {
+        el.style.display = 'none';
+      });
+      document.querySelectorAll('.landing-part-showcase-zoom').forEach((el) => {
+        el.style.display = 'none';
+      });
+      document.querySelectorAll('.landing-part-bottom-main').forEach((el) => {
         el.style.display = 'none';
       });
       const mobileMenu = document.getElementById('mobile-menu');

@@ -63,6 +63,7 @@ interface TaskListViewProps {
 interface SortableRowProps {
   task: Task;
   statuses: ProjectStatus[];
+  defaultStatusId: string | null;
   commentCount: number;
   trackedSeconds: number;
   onTaskClick: () => void;
@@ -78,6 +79,7 @@ interface SortableRowProps {
 function SortableRow({
   task,
   statuses,
+  defaultStatusId,
   commentCount,
   trackedSeconds,
   onTaskClick,
@@ -108,7 +110,8 @@ function SortableRow({
     transition,
   };
 
-  const currentStatus = statuses.find(s => s.id === task.status_id);
+  const effectiveStatusId = task.status_id ?? defaultStatusId;
+  const currentStatus = statuses.find((s) => s.id === effectiveStatusId);
   const isDone = currentStatus?.is_done_status;
 
   const handleTitleBlur = () => {
@@ -193,7 +196,7 @@ function SortableRow({
         )}
       </TableCell>
       <TableCell>
-        <Select value={task.status_id || ''} onValueChange={onStatusChange}>
+        <Select value={effectiveStatusId || ''} onValueChange={onStatusChange}>
           <SelectTrigger className="w-[160px] h-8 border-0 bg-transparent text-sm hover:bg-muted">
             <div className="flex items-center gap-2">
               {currentStatus && (
@@ -202,7 +205,7 @@ function SortableRow({
                   style={{ backgroundColor: currentStatus.color }}
                 />
               )}
-              <span className="truncate">{currentStatus?.name || 'Select'}</span>
+              <span className="truncate">{currentStatus?.name ?? '—'}</span>
             </div>
           </SelectTrigger>
           <SelectContent>
@@ -318,15 +321,17 @@ export function TaskListView({
 
   const taskSortComparators = useMemo(() => {
     const statusPos = (s: ProjectStatus) => s.position;
-    const statusName = (t: Task) => statuses.find((s) => s.id === t.status_id)?.name ?? '';
+    const effectiveId = (t: Task) => t.status_id ?? defaultStatusId;
+    const statusName = (t: Task) =>
+      statuses.find((s) => s.id === effectiveId(t))?.name ?? '';
     const priorityOrder = (p: string | null) =>
       p ? ['low', 'medium', 'high', 'urgent'].indexOf(p) : -1;
 
     return {
       title: (a: Task, b: Task) => compareStrings(a.title, b.title),
       status: (a: Task, b: Task) => {
-        const sa = statuses.find((s) => s.id === a.status_id);
-        const sb = statuses.find((s) => s.id === b.status_id);
+        const sa = statuses.find((s) => s.id === effectiveId(a));
+        const sb = statuses.find((s) => s.id === effectiveId(b));
         const va = sa ? statusPos(sa) : 999;
         const vb = sb ? statusPos(sb) : 999;
         if (va !== vb) return va - vb;
@@ -338,7 +343,7 @@ export function TaskListView({
         compareNullableNumbers(a.estimated_hours, b.estimated_hours, -1),
       due_date: (a: Task, b: Task) => compareDates(a.due_date, b.due_date),
     };
-  }, [statuses]);
+  }, [statuses, defaultStatusId]);
 
   const taskSort = useTableSort(tasks, taskSortComparators);
   const tasksPagination = usePagination(taskSort.sortedItems);
@@ -371,6 +376,7 @@ export function TaskListView({
                 key={task.id}
                 task={task}
                 statuses={statuses}
+                defaultStatusId={defaultStatusId || null}
                 commentCount={commentCounts[task.id] || 0}
                 trackedSeconds={trackedSecondsByTask[task.id] || 0}
                 onTaskClick={() => onTaskClick(task)}
