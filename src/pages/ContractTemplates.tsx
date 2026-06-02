@@ -86,7 +86,7 @@ export default function ContractTemplates() {
         user_id: user.id,
         name: "New Contract Template",
         description: "",
-        content: DEFAULT_CONTRACT_TEMPLATE_CONTENT,
+        content: "",
       } as never)
       .select("id")
       .single();

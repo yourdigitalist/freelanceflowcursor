@@ -417,9 +417,9 @@ export default function Contracts() {
       .from("contract_templates")
       .insert({
         user_id: user.id,
-        name: "Standard Service Agreement",
-        description: "Standard English template for freelance services agreements.",
-        content: DEFAULT_CONTRACT_TEMPLATE_CONTENT,
+        name: "New Contract Template",
+        description: "",
+        content: "",
         is_default: false,
         is_lance_template: false,
       } as never)

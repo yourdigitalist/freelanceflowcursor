@@ -196,7 +196,7 @@ export default function ContractTemplateDetail() {
                   <ReactQuill
                     ref={quillRef}
                     theme="snow"
-                    value={row.content}
+                    value={row.content || ""}
                     onChange={(value) => {
                       if (!requireDisclaimerAccepted("edit this template")) return;
                       setRow((prev) => (prev ? { ...prev, content: value } : prev));
