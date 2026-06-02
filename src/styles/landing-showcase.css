@@ -5,10 +5,7 @@
 }
 
 .landing-showcase-divider {
-  max-width: 1100px;
-  margin: 0 auto 80px;
-  height: 1px;
-  background: #ede8fa;
+  display: none;
 }
 
 .landing-showcase-item {

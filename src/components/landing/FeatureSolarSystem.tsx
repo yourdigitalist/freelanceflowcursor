@@ -27,7 +27,7 @@ type FeatureItem = {
   popoverPlacement: "top" | "bottom" | "left" | "right";
 };
 
-/** Elliptical orbit on feature-solar-system.png (0° = top, 36° spokes). */
+/** Elliptical orbit on feature-solar-system.png (0° = top). */
 function orbitOnEllipse(angleDeg: number, rx: number, ry: number) {
   const rad = (angleDeg * Math.PI) / 180;
   return {
@@ -37,25 +37,24 @@ function orbitOnEllipse(angleDeg: number, rx: number, ry: number) {
 }
 
 const ORBIT_CENTER_X = 50;
-const ORBIT_CENTER_Y = 49.9;
-const SPOKE_STEP_DEG = 36;
+const ORBIT_CENTER_Y = 46;
 /** Inner dashed ring (top arc). */
-const INNER_ORBIT = { rx: 8.5, ry: 11 };
+const INNER_ORBIT = { rx: 24, ry: 16.5 };
 /** Outer dashed ring. */
-const OUTER_ORBIT = { rx: 23.5, ry: 26.5 };
+const OUTER_ORBIT = { rx: 34, ry: 25.5 };
 
 type OrbitRing = "inner" | "outer";
 
-const FEATURE_ORBIT: Record<string, { spoke: number; ring: OrbitRing }> = {
-  clients: { spoke: 0, ring: "inner" },
-  time: { spoke: 1, ring: "inner" },
-  projects: { spoke: 8, ring: "inner" },
-  invoices: { spoke: 2, ring: "outer" },
-  proposals: { spoke: 3, ring: "outer" },
-  contracts: { spoke: 4, ring: "outer" },
-  approvals: { spoke: 5, ring: "outer" },
-  tasks: { spoke: 6, ring: "outer" },
-  portal: { spoke: 7, ring: "outer" },
+const FEATURE_ORBIT: Record<string, { angle: number; ring: OrbitRing }> = {
+  clients: { angle: 0, ring: "inner" },
+  time: { angle: 42, ring: "inner" },
+  projects: { angle: 318, ring: "inner" },
+  invoices: { angle: 78, ring: "outer" },
+  proposals: { angle: 120, ring: "outer" },
+  contracts: { angle: 158, ring: "outer" },
+  approvals: { angle: 186, ring: "outer" },
+  tasks: { angle: 220, ring: "outer" },
+  portal: { angle: 262, ring: "outer" },
 };
 
 type FeatureDef = Omit<FeatureItem, "top" | "left">;
@@ -148,7 +147,7 @@ const FEATURES: FeatureItem[] = FEATURE_DEFS.map((def) => {
   const orbit = FEATURE_ORBIT[def.id];
   if (!orbit) throw new Error(`Missing solar orbit for ${def.id}`);
   const { rx, ry } = orbit.ring === "inner" ? INNER_ORBIT : OUTER_ORBIT;
-  return { ...def, ...orbitOnEllipse(orbit.spoke * SPOKE_STEP_DEG, rx, ry) };
+  return { ...def, ...orbitOnEllipse(orbit.angle, rx, ry) };
 });
 
 function useMediaQuery(query: string) {
