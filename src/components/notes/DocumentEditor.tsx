@@ -281,6 +281,7 @@ export function DocumentEditor({
   const [selectionRange, setSelectionRange] = useState<{ index: number; length: number } | null>(null);
   const [createTaskButtonPos, setCreateTaskButtonPos] = useState<{ top: number; left: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const newTagInputRef = useRef<HTMLInputElement>(null);
   const savedSelectionRef = useRef<{ index: number; length: number } | null>(null);
   const linkUrlInputRef = useRef<HTMLInputElement>(null);
   const linkDialogOpenRef = useRef(false);
@@ -290,6 +291,12 @@ export function DocumentEditor({
     setIsAddingTag(false);
     setNewTag('');
   }, [noteId]);
+
+  useEffect(() => {
+    if (!isAddingTag) return;
+    // Ensure the inline tag input always receives focus after toggling.
+    requestAnimationFrame(() => newTagInputRef.current?.focus());
+  }, [isAddingTag]);
 
   const modules = useMemo(() => buildQuillModules(), []);
 
@@ -552,8 +559,34 @@ export function DocumentEditor({
     };
 
     q.on('text-change', handler);
+
+    const pasteHandler = (e: ClipboardEvent) => {
+      const clipboard = e.clipboardData;
+      if (!clipboard) return;
+      const html = clipboard.getData('text/html') || '';
+      const text = clipboard.getData('text/plain') || '';
+      if (!html || !text) return;
+
+      // Keep Quill's native paste pipeline for content copied inside this editor
+      // (mentions, lists, formatting) and only normalize external HTML pastes.
+      const isInternalPaste =
+        html.includes('class="ql-editor"') ||
+        html.includes('data-entity=') ||
+        html.includes('entity-pill');
+      if (isInternalPaste) return;
+
+      e.preventDefault();
+      const sel = q.getSelection(true);
+      if (!sel) return;
+      if (sel.length > 0) q.deleteText(sel.index, sel.length, 'user');
+      q.insertText(sel.index, text, 'user');
+      q.setSelection(sel.index + text.length, 0, 'user');
+    };
+
+    q.root.addEventListener('paste', pasteHandler);
     return () => {
       q.off('text-change', handler);
+      q.root.removeEventListener('paste', pasteHandler);
     };
   }, [noteId]);
 
@@ -654,7 +687,11 @@ export function DocumentEditor({
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+        <div
+          className="flex flex-wrap items-center gap-2 pt-0.5"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           {tags.map((t) => (
             <Badge key={t} variant="outline" className={cn('group relative pr-6', tagColorClass(t))}>
               {formatTag(t)}
@@ -679,12 +716,12 @@ export function DocumentEditor({
           ) : (
             <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5">
               <Input
+                ref={newTagInputRef}
                 className="h-6 w-28 border-0 px-1 text-xs shadow-none focus-visible:ring-0"
                 placeholder="Tag"
                 value={newTag}
                 onChange={(e) => setNewTag(e.target.value)}
                 onBlur={() => saveTag()}
-                autoFocus
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();

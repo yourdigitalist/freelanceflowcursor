@@ -419,10 +419,6 @@ export default function Notes() {
       const newNote = { ...data, tags: (data as any).tags || [], folder_id: (data as any).folder_id ?? null, icon_emoji: null, cover_color: null, note_comment: null } as Note;
       setNotes((prev) => [newNote, ...prev]);
       setSelectedId(newNote.id);
-      setTitle(newNote.title);
-      setContent(newNote.content || '');
-      setTags(newNote.tags || []);
-      setFolderIdInNote(null);
     } catch (err: any) {
       toast({ title: 'Error creating note', description: err.message, variant: 'destructive' });
     }
