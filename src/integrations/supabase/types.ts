@@ -1086,6 +1086,27 @@ export type Database = {
         }
         Relationships: []
       }
+      note_tags: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notes: {
         Row: {
           client_id: string | null

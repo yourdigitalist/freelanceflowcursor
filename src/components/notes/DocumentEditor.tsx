@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 export type EntityMentionValue = {
   type: 'client' | 'project' | 'task';
@@ -236,7 +237,9 @@ interface DocumentEditorProps {
   onContentChange: (content: string) => void;
   tags: string[];
   onTagsChange: (tags: string[]) => void;
-  suggestedTags?: string[];
+  availableTags?: string[];
+  onCreateTag?: (tag: string) => void | Promise<void>;
+  onDeleteAvailableTag?: (tag: string) => void | Promise<void>;
   onRequestCreateTask?: (selectedText: string) => void;
   onUploadImage?: (file: File) => Promise<string | null>;
   formattedDate?: string | null;
@@ -255,7 +258,9 @@ export function DocumentEditor({
   onContentChange,
   tags,
   onTagsChange,
-  suggestedTags = [],
+  availableTags = [],
+  onCreateTag,
+  onDeleteAvailableTag,
   onRequestCreateTask,
   onUploadImage,
   formattedDate = null,
@@ -276,27 +281,19 @@ export function DocumentEditor({
   const [imageUploading, setImageUploading] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
-  const [isAddingTag, setIsAddingTag] = useState(false);
   const [newTag, setNewTag] = useState('');
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [selectionRange, setSelectionRange] = useState<{ index: number; length: number } | null>(null);
   const [createTaskButtonPos, setCreateTaskButtonPos] = useState<{ top: number; left: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const newTagInputRef = useRef<HTMLInputElement>(null);
   const savedSelectionRef = useRef<{ index: number; length: number } | null>(null);
   const linkUrlInputRef = useRef<HTMLInputElement>(null);
   const linkDialogOpenRef = useRef(false);
   const handleLinkApplyRef = useRef<() => void>(() => {});
 
   useEffect(() => {
-    setIsAddingTag(false);
     setNewTag('');
   }, [noteId]);
-
-  useEffect(() => {
-    if (!isAddingTag) return;
-    // Ensure the inline tag input always receives focus after toggling.
-    requestAnimationFrame(() => newTagInputRef.current?.focus());
-  }, [isAddingTag]);
 
   const modules = useMemo(() => buildQuillModules(), []);
 
@@ -650,14 +647,25 @@ export function DocumentEditor({
     const t = newTag.trim();
     if (t && !tags.includes(t)) {
       onTagsChange([...tags, t]);
+      if (onCreateTag) void onCreateTag(t);
     }
     setNewTag('');
-    setIsAddingTag(false);
-  }, [newTag, tags, onTagsChange]);
+  }, [newTag, tags, onTagsChange, onCreateTag]);
 
   const removeTag = useCallback(
     (tag: string) => {
       onTagsChange(tags.filter((x) => x !== tag));
+    },
+    [tags, onTagsChange],
+  );
+
+  const toggleTag = useCallback(
+    (tag: string) => {
+      if (tags.includes(tag)) {
+        onTagsChange(tags.filter((value) => value !== tag));
+        return;
+      }
+      onTagsChange([...tags, tag]);
     },
     [tags, onTagsChange],
   );
@@ -705,49 +713,75 @@ export function DocumentEditor({
               </button>
             </Badge>
           ))}
-          {!isAddingTag ? (
-            <button
-              type="button"
-              className="rounded-full border border-dashed px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => setIsAddingTag(true)}
-            >
-              + Add tag
-            </button>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5">
-              <Input
-                ref={newTagInputRef}
-                className="h-6 w-28 border-0 px-1 text-xs shadow-none focus-visible:ring-0"
-                placeholder="Tag"
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                onBlur={() => saveTag()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    saveTag();
-                  }
-                  if (e.key === 'Escape') {
-                    setNewTag('');
-                    setIsAddingTag(false);
-                  }
-                }}
-              />
-            </span>
-          )}
-          {suggestedTags
-            .filter((t) => !tags.includes(t))
-            .slice(0, 3)
-            .map((t) => (
+          <Popover open={tagPickerOpen} onOpenChange={setTagPickerOpen}>
+            <PopoverTrigger asChild>
               <button
-                key={t}
                 type="button"
-                className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => onTagsChange([...tags, t])}
+                className="rounded-full border border-dashed px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
               >
-                {formatTag(t)}
+                + Add tag
               </button>
-            ))}
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-72 p-3">
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Add new tag</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={newTag}
+                      onChange={(e) => setNewTag(e.target.value)}
+                      placeholder="Type tag name"
+                      className="h-8 text-xs"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          saveTag();
+                        }
+                      }}
+                    />
+                    <Button size="sm" className="h-8 px-2 text-xs" onClick={saveTag}>
+                      Add
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Existing tags</Label>
+                  <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-1">
+                    {availableTags.length === 0 ? (
+                      <p className="px-2 py-1 text-xs text-muted-foreground">No tags yet.</p>
+                    ) : (
+                      availableTags.map((tag) => (
+                        <div key={tag} className="flex items-center justify-between gap-1 rounded px-1 py-1 hover:bg-muted/60">
+                          <button
+                            type="button"
+                            className={cn(
+                              'min-w-0 flex-1 truncate rounded px-2 py-1 text-left text-xs',
+                              tags.includes(tag)
+                                ? 'bg-primary/10 text-primary'
+                                : 'text-foreground',
+                            )}
+                            onClick={() => toggleTag(tag)}
+                            title={tag}
+                          >
+                            {tag}
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => onDeleteAvailableTag && void onDeleteAvailableTag(tag)}
+                            aria-label={`Delete ${tag}`}
+                            title={`Delete ${tag}`}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {(clientName || projectName) && (

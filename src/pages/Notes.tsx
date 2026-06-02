@@ -67,6 +67,11 @@ interface Note {
   updated_at: string;
 }
 
+interface NoteTag {
+  id: string;
+  name: string;
+}
+
 const FOLDER_COLORS = [
   '#9B63E9', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#8B5CF6', '#06B6D4'
 ];
@@ -138,6 +143,7 @@ export default function Notes() {
   const [folderEmoji, setFolderEmoji] = useState('📁');
   const [folderColor, setFolderColor] = useState('#9B63E9');
   const [folderIdInNote, setFolderIdInNote] = useState<string | null>(null);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -145,6 +151,16 @@ export default function Notes() {
     supabase.from('clients').select('id, name').eq('user_id', user.id).is('archived_at', null).order('name').then(({ data }) => setClients((data as { id: string; name: string }[]) || []));
     supabase.from('projects').select('id, name').eq('user_id', user.id).order('updated_at', { ascending: false }).then(({ data }) => setProjects((data as { id: string; name: string }[]) || []));
     supabase.from('note_folders').select('id, name, emoji, color').eq('user_id', user.id).order('name').then(({ data }) => setFolders((data as NoteFolder[]) || []));
+    supabase
+      .from('note_tags')
+      .select('id, name')
+      .eq('user_id', user.id)
+      .order('name')
+      .then(({ data, error }) => {
+        if (!error) {
+          setAvailableTags(((data as NoteTag[]) || []).map((row) => row.name));
+        }
+      });
   }, [user]);
 
   useEffect(() => {
@@ -182,6 +198,12 @@ export default function Notes() {
     notes.forEach((n) => (n.tags || []).forEach((t) => t.trim() && set.add(t.trim())));
     return Array.from(set).sort();
   }, [notes]);
+
+  useEffect(() => {
+    if (availableTags.length > 0) return;
+    if (allTagsFromNotes.length === 0) return;
+    setAvailableTags(allTagsFromNotes);
+  }, [availableTags.length, allTagsFromNotes]);
 
   const filteredNotes = notes.filter((n) => {
     const hasNoFolder = n.folder_id == null || n.folder_id === '';
@@ -424,6 +446,94 @@ export default function Notes() {
     }
   }, [user, toast]);
 
+  const normalizeTagName = useCallback((value: string) => value.trim().replace(/\s+/g, ' '), []);
+
+  const handleCreateTag = useCallback(
+    async (rawTag: string) => {
+      if (!user) return;
+      const name = normalizeTagName(rawTag);
+      if (!name) return;
+      const exists = availableTags.some((tag) => tag.toLowerCase() === name.toLowerCase());
+      if (exists) return;
+      try {
+        const { error } = await supabase.from('note_tags').insert({ user_id: user.id, name });
+        if (error) throw error;
+        setAvailableTags((prev) => [...prev, name].sort((a, b) => a.localeCompare(b)));
+      } catch (err: any) {
+        toast({ title: 'Error creating tag', description: err.message, variant: 'destructive' });
+      }
+    },
+    [user, normalizeTagName, availableTags, toast],
+  );
+
+  const handleDeleteTag = useCallback(
+    async (tagToDelete: string) => {
+      if (!user) return;
+      try {
+        const { error } = await supabase
+          .from('note_tags')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('name', tagToDelete);
+        if (error) throw error;
+
+        const now = new Date().toISOString();
+        const affectedNotes = notesRef.current.filter((note) => (note.tags || []).includes(tagToDelete));
+        if (affectedNotes.length > 0) {
+          await Promise.all(
+            affectedNotes.map((note) =>
+              supabase
+                .from('notes')
+                .update({
+                  tags: (note.tags || []).filter((tag) => tag !== tagToDelete),
+                  updated_at: now,
+                })
+                .eq('id', note.id)
+                .eq('user_id', user.id),
+            ),
+          );
+        }
+
+        setNotes((prev) =>
+          prev.map((note) =>
+            (note.tags || []).includes(tagToDelete)
+              ? { ...note, tags: (note.tags || []).filter((tag) => tag !== tagToDelete), updated_at: now }
+              : note,
+          ),
+        );
+        setTags((prev) => prev.filter((tag) => tag !== tagToDelete));
+        setTagFilter((prev) => prev.filter((tag) => tag !== tagToDelete));
+        setAvailableTags((prev) => prev.filter((tag) => tag !== tagToDelete));
+      } catch (err: any) {
+        toast({ title: 'Error deleting tag', description: err.message, variant: 'destructive' });
+      }
+    },
+    [user, toast, setNotes],
+  );
+
+  const handleTagsChange = useCallback(
+    (nextTags: string[]) => {
+      const normalized = Array.from(
+        new Set(nextTags.map((tag) => normalizeTagName(tag)).filter((tag) => tag.length > 0)),
+      );
+      setTags(normalized);
+      const newCatalogTags = normalized.filter(
+        (tag) => !availableTags.some((existing) => existing.toLowerCase() === tag.toLowerCase()),
+      );
+      if (newCatalogTags.length > 0) {
+        setAvailableTags((prev) => [...prev, ...newCatalogTags].sort((a, b) => a.localeCompare(b)));
+        if (user) {
+          void Promise.all(
+            newCatalogTags.map((name) =>
+              supabase.from('note_tags').upsert({ user_id: user.id, name }, { onConflict: 'user_id,name' }),
+            ),
+          );
+        }
+      }
+    },
+    [normalizeTagName, availableTags, user],
+  );
+
   const handleUploadNoteImage = useCallback(
     async (file: File): Promise<string | null> => {
       if (!user) return null;
@@ -607,6 +717,23 @@ export default function Notes() {
                               <span>{note.tags.length} tag{note.tags.length === 1 ? '' : 's'}</span>
                             ) : null}
                           </div>
+                          {note.tags?.length ? (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {note.tags.slice(0, 3).map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                              {note.tags.length > 3 ? (
+                                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                  +{note.tags.length - 3}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
                         <Button
                           type="button"
@@ -678,7 +805,9 @@ export default function Notes() {
                   onContentChange={handleContentChange}
                   tags={tags}
                   onTagsChange={handleTagsChange}
-                  suggestedTags={allTagsFromNotes}
+                  availableTags={availableTags}
+                  onCreateTag={handleCreateTag}
+                  onDeleteAvailableTag={handleDeleteTag}
                   onRequestCreateTask={handleRequestCreateTask}
                   onUploadImage={handleUploadNoteImage}
                   formattedDate={
