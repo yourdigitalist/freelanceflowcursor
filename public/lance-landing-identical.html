@@ -1449,10 +1449,10 @@
     <img src="uploads/logo-1776927478688.png" alt="Lance">
   </div>
   <ul class="nav-links">
-    <li><a href="#features" target="_parent">Features</a></li>
-    <li><a href="#compare" target="_parent">Pricing vs. tools</a></li>
-    <li><a href="#how" target="_parent">How it works</a></li>
-    <li><a href="#pricing" target="_parent">Pricing</a></li>
+    <li><a href="#features" data-landing-nav>Features</a></li>
+    <li><a href="#compare" data-landing-nav>Pricing vs. tools</a></li>
+    <li><a href="#how" data-landing-nav>How it works</a></li>
+    <li><a href="#pricing" data-landing-nav>Pricing</a></li>
   </ul>
   <div class="nav-cta">
     <a href="/auth" target="_top" class="btn-ghost">Log in</a>
@@ -1465,10 +1465,10 @@
   </button>
 </nav>
 <div class="mobile-menu landing-part-top" id="mobile-menu">
-  <a href="#features" target="_parent">Features</a>
-  <a href="#compare" target="_parent">Pricing vs. tools</a>
-  <a href="#how" target="_parent">How it works</a>
-  <a href="#pricing" target="_parent">Pricing</a>
+  <a href="#features" data-landing-nav>Features</a>
+  <a href="#compare" data-landing-nav>Pricing vs. tools</a>
+  <a href="#how" data-landing-nav>How it works</a>
+  <a href="#pricing" data-landing-nav>Pricing</a>
   <a href="/auth" target="_top" class="btn-ghost">Log in</a>
   <a href="/auth?tab=signup" target="_top" class="btn-primary">Try Lance Free</a>
 </div>
@@ -2125,11 +2125,44 @@
     }
   })();
 
+  // In-app nav: when embedded in React shell, scroll parent page (keeps URL as /#section).
+  (function initLandingNavBridge() {
+    const isEmbedded = window.self !== window.top;
+    const navHashes = new Set(['#features', '#compare', '#how', '#pricing']);
+
+    function scrollToHash(hash) {
+      const target = document.querySelector(hash);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    document.querySelectorAll('a[data-landing-nav]').forEach((link) => {
+      link.addEventListener('click', (event) => {
+        const hash = link.getAttribute('href');
+        if (!hash || !navHashes.has(hash)) return;
+        if (!isEmbedded) return;
+        event.preventDefault();
+        window.parent.postMessage({ type: 'lance-landing-nav', hash }, '*');
+      });
+    });
+
+    window.addEventListener('message', (event) => {
+      if (event.data?.type !== 'lance-landing-scroll') return;
+      const hash = event.data.hash;
+      if (typeof hash === 'string' && navHashes.has(hash)) scrollToHash(hash);
+    });
+
+    if (!isEmbedded && location.hash && navHashes.has(location.hash)) {
+      window.addEventListener('load', () => scrollToHash(location.hash));
+    }
+  })();
+
   // Nav scroll
   const nav = document.getElementById('nav');
-  window.addEventListener('scroll', () => {
-    nav.classList.toggle('scrolled', window.scrollY > 20);
-  });
+  if (nav) {
+    window.addEventListener('scroll', () => {
+      nav.classList.toggle('scrolled', window.scrollY > 20);
+    });
+  }
 
   // Reveal
   const reveals = document.querySelectorAll('.reveal');

@@ -1,12 +1,34 @@
+import { useCallback, useEffect, useRef, type MutableRefObject, type Ref } from "react";
 import LandingFeaturesSolarSection from "@/components/landing/LandingFeaturesSolarSection";
 import LandingPricingEverythingIncluded from "@/components/landing/LandingPricingEverythingIncluded";
 import { useIframeAutoHeight } from "@/hooks/useIframeAutoHeight";
 
-function LandingIframe({ src, title }: { src: string; title: string }) {
+const LANDING_NAV_HASHES = new Set(["#features", "#compare", "#how", "#pricing"]);
+const IFRAME_BOTTOM_HASHES = new Set(["#compare", "#how", "#pricing"]);
+
+function mergeRefs<T>(...refs: Array<Ref<T> | undefined>) {
+  return (value: T | null) => {
+    refs.forEach((ref) => {
+      if (!ref) return;
+      if (typeof ref === "function") ref(value);
+      else (ref as MutableRefObject<T | null>).current = value;
+    });
+  };
+}
+
+function LandingIframe({
+  src,
+  title,
+  iframeRef,
+}: {
+  src: string;
+  title: string;
+  iframeRef?: Ref<HTMLIFrameElement>;
+}) {
   const { ref, height } = useIframeAutoHeight(src);
   return (
     <iframe
-      ref={ref}
+      ref={mergeRefs(ref, iframeRef)}
       src={src}
       title={title}
       scrolling="no"
@@ -21,11 +43,56 @@ function LandingIframe({ src, title }: { src: string; title: string }) {
 }
 
 const LpTest: React.FC = () => {
+  const bottomIframeRef = useRef<HTMLIFrameElement>(null);
+
+  const scrollToLandingHash = useCallback((hash: string) => {
+    if (!LANDING_NAV_HASHES.has(hash)) return;
+
+    const updateUrl = () => {
+      const path = window.location.pathname || "/";
+      window.history.replaceState(null, "", `${path}${hash}`);
+    };
+
+    if (hash === "#features") {
+      document.getElementById("features")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      updateUrl();
+      return;
+    }
+
+    if (IFRAME_BOTTOM_HASHES.has(hash)) {
+      bottomIframeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      bottomIframeRef.current?.contentWindow?.postMessage({ type: "lance-landing-scroll", hash }, "*");
+      updateUrl();
+    }
+  }, []);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type !== "lance-landing-nav") return;
+      const hash = event.data.hash;
+      if (typeof hash !== "string" || !LANDING_NAV_HASHES.has(hash)) return;
+      scrollToLandingHash(hash);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [scrollToLandingHash]);
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash || !LANDING_NAV_HASHES.has(hash)) return;
+    const timer = window.setTimeout(() => scrollToLandingHash(hash), 400);
+    return () => window.clearTimeout(timer);
+  }, [scrollToLandingHash]);
+
   return (
     <div className="landing-compose" style={{ background: "#fff", minHeight: "100vh" }}>
       <LandingIframe src="/lance-landing-identical.html?part=top" title="Lance landing" />
       <LandingFeaturesSolarSection />
-      <LandingIframe src="/lance-landing-identical.html?part=bottom" title="Lance landing continued" />
+      <LandingIframe
+        iframeRef={bottomIframeRef}
+        src="/lance-landing-identical.html?part=bottom"
+        title="Lance landing continued"
+      />
       <LandingPricingEverythingIncluded />
       <LandingIframe src="/lance-landing-identical.html?part=bottom-tail" title="Lance landing footer" />
     </div>
