@@ -12,6 +12,7 @@ export type LanceServiceAgreementTemplateLike = {
   id?: string;
   name?: string | null;
   is_default?: boolean | null;
+  is_lance_template?: boolean | null;
   description?: string | null;
 };
 
@@ -19,18 +20,7 @@ export function isLanceProvidedServiceAgreementTemplate(
   template: LanceServiceAgreementTemplateLike | null | undefined,
 ): boolean {
   if (!template) return false;
-  const name = (template.name || "").trim().toLowerCase();
-  if (!name.includes("service agreement")) return false;
-  if (name.startsWith("copy of ")) return false;
-
-  if (template.is_default) return true;
-
-  if (name === "service agreement" || name === "standard service agreement") return true;
-
-  const description = (template.description || "").trim().toLowerCase();
-  if (description.includes("standard english template for freelance services")) return true;
-
-  return false;
+  return template.is_lance_template === true;
 }
 
 export function resolveDefaultServiceAgreementTemplate<

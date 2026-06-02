@@ -46,6 +46,8 @@ export type Contract = {
   payment_structure: "upfront" | "installments" | null;
   installment_description: string | null;
   payment_methods: string[];
+  /** UI-only; encoded in payment_methods as `other: …` when saved */
+  payment_other?: string | null;
   payment_link: string | null;
   additional_clause: string | null;
   subtotal: number;

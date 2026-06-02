@@ -79,13 +79,19 @@ type ProposalCandidate = {
   id: string;
   identifier: string;
 };
-type TemplateCandidate = { id: string; name: string; is_default: boolean | null };
+type TemplateCandidate = {
+  id: string;
+  name: string;
+  is_default: boolean | null;
+  is_lance_template: boolean | null;
+};
 type TemplateRow = {
   id: string;
   name: string;
   description: string | null;
   content: string;
   is_default: boolean | null;
+  is_lance_template: boolean | null;
 };
 
 export default function Contracts() {
@@ -131,14 +137,19 @@ export default function Contracts() {
         .order("created_at", { ascending: false }),
       supabase.from("clients").select("id, name, company, company_name, entity_type, company_registration, email, phone, address, street, street2, city, state, postal_code, country, tax_id, currency").is("archived_at", null).order("name"),
       supabase.from("projects").select("id, name, client_id").order("name"),
-      supabase.from("contract_templates").select("id, name, description, content, is_default").order("created_at"),
+      supabase.from("contract_templates").select("id, name, description, content, is_default, is_lance_template").order("created_at"),
     ]);
     setRows(((contracts || []) as ContractRow[]).map((row) => ({ ...row, total: Number(row.total || 0) })));
     setClients((allClients || []) as typeof clients);
     setProjects((allProjects || []) as typeof projects);
     const loadedTemplateRows = (allTemplates || []) as TemplateRow[];
     setTemplateRows(loadedTemplateRows);
-    const loadedTemplates = loadedTemplateRows.map((row) => ({ id: row.id, name: row.name, is_default: row.is_default }));
+    const loadedTemplates = loadedTemplateRows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      is_default: row.is_default,
+      is_lance_template: row.is_lance_template,
+    }));
     setTemplates(loadedTemplates);
     if (loadedTemplateRows.length === 0 && user) {
       const { data: inserted } = await supabase
@@ -149,13 +160,21 @@ export default function Contracts() {
           description: "Standard English template for freelance services agreements.",
           content: DEFAULT_CONTRACT_TEMPLATE_CONTENT,
           is_default: true,
+          is_lance_template: true,
         } as never)
-        .select("id, name, description, content, is_default")
+        .select("id, name, description, content, is_default, is_lance_template")
         .single();
       if (inserted) {
         const newRow = inserted as TemplateRow;
         setTemplateRows([newRow]);
-        setTemplates([{ id: newRow.id, name: newRow.name, is_default: newRow.is_default }]);
+        setTemplates([
+          {
+            id: newRow.id,
+            name: newRow.name,
+            is_default: newRow.is_default,
+            is_lance_template: newRow.is_lance_template,
+          },
+        ]);
         setTemplateId(newRow.id);
         toast({ title: "Default template created", description: "A Standard Service Agreement template was added automatically." });
       }
@@ -402,6 +421,7 @@ export default function Contracts() {
         description: "Standard English template for freelance services agreements.",
         content: DEFAULT_CONTRACT_TEMPLATE_CONTENT,
         is_default: false,
+        is_lance_template: false,
       } as never)
       .select("id")
       .single();
@@ -422,6 +442,7 @@ export default function Contracts() {
       description: row.description,
       content: row.content,
       is_default: false,
+      is_lance_template: false,
     } as never);
     await load();
   };

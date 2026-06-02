@@ -29,6 +29,7 @@ type Row = {
   description: string | null;
   content: string;
   is_default?: boolean | null;
+  is_lance_template?: boolean | null;
 };
 
 export default function ContractTemplateDetail() {
@@ -65,7 +66,7 @@ export default function ContractTemplateDetail() {
     if (!id) return;
     const { data } = await supabase
       .from("contract_templates")
-      .select("id, name, description, content, is_default")
+      .select("id, name, description, content, is_default, is_lance_template")
       .eq("id", id)
       .single();
     setRow(data as Row);

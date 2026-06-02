@@ -55,7 +55,7 @@ import {
   isContractArchived,
   restoreContract,
 } from "@/lib/contractLifecycle";
-import type { Contract, ContractService } from "@/types/contracts";
+import type { Contract, ContractService, ContractStatus } from "@/types/contracts";
 import { useLocalePreferences } from "@/hooks/useLocalePreferences";
 import { formatLocaleDate, formatLocaleDateTime } from "@/lib/datetime";
 import { ProjectFormDialog } from "@/components/projects/ProjectFormDialog";
@@ -72,11 +72,39 @@ const PAYMENT_METHOD_OPTIONS = [
 
 type EditableParty = "client" | "freelancer" | null;
 
+type ContractWithRelations = Contract & {
+  clients?: { name: string; company?: string | null; currency?: string | null } | null;
+  projects?: { name: string } | null;
+};
+
+function createDraftServiceItem(
+  contractId: string,
+  partial: {
+    name: string;
+    description?: string | null;
+    price?: number;
+    quantity?: number;
+    service_id?: string | null;
+    sort_order?: number;
+  },
+): ContractService {
+  return {
+    id: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    contract_id: contractId,
+    service_id: partial.service_id ?? null,
+    name: partial.name,
+    description: partial.description ?? null,
+    price: partial.price ?? 0,
+    quantity: partial.quantity ?? 1,
+    sort_order: partial.sort_order ?? 0,
+  };
+}
+
 export default function ContractDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [contract, setContract] = useState<(Contract & { clients?: { name: string; company?: string | null; currency?: string | null } | null; projects?: { name: string } | null }) | null>(null);
+  const [contract, setContract] = useState<ContractWithRelations | null>(null);
   const [items, setItems] = useState<ContractService[]>([]);
   const [activeTab, setActiveTab] = useState("data");
   const [catalogOpen, setCatalogOpen] = useState(false);
@@ -162,10 +190,11 @@ export default function ContractDetail() {
     const paymentFields = normalizeProposalPaymentMethods(
       (c?.payment_methods as string[] | undefined) || [],
     );
-    const mergedContract = c
+    const mergedContract: ContractWithRelations | null = c
       ? {
           ...c,
           ...paymentFields,
+          status: (c.status as ContractStatus) || "draft",
           client_company: c.client_company || linkedClient?.company || null,
           client_street: c.client_street || linkedClient?.street || null,
           client_street2: c.client_street2 || linkedClient?.street2 || null,
@@ -199,7 +228,8 @@ export default function ContractDetail() {
           freelancer_country: c.freelancer_country || profile?.business_country || null,
           freelancer_tax_id: c.freelancer_tax_id || profile?.tax_id || null,
           payment_structure: c.payment_structure || "upfront",
-        }
+          client_entity_type: (c.client_entity_type as Contract["client_entity_type"]) || "individual",
+        } as ContractWithRelations
       : null;
     setContract(mergedContract);
     const resolvedContent = resolveContractTemplateContent(c?.template_id, templatesData);
@@ -608,7 +638,7 @@ export default function ContractDetail() {
       .from("contracts")
       .update({
         status: contract.status === "draft" ? "pending_signatures" : contract.status,
-        sent_at: contract.sent_at || new Date().toISOString(),
+        sent_at: new Date().toISOString(),
       } as never)
       .eq("id", id);
     if (error) {
@@ -758,6 +788,8 @@ export default function ContractDetail() {
   if (!hasRequiredServices) missingRequiredSections.push("Services");
   if (!hasRequiredConditions) missingRequiredSections.push("Conditions");
   const canSendContract = missingRequiredSections.length === 0;
+  const canResendLink = contract?.status === "pending_signatures";
+  const canOpenSendDialog = (contract?.status === "draft" ? canSendContract : canResendLink) && !isArchived;
   const topStatusMessage = isLocked
     ? "This contract has been sent and can no longer be edited."
     : !canSendContract
@@ -868,7 +900,7 @@ export default function ContractDetail() {
             <Button variant="outline" onClick={() => void save()} disabled={isLocked || isArchived}>
               Save Changes
             </Button>
-            <Button onClick={() => setSendModalOpen(true)} disabled={!canSendContract || isArchived}>
+            <Button onClick={() => setSendModalOpen(true)} disabled={!canOpenSendDialog}>
               {contract.status === "draft" ? "Send Contract" : "Resend Link"}
             </Button>
           </div>
@@ -1103,9 +1135,16 @@ export default function ContractDetail() {
                   <Button
                     variant="outline"
                     onClick={() =>
+                      id &&
                       setItems((prev) => [
                         ...prev,
-                        { id: `tmp-${Date.now()}`, name: "", description: "", price: 0, quantity: 1 },
+                        createDraftServiceItem(id, {
+                          name: "",
+                          description: "",
+                          price: 0,
+                          quantity: 1,
+                          sort_order: prev.length,
+                        }),
                       ])
                     }
                     disabled={isLocked}
@@ -1410,16 +1449,17 @@ export default function ContractDetail() {
                 key={service.id}
                 className="w-full rounded-lg border p-3 text-left hover:bg-muted/50"
                 onClick={() =>
+                  id &&
                   setItems((prev) => [
                     ...prev,
-                    {
-                      id: `tmp-${Date.now()}-${service.id}`,
+                    createDraftServiceItem(id, {
                       service_id: service.id,
                       name: service.name,
                       description: service.description,
                       price: Number(service.price || 0),
                       quantity: 1,
-                    },
+                      sort_order: prev.length,
+                    }),
                   ])
                 }
                 disabled={isLocked}
@@ -1478,21 +1518,27 @@ export default function ContractDetail() {
           <p className="text-sm text-muted-foreground">
             Send the contract link to your client through any channel you prefer.
           </p>
-          <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            Once you copy this link, the contract will move to Pending Signatures and your client will have access. You will no longer be able to edit the contract.
-          </p>
+          {contract.status === "draft" ? (
+            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              Once you copy this link, the contract will move to Pending Signatures and your client will have access. You will no longer be able to edit the contract.
+            </p>
+          ) : (
+            <p className="rounded-md border border-muted px-3 py-2 text-sm text-muted-foreground">
+              This contract is already in Pending Signatures. Resending only shares the same client link again; contract content remains locked.
+            </p>
+          )}
           <DialogFooter className="gap-2">
             {!contract.freelancer_signed_at ? (
               <Button variant="outline" onClick={() => { setSendModalOpen(false); setActiveTab("signatures"); }}>
                 Sign contract first
               </Button>
             ) : null}
-            {!canSendContract ? (
+            {contract.status === "draft" && !canSendContract ? (
               <p className="w-full rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                 Missing required fields in {missingRequiredSections.join(", ")}.
               </p>
             ) : null}
-            <Button onClick={() => void sendContract()} disabled={!canSendContract}>
+            <Button onClick={() => void sendContract()} disabled={contract.status === "draft" ? !canSendContract : !canResendLink}>
               {contract.status === "draft" ? (signedCopy ? "Link copied to clipboard" : "Copy link and send") : "Resend link"}
             </Button>
           </DialogFooter>
