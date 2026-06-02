@@ -9,7 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { AppLogo } from '@/components/AppLogo';
 import { Loader2 } from '@/components/icons';
-import { SlotIcon } from '@/components/SlotIcon';
+import { SlotIcon } from '@/contexts/IconSlotContext';
+import type { IconSlotKey } from '@/lib/iconSlots';
 
 const SIGNUP_PENDING_KEY = 'signup_pending';
 const SIGNUP_EMAIL_KEY = 'signup_email';
@@ -186,13 +187,15 @@ export default function Auth() {
     setResendLoading(false);
   };
 
-  const features = [
-    { slot: 'sidebar_clients' as const, text: 'Client Management' },
-    { slot: 'sidebar_projects' as const, text: 'Project Tracking' },
-    { slot: 'sidebar_time' as const, text: 'Time Tracking' },
-    { slot: 'sidebar_reviews' as const, text: 'Client Approvals' },
-    { slot: 'sidebar_invoices' as const, text: 'Professional Invoicing' },
-    { slot: 'stat_money' as const, text: 'Payment Tracking' },
+  const features: Array<{ slot: IconSlotKey; text: string }> = [
+    { slot: 'sidebar_clients', text: 'Clients' },
+    { slot: 'sidebar_projects', text: 'Projects' },
+    { slot: 'sidebar_time', text: 'Time' },
+    { slot: 'sidebar_notes', text: 'Notes' },
+    { slot: 'sidebar_invoices', text: 'Invoices' },
+    { slot: 'sidebar_proposals', text: 'Proposals' },
+    { slot: 'sidebar_contracts', text: 'Contracts' },
+    { slot: 'sidebar_reviews', text: 'Approvals' },
   ];
 
   return (
@@ -200,6 +203,25 @@ export default function Auth() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
         .auth-brand { font-family: 'Inter', sans-serif; }
+        .auth-dashboard-float {
+          border-radius: 14px;
+          overflow: hidden;
+          box-shadow: 0 24px 60px rgba(155, 99, 233, 0.16), 0 8px 24px rgba(0, 0, 0, 0.06);
+          border: 1.5px solid rgba(155, 99, 233, 0.12);
+          transform: perspective(1200px) rotateX(2deg) rotateY(-2deg);
+          transition: transform 0.45s ease, box-shadow 0.45s ease;
+        }
+        .auth-dashboard-float:hover {
+          transform: perspective(1200px) rotateX(5deg) rotateY(-4deg) translateY(-8px);
+          box-shadow: 0 36px 88px rgba(155, 99, 233, 0.24), 0 14px 36px rgba(0, 0, 0, 0.08);
+        }
+        .auth-dashboard-float img {
+          display: block;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          object-position: top left;
+        }
       `}</style>
       {/* Left side - Features */}
       <div className="hidden lg:flex lg:w-1/2 bg-[linear-gradient(160deg,#f8f6ff_0%,#fff_100%)] p-12 flex-col justify-between border-r border-[#ede8fa]">
@@ -210,22 +232,31 @@ export default function Auth() {
           
           <div className="space-y-2 mb-12">
             <h1 className="text-4xl font-extrabold tracking-[-0.03em] text-[#1a1a2e]">
-              One tool. Every client. No excuses.
+              <span className="block">Your entire freelance stack.</span>
+              <span className="block">$29/month.</span>
             </h1>
-            <p className="text-xl text-[#64647a]">
+            <p className="text-sm leading-relaxed text-[#64647a] max-w-md">
               Stop paying for five apps to run one business. Lance gives designers, developers, and freelancers a single workspace for clients, projects, time tracking, approvals, and invoices.
             </p>
           </div>
 
-          <div className="space-y-4">
-            {features.map((feature, index) => (
-              <div key={index} className="flex items-center gap-3 text-[#1a1a2e]">
-                <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-[#9b63e9]/10 border border-[#9b63e9]/20">
-                  <SlotIcon slot={feature.slot} className="h-5 w-5 text-[#9b63e9]" />
+          <div className="flex items-stretch gap-6 xl:gap-8">
+            <div className="flex shrink-0 flex-col gap-3">
+              {features.map((feature) => (
+                <div key={feature.slot} className="flex items-center gap-2.5 text-[#1a1a2e]">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#9b63e9]/20 bg-[#9b63e9]/10">
+                    <SlotIcon slot={feature.slot} className="h-4 w-4 text-[#9b63e9]" />
+                  </div>
+                  <span className="text-sm font-medium">{feature.text}</span>
                 </div>
-                <span className="text-lg">{feature.text}</span>
-              </div>
-            ))}
+              ))}
+            </div>
+            <div className="auth-dashboard-float h-full min-h-0 min-w-0 flex-1 overflow-hidden">
+              <img
+                src="/uploads/landing-hero-dashboard.png"
+                alt="Lance dashboard preview"
+              />
+            </div>
           </div>
 
         </div>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useBeforeUnload, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useBeforeUnload, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ClientAvatar } from "@/components/clients/ClientAvatar";
 import { ClientFormFields } from "@/components/clients/ClientFormFields";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -189,12 +189,43 @@ const formatHm = (seconds: number) => {
   return `${h}:${m.toString().padStart(2, "0")}`;
 };
 
+const CLIENT_DETAIL_TABS = [
+  "details",
+  "projects",
+  "time",
+  "invoices",
+  "proposals",
+  "contracts",
+  "approvals",
+  "portal",
+] as const;
+
+type ClientDetailTab = (typeof CLIENT_DETAIL_TABS)[number];
+
+function isClientDetailTab(value: string | null): value is ClientDetailTab {
+  return !!value && (CLIENT_DETAIL_TABS as readonly string[]).includes(value);
+}
+
 export default function ClientDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const activeTab: ClientDetailTab = isClientDetailTab(tabParam) ? tabParam : "details";
+  const setActiveTab = (tab: string) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (tab === "details") next.delete("tab");
+        else next.set("tab", tab);
+        return next;
+      },
+      { replace: true },
+    );
+  };
   const clientsNav = readClientsNavState(location.state);
   const clientsReturnTo = clientsNav?.clientsReturnTo ?? "/clients";
   const clientsReturnState = clientsNav ?? undefined;
@@ -267,8 +298,9 @@ export default function ClientDetail() {
 
   useEffect(() => {
     const load = async () => {
-      if (!user || !id) return;
-      setLoading(true);
+      if (!user?.id || !id) return;
+      const isInitialLoad = !client || client.id !== id;
+      if (isInitialLoad) setLoading(true);
       try {
         const [{ data: c, error: cErr }, { data: p }, { data: inv }, { data: prop }, { data: ctr }, { data: appr }, { data: fu }, { data: act }, { data: noteRows }] = await Promise.all([
           supabase.from("clients").select("*").eq("id", id).eq("user_id", user.id).maybeSingle(),
@@ -317,7 +349,7 @@ export default function ClientDetail() {
       }
     };
     void load();
-  }, [id, user]);
+  }, [id, user?.id]);
 
   useEffect(() => {
     setSelectedTimeDay(timeAnchor);
@@ -1018,7 +1050,7 @@ export default function ClientDetail() {
           </div>
         </div>
 
-        <Tabs defaultValue="details" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="h-auto w-full justify-start rounded-none border-b bg-transparent p-0">
             {[
               ["details", "Client Details"],
