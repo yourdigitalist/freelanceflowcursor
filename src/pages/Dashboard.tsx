@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Receipt, CheckCircle, ArrowRight, ChevronUp, ChevronDown } from '@/components/icons';
+import { Plus, Receipt, CheckCircle, ArrowRight, ChevronUp, ChevronDown, Table, CheckSquare, Clock as ClockIcon, FileText } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import type { IconSlotKey } from '@/lib/iconSlots';
 import { canAccessNotes, getContractsAccessMode } from '@/lib/features';
@@ -110,6 +110,7 @@ interface RecentItem {
 
 interface RawTimeEntry {
   start_time: string | null;
+  started_at: string | null;
   hours: number;
   billable: boolean | null;
   billing_status: string | null;
@@ -136,13 +137,26 @@ const TONE_STYLES: Record<PriorityItem['tone'], string> = {
   info: 'bg-primary/10 text-primary',
 };
 
-const RECENT_ICON_SLOT: Record<RecentItem['kind'], IconSlotKey> = {
-  project: 'sidebar_projects',
-  task: 'sidebar_reviews',
-  time: 'sidebar_time',
-  note: 'sidebar_notes',
-  invoice: 'sidebar_invoices',
-};
+function getTimeEntryDate(entry: Pick<RawTimeEntry, 'started_at' | 'start_time'>): Date | null {
+  const value = entry.started_at || entry.start_time;
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function RecentItemIcon({ kind }: { kind: RecentItem['kind'] }) {
+  const Icon =
+    kind === 'project'
+      ? Table
+      : kind === 'task'
+        ? CheckSquare
+        : kind === 'time'
+          ? ClockIcon
+          : kind === 'note'
+            ? FileText
+            : Receipt;
+  return <Icon className="h-3.5 w-3.5 text-primary" />;
+}
 
 /** Show in "Needs you today" when due/expiry is within this many days (or already past). */
 const SOON_DAYS = 2;
@@ -372,11 +386,12 @@ export default function Dashboard() {
       // ── Time entries (6 months) ────────────────────────────────────────────
       const { data: timeEntries } = await supabase
         .from('time_entries')
-        .select('duration_minutes, total_duration_seconds, billable, billing_status, start_time, hourly_rate')
-        .gte('start_time', sixMonthsAgo.toISOString());
+        .select('duration_minutes, total_duration_seconds, billable, billing_status, start_time, started_at, hourly_rate')
+        .or(`start_time.gte.${sixMonthsAgo.toISOString()},started_at.gte.${sixMonthsAgo.toISOString()}`);
 
       const rawTime: RawTimeEntry[] = (timeEntries || []).map((e) => ({
         start_time: e.start_time,
+        started_at: e.started_at,
         hours: toHours(e),
         billable: e.billable,
         billing_status: e.billing_status,
@@ -384,20 +399,27 @@ export default function Dashboard() {
       }));
       setRawTimeEntries(rawTime);
 
-      const thisMonth = rawTime.filter((e) => e.start_time && new Date(e.start_time) >= startOfMonth);
+      const thisMonth = rawTime.filter((e) => {
+        const entryDate = getTimeEntryDate(e);
+        return entryDate ? entryDate >= startOfMonth : false;
+      });
       const hoursThisMonth = thisMonth.reduce((s, e) => s + e.hours, 0);
       const unbilledEntries = thisMonth.filter(isUnbilledTimeEntry);
       const unbilledHours = unbilledEntries.reduce((s, e) => s + e.hours, 0);
       const unbilledAmount = unbilledEntries.reduce((s, e) => s + e.hours * (Number(e.hourly_rate) || 0), 0);
       const prevMonthHours = rawTime
-        .filter((e) => e.start_time && new Date(e.start_time) >= startOfPrevMonth && new Date(e.start_time) <= endOfPrevMonth)
+        .filter((e) => {
+          const entryDate = getTimeEntryDate(e);
+          return entryDate ? entryDate >= startOfPrevMonth && entryDate <= endOfPrevMonth : false;
+        })
         .reduce((s, e) => s + e.hours, 0);
 
       // Sparkline: last 4 weeks of hours
       const weekBuckets = [0, 0, 0, 0];
       thisMonth.forEach((e) => {
-        if (!e.start_time) return;
-        const daysAgo = Math.floor((now.getTime() - new Date(e.start_time).getTime()) / 86400000);
+        const entryDate = getTimeEntryDate(e);
+        if (!entryDate) return;
+        const daysAgo = Math.floor((now.getTime() - entryDate.getTime()) / 86400000);
         const idx = 3 - Math.min(3, Math.floor(daysAgo / 7));
         weekBuckets[idx] += e.hours;
       });
@@ -815,8 +837,8 @@ export default function Dashboard() {
     const buckets = buildHoursBuckets(hoursRange);
     return buckets.map((b) => {
       const value = rawTimeEntries.reduce((s, e) => {
-        if (!e.start_time) return s;
-        const t = new Date(e.start_time);
+        const t = getTimeEntryDate(e);
+        if (!t) return s;
         return t >= b.start && t < b.end ? s + e.hours : s;
       }, 0);
       return { label: b.label, hours: +value.toFixed(1) };
@@ -1394,10 +1416,7 @@ export default function Dashboard() {
                       className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/50"
                     >
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted">
-                        <SlotIcon
-                          slot={RECENT_ICON_SLOT[item.kind]}
-                          className="h-3.5 w-3.5 text-primary"
-                        />
+                        <RecentItemIcon kind={item.kind} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
