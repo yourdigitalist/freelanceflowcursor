@@ -25,6 +25,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   DndContext,
   closestCenter,
+  pointerWithin,
+  type CollisionDetection,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -149,6 +151,14 @@ export default function ProjectDetail() {
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
+  );
+
+  const collisionDetectionStrategy = useCallback<CollisionDetection>(
+    (args) => {
+      const pointerCollisions = pointerWithin(args);
+      return pointerCollisions.length > 0 ? pointerCollisions : closestCenter(args);
+    },
+    [],
   );
 
   const defaultStatusId = useMemo(() => getDefaultStatusId(statuses), [statuses]);
@@ -1030,7 +1040,7 @@ export default function ProjectDetail() {
 
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={collisionDetectionStrategy}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}

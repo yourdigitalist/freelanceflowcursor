@@ -20,6 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useSettingsDirty } from '@/contexts/SettingsDirtyContext';
 import { Loader2 } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useNavigate } from 'react-router-dom';
 
 interface UserProfile {
@@ -206,6 +207,29 @@ export default function UserSettings() {
     }
   };
 
+  const handleRemoveAvatar = async () => {
+    if (!user || !profile?.avatar_url) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ avatar_url: null })
+        .eq('user_id', user.id);
+      if (error) throw error;
+      setProfile((prev) => (prev ? { ...prev, avatar_url: null } : prev));
+      toast({ title: 'Profile photo removed' });
+      dirtyContext?.setDirty(false);
+    } catch (error: any) {
+      toast({
+        title: 'Could not remove photo',
+        description: error.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -228,7 +252,25 @@ export default function UserSettings() {
     <form ref={formRef} onSubmit={handleSubmit} onInput={() => dirtyContext?.setDirty(true)} className="space-y-6">
       <Card className="border-0 shadow-sm">
         <CardHeader>
-          <CardTitle>Profile Picture</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle>Profile Picture</CardTitle>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Profile picture requirements"
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border text-[11px] font-semibold text-muted-foreground hover:bg-muted"
+                  >
+                    i
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-xs text-xs">
+                  Use a square image. Maximum file size: 500 KB.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <CardDescription>Update your profile photo</CardDescription>
         </CardHeader>
         <CardContent>
@@ -247,16 +289,30 @@ export default function UserSettings() {
               onChange={handleAvatarUpload}
               disabled={saving}
             />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => avatarInputRef.current?.click()}
-              disabled={saving}
-            >
-              <SlotIcon slot="profile_camera" className="mr-2 h-4 w-4" />
-              {saving ? 'Uploading…' : 'Upload Photo'}
-            </Button>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={saving}
+                >
+                  <SlotIcon slot="profile_camera" className="mr-2 h-4 w-4" />
+                  {saving ? 'Uploading…' : 'Upload Photo'}
+                </Button>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-fit px-0 text-xs text-muted-foreground hover:text-destructive"
+                onClick={handleRemoveAvatar}
+                disabled={saving || !profile?.avatar_url}
+              >
+                Remove photo
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

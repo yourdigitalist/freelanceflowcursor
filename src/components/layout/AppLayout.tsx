@@ -523,7 +523,7 @@ export function AppLayout({
                 {!sidebarCollapsed && (
                   <>
                     Proposals
-                    <Badge className="shrink-0 bg-purple-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-purple-600">Beta</Badge>
+                    <Badge className="shrink-0 bg-purple-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-purple-600">New</Badge>
                   </>
                 )}
               </Link>,
@@ -540,7 +540,7 @@ export function AppLayout({
                     {!sidebarCollapsed && (
                       <>
                         Contracts
-                        <Badge className="shrink-0 bg-purple-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-purple-600">Beta</Badge>
+                        <Badge className="shrink-0 bg-purple-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-purple-600">New</Badge>
                       </>
                     )}
                   </Link>,
@@ -568,7 +568,7 @@ export function AppLayout({
                 {!sidebarCollapsed && (
                   <>
                     Approvals
-                    <Badge className="shrink-0 bg-purple-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-purple-600">Beta</Badge>
+                    <Badge className="shrink-0 bg-purple-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-purple-600">New</Badge>
                   </>
                 )}
               </Link>,
