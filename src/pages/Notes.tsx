@@ -232,10 +232,6 @@ export default function Notes() {
     setContent(value);
   }, []);
 
-  const handleTagsChange = useCallback((value: string[]) => {
-    setTags(value);
-  }, []);
-
   /** Sidebar reflects in-progress edits for the open note without mutating the saved list copy */
   const noteCardTitle = useCallback(
     (note: Note) => (note.id === selectedId ? title.trim() || 'Untitled' : note.title?.trim() || 'Untitled'),
