@@ -822,7 +822,10 @@ export default function Dashboard() {
     });
   }, [rawTimeEntries, hoursRange]);
 
-  const hoursRangeTotal = useMemo(() => hoursSeries.reduce((s, p) => s + p.hours, 0), [hoursSeries]);
+  const hoursCurrentPeriod = useMemo(() => {
+    const currentBucket = hoursSeries[hoursSeries.length - 1];
+    return currentBucket?.hours ?? 0;
+  }, [hoursSeries]);
 
   const cashSeries = useMemo(() => {
     const buckets = buildBuckets(cashRange);
@@ -1327,7 +1330,7 @@ export default function Dashboard() {
               <div>
                 <CardTitle className="text-base font-semibold">Hours tracked</CardTitle>
                 <p className="mt-1 text-lg font-bold text-foreground">
-                  {hoursRangeTotal.toFixed(1)}h{' '}
+                  {hoursCurrentPeriod.toFixed(1)}h{' '}
                   <span className="text-xs font-normal text-muted-foreground">this {hoursRange}</span>
                 </p>
               </div>

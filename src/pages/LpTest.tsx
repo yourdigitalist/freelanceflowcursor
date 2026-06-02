@@ -1,6 +1,5 @@
 import LandingFeaturesSolarSection from "@/components/landing/LandingFeaturesSolarSection";
 import LandingPricingEverythingIncluded from "@/components/landing/LandingPricingEverythingIncluded";
-import LandingShowcaseProjectOverview from "@/components/landing/LandingShowcaseProjectOverview";
 import { useIframeAutoHeight } from "@/hooks/useIframeAutoHeight";
 
 function LandingIframe({ src, title }: { src: string; title: string }) {
@@ -26,7 +25,6 @@ const LpTest: React.FC = () => {
     <div className="landing-compose" style={{ background: "#fff", minHeight: "100vh" }}>
       <LandingIframe src="/lance-landing-identical.html?part=top" title="Lance landing" />
       <LandingFeaturesSolarSection />
-      <LandingShowcaseProjectOverview />
       <LandingIframe src="/lance-landing-identical.html?part=bottom" title="Lance landing continued" />
       <LandingPricingEverythingIncluded />
       <LandingIframe src="/lance-landing-identical.html?part=bottom-tail" title="Lance landing footer" />

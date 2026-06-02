@@ -394,6 +394,42 @@
     margin-bottom: 14px;
   }
 
+  .showcase-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 13px;
+    border-radius: 999px;
+    background: #f8f6ff;
+    border: 1px solid #e7e0f4;
+    box-shadow: 0 2px 12px rgba(155, 99, 233, 0.12);
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a1a2e;
+    letter-spacing: -0.2px;
+    margin-bottom: 14px;
+  }
+
+  .showcase-pill-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .showcase-pill-icon svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
   .section-title {
     font-size: clamp(30px, 3.8vw, 50px);
     font-weight: 800;
@@ -584,7 +620,7 @@
 
   .how-steps {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 32px;
     margin-top: 52px;
     position: relative;
@@ -594,8 +630,8 @@
     content: '';
     position: absolute;
     top: 38px;
-    left: calc(16.66% + 16px);
-    right: calc(16.66% + 16px);
+    left: 12.5%;
+    right: 12.5%;
     height: 2px;
     background: linear-gradient(90deg, var(--primary), var(--yellow));
     opacity: 0.35;
@@ -1216,16 +1252,22 @@
   .lance-price-sub { font-size: 13px; color: var(--muted); font-weight: 500; }
 
   .lance-perks {
-    padding: 16px 28px; display: flex; flex-direction: column;
-    gap: 8px; border-top: 1px solid rgba(155,99,233,0.10);
+    padding: 16px 28px;
+    border-top: 1px solid rgba(155,99,233,0.10);
     margin-top: auto;
   }
-  .perk-item { font-size: 13px; font-weight: 600; color: var(--body); display: flex; align-items: center; gap: 8px; }
-  .perk-icon {
-    width: 18px; height: 18px; border-radius: 50%;
-    background: rgba(155,99,233,0.12); color: var(--primary);
-    display: inline-flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
+  .perk-item {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--body);
+    margin-left: 18px;
+    margin-bottom: 8px;
+  }
+  .perk-item:last-child {
+    margin-bottom: 0;
+  }
+  .perk-item::marker {
+    color: var(--primary);
   }
 
   .savings-bar {
@@ -1473,19 +1515,15 @@
 
 <!-- FEATURE SHOWCASES (features solar system rendered by React in app shell) -->
 <section class="showcase-section section-enter landing-part-bottom-main">
-
-  <div class="showcase-divider"></div>
-
-  <div class="showcase-item reveal landing-part-showcase-zoom">
+  <div class="showcase-item reveal">
     <div class="showcase-text">
-      <span class="section-label">✦ Project overview</span>
-      <h3>Your entire business at a glance</h3>
-      <p>The Lance dashboard gives you an instant read on what's happening — active projects, hours logged, pending payments, and upcoming tasks — without hunting across multiple tools.</p>
+      <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg></span>Dashboard</span>
+      <h3>Your entire business, one glance.</h3>
+      <p>Active projects, pending payments, unbilled hours, and what needs your attention today — all before your first coffee.</p>
       <ul class="showcase-points">
-        <li>Active clients and projects in one view</li>
-        <li>Hours this month, rates, and due dates</li>
-        <li>Quick actions to log time or send invoices</li>
-        <li>Follow-ups and recent activity feed</li>
+        <li>Every live number that matters: clients, hours, invoices, proposals</li>
+        <li>Upcoming follow-ups and overdue tasks surfaced automatically</li>
+        <li>Quick actions to log time, add a client, or send an invoice</li>
       </ul>
     </div>
     <div class="showcase-img">
@@ -1493,36 +1531,47 @@
     </div>
   </div>
 
-  <div class="showcase-divider landing-part-showcase-zoom"></div>
-
   <div class="showcase-item reverse reveal">
     <div class="showcase-text">
-      <span class="section-label">✦ Client approvals</span>
-      <h3>Get feedback without the back-and-forth</h3>
-      <p>Share a link. Your client sees the work, pins comments exactly where they mean, and approves or requests changes — no login, no app install, no chasing. You get a full record of every decision.</p>
+      <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><path d="M20 8v6"></path><path d="M23 11h-6"></path></svg></span>Clients &amp; CRM</span>
+      <h3>Every client relationship, properly managed.</h3>
+      <p>A full pipeline from first contact to active client — with activity logs, follow-up reminders, and everything in one place instead of your inbox.</p>
       <ul class="showcase-points">
-        <li>Pinned, contextual comments on any deliverable</li>
-        <li>One-click approve or request changes</li>
-        <li>No client login or app install required</li>
-        <li>Full audit trail of feedback and decisions</li>
+        <li>CRM board with 11 pipeline stages, drag-and-drop</li>
+        <li>Log calls, emails, and meetings against each client</li>
+        <li>Follow-up tasks so no lead ever goes quiet</li>
       </ul>
     </div>
     <div class="showcase-img">
-      <img src="uploads/Untitled (2).png" alt="Client approval interface">
+      <img src="https://placehold.co/1200x760/f8f6ff/9b63e9?text=Clients+%26+CRM+Placeholder" alt="Clients and CRM placeholder">
     </div>
   </div>
 
-  <div class="showcase-divider"></div>
-
   <div class="showcase-item reveal">
     <div class="showcase-text">
-      <span class="section-label">✦ Task management</span>
-      <h3>Keep project work organized and moving</h3>
-      <p>Lance gives you a kanban board built specifically for client work — with task priorities, time logs, due dates, and statuses that connect directly to your project and invoice.</p>
+      <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1H3z"></path><path d="M3 9h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></span>Projects</span>
+      <h3>Projects that don't fall apart mid-way.</h3>
+      <p>Custom Kanban boards, task priorities, and due dates — all linked to the client and billable hours they belong to.</p>
       <ul class="showcase-points">
-        <li>Customisable columns — name and colour your own statuses</li>
-        <li>Priority levels and estimated hours per task</li>
-        <li>Time logged per task flows into invoices</li>
+        <li>Build your own workflow columns, not someone else's template</li>
+        <li>Tasks with priorities, due dates, and estimated hours</li>
+        <li>Every project connected to its client, time logs, and invoices</li>
+      </ul>
+    </div>
+    <div class="showcase-img">
+      <img src="https://placehold.co/1200x760/f8f6ff/9b63e9?text=Projects+Placeholder" alt="Projects placeholder">
+    </div>
+  </div>
+
+  <div class="showcase-item reverse reveal">
+    <div class="showcase-text">
+      <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M9 12l2 2 4-4"></path></svg></span>Tasks</span>
+      <h3>Everything that needs doing, nothing forgotten.</h3>
+      <p>Create tasks inside projects, assign priorities, set due dates, and move them through your workflow without switching tools.</p>
+      <ul class="showcase-points">
+        <li>Kanban or list view, your choice</li>
+        <li>Priority levels from Low to Urgent</li>
+        <li>Turn a note into a task with one click</li>
       </ul>
     </div>
     <div class="showcase-img">
@@ -1530,29 +1579,145 @@
     </div>
   </div>
 
+  <div class="showcase-item reveal">
+    <div class="showcase-text">
+      <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 2.5"></path><path d="M9 2h6"></path><path d="M12 2v3"></path></svg></span>Time Tracking</span>
+      <h3>Every hour logged. Every hour billed.</h3>
+      <p>Start a timer or log manually. Mark time as billable and pull it straight into an invoice — no spreadsheet, no guessing, no lost hours.</p>
+      <ul class="showcase-points">
+        <li>Live timer that runs while you work in the app</li>
+        <li>Billable vs non-billable tracking per entry</li>
+        <li>One-click import into invoices</li>
+      </ul>
+    </div>
+    <div class="showcase-img">
+      <img src="https://placehold.co/1200x760/f8f6ff/9b63e9?text=Time+Tracking+Placeholder" alt="Time tracking placeholder">
+    </div>
+  </div>
+
+  <div class="showcase-item reverse reveal">
+    <div class="showcase-text">
+      <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M7 15h4"></path></svg></span>Invoices</span>
+      <h3>Invoices that go out fast and come back paid.</h3>
+      <p>Build branded invoices, import your tracked time as line items, and send — with automatic reminders so you're not the one chasing.</p>
+      <ul class="showcase-points">
+        <li>Auto-generated invoice numbers, your format</li>
+        <li>Import billable time entries directly as line items</li>
+        <li>Automatic payment reminders on your schedule</li>
+      </ul>
+    </div>
+    <div class="showcase-img">
+      <img src="https://placehold.co/1200x760/f8f6ff/9b63e9?text=Invoices+Placeholder" alt="Invoices placeholder">
+    </div>
+  </div>
+
+  <div class="showcase-item reveal">
+    <div class="showcase-text">
+      <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6"></path><path d="M8 13h8"></path><path d="M8 17h6"></path></svg></span>Proposals</span>
+      <h3>Proposals your clients actually read.</h3>
+      <p>Build and send professional proposals with your services, timeline, and payment terms. Clients accept with one click — you get notified the moment they do.</p>
+      <ul class="showcase-points">
+        <li>Cover image, brand colour, and custom terms per proposal</li>
+        <li>Services pulled from your catalogue, priced and ready</li>
+        <li>One-click acceptance, converts straight to a contract</li>
+      </ul>
+    </div>
+    <div class="showcase-img">
+      <img src="https://placehold.co/1200x760/f8f6ff/9b63e9?text=Proposals+Placeholder" alt="Proposals placeholder">
+    </div>
+  </div>
+
+  <div class="showcase-item reverse reveal">
+    <div class="showcase-text">
+      <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21h16"></path><path d="M7 17h10"></path><path d="M9 3h6"></path><path d="M8 7h8"></path><path d="M8 11h8"></path><path d="M14 14l4-4"></path><path d="M13 18l5-5"></path></svg></span>Contracts</span>
+      <h3>Signed contracts without the back-and-forth.</h3>
+      <p>Send a contract, your client verifies with a one-time email code and signs. No printing, no PDFs by email, no chasing a signature for two weeks.</p>
+      <ul class="showcase-points">
+        <li>Import everything from an accepted proposal automatically</li>
+        <li>Dual e-signature with OTP email verification</li>
+        <li>Contract locked after sending — tamper-proof by design</li>
+      </ul>
+    </div>
+    <div class="showcase-img">
+      <img src="https://placehold.co/1200x760/f8f6ff/9b63e9?text=Contracts+Placeholder" alt="Contracts placeholder">
+    </div>
+  </div>
+
+  <div class="showcase-item reveal">
+    <div class="showcase-text">
+      <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4"></path><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path></svg></span>Approvals</span>
+      <h3>Client feedback that's actually useful.</h3>
+      <p>Share files, get pinned comments directly on images, and collect a formal approval — all without your client needing an account.</p>
+      <ul class="showcase-points">
+        <li>Clients pin comments to exact spots on your designs</li>
+        <li>Approve or reject with one click, timestamped</li>
+        <li>Version tracking across every revision round</li>
+      </ul>
+    </div>
+    <div class="showcase-img">
+      <img src="uploads/Untitled (2).png" alt="Approvals interface">
+    </div>
+  </div>
+
+  <div class="showcase-item reverse reveal">
+    <div class="showcase-text">
+      <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a14 14 0 0 1 0 18"></path><path d="M12 3a14 14 0 0 0 0 18"></path></svg></span>Client Portal</span>
+      <h3>Give clients a window. Not your inbox.</h3>
+      <p>Every client gets a private link to view their invoices, proposals, contracts, and approvals — without creating an account or emailing you for files.</p>
+      <ul class="showcase-points">
+        <li>Choose exactly which sections each client can see</li>
+        <li>Clients sign contracts and approve work directly from the portal</li>
+        <li>Enable or revoke access instantly</li>
+      </ul>
+    </div>
+    <div class="showcase-img">
+      <img src="https://placehold.co/1200x760/f8f6ff/9b63e9?text=Client+Portal+Placeholder" alt="Client portal placeholder">
+    </div>
+  </div>
+
+  <div class="showcase-item reveal">
+    <div class="showcase-text">
+      <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"></path></svg></span>Notes</span>
+      <h3>Every brief, idea, and meeting note in one place.</h3>
+      <p>Rich text notes linked to clients and projects, with tags, folders, and one trick no other notes tool has — highlight any text and turn it into a task.</p>
+      <ul class="showcase-points">
+        <li>Full rich text editor with images, lists, and headings</li>
+        <li>Linked to clients and projects for instant context</li>
+        <li>Download as a Word doc to share with clients</li>
+      </ul>
+    </div>
+    <div class="showcase-img">
+      <img src="https://placehold.co/1200x760/f8f6ff/9b63e9?text=Notes+Placeholder" alt="Notes placeholder">
+    </div>
+  </div>
 </section>
 
 <!-- HOW IT WORKS -->
 <section class="how-section section-enter landing-part-bottom-main" id="how">
   <div class="how-inner centered">
     <span class="section-label">✦ How it works</span>
-    <h2 class="section-title">From kickoff to paid<br>in three steps.</h2>
-    <p class="section-sub">Lance is built around your actual workflow — not the other way around.</p>
+    <h2 class="section-title">From kickoff to paid.</h2>
+    <p class="section-sub">Lance handles the four things freelancers most often drop the ball on.</p>
     <div class="how-steps">
       <div class="step-card reveal">
-        <div class="step-num">1</div>
-        <h3>Set up your project</h3>
-        <p>Add your client, define the scope, and start logging tasks. Takes minutes, not hours.</p>
+        <div class="step-num">01</div>
+        <h3>Track every lead</h3>
+        <p>CRM pipeline with built-in follow-up reminders.</p>
       </div>
       <div class="step-card reveal">
-        <div class="step-num">2</div>
-        <h3>Do the work, get approval</h3>
-        <p>Track your time, share deliverables, and collect client sign-off — all in one place.</p>
+        <div class="step-num">02</div>
+        <h3>Close every deal</h3>
+        <p>Send a proposal, get a signature, start the work.</p>
       </div>
       <div class="step-card reveal">
-        <div class="step-num">3</div>
-        <h3>Send invoice, get paid</h3>
-        <p>One click turns your logged work into a professional invoice. No more manually piecing things together.</p>
+        <div class="step-num">03</div>
+        <h3>Deliver every time</h3>
+        <p>Approvals, versions, and feedback in one place.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">04</div>
+        <h3>Bill every hour</h3>
+        <p>Log time, import it, invoice it. Nothing slips through.</p>
       </div>
     </div>
   </div>
@@ -1592,7 +1757,7 @@
               </div>
               <div class="tool-info">
                 <span class="tool-name">Asana</span>
-                <span class="tool-desc">Project management</span>
+                <span class="tool-desc">Project &amp; task management</span>
               </div>
               <span class="tool-price">$13<span>/mo</span></span>
             </div>
@@ -1626,16 +1791,26 @@
               </div>
               <span class="tool-price">$20<span>/mo</span></span>
             </div>
+            <div class="tool-row">
+              <div class="tool-logo-wrap" style="background:#F7EEF9;">
+                <svg viewBox="0 0 32 32" width="22" height="22"><rect width="32" height="32" rx="6" fill="#8A4FB1"/><text x="16" y="22" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" font-family="sans-serif">Hb</text></svg>
+              </div>
+              <div class="tool-info">
+                <span class="tool-name">HoneyBook</span>
+                <span class="tool-desc">Proposals &amp; contracts</span>
+              </div>
+              <span class="tool-price">$19<span>/mo</span></span>
+            </div>
           </div>
           <div class="tool-total">
             <div class="tool-total-label">Total per month</div>
             <div class="tool-total-amount" id="counter-total">$0<span>/mo</span></div>
           </div>
           <div class="tool-pain" style="margin: 52px 0px 0px;">
-            <div class="pain-item"><span class="pain-x">✕</span>5 different dashboards to check</div>
-            <div class="pain-item"><span class="pain-x">✕</span>Manual data entry between tools</div>
-            <div class="pain-item"><span class="pain-x">✕</span>5 separate support queues</div>
-            <div class="pain-item"><span class="pain-x">✕</span>5 different logins to manage</div>
+            <div class="pain-item"><span class="pain-x">✕</span>6 different tools to log into every day</div>
+            <div class="pain-item"><span class="pain-x">✕</span>Data that never talks to each other</div>
+            <div class="pain-item"><span class="pain-x">✕</span>Re-entering the same client info everywhere</div>
+            <div class="pain-item"><span class="pain-x">✕</span>6 invoices. 6 support queues. 6 renewal dates.</div>
           </div>
         </div>
 
@@ -1676,35 +1851,33 @@
             <div class="lance-feature-row" style="justify-content: flex-start;">
               <span class="lance-check">
                 <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5l3 3.5L11 1" stroke="#9b63e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </span><span>Client CRM</span>
+              </span><span>Client CRM &amp; pipeline</span>
+            </div>
+            <div class="lance-feature-row">
+              <span class="lance-check">
+                <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5l3 3.5L11 1" stroke="#9b63e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span><span>Proposals &amp; contracts</span>
+            </div>
+            <div class="lance-feature-row">
+              <span class="lance-check">
+                <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5l3 3.5L11 1" stroke="#9b63e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span><span>Client portal</span>
             </div>
           </div>
           <div class="lance-price-block">
             <div class="lance-price-top">
               <div class="lance-price-amount"><sup>$</sup>29<span class="lance-period">/mo</span></div>
-              <div class="lance-savings-badge">Save $46/mo</div>
+              <div class="lance-savings-badge">Save $65/mo</div>
             </div>
             <div class="lance-price-sub">Full access · 15-day free trial </div>
             <a href="/auth?tab=signup" target="_top" class="btn-hero" style="display:inline-block; margin-top:24px;">Try Lance Free</a>
           </div>
-          <div class="lance-perks">
-            <div class="perk-item">
-              <span class="perk-icon"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="#9b63e9" stroke-width="1.5"/><circle cx="5" cy="5" r="2" fill="#9b63e9"/></svg></span>
-              One login, one workspace
-            </div>
-            <div class="perk-item">
-              <span class="perk-icon"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1v4l2.5 1.5" stroke="#9b63e9" stroke-width="1.5" stroke-linecap="round"/></svg></span>
-              Data flows between every feature
-            </div>
-            <div class="perk-item">
-              <span class="perk-icon"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1l1.2 2.6L9 4.1 6.8 6.3l.5 3L5 8l-2.3 1.3.5-3L1 4.1l2.8-.5L5 1z" fill="#9b63e9"/></svg></span>
-              Built specifically for freelancers
-            </div>
-            <div class="perk-item">
-              <span class="perk-icon"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="1" width="6" height="8" rx="1" stroke="#9b63e9" stroke-width="1.5"/><path d="M4 4h2M4 6h2" stroke="#9b63e9" stroke-width="1.2" stroke-linecap="round"/></svg></span>
-              Fraction of the cost
-            </div>
-          </div>
+          <ul class="lance-perks">
+            <li class="perk-item">One login, one workspace</li>
+            <li class="perk-item">Every feature connected — time flows into invoices, proposals flow into contracts</li>
+            <li class="perk-item">Built specifically for freelancers</li>
+            <li class="perk-item">A fraction of what you're paying now</li>
+          </ul>
         </div>
       </div>
 
@@ -1712,12 +1885,12 @@
       <div class="savings-bar reveal" style="margin-top:32px;">
         <div class="savings-bar-inner">
         <div class="savings-stat">
-          <span class="savings-num">$552</span>
+          <span class="savings-num">$780</span>
           <span class="savings-label">saved every year</span>
         </div>
         <div class="savings-divider"></div>
         <div class="savings-stat">
-          <span class="savings-num">5 tools</span>
+          <span class="savings-num">6 tools</span>
           <span class="savings-label">replaced by one</span>
         </div>
         <div class="savings-divider"></div>
@@ -1816,24 +1989,44 @@
     <p class="section-sub">If something's still unclear, we're always reachable.</p>
     <div class="faq-list" style="width:100%; text-align:left;">
       <div class="faq-item">
-        <button class="faq-q" onclick="toggleFaq(this)">What happens after my 15-day trial? <span class="faq-icon">+</span></button>
-        <div class="faq-a">After 15 days you'll be asked to choose a plan. If you don't subscribe, your account pauses — we never delete your data. You can pick back up any time.</div>
+        <button class="faq-q" onclick="toggleFaq(this)">Is Lance just for freelancers, or can agencies use it too? <span class="faq-icon">+</span></button>
+        <div class="faq-a">Lance is built for independent professionals — freelancers, consultants, designers, developers, photographers, copywriters, and small agencies running lean. If you work with clients and bill for your time, Lance was made for you.</div>
       </div>
       <div class="faq-item">
         <button class="faq-q" onclick="toggleFaq(this)">Do my clients need to create an account? <span class="faq-icon">+</span></button>
-        <div class="faq-a">No. Clients receive a simple link to review work, leave comments, and approve deliverables — no sign-up or app required on their end.</div>
+        <div class="faq-a">Never. Clients get a private link for proposals, contracts, approvals, and their portal. For contracts, they verify with a one-time code sent to their email. No app, no signup, no friction on their end.</div>
       </div>
       <div class="faq-item">
-        <button class="faq-q" onclick="toggleFaq(this)">Can I switch between monthly and yearly? <span class="faq-icon">+</span></button>
-        <div class="faq-a">Yes, you can switch any time from account settings. Switching to yearly prorates any remaining credit automatically.</div>
+        <button class="faq-q" onclick="toggleFaq(this)">How much can I customise Lance? <span class="faq-icon">+</span></button>
+        <div class="faq-a">Quite a lot. Your business logo, brand colour, and email footer appear on every client-facing document automatically. Invoice numbering follows your own format — prefix, padding, yearly reset. Email templates for invoices, reminders, and receipts are fully editable with merge tags. Proposal defaults — cover image, colour, payment terms, and conditions — are set once and pre-fill every new proposal. Your locale settings control currency, date format, number format, and timezone across the whole app. And each client portal is individually configured — you choose exactly which sections each client can see.</div>
       </div>
       <div class="faq-item">
-        <button class="faq-q" onclick="toggleFaq(this)">Is Lance good for small agencies? <span class="faq-icon">+</span></button>
-        <div class="faq-a">Absolutely. Lance works great for solo freelancers but is equally powerful for small agencies and contractor teams managing multiple clients and projects.</div>
+        <button class="faq-q" onclick="toggleFaq(this)">What happens after my 15-day trial? <span class="faq-icon">+</span></button>
+        <div class="faq-a">After 15 days you choose a plan and continue. If you don't subscribe, your account pauses — we never delete your data. Come back any time and pick up exactly where you left off.</div>
       </div>
       <div class="faq-item">
-        <button class="faq-q" onclick="toggleFaq(this)">How does invoicing work? <span class="faq-icon">+</span></button>
-        <div class="faq-a">Time you log on a project automatically populates invoice line items. Review, adjust, and send — your client gets a clean invoice with a payment link. No separate tool needed.</div>
+        <button class="faq-q" onclick="toggleFaq(this)">Can I switch between monthly and annual? <span class="faq-icon">+</span></button>
+        <div class="faq-a">Yes, any time. Go to Settings → Subscription and switch. Stripe handles the proration automatically.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Does Lance process payments from my clients? <span class="faq-icon">+</span></button>
+        <div class="faq-a">Not yet — Lance doesn't process payments directly. Your clients pay you however they already do (bank transfer, PayPal, card) and you mark the invoice as paid in Lance to keep everything organised.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Are the contracts legally binding? <span class="faq-icon">+</span></button>
+        <div class="faq-a">Lance provides the tools to create and sign contracts with dual e-signature and OTP email verification. We recommend having your contract content reviewed by a qualified attorney — we provide the infrastructure, not the legal advice.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Can I cancel any time? <span class="faq-icon">+</span></button>
+        <div class="faq-a">Yes. Though we think you won't want to.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">I already use FreshBooks, Wave, or HoneyBook (or similar). Why switch? <span class="faq-icon">+</span></button>
+        <div class="faq-a">Those tools handle billing or projects. Lance connects the whole arc, from first contact to final payment. The value isn't in replacing one tool. It's in closing the gaps between all of them.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Is my data secure? <span class="faq-icon">+</span></button>
+        <div class="faq-a">Yes. Lance is built on trusted infrastructure used by modern software products. Your data is stored in Supabase (PostgreSQL) with row-level security so access is tightly controlled, payments are handled by Stripe, and email delivery runs through Resend. In plain terms: secure stack, strict access rules, and reliable providers.</div>
       </div>
     </div>
   </div>
@@ -1842,7 +2035,7 @@
 <!-- CTA BAND -->
 <div class="cta-band-outer landing-part-bottom-tail">
   <div class="cta-band reveal">
-    <h2>Ready to cancel four subscriptions?</h2>
+    <h2>Ready to cancel six subscriptions?</h2>
     <p>Join thousands of freelancers running their business with Lance.</p>
     <a href="/auth?tab=signup" target="_top" class="btn-cta-primary">Try Lance Free — 15 days</a>
     <p class="cta-note">Cancel anytime</p>
@@ -2003,7 +2196,7 @@
   // Counter animation for comparison total
   const counterEl = document.getElementById('counter-total');
   if (counterEl) {
-    const target = 75;
+    const target = 94;
     let started = false;
     const counterObserver = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting && !started) {
