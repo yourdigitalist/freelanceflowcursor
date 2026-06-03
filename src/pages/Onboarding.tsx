@@ -27,17 +27,9 @@ import {
   ArrowRight,
   LogOut,
 } from '@/components/icons';
-import {
-  LayoutDashboard,
-  Users,
-  FolderKanban,
-  BookOpen,
-  MessageSquare,
-  Bell,
-  Receipt,
-  Timer,
-  ShieldCheck,
-} from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
+import { SlotIcon } from '@/contexts/IconSlotContext';
+import type { IconSlotKey } from '@/lib/iconSlots';
 import { currencies } from '@/lib/locale-data';
 import { cn } from '@/lib/utils';
 
@@ -59,16 +51,15 @@ const roles = [
   { id: 'other', label: 'Other' },
 ];
 
-/** Matches main app navigation (sidebar) so icons and labels stay consistent. */
-const useFirstOptions = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'clients', label: 'Clients', icon: Users },
-  { id: 'projects', label: 'Projects', icon: FolderKanban },
-  { id: 'time', label: 'Time tracking', icon: Timer },
-  { id: 'notes', label: 'Notes', icon: BookOpen },
-  { id: 'invoices', label: 'Invoices', icon: Receipt },
-  { id: 'reviews', label: 'Client approvals', icon: MessageSquare },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
+/** Matches main app sidebar slots so icons and labels stay consistent. */
+const useFirstOptions: Array<{ id: string; label: string; slot: IconSlotKey }> = [
+  { id: 'clients', label: 'Clients', slot: 'sidebar_clients' },
+  { id: 'projects', label: 'Projects', slot: 'sidebar_projects' },
+  { id: 'time', label: 'Time', slot: 'sidebar_time' },
+  { id: 'invoices', label: 'Invoices', slot: 'sidebar_invoices' },
+  { id: 'proposals', label: 'Proposals', slot: 'sidebar_proposals' },
+  { id: 'contracts', label: 'Contracts', slot: 'sidebar_contracts' },
+  { id: 'reviews', label: 'Approvals', slot: 'sidebar_reviews' },
 ];
 
 async function getAccessTokenWithRetry(maxAttempts = 6): Promise<string | null> {
@@ -404,23 +395,20 @@ export default function Onboarding() {
               <p className="text-muted-foreground mt-1">You can use everything—we’ll highlight this.</p>
             </div>
             <div className="grid gap-3">
-              {useFirstOptions.map((opt) => {
-                const Icon = opt.icon;
-                return (
-                  <Card
-                    key={opt.id}
-                    className={`cursor-pointer transition-all border-2 ${selectedUseFirst === opt.id ? 'border-primary' : 'border-transparent hover:border-border'}`}
-                    onClick={() => setSelectedUseFirst(opt.id)}
-                  >
-                    <CardContent className="py-4 flex items-center gap-3">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <Icon className="h-5 w-5 text-primary" strokeWidth={2} aria-hidden />
-                      </span>
-                      <span className="font-medium text-foreground">{opt.label}</span>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+              {useFirstOptions.map((opt) => (
+                <Card
+                  key={opt.id}
+                  className={`cursor-pointer transition-all border-2 ${selectedUseFirst === opt.id ? 'border-primary' : 'border-transparent hover:border-border'}`}
+                  onClick={() => setSelectedUseFirst(opt.id)}
+                >
+                  <CardContent className="py-4 flex items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <SlotIcon slot={opt.slot} className="h-5 w-5 text-primary" />
+                    </span>
+                    <span className="font-medium text-foreground">{opt.label}</span>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
             <div className="flex justify-between">
               <Button variant="ghost" onClick={() => setStep('role')}>Back</Button>

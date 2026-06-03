@@ -12,6 +12,7 @@ import {
   GUIDE_REFRESH_EVENT,
   type GuideItemId,
   loadJson,
+  profileHasInvoiceCustomization,
   saveJson,
   storageKey,
 } from '@/components/layout/startGuideUtils';
@@ -81,25 +82,7 @@ export function StartGuide() {
       );
       const hasCompanyProfile = hasBusinessName && hasBusinessDetail;
       const hasLogo = !!(profile?.business_logo || '').trim();
-      const prefix = (profile?.invoice_prefix || '').trim();
-      const hasInvoiceCustomization = !!(
-        (profile?.invoice_footer || '').trim() ||
-        (profile?.invoice_notes_default || '').trim() ||
-        (profile?.invoice_bank_details_default || '').trim() ||
-        (profile?.invoice_email_subject_default || '').trim() ||
-        (profile?.invoice_email_message_default || '').trim() ||
-        (profile?.reminder_subject_default || '').trim() ||
-        (profile?.reminder_body_default || '').trim() ||
-        profile?.reminder_enabled === true ||
-        (profile?.hourly_rate != null && Number(profile.hourly_rate) > 0) ||
-        (prefix && prefix !== 'INV') ||
-        profile?.invoice_include_year === false ||
-        profile?.invoice_number_reset_yearly === false ||
-        (profile?.invoice_number_start != null && profile.invoice_number_start !== 1) ||
-        (profile?.invoice_number_padding != null && profile.invoice_number_padding !== 4) ||
-        (profile?.reminder_days_before != null && profile.reminder_days_before !== 1) ||
-        (taxCount || 0) > 0
-      );
+      const hasInvoiceCustomization = profileHasInvoiceCustomization(profile, taxCount || 0);
 
       setAuto({
         companyProfile: hasCompanyProfile,
