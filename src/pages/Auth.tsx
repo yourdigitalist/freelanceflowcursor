@@ -203,25 +203,6 @@ export default function Auth() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
         .auth-brand { font-family: 'Inter', sans-serif; }
-        .auth-dashboard-float {
-          border-radius: 14px;
-          overflow: hidden;
-          box-shadow: 0 24px 60px rgba(155, 99, 233, 0.16), 0 8px 24px rgba(0, 0, 0, 0.06);
-          border: 1.5px solid rgba(155, 99, 233, 0.12);
-          transform: perspective(1200px) rotateX(2deg) rotateY(-2deg);
-          transition: transform 0.45s ease, box-shadow 0.45s ease;
-        }
-        .auth-dashboard-float:hover {
-          transform: perspective(1200px) rotateX(5deg) rotateY(-4deg) translateY(-8px);
-          box-shadow: 0 36px 88px rgba(155, 99, 233, 0.24), 0 14px 36px rgba(0, 0, 0, 0.08);
-        }
-        .auth-dashboard-float img {
-          display: block;
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          object-position: top left;
-        }
       `}</style>
       {/* Left side - Features */}
       <div className="hidden lg:flex lg:w-1/2 bg-[linear-gradient(160deg,#f8f6ff_0%,#fff_100%)] p-12 flex-col justify-between border-r border-[#ede8fa]">
@@ -240,23 +221,15 @@ export default function Auth() {
             </p>
           </div>
 
-          <div className="flex items-stretch gap-6 xl:gap-8">
-            <div className="flex shrink-0 flex-col gap-3">
-              {features.map((feature) => (
-                <div key={feature.slot} className="flex items-center gap-2.5 text-[#1a1a2e]">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#9b63e9]/20 bg-[#9b63e9]/10">
-                    <SlotIcon slot={feature.slot} className="h-4 w-4 text-[#9b63e9]" />
-                  </div>
-                  <span className="text-sm font-medium">{feature.text}</span>
+          <div className="flex flex-col gap-3">
+            {features.map((feature) => (
+              <div key={feature.slot} className="flex items-center gap-2.5 text-[#1a1a2e]">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#9b63e9]/20 bg-[#9b63e9]/10">
+                  <SlotIcon slot={feature.slot} className="h-4 w-4 text-[#9b63e9]" />
                 </div>
-              ))}
-            </div>
-            <div className="auth-dashboard-float h-full min-h-0 min-w-0 flex-1 overflow-hidden">
-              <img
-                src="/uploads/landing-hero-dashboard.png"
-                alt="Lance dashboard preview"
-              />
-            </div>
+                <span className="text-sm font-medium">{feature.text}</span>
+              </div>
+            ))}
           </div>
 
         </div>
