@@ -14,18 +14,36 @@ import type { IconSlotKey } from '@/lib/iconSlots';
 
 const SIGNUP_PENDING_KEY = 'signup_pending';
 const SIGNUP_EMAIL_KEY = 'signup_email';
+const AUTH_LAST_EMAIL_KEY = 'lance_auth_last_email';
+
+function readStoredAuthEmail(): string {
+  try {
+    return localStorage.getItem(AUTH_LAST_EMAIL_KEY)?.trim() ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function persistAuthEmail(email: string) {
+  const trimmed = email.trim();
+  if (!trimmed) return;
+  try {
+    localStorage.setItem(AUTH_LAST_EMAIL_KEY, trimmed);
+  } catch {
+    // ignore localStorage failures
+  }
+}
 
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [acceptTermsAndPrivacy, setAcceptTermsAndPrivacy] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [showConfirmEmailMessage, setShowConfirmEmailMessage] = useState(false);
   const [resendEmail, setResendEmail] = useState('');
   const [resendLoading, setResendLoading] = useState(false);
   const { signIn, signUp, signInWithMagicLink, resetPassword, resendConfirmationEmail } = useAuth();
-  const [magicLinkEmail, setMagicLinkEmail] = useState('');
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [magicLinkLoading, setMagicLinkLoading] = useState(false);
   const navigate = useNavigate();
@@ -49,13 +67,24 @@ export default function Auth() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    const signupEmail = sessionStorage.getItem(SIGNUP_EMAIL_KEY)?.trim() ?? '';
+    const stored = readStoredAuthEmail();
+    const initial = signupEmail || stored;
+    if (initial) {
+      setAuthEmail(initial);
+      if (signupEmail) setResendEmail(signupEmail);
+    }
+  }, []);
+
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     
     const formData = new FormData(e.currentTarget);
-    const email = formData.get('email') as string;
+    const email = (formData.get('email') as string).trim();
     const password = formData.get('password') as string;
+    persistAuthEmail(email);
 
     const { error } = await signIn(email, password);
     
@@ -86,11 +115,12 @@ export default function Auth() {
     setIsLoading(true);
     
     const formData = new FormData(e.currentTarget);
-    const email = formData.get('email') as string;
+    const email = (formData.get('email') as string).trim();
     const password = formData.get('password') as string;
     const firstName = formData.get('firstName') as string;
     const lastName = formData.get('lastName') as string;
     const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+    persistAuthEmail(email);
 
     const { error } = await signUp(email, password, fullName, firstName, lastName);
     
@@ -119,7 +149,9 @@ export default function Auth() {
     e.preventDefault();
     setIsLoading(true);
 
-    const { error } = await resetPassword(forgotPasswordEmail);
+    const email = authEmail.trim();
+    persistAuthEmail(email);
+    const { error } = await resetPassword(email);
 
     if (error) {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -147,9 +179,11 @@ export default function Auth() {
 
   const handleMagicLink = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!magicLinkEmail?.trim()) return;
+    const email = authEmail.trim();
+    if (!email) return;
+    persistAuthEmail(email);
     setMagicLinkLoading(true);
-    const { error, message } = await signInWithMagicLink(magicLinkEmail);
+    const { error, message } = await signInWithMagicLink(email);
     if (error) {
       toast({
         title: 'Could not send magic link',
@@ -170,6 +204,7 @@ export default function Auth() {
   const handleResendConfirmation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resendEmail?.trim()) return;
+    persistAuthEmail(resendEmail);
     setResendLoading(true);
     const { error } = await resendConfirmationEmail(resendEmail);
     if (error) {
@@ -330,6 +365,9 @@ export default function Auth() {
                         name="email"
                         type="email"
                         placeholder="you@example.com"
+                        value={authEmail}
+                        onChange={(e) => setAuthEmail(e.target.value)}
+                        autoComplete="email"
                         required
                       />
                     </div>
@@ -369,7 +407,7 @@ export default function Auth() {
                     <Label htmlFor="magic-link-email">Sign in with a magic link</Label>
                     {magicLinkSent ? (
                       <div className="text-sm text-muted-foreground py-2 space-y-1">
-                        <p>We sent a sign-in link to <strong>{magicLinkEmail}</strong>. Click the link in the email to sign in.</p>
+                        <p>We sent a sign-in link to <strong>{authEmail}</strong>. Click the link in the email to sign in.</p>
                         <p className="text-xs">If you don’t see it, check spam/junk.</p>
                       </div>
                     ) : (
@@ -378,8 +416,9 @@ export default function Auth() {
                           id="magic-link-email"
                           type="email"
                           placeholder="you@example.com"
-                          value={magicLinkEmail}
-                          onChange={(e) => setMagicLinkEmail(e.target.value)}
+                          value={authEmail}
+                          onChange={(e) => setAuthEmail(e.target.value)}
+                          autoComplete="email"
                           className="flex-1"
                           disabled={magicLinkLoading}
                         />
@@ -423,6 +462,9 @@ export default function Auth() {
                         name="email"
                         type="email"
                         placeholder="you@example.com"
+                        value={authEmail}
+                        onChange={(e) => setAuthEmail(e.target.value)}
+                        autoComplete="email"
                         required
                       />
                     </div>
@@ -515,7 +557,6 @@ export default function Auth() {
                     onClick={() => {
                       setShowForgotPassword(false);
                       setResetEmailSent(false);
-                      setForgotPasswordEmail('');
                     }}
                     className="w-full"
                   >
@@ -530,8 +571,9 @@ export default function Auth() {
                       id="forgot-email"
                       type="email"
                       placeholder="you@example.com"
-                      value={forgotPasswordEmail}
-                      onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                      value={authEmail}
+                      onChange={(e) => setAuthEmail(e.target.value)}
+                      autoComplete="email"
                       required
                     />
                   </div>
@@ -539,10 +581,7 @@ export default function Auth() {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => {
-                        setShowForgotPassword(false);
-                        setForgotPasswordEmail('');
-                      }}
+                      onClick={() => setShowForgotPassword(false)}
                       className="flex-1"
                     >
                       Cancel

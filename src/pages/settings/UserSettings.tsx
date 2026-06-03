@@ -18,9 +18,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useSettingsDirty } from '@/contexts/SettingsDirtyContext';
-import { Loader2 } from '@/components/icons';
+import { HelpCircle, Loader2 } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { useNavigate } from 'react-router-dom';
 
 interface UserProfile {
@@ -254,22 +254,24 @@ export default function UserSettings() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <CardTitle>Profile Picture</CardTitle>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Profile picture requirements"
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border text-[11px] font-semibold text-muted-foreground hover:bg-muted"
-                  >
-                    i
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="max-w-xs text-xs">
-                  Use a square image. Maximum file size: 500 KB.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <HoverCard openDelay={150} closeDelay={100}>
+              <HoverCardTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Profile picture requirements"
+                  className="inline-flex text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+                >
+                  <HelpCircle className="h-3.5 w-3.5" />
+                </button>
+              </HoverCardTrigger>
+              <HoverCardContent
+                side="top"
+                align="start"
+                className="w-auto max-w-[220px] border-border/60 px-2.5 py-1.5 text-[11px] font-normal text-muted-foreground shadow-sm"
+              >
+                Use a square image. Maximum file size: 500 KB.
+              </HoverCardContent>
+            </HoverCard>
           </div>
           <CardDescription>Update your profile photo</CardDescription>
         </CardHeader>
