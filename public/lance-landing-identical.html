@@ -1453,8 +1453,77 @@
     .footer-bottom { flex-direction: column; align-items: flex-start; gap: 8px; }
   }
 
+  @media (max-width: 768px) {
+    .hero h1 {
+      font-size: clamp(44px, 12vw, 64px);
+      letter-spacing: -1.8px;
+      line-height: 1.1;
+    }
+
+    .hero-headline-inner {
+      gap: 0;
+    }
+    .hero-headline-line1-wrap {
+      margin-bottom: -0.12em;
+    }
+    .hero-headline-line1 {
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      white-space: normal;
+    }
+    .hero-headline-prefix {
+      display: block;
+      line-height: 1.08;
+    }
+    .hero-role-slot {
+      display: block;
+      margin-top: 0.04em;
+      padding-bottom: 0.08em;
+      line-height: 1.08;
+    }
+    .hero-headline-line2 {
+      line-height: 1.08;
+      margin-top: 0;
+    }
+
+    .lance-price-top {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .lance-savings-badge {
+      white-space: normal;
+    }
+
+    .pricing-inner.centered .price-card {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      align-self: stretch;
+      width: 100%;
+      text-align: left;
+    }
+    .pricing-inner.centered .price-amount {
+      justify-content: flex-start;
+    }
+    .pricing-inner.centered .price-desc {
+      text-align: left;
+    }
+    .pricing-inner.centered .price-features {
+      align-self: stretch;
+      width: 100%;
+    }
+    .pricing-inner.centered .price-features li {
+      justify-content: flex-start;
+    }
+    .pricing-inner.centered .btn-plan {
+      align-self: stretch;
+      text-align: center;
+    }
+  }
+
   @media (max-width: 680px) {
-    .hero h1 { font-size: clamp(34px, 10vw, 52px); letter-spacing: -1.5px; }
     .hero-sub { font-size: 16px; }
     .features-grid { grid-template-columns: 1fr; }
     .section-title { letter-spacing: -1.2px; }
