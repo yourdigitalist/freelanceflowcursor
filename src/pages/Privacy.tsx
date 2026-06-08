@@ -3,7 +3,7 @@ import { AppLogo } from '@/components/AppLogo';
 
 const PRIVACY_DOC = `p|Lance
 p|Privacy Policy
-p|Last updated: 27/04/2026
+p|Last updated: 08/06/2026
 p|Your Digitalist (“we,” “us,” or “our”), registered in Poland (NIP: 1182291445, REGON: 529739460), operates Lance at getlance.app (the “Service”). This Privacy Policy explains what personal data we collect, why we collect it, how we use and protect it, and what rights you have over it.
 p|We are subject to the General Data Protection Regulation (GDPR) as a business established within the European Union. Additional rights for users in the United Kingdom and Australia are described in the jurisdiction-specific sections at the end of this Policy.
 p|By using the Service, you confirm that you have read and understood this Privacy Policy. If you do not agree, please do not use the Service.
@@ -28,13 +28,13 @@ li|Invoice data, client details, project notes, and CRM records that you create 
 li|Log data including your IP address, browser type, device type, pages visited within the Service, and the date and time of your activity;
 li|Feature usage patterns, such as which tools within Lance you use and how frequently.
 h2|2.4 Analytics Data
-p|We use Google Analytics and a session recording tool (such as Hotjar or similar) to understand how users interact with Lance. These tools may collect:
-li|Pages and features visited, time spent, and navigation paths;
-li|Device and browser information;
+p|We use Google Analytics 4 (GA4) to understand how users navigate and use Lance. GA4 is provided by Google LLC and may collect:
+li|Pages visited, navigation paths, and time spent in the app;
+li|Device and browser information (e.g. screen size, language);
 li|Approximate geographic location (derived from IP address, not GPS);
-li|Mouse movements, clicks, and scrolling behaviour (via session recording tools), used solely to improve the user experience.
-p|Google Analytics data is processed by Google LLC. Please refer to Google’s Privacy Policy at policies.google.com/privacy for details. You can opt out of Google Analytics tracking at tools.google.com/dlpage/gaoptout.
-p|Session recording tools such as Hotjar collect interaction data in anonymised or pseudonymised form. No passwords or payment details are ever captured by these tools. You can opt out of Hotjar at hotjar.com/legal/compliance/opt-out.
+li|Referring website or campaign, where applicable.
+p|We configure GA4 to record page views as you move through the app. When you are signed in, we may send an internal user identifier to GA4 so we can analyse product usage across sessions. We do not send your password, payment card details, or invoice/client content to Google Analytics.
+p|Google processes analytics data on our behalf. See Google’s Privacy Policy at policies.google.com/privacy. You can opt out of Google Analytics in your browser or via Google’s opt-out add-on at tools.google.com/dlpage/gaoptout.
 h2|2.5 Communications Data
 li|Emails you send to us, including support requests and enquiries;
 li|Your email address and communication preferences in connection with transactional and marketing emails (see Section 4).
@@ -42,7 +42,7 @@ h1|3. Legal Basis for Processing (GDPR)
 p|Under the GDPR, we are required to have a lawful basis for processing your personal data. We rely on the following bases:
 li|Contract performance: Processing your account data, subscription data, and Your Content is necessary to provide you with the Service under our Terms & Conditions.
 li|Legitimate interests: Processing usage data and analytics helps us improve the Service, detect fraud, and ensure security. We have assessed that these interests are not overridden by your rights.
-li|Consent: We rely on your consent to send you marketing emails and to use non-essential cookies and session recording tools. You may withdraw this consent at any time (see Section 7).
+li|Consent: We rely on your consent to send you marketing emails and, where required by law, to use non-essential analytics cookies. You may withdraw that consent at any time (see Section 7).
 li|Legal obligation: We may process data where required to comply with applicable law, such as tax or accounting obligations.
 h1|4. How We Use Your Data
 h2|4.1 To Provide the Service
@@ -51,7 +51,7 @@ li|Processing your subscription and billing;
 li|Storing and displaying Your Content (invoices, client records, CRM data);
 li|Sending transactional emails such as account confirmations, password resets, and billing receipts.
 h2|4.2 To Improve the Service
-li|Analysing usage patterns via Google Analytics and session recording tools to identify bugs, improve features, and optimise user experience;
+li|Analysing usage patterns via Google Analytics to identify bugs, improve features, and optimise user experience;
 li|Internal reporting and product development.
 h2|4.3 Marketing Communications
 p|With your consent, we may send you emails about new features, product updates, tips for using Lance, and occasional promotional offers. Every marketing email includes an unsubscribe link. You can also update your preferences at any time by contacting hello@getlance.app or through your account settings.
@@ -65,16 +65,13 @@ p|Lance uses cookies and similar tracking technologies. Cookies are small text f
 h2|5.1 Essential Cookies
 p|These are required for the Service to function and cannot be switched off. They include session cookies that keep you logged in and security cookies that protect against cross-site request forgery.
 h2|5.2 Analytics Cookies
-p|We use Google Analytics cookies to collect anonymised data about how users navigate Lance. These cookies help us understand which features are used most and where users encounter difficulties. You can opt out via your browser settings or the Google Analytics opt-out tool.
-h2|5.3 Session Recording
-p|Tools such as Hotjar use cookies to record anonymised session data including mouse movements, clicks, and scrolling. These recordings never capture passwords, payment details, or other sensitive fields. You can opt out at hotjar.com/legal/compliance/opt-out.
-h2|5.4 Managing Cookies
+p|We use Google Analytics cookies and similar technologies to collect usage data about how users navigate Lance. These help us understand which features are used and where users encounter difficulties. Analytics cookies are non-essential. You can opt out via your browser settings or Google’s Analytics opt-out tool at tools.google.com/dlpage/gaoptout.
+h2|5.3 Managing Cookies
 p|You can control or delete cookies through your browser settings at any time. Note that disabling essential cookies may affect the functionality of the Service. For more information about cookies and how to manage them, visit allaboutcookies.org.
 h1|6. Data Sharing & Third Parties
 p|We do not sell your personal data. We share data only with the following categories of third parties, and only to the extent necessary:
 li|Stripe (payment processing): Your billing and payment data is processed by Stripe, Inc. Stripe is a certified PCI DSS Level 1 service provider. Data may be processed in the United States under Stripe’s standard contractual clauses.
-li|Google LLC (analytics): Usage and behavioural data is processed by Google Analytics. Data may be processed in the United States.
-li|Session recording provider (e.g. Hotjar): Anonymised interaction data is processed by our session recording tool provider. Data may be processed outside the EU under appropriate safeguards.
+li|Google LLC (Google Analytics 4): Usage and navigation data is processed by Google Analytics. Data may be processed in the United States under Google’s standard contractual terms and safeguards.
 li|Email delivery provider: We use a third-party email service to send transactional and marketing emails. Your email address is shared with this provider solely for delivery purposes.
 li|Hosting and infrastructure providers: Your Content and account data is stored on servers provided by our cloud hosting provider. All providers are bound by data processing agreements.
 li|Legal and regulatory authorities: We may disclose data where required by law, court order, or to protect our legal rights.

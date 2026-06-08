@@ -66,6 +66,7 @@ import { RecoveryHashRedirect } from "@/components/RecoveryHashRedirect";
 import { TimerProvider } from "@/contexts/TimerContext";
 import { IconSlotProvider } from "@/contexts/IconSlotContext";
 import { CrispChat } from "@/components/CrispChat";
+import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import { canAccessContracts, canAccessNotes } from "@/lib/features";
 
 import { hasBillingAccess as profileHasBillingAccess } from '@/lib/billingAccess';
@@ -340,6 +341,7 @@ const App = () => {
             <TimerProvider>
               <ErrorBoundary>
                 <RecoveryHashRedirect />
+                <GoogleAnalytics />
                 <CrispChat />
                 <AppRoutes />
               </ErrorBoundary>
