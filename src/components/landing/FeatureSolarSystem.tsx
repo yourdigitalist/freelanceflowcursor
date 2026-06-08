@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 
-export const FEATURE_SOLAR_BG = "/landing/feature-solar-system.png?v=4";
+export const FEATURE_SOLAR_BG = "/landing/feature-solar-system.png?v=5";
 
 type FeatureItem = {
   id: string;
