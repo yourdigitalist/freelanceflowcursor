@@ -27,34 +27,25 @@ type FeatureItem = {
   popoverPlacement: "top" | "bottom" | "left" | "right";
 };
 
-/** Elliptical orbit on feature-solar-system.png (0° = top). */
-function orbitOnEllipse(angleDeg: number, rx: number, ry: number) {
-  const rad = (angleDeg * Math.PI) / 180;
-  return {
-    left: Math.round((ORBIT_CENTER_X + rx * Math.sin(rad)) * 10) / 10,
-    top: Math.round((ORBIT_CENTER_Y - ry * Math.cos(rad)) * 10) / 10,
-  };
-}
+/** Native artwork size — pill % positions map to this box (see feature-solar-system.png). */
+export const FEATURE_SOLAR_WIDTH = 1024;
+export const FEATURE_SOLAR_HEIGHT = 611;
 
-const ORBIT_CENTER_X = 50;
-const ORBIT_CENTER_Y = 46;
-/** Inner dashed ring (top arc). */
-const INNER_ORBIT = { rx: 28, ry: 19.5 };
-/** Outer dashed ring. */
-const OUTER_ORBIT = { rx: 42, ry: 31 };
-
-type OrbitRing = "inner" | "outer";
-
-const FEATURE_ORBIT: Record<string, { angle: number; ring: OrbitRing }> = {
-  clients: { angle: 0, ring: "inner" },
-  time: { angle: 62, ring: "inner" },
-  projects: { angle: 298, ring: "inner" },
-  invoices: { angle: 55, ring: "outer" },
-  proposals: { angle: 115, ring: "outer" },
-  contracts: { angle: 148, ring: "outer" },
-  approvals: { angle: 200, ring: "outer" },
-  tasks: { angle: 242, ring: "outer" },
-  portal: { angle: 272, ring: "outer" },
+/**
+ * Hand-tuned left%/top% on the 1024×611 artwork (inner / outer dashed ellipses).
+ * Do not derive from orbit math — the rings are static illustration.
+ */
+/** Tuned inward toward visual center (50%, ~54%) of the 1024×611 artwork. */
+const FEATURE_POSITIONS: Record<string, { left: number; top: number }> = {
+  clients: { left: 50, top: 22.5 },
+  time: { left: 73.4, top: 32.4 },
+  projects: { left: 26.6, top: 32.4 },
+  invoices: { left: 84.2, top: 43.2 },
+  portal: { left: 15.8, top: 43.2 },
+  proposals: { left: 78.8, top: 61.2 },
+  tasks: { left: 21.2, top: 61.2 },
+  contracts: { left: 62.6, top: 73.8 },
+  approvals: { left: 37.4, top: 73.8 },
 };
 
 type FeatureDef = Omit<FeatureItem, "top" | "left">;
@@ -144,11 +135,28 @@ const FEATURE_DEFS: FeatureDef[] = [
 ];
 
 const FEATURES: FeatureItem[] = FEATURE_DEFS.map((def) => {
-  const orbit = FEATURE_ORBIT[def.id];
-  if (!orbit) throw new Error(`Missing solar orbit for ${def.id}`);
-  const { rx, ry } = orbit.ring === "inner" ? INNER_ORBIT : OUTER_ORBIT;
-  return { ...def, ...orbitOnEllipse(orbit.angle, rx, ry) };
+  const position = FEATURE_POSITIONS[def.id];
+  if (!position) throw new Error(`Missing solar position for ${def.id}`);
+  return { ...def, ...position };
 });
+
+const FEATURES_BY_ID = Object.fromEntries(FEATURE_DEFS.map((def) => [def.id, def])) as Record<
+  string,
+  FeatureDef
+>;
+
+/** Mobile grid order (2-column layout). */
+const MOBILE_GRID_ORDER = [
+  "clients",
+  "projects",
+  "time",
+  "invoices",
+  "proposals",
+  "contracts",
+  "approvals",
+  "tasks",
+  "portal",
+] as const;
 
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(() =>
@@ -306,6 +314,32 @@ function FeaturePopover({
   );
 }
 
+function MobileGridPill({
+  feature,
+  isActive,
+  onClick,
+}: {
+  feature: FeatureDef;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  const Icon = feature.icon;
+  return (
+    <button
+      type="button"
+      className="feature-solar-pill"
+      onClick={onClick}
+      aria-expanded={isActive}
+      aria-haspopup="dialog"
+    >
+      <span className="feature-solar-pill-inner">
+        <Icon className="feature-solar-pill-icon" strokeWidth={2.2} aria-hidden />
+        <span>{feature.label}</span>
+      </span>
+    </button>
+  );
+}
+
 export default function FeatureSolarSystem() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -355,69 +389,83 @@ export default function FeatureSolarSystem() {
     setActiveId((current) => (current === id ? null : id));
   };
 
-  return (
-    <div
-      className={`feature-solar${isMobile ? " feature-solar--mobile" : ""}`}
-      ref={containerRef}
-    >
-      <div className="feature-solar-stage">
-        <img
-          src={FEATURE_SOLAR_BG}
-          alt=""
-          className="feature-solar-bg"
-          width={1024}
-          height={611}
-          decoding="async"
-        />
+  const mobileGridFeatures = MOBILE_GRID_ORDER.map((id) => FEATURES_BY_ID[id]);
 
-        <div className="feature-solar-pills feature-solar-pills--overlay" aria-label="Lance features">
-          {FEATURES.map((feature) => (
-            <FeaturePill
-              key={feature.id}
-              feature={feature}
-              isActive={activeId === feature.id}
-              onActivate={() => open(feature.id)}
-              onClick={() => handlePillClick(feature.id)}
-              onMouseEnter={() => !isMobile && open(feature.id)}
-              onMouseLeave={() => !isMobile && scheduleClose()}
-            >
-              <AnimatePresence>
-                {activeId === feature.id && !isMobile && (
-                  <FeaturePopover
-                    feature={feature}
-                    onClose={close}
-                    onPointerEnter={cancelClose}
-                    onPointerLeave={scheduleClose}
-                  />
-                )}
-              </AnimatePresence>
-            </FeaturePill>
-          ))}
+  return (
+    <div ref={containerRef}>
+      <div className="feature-solar solar-desktop-only">
+        <div className="feature-solar-stage">
+          <img
+            src={FEATURE_SOLAR_BG}
+            alt=""
+            className="feature-solar-bg"
+            width={1024}
+            height={611}
+            decoding="async"
+          />
+
+          <div className="feature-solar-pills feature-solar-pills--overlay" aria-label="Lance features">
+            {FEATURES.map((feature) => (
+              <FeaturePill
+                key={feature.id}
+                feature={feature}
+                isActive={activeId === feature.id}
+                onActivate={() => open(feature.id)}
+                onClick={() => handlePillClick(feature.id)}
+                onMouseEnter={() => open(feature.id)}
+                onMouseLeave={() => scheduleClose()}
+              >
+                <AnimatePresence>
+                  {activeId === feature.id && (
+                    <FeaturePopover
+                      feature={feature}
+                      onClose={close}
+                      onPointerEnter={cancelClose}
+                      onPointerLeave={scheduleClose}
+                    />
+                  )}
+                </AnimatePresence>
+              </FeaturePill>
+            ))}
+          </div>
         </div>
       </div>
 
-      <AnimatePresence>
-        {activeFeature && isMobile && (
-          <motion.div
-            className="feature-solar-mobile-detail"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 12 }}
-            transition={{ duration: 0.22 }}
-          >
-            <button
-              type="button"
-              className="feature-solar-popover-close"
-              onClick={close}
-              aria-label="Close"
+      <div className="solar-mobile-shell">
+        <div className="solar-mobile-grid" aria-label="Lance features">
+          {mobileGridFeatures.map((feature) => (
+            <MobileGridPill
+              key={feature.id}
+              feature={feature}
+              isActive={activeId === feature.id}
+              onClick={() => handlePillClick(feature.id)}
+            />
+          ))}
+        </div>
+
+        <AnimatePresence>
+          {activeFeature && isMobile && (
+            <motion.div
+              className="feature-solar-mobile-detail"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 12 }}
+              transition={{ duration: 0.22 }}
             >
-              <X size={16} />
-            </button>
-            <h3>{activeFeature.label}</h3>
-            <p>{activeFeature.description}</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <button
+                type="button"
+                className="feature-solar-popover-close"
+                onClick={close}
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+              <h3>{activeFeature.label}</h3>
+              <p>{activeFeature.description}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
