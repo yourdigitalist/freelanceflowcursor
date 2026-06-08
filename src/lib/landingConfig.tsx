@@ -87,7 +87,7 @@ export const siteConfig = {
         "Unlimited projects & clients",
         "Time tracking & invoicing",
         "Client reviews & approvals",
-        "Cancel anytime",
+        "Cancel anytime · No card required",
       ],
       description: "Full access. 15-day free trial.",
       buttonText: "Start 15-day free trial",

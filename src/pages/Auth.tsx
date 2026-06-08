@@ -298,7 +298,7 @@ export default function Auth() {
             </div>
             <span className="text-sm text-[#64647a]">Tested by real freelancers in beta.</span>
           </div>
-          <p className="text-sm font-bold text-[#1a1a2e]">15-day free trial. Cancel anytime.</p>
+          <p className="text-sm font-bold text-[#1a1a2e]">15-day free trial. No card required. Cancel anytime.</p>
           <div className="mt-2 flex items-center gap-2 text-sm text-[#64647a]">
             <img src="/stripe-logo.svg" alt="Stripe" className="h-3.5 w-auto" />
             <span>Secure Payment Powered by Stripe.</span>
@@ -548,7 +548,7 @@ export default function Auth() {
           </p>
           <footer className="mt-8 pt-6 border-t text-center text-sm text-muted-foreground">
             <Link to="/auth" className="hover:text-foreground mr-4">Log in</Link>
-            <Link to="/help" className="hover:text-foreground mr-4">Help</Link>
+            <a href="mailto:hello@getlance.app" className="hover:text-foreground mr-4">Help</a>
             <Link to="/terms" className="hover:text-foreground mr-4">Terms and conditions</Link>
             <Link to="/privacy" className="hover:text-foreground">Privacy policy</Link>
           </footer>

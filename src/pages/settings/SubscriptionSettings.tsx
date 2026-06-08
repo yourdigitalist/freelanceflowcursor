@@ -36,7 +36,7 @@ const plans = [
       'Unlimited projects & clients',
       'Time tracking & invoicing',
       'Client reviews & approvals',
-      'Cancel anytime',
+      'Cancel anytime · No card required',
     ],
   },
   {

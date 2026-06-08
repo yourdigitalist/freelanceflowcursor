@@ -21,7 +21,7 @@ export default function PricingSection() {
           "Unlimited projects & clients",
           "Time tracking & invoicing",
           "Client reviews & approvals",
-          "Cancel anytime",
+          "Cancel anytime · No card required",
         ],
       isPopular: false,
       buttonText: pricing?.cta || "Start 15-day free trial",

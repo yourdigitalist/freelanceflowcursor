@@ -316,7 +316,7 @@ export const DEFAULT_LANDING_CONTENT: LandingContent = {
       'Unlimited projects & clients',
       'Time tracking & invoicing',
       'Client reviews & approvals',
-      'Cancel anytime',
+      'Cancel anytime · No card required',
     ],
     note: 'Early access pricing.',
     cta: 'Start 15-day free trial',
