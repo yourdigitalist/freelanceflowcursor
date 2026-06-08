@@ -9,11 +9,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { AppLogo } from '@/components/AppLogo';
 import { Loader2, CheckCircle } from '@/components/icons';
+import { PasswordStrengthInput } from '@/components/PasswordStrengthInput';
+import { evaluatePasswordStrength, passwordStrengthMessage } from '@/lib/passwordStrength';
 
 export default function ResetPassword() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [hasAuthSession, setHasAuthSession] = useState<boolean | null>(null);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const { updatePassword, session, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -50,11 +54,10 @@ export default function ResetPassword() {
 
     setIsLoading(true);
 
-    const formData = new FormData(e.currentTarget);
-    const password = formData.get('password') as string;
-    const confirmPassword = formData.get('confirmPassword') as string;
+    const newPassword = password;
+    const confirm = confirmPassword;
 
-    if (password !== confirmPassword) {
+    if (newPassword !== confirm) {
       toast({
         title: 'Passwords do not match',
         description: 'Please make sure both passwords are the same.',
@@ -64,17 +67,18 @@ export default function ResetPassword() {
       return;
     }
 
-    if (password.length < 8) {
+    const strength = evaluatePasswordStrength(newPassword);
+    if (!strength.isStrongEnough) {
       toast({
-        title: 'Password too short',
-        description: 'Password must be at least 8 characters.',
+        title: 'Password not strong enough',
+        description: passwordStrengthMessage(strength),
         variant: 'destructive',
       });
       setIsLoading(false);
       return;
     }
 
-    const { error } = await updatePassword(password);
+    const { error } = await updatePassword(newPassword);
 
     if (error) {
       toast({
@@ -129,17 +133,14 @@ export default function ResetPassword() {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="password">New Password</Label>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    placeholder="••••••••"
-                    minLength={8}
-                    required
-                  />
-                </div>
+                <PasswordStrengthInput
+                  id="password"
+                  name="password"
+                  label="New Password"
+                  value={password}
+                  onChange={setPassword}
+                  autoComplete="new-password"
+                />
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">Confirm New Password</Label>
                   <Input
@@ -147,14 +148,18 @@ export default function ResetPassword() {
                     name="confirmPassword"
                     type="password"
                     placeholder="••••••••"
-                    minLength={8}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    autoComplete="new-password"
                     required
+                    minLength={8}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Minimum 8 characters
-                  </p>
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isLoading || !evaluatePasswordStrength(password).isStrongEnough}
+                >
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Update Password
                 </Button>

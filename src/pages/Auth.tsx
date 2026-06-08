@@ -8,6 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from '@/components/icons';
+import { PasswordStrengthInput } from '@/components/PasswordStrengthInput';
+import { evaluatePasswordStrength, passwordStrengthMessage } from '@/lib/passwordStrength';
 
 const LANCE_LOGO_SRC = '/lance-logo-black-colour.png';
 import { SlotIcon } from '@/contexts/IconSlotContext';
@@ -47,6 +49,7 @@ export default function Auth() {
   const { signIn, signUp, signInWithMagicLink, resetPassword, resendConfirmationEmail } = useAuth();
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [magicLinkLoading, setMagicLinkLoading] = useState(false);
+  const [signupPassword, setSignupPassword] = useState('');
   const navigate = useNavigate();
 
   // After showing magic link success, allow re-entering email after a few seconds
@@ -117,10 +120,22 @@ export default function Auth() {
     
     const formData = new FormData(e.currentTarget);
     const email = (formData.get('email') as string).trim();
-    const password = formData.get('password') as string;
+    const password = signupPassword;
     const firstName = formData.get('firstName') as string;
     const lastName = formData.get('lastName') as string;
     const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+
+    const strength = evaluatePasswordStrength(password);
+    if (!strength.isStrongEnough) {
+      toast({
+        title: 'Password not strong enough',
+        description: passwordStrengthMessage(strength),
+        variant: 'destructive',
+      });
+      setIsLoading(false);
+      return;
+    }
+
     persistAuthEmail(email);
 
     const { error } = await signUp(email, password, fullName, firstName, lastName);
@@ -477,20 +492,14 @@ export default function Auth() {
                         required
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-password">Password</Label>
-                      <Input
-                        id="signup-password"
-                        name="password"
-                        type="password"
-                        placeholder="••••••••"
-                        minLength={8}
-                        required
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Minimum 8 characters
-                      </p>
-                    </div>
+                    <PasswordStrengthInput
+                      id="signup-password"
+                      name="password"
+                      label="Password"
+                      value={signupPassword}
+                      onChange={setSignupPassword}
+                      autoComplete="new-password"
+                    />
                     <div className="flex items-start gap-2.5">
                       <input
                         id="accept-terms-and-privacy"
@@ -509,7 +518,11 @@ export default function Auth() {
                         )
                       </Label>
                     </div>
-                    <Button type="submit" className="w-full bg-[#9b63e9] hover:bg-[#7a45cc]" disabled={isLoading}>
+                    <Button
+                      type="submit"
+                      className="w-full bg-[#9b63e9] hover:bg-[#7a45cc]"
+                      disabled={isLoading || !evaluatePasswordStrength(signupPassword).isStrongEnough}
+                    >
                       {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       Create Account
                     </Button>

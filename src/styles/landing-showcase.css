@@ -70,6 +70,12 @@
   border: 1.5px solid rgba(155, 99, 233, 0.1);
 }
 
+.landing-showcase-img img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
 .landing-showcase-section .landing-section-label {
   display: inline-flex;
   align-items: center;

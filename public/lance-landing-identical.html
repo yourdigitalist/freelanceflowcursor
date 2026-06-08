@@ -345,6 +345,7 @@
   .hero-screenshot-wrapper:hover { transform: perspective(1400px) translateZ(0) rotateX(3deg); }
   .hero-screenshot img {
     width: 100%;
+    height: auto;
     display: block;
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
@@ -631,8 +632,11 @@
   }
   .showcase-img img {
     width: 100%;
+    height: auto;
     display: block;
     border-radius: 16px;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
   }
 
   .showcase-divider {
@@ -1452,6 +1456,11 @@
     .nav-links, .nav-cta { display: none; }
     .nav-toggle { display: inline-flex; }
 
+    .hero-screenshot-wrapper {
+      transform: none;
+      will-change: auto;
+    }
+
     .hero,
     .features-section,
     .showcase-section,
@@ -1642,7 +1651,16 @@
 
   <div class="hero-screenshot">
     <div class="hero-screenshot-wrapper">
-      <img src="uploads/landing-hero-dashboard.png" alt="Lance dashboard">
+      <img
+        src="uploads/landing-hero-dashboard.png"
+        srcset="uploads/landing-hero-dashboard.png 1024w, uploads/landing-hero-dashboard@2x.png 2048w"
+        sizes="100vw"
+        width="1024"
+        height="566"
+        alt="Lance dashboard"
+        decoding="async"
+        fetchpriority="high"
+      >
     </div>
   </div>
 
@@ -1674,7 +1692,16 @@
       </ul>
     </div>
     <div class="showcase-img">
-      <img src="uploads/landing-dashboard-section.png" alt="Lance dashboard overview">
+      <img
+        src="uploads/landing-dashboard-section.png"
+        srcset="uploads/landing-dashboard-section.png 1000w, uploads/landing-dashboard-section@2x.png 2000w"
+        sizes="(max-width: 900px) 100vw, 550px"
+        width="1000"
+        height="883"
+        alt="Lance dashboard overview"
+        loading="lazy"
+        decoding="async"
+      >
     </div>
   </div>
 
@@ -1690,7 +1717,16 @@
       </ul>
     </div>
     <div class="showcase-img">
-      <img src="uploads/landing-clients-crm-section.png" alt="Clients and CRM workspace">
+      <img
+        src="uploads/landing-clients-crm-section.png"
+        srcset="uploads/landing-clients-crm-section.png 704w, uploads/landing-clients-crm-section@2x.png 1408w"
+        sizes="(max-width: 900px) 100vw, 550px"
+        width="704"
+        height="622"
+        alt="Clients and CRM workspace"
+        loading="lazy"
+        decoding="async"
+      >
     </div>
   </div>
 
@@ -1706,7 +1742,16 @@
       </ul>
     </div>
     <div class="showcase-img">
-      <img src="uploads/landing-projects-section.png" alt="Projects workspace">
+      <img
+        src="uploads/landing-projects-section.png"
+        srcset="uploads/landing-projects-section.png 704w, uploads/landing-projects-section@2x.png 1408w"
+        sizes="(max-width: 900px) 100vw, 550px"
+        width="704"
+        height="622"
+        alt="Projects workspace"
+        loading="lazy"
+        decoding="async"
+      >
     </div>
   </div>
 
@@ -1722,7 +1767,16 @@
       </ul>
     </div>
     <div class="showcase-img">
-      <img src="uploads/landing-tasks-section.png" alt="Task management kanban">
+      <img
+        src="uploads/landing-tasks-section.png"
+        srcset="uploads/landing-tasks-section.png 704w, uploads/landing-tasks-section@2x.png 1408w"
+        sizes="(max-width: 900px) 100vw, 550px"
+        width="704"
+        height="622"
+        alt="Task management kanban"
+        loading="lazy"
+        decoding="async"
+      >
     </div>
   </div>
 
@@ -1738,7 +1792,16 @@
       </ul>
     </div>
     <div class="showcase-img">
-      <img src="uploads/landing-time-section.png" alt="Time tracking">
+      <img
+        src="uploads/landing-time-section.png"
+        srcset="uploads/landing-time-section.png 704w, uploads/landing-time-section@2x.png 1408w"
+        sizes="(max-width: 900px) 100vw, 550px"
+        width="704"
+        height="622"
+        alt="Time tracking"
+        loading="lazy"
+        decoding="async"
+      >
     </div>
   </div>
 
@@ -1754,7 +1817,16 @@
       </ul>
     </div>
     <div class="showcase-img">
-      <img src="uploads/landing-invoices-section.png" alt="Invoices">
+      <img
+        src="uploads/landing-invoices-section.png"
+        srcset="uploads/landing-invoices-section.png 704w, uploads/landing-invoices-section@2x.png 1408w"
+        sizes="(max-width: 900px) 100vw, 550px"
+        width="704"
+        height="622"
+        alt="Invoices"
+        loading="lazy"
+        decoding="async"
+      >
     </div>
   </div>
 
@@ -1770,7 +1842,16 @@
       </ul>
     </div>
     <div class="showcase-img">
-      <img src="uploads/landing-proposals-section.png" alt="Proposals">
+      <img
+        src="uploads/landing-proposals-section.png"
+        srcset="uploads/landing-proposals-section.png 704w, uploads/landing-proposals-section@2x.png 1408w"
+        sizes="(max-width: 900px) 100vw, 550px"
+        width="704"
+        height="622"
+        alt="Proposals"
+        loading="lazy"
+        decoding="async"
+      >
     </div>
   </div>
 
@@ -1786,7 +1867,16 @@
       </ul>
     </div>
     <div class="showcase-img">
-      <img src="uploads/landing-contracts-section.png" alt="Contracts">
+      <img
+        src="uploads/landing-contracts-section.png"
+        srcset="uploads/landing-contracts-section.png 704w, uploads/landing-contracts-section@2x.png 1408w"
+        sizes="(max-width: 900px) 100vw, 550px"
+        width="704"
+        height="622"
+        alt="Contracts"
+        loading="lazy"
+        decoding="async"
+      >
     </div>
   </div>
 
@@ -1802,7 +1892,16 @@
       </ul>
     </div>
     <div class="showcase-img">
-      <img src="uploads/landing-approvals-section.png" alt="Approvals interface">
+      <img
+        src="uploads/landing-approvals-section.png"
+        srcset="uploads/landing-approvals-section.png 704w, uploads/landing-approvals-section@2x.png 1408w"
+        sizes="(max-width: 900px) 100vw, 550px"
+        width="704"
+        height="622"
+        alt="Approvals interface"
+        loading="lazy"
+        decoding="async"
+      >
     </div>
   </div>
 
@@ -1818,7 +1917,16 @@
       </ul>
     </div>
     <div class="showcase-img">
-      <img src="uploads/landing-client-portal-section.png" alt="Client portal">
+      <img
+        src="uploads/landing-client-portal-section.png"
+        srcset="uploads/landing-client-portal-section.png 704w, uploads/landing-client-portal-section@2x.png 1408w"
+        sizes="(max-width: 900px) 100vw, 550px"
+        width="704"
+        height="622"
+        alt="Client portal"
+        loading="lazy"
+        decoding="async"
+      >
     </div>
   </div>
 
@@ -1834,7 +1942,16 @@
       </ul>
     </div>
     <div class="showcase-img">
-      <img src="uploads/landing-notes-section.png" alt="Notes">
+      <img
+        src="uploads/landing-notes-section.png"
+        srcset="uploads/landing-notes-section.png 704w, uploads/landing-notes-section@2x.png 1408w"
+        sizes="(max-width: 900px) 100vw, 550px"
+        width="704"
+        height="622"
+        alt="Notes"
+        loading="lazy"
+        decoding="async"
+      >
     </div>
   </div>
 </section>
