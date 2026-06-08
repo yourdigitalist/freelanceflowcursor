@@ -35,14 +35,21 @@ li|Approximate geographic location (derived from IP address, not GPS);
 li|Referring website or campaign, where applicable.
 p|We configure GA4 to record page views as you move through the app. When you are signed in, we may send an internal user identifier to GA4 so we can analyse product usage across sessions. We do not send your password, payment card details, or invoice/client content to Google Analytics.
 p|Google processes analytics data on our behalf. See Google’s Privacy Policy at policies.google.com/privacy. You can opt out of Google Analytics in your browser or via Google’s opt-out add-on at tools.google.com/dlpage/gaoptout.
-h2|2.5 Communications Data
+h2|2.5 Session Recording & Feedback
+p|We use Hotjar (operated by Contentsquare SAS) to record how users interact with Lance and to collect optional feedback. Hotjar may collect:
+li|Mouse movements, clicks, scrolling, and navigation within the app;
+li|Device and browser information, screen size, and approximate location (from IP address);
+li|Responses you submit through in-app surveys or feedback widgets.
+p|Hotjar is configured to suppress sensitive fields where possible. Passwords and payment card details are never intentionally captured. Session recordings are used solely to improve usability and fix issues.
+p|Hotjar processes data on our behalf. See Hotjar’s Privacy Policy at hotjar.com/legal/policies/privacy and opt out at hotjar.com/legal/compliance/opt-out.
+h2|2.6 Communications Data
 li|Emails you send to us, including support requests and enquiries;
 li|Your email address and communication preferences in connection with transactional and marketing emails (see Section 4).
 h1|3. Legal Basis for Processing (GDPR)
 p|Under the GDPR, we are required to have a lawful basis for processing your personal data. We rely on the following bases:
 li|Contract performance: Processing your account data, subscription data, and Your Content is necessary to provide you with the Service under our Terms & Conditions.
 li|Legitimate interests: Processing usage data and analytics helps us improve the Service, detect fraud, and ensure security. We have assessed that these interests are not overridden by your rights.
-li|Consent: We rely on your consent to send you marketing emails and, where required by law, to use non-essential analytics cookies. You may withdraw that consent at any time (see Section 7).
+li|Consent: We rely on your consent to send you marketing emails and, where required by law, to use non-essential analytics and session-recording cookies. You may withdraw that consent at any time (see Section 7).
 li|Legal obligation: We may process data where required to comply with applicable law, such as tax or accounting obligations.
 h1|4. How We Use Your Data
 h2|4.1 To Provide the Service
@@ -52,6 +59,7 @@ li|Storing and displaying Your Content (invoices, client records, CRM data);
 li|Sending transactional emails such as account confirmations, password resets, and billing receipts.
 h2|4.2 To Improve the Service
 li|Analysing usage patterns via Google Analytics to identify bugs, improve features, and optimise user experience;
+li|Reviewing anonymised session recordings and feedback via Hotjar to understand usability issues;
 li|Internal reporting and product development.
 h2|4.3 Marketing Communications
 p|With your consent, we may send you emails about new features, product updates, tips for using Lance, and occasional promotional offers. Every marketing email includes an unsubscribe link. You can also update your preferences at any time by contacting hello@getlance.app or through your account settings.
@@ -66,12 +74,15 @@ h2|5.1 Essential Cookies
 p|These are required for the Service to function and cannot be switched off. They include session cookies that keep you logged in and security cookies that protect against cross-site request forgery.
 h2|5.2 Analytics Cookies
 p|We use Google Analytics cookies and similar technologies to collect usage data about how users navigate Lance. These help us understand which features are used and where users encounter difficulties. Analytics cookies are non-essential. You can opt out via your browser settings or Google’s Analytics opt-out tool at tools.google.com/dlpage/gaoptout.
-h2|5.3 Managing Cookies
+h2|5.3 Session Recording Cookies
+p|Hotjar uses cookies to enable session recordings, heatmaps, and feedback widgets. These cookies are non-essential. You can opt out at hotjar.com/legal/compliance/opt-out.
+h2|5.4 Managing Cookies
 p|You can control or delete cookies through your browser settings at any time. Note that disabling essential cookies may affect the functionality of the Service. For more information about cookies and how to manage them, visit allaboutcookies.org.
 h1|6. Data Sharing & Third Parties
 p|We do not sell your personal data. We share data only with the following categories of third parties, and only to the extent necessary:
 li|Stripe (payment processing): Your billing and payment data is processed by Stripe, Inc. Stripe is a certified PCI DSS Level 1 service provider. Data may be processed in the United States under Stripe’s standard contractual clauses.
 li|Google LLC (Google Analytics 4): Usage and navigation data is processed by Google Analytics. Data may be processed in the United States under Google’s standard contractual terms and safeguards.
+li|Contentsquare SAS (Hotjar): Session recordings, interaction data, and feedback responses are processed by Hotjar. Data may be processed outside the EU under appropriate safeguards.
 li|Email delivery provider: We use a third-party email service to send transactional and marketing emails. Your email address is shared with this provider solely for delivery purposes.
 li|Hosting and infrastructure providers: Your Content and account data is stored on servers provided by our cloud hosting provider. All providers are bound by data processing agreements.
 li|Legal and regulatory authorities: We may disclose data where required by law, court order, or to protect our legal rights.
@@ -92,6 +103,7 @@ li|Account data: Retained for the duration of your subscription and for up to 2 
 li|Your Content (invoices, CRM records, etc.): Retained while your account is active. Following account closure, Your Content is deleted within 90 days unless a longer retention period is required by law.
 li|Payment metadata: Retained for up to 7 years in accordance with Polish and EU accounting and tax law.
 li|Analytics data: Retained in anonymised or aggregated form for up to 26 months (Google Analytics default), after which it is automatically deleted.
+li|Session recordings: Retained by Hotjar for up to 365 days in accordance with Hotjar’s default retention settings, unless deleted sooner.
 li|Marketing consent records: Retained until you withdraw consent or for up to 3 years after your last interaction, whichever is sooner.
 h1|9. Data Security
 p|We take appropriate technical and organisational measures to protect your personal data against unauthorised access, loss, or disclosure. These measures include:
