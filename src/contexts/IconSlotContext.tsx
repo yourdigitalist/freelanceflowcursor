@@ -75,6 +75,7 @@ const DEFAULT_ICONS: Record<IconSlotKey, IconComponent> = {
   empty_time: Clock,
   empty_reviews: IrisScan,
   admin_overview: LayoutDashboard,
+  admin_metrics: BarChart3,
   admin_landing_content: LayoutDashboard,
   admin_announcements: Megaphone,
   admin_comms: Mail,

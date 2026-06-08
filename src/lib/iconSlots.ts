@@ -44,6 +44,7 @@ export const ICON_SLOT_GROUPS = [
     group: 'Admin',
     slots: [
       { key: 'admin_overview', label: 'Overview' },
+      { key: 'admin_metrics', label: 'Metrics' },
       { key: 'admin_landing_content', label: 'Landing content' },
       { key: 'admin_announcements', label: 'Announcements' },
       { key: 'admin_comms', label: 'Comms & templates' },

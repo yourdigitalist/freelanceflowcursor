@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { SlotIcon } from '@/contexts/IconSlotContext';
 
 const adminCards = [
+  { path: '/admin/metrics', label: 'Metrics', slot: 'admin_metrics' as const, description: 'Users, revenue, trials, and churn' },
   { path: '/admin/announcements', label: 'Announcements', slot: 'admin_announcements' as const, description: 'Manage in-app announcements' },
   { path: '/admin/comms', label: 'Comms & templates', slot: 'admin_comms' as const, description: 'Email and communication templates' },
   { path: '/admin/branding', label: 'Branding', slot: 'admin_branding' as const, description: 'Logo and brand colors' },

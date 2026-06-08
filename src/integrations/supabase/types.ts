@@ -2256,6 +2256,8 @@ export type Database = {
     }
     Functions: {
       get_admin_stats: { Args: never; Returns: Json }
+      get_admin_metrics: { Args: never; Returns: Json }
+      get_admin_users_list: { Args: never; Returns: Json }
       get_announcement_recipient_count: { Args: never; Returns: number }
       next_invoice_number: { Args: { p_user_id: string }; Returns: string }
     }

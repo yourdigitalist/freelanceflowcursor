@@ -39,6 +39,7 @@ import FeatureRequestSettings from "./pages/settings/FeatureRequestSettings";
 import FeedbackSettings from "./pages/settings/FeedbackSettings";
 import BrandingSettings from "./pages/settings/BrandingSettings";
 import AdminOverview from "./pages/admin/AdminOverview";
+import AdminMetrics from "./pages/admin/AdminMetrics";
 import AdminIcons from "./pages/admin/AdminIcons";
 import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
 import AdminComms from "./pages/admin/AdminComms";
@@ -271,6 +272,7 @@ function AppRoutes() {
       <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
         <Route index element={<Navigate to="overview" replace />} />
         <Route path="overview" element={<AdminOverview />} />
+        <Route path="metrics" element={<AdminMetrics />} />
         <Route path="system-check" element={<SystemCheck />} />
         <Route path="announcements" element={<AdminAnnouncements />} />
         <Route path="comms" element={<AdminComms />} />

@@ -12,6 +12,7 @@ import { SlotIcon } from '@/contexts/IconSlotContext';
 
 const adminNavItems = [
   { path: '/admin/overview', label: 'Overview', slot: 'admin_overview' as const },
+  { path: '/admin/metrics', label: 'Metrics', slot: 'admin_metrics' as const },
   { path: '/admin/landing-content', label: 'Landing content', slot: 'admin_landing_content' as const },
   { path: '/admin/announcements', label: 'Announcements', slot: 'admin_announcements' as const },
   { path: '/admin/comms', label: 'Comms & templates', slot: 'admin_comms' as const },
@@ -51,7 +52,7 @@ export default function AdminLayout() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col lg:flex-row gap-8 max-w-5xl">
+      <div className="flex flex-col lg:flex-row gap-8 max-w-7xl">
         <aside className="lg:w-56 shrink-0 min-w-0">
           <div className="rounded-xl border bg-card p-4 space-y-4">
             <div className="flex items-center gap-2">
