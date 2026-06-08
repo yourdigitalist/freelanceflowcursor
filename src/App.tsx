@@ -96,13 +96,26 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       setHasBillingAccess(profileHasBillingAccess(data));
       setCheckingOnboarding(false);
     };
+
+    const refreshOnVisible = () => {
+      if (document.visibilityState === 'visible') {
+        checkOnboarding();
+      }
+    };
     
     if (user) {
       checkOnboarding();
+      window.addEventListener('focus', checkOnboarding);
+      document.addEventListener('visibilitychange', refreshOnVisible);
     } else {
       setCheckingOnboarding(false);
     }
-  }, [user]);
+
+    return () => {
+      window.removeEventListener('focus', checkOnboarding);
+      document.removeEventListener('visibilitychange', refreshOnVisible);
+    };
+  }, [user, location.pathname]);
 
   if (loading || checkingOnboarding) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
@@ -115,8 +128,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   const isBillingRoute = location.pathname === '/settings/subscription';
-  if (onboardingCompleted === true && hasBillingAccess === false && !isBillingRoute) {
-    return <Navigate to="/settings/subscription" replace />;
+  const billingLocked =
+    onboardingCompleted === true && hasBillingAccess === false;
+  if (billingLocked && !isBillingRoute) {
+    return <Navigate to="/settings/subscription" replace state={{ from: location.pathname }} />;
   }
   
   return <>{children}</>;

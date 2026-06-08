@@ -4,6 +4,8 @@ import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { cn } from '@/lib/utils';
 import { getSettingsBreadcrumbs } from '@/lib/settingsBreadcrumbs';
 import { SlotIcon } from '@/contexts/IconSlotContext';
+import { useAuth } from '@/lib/auth';
+import { useBillingLock } from '@/hooks/useBillingLock';
 
 const settingsNav = [
   { path: '/settings/profile', label: 'Profile', slot: 'settings_profile' as const },
@@ -18,6 +20,16 @@ const settingsNav = [
 
 export default function SettingsLayout() {
   const location = useLocation();
+  const { user } = useAuth();
+  const { isBillingLocked } = useBillingLock(user?.id);
+
+  if (isBillingLocked) {
+    return (
+      <AppLayout>
+        <Outlet />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>

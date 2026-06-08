@@ -215,7 +215,7 @@ export default function AdminComms() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="trial_body_5d">Trial body (5 days left)</Label>
+            <Label htmlFor="trial_body_5d">Trial body (3 days left)</Label>
             <Textarea
               id="trial_body_5d"
               value={form.trial_body_5d ?? ''}

@@ -1,6 +1,6 @@
 # Trial reminder emails
 
-The `send-trial-reminders` Edge Function sends emails when a user's trial has **5 days left**, **1 day left**, or **ends today** (0 days).
+The `send-trial-reminders` Edge Function sends emails when a user's trial has **3 days left**, **1 day left**, or **ends today** (0 days).
 
 - **Requires:** `RESEND_API_KEY`, `RESEND_FROM_EMAIL` in Supabase Edge Function secrets.
 - **Invoke:** Run once per day (e.g. 9:00 AM) via cron:
@@ -36,7 +36,7 @@ To test inbox placement without changing production trial dates, you can send a 
   - `Authorization: Bearer <TRIAL_REMINDERS_CRON_KEY>`
   - `Content-Type: application/json`
 - Body:
-  - `{ "testEmail": "you@example.com", "testDaysLeft": 5, "testName": "Marina" }`
+  - `{ "testEmail": "you@example.com", "testDaysLeft": 3, "testName": "Marina" }`
 
 ## Who receives reminder emails?
 
@@ -56,4 +56,4 @@ Common reasons:
    - In Supabase Dashboard → Table Editor → `profiles`: edit the row and set `trial_end_date` to the desired end date (e.g. 15 days after signup or a fixed date).
    - Or run a one-off SQL update for existing trial users who are missing the date.
 
-After `trial_end_date` is set, the next time the cron runs and the “days left” matches 5, 1, or 0, that user will receive the corresponding email.
+After `trial_end_date` is set, the next time the cron runs and the “days left” matches 3, 1, or 0, that user will receive the corresponding email.

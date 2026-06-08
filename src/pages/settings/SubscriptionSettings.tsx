@@ -211,20 +211,26 @@ export default function SubscriptionSettings() {
   return (
     <div className="space-y-6 relative">
       {isLocked && (
-        <Card className="border-destructive/40 bg-destructive/5 shadow-md">
-          <CardHeader>
-            <CardTitle className="text-destructive">Your trial has ended</CardTitle>
-            <CardDescription>
-              Add a payment method to restore full access to Lance.
+        <Card className="border-destructive/50 bg-destructive/5 shadow-lg">
+          <CardHeader className="space-y-2">
+            <CardTitle className="text-destructive text-xl">
+              {isPaused ? 'Your subscription is paused' : 'Your free trial has ended'}
+            </CardTitle>
+            <CardDescription className="text-base text-foreground/80">
+              Add your payment details to keep access to Lance. All your data is safe and waiting.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
             {profile?.stripe_customer_id ? (
-              <Button onClick={handleManageSubscription}>
+              <Button size="lg" onClick={handleManageSubscription}>
                 Add payment method
               </Button>
             ) : (
-              <Button onClick={() => handleUpgrade(profile?.plan_type === 'pro_annual' ? 'pro_annual' : 'pro_monthly')} disabled={upgrading}>
+              <Button
+                size="lg"
+                onClick={() => handleUpgrade(profile?.plan_type === 'pro_annual' ? 'pro_annual' : 'pro_monthly')}
+                disabled={upgrading}
+              >
                 {upgrading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Subscribe to continue
               </Button>

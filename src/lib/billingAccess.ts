@@ -17,3 +17,15 @@ export function hasBillingAccess(profile: BillingProfile | null | undefined): bo
   if (status === 'trial' && trialEnd && trialEnd >= now) return true;
   return false;
 }
+
+export type BillingLockProfile = BillingProfile & {
+  onboarding_completed?: boolean | null;
+};
+
+/** Onboarding done, not lifetime, and no active trial/subscription — billing page only. */
+export function isBillingLocked(profile: BillingLockProfile | null | undefined): boolean {
+  if (!profile) return false;
+  if (profile.is_lifetime === true) return false;
+  if (profile.onboarding_completed !== true) return false;
+  return !hasBillingAccess(profile);
+}

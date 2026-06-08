@@ -15,6 +15,8 @@ import { isClientDetailPath } from '@/lib/clientsNavigation';
 import { cn } from '@/lib/utils';
 import { useBranding } from '@/hooks/useBranding';
 import { shellProfileDisplayName, useShellProfile } from '@/hooks/useShellProfile';
+import { useBillingLock } from '@/hooks/useBillingLock';
+import { BillingLockLayout } from '@/components/layout/BillingLockLayout';
 import { brandingAssetUrl } from '@/lib/brandingUrl';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ShellImageWithSkeleton } from '@/components/ui/shell-image-skeleton';
@@ -65,6 +67,7 @@ export function AppLayout({
   const navigate = useNavigate();
   const { data: branding, isPending: brandingPending, isSuccess: brandingReady } = useBranding();
   const { data: profile, isPending: profilePending, isSuccess: profileReady } = useShellProfile(user?.id);
+  const { isBillingLocked, isPending: billingLockPending } = useBillingLock(user?.id);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -140,7 +143,8 @@ export function AppLayout({
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(() => {
     try { return localStorage.getItem('trial_banner_dismissed') === 'true'; } catch { /* ignore */ return false; }
   });
-  const showTrialBanner = isOnTrial && profile?.is_lifetime !== true && !trialBannerDismissed;
+  const showTrialBanner =
+    isOnTrial && profile?.is_lifetime !== true && !isBillingLocked && !trialBannerDismissed;
   const handleTrialBannerDismiss = () => {
     setTrialBannerDismissed(true);
     try { localStorage.setItem('trial_banner_dismissed', 'true'); } catch { /* ignore localStorage */ }
@@ -359,6 +363,18 @@ export function AppLayout({
     </DropdownMenu>
     );
   };
+
+  if (user && billingLockPending) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Skeleton className="h-8 w-48" />
+      </div>
+    );
+  }
+
+  if (isBillingLocked) {
+    return <BillingLockLayout>{children}</BillingLockLayout>;
+  }
 
   return <div className="min-h-screen flex flex-col">
       {/* Trial Banner – when dismissed, sidebar lifts to top (no blank space) */}

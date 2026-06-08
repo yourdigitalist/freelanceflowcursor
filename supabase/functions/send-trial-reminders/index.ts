@@ -93,7 +93,7 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceKey);
 
   // Optional test mode for deliverability checks without touching production trial dates.
-  // Body: { testEmail?: string, testDaysLeft?: 5|1|0, testName?: string }
+  // Body: { testEmail?: string, testDaysLeft?: 3|1|0, testName?: string }
   let testBody: { testEmail?: string; testDaysLeft?: number; testName?: string } = {};
   try {
     const text = await req.text();
@@ -105,9 +105,9 @@ serve(async (req) => {
   const toSend: { email: string; name: string; daysLeft: number }[] = [];
   const testEmail = (testBody.testEmail || "").trim();
   if (testEmail) {
-    const daysLeft = testBody.testDaysLeft === 5 || testBody.testDaysLeft === 1 || testBody.testDaysLeft === 0
+    const daysLeft = testBody.testDaysLeft === 3 || testBody.testDaysLeft === 1 || testBody.testDaysLeft === 0
       ? testBody.testDaysLeft
-      : 5;
+      : 3;
     toSend.push({ email: testEmail, name: (testBody.testName || "there").trim() || "there", daysLeft });
   } else {
     const { data: profiles, error } = await supabase
@@ -133,7 +133,7 @@ serve(async (req) => {
       const email = (p.email as string) || "";
       if (!email) continue;
       const daysLeft = getDaysUntil(trialEnd);
-      if (daysLeft === 5 || daysLeft === 1 || daysLeft === 0) {
+      if (daysLeft === 3 || daysLeft === 1 || daysLeft === 0) {
         toSend.push({
           email,
           name: (p.full_name as string) || "there",
@@ -159,19 +159,19 @@ serve(async (req) => {
   let sent = 0;
   for (const { email, name, daysLeft } of toSend) {
     const subject =
-      daysLeft === 5
-        ? `Your ${LANCE_PRODUCT_NAME} trial ends in 5 days`
+      daysLeft === 3
+        ? `Your ${LANCE_PRODUCT_NAME} trial ends in 3 days`
         : daysLeft === 1
           ? `Your ${LANCE_PRODUCT_NAME} trial ends tomorrow`
           : `Your ${LANCE_PRODUCT_NAME} trial ends today`;
     const fallbackBody =
-      daysLeft === 5
-        ? `Hi ${name},\n\nYour 15-day free trial ends in 5 days. You'll keep full access until then. Add a payment method before the trial ends to continue after day 15.\n\nManage your subscription: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`
+      daysLeft === 3
+        ? `Hi ${name},\n\nYour 15-day free trial ends in 3 days. Add your payment details to keep access to all your clients, projects, invoices, and contracts.\n\nAdd payment details: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`
         : daysLeft === 1
           ? `Hi ${name},\n\nYour free trial ends tomorrow. Add a payment method to keep access after your trial ends.\n\nAdd payment: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`
           : `Hi ${name},\n\nYour free trial ends today. Add a payment method to keep access to ${LANCE_PRODUCT_NAME}.\n\nAdd payment: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`;
     const customBody =
-      daysLeft === 5
+      daysLeft === 3
         ? (comms?.trial_body_5d as string | null)
         : daysLeft === 1
           ? (comms?.trial_body_1d as string | null)

@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { X } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { differenceInDays } from 'date-fns';
+import { getTrialBannerAppearance } from '@/lib/trialBannerStyles';
+import { cn } from '@/lib/utils';
 
 interface TrialBannerProps {
   onUpgrade?: () => void;
@@ -72,18 +74,21 @@ export function TrialBanner({ onUpgrade, onDismiss }: TrialBannerProps) {
 
   if (!trialInfo?.show || dismissed) return null;
 
-  const isUrgent = trialInfo.daysLeft <= 3;
+  const appearance = getTrialBannerAppearance(
+    trialInfo.daysLeft,
+    trialInfo.status,
+    trialInfo.isExpired,
+  );
+  const isUrgent = trialInfo.daysLeft <= 3 || trialInfo.isExpired;
 
   return (
     <div 
-      className="sticky top-0 z-40 py-2 px-4 text-center text-sm font-medium"
-      style={{
-        background: 'linear-gradient(135deg, #F8EDFF 0%, #CFDEF7 100%)',
-      }}
+      className="sticky top-0 z-40 py-2 px-4 text-center text-sm font-medium relative"
+      style={{ background: appearance.background }}
     >
       <div className="flex items-center justify-center gap-3 flex-wrap">
-        <SlotIcon slot="nav_billing" className="h-4 w-4 text-primary shrink-0" />
-        <span className="text-foreground">
+        <SlotIcon slot="nav_billing" className={cn('h-4 w-4 shrink-0', appearance.iconClass)} />
+        <span className={appearance.textClass}>
           {trialInfo.status === 'past_due' ? (
             <>Your payment is past due. Update your payment method in Billing to keep access.</>
           ) : trialInfo.status === 'paused' || trialInfo.isExpired ? (
@@ -110,7 +115,12 @@ export function TrialBanner({ onUpgrade, onDismiss }: TrialBannerProps) {
           setDismissed(true);
           onDismiss?.();
         }}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+        className={cn(
+          'absolute right-3 top-1/2 -translate-y-1/2 transition-colors',
+          appearance.textClass === 'text-white'
+            ? 'text-white/80 hover:text-white'
+            : 'text-muted-foreground hover:text-foreground',
+        )}
       >
         <X className="h-4 w-4" />
       </button>
