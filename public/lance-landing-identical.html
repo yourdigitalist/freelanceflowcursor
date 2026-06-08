@@ -181,11 +181,13 @@
     line-height: 1.18;
     letter-spacing: -2.5px;
     color: var(--body);
+    width: 100%;
     max-width: 860px;
     position: relative;
     z-index: 1;
     animation: fadeUp 0.5s ease 0.08s both;
     margin-bottom: 22px;
+    overflow: visible;
   }
 
   .hero h1 .highlight {
@@ -194,13 +196,33 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
     color: transparent;
+    overflow: visible;
   }
 
   .hero-headline-inner {
-    display: inline;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 100%;
   }
 
-  .hero-headline-nowrap {
+  .hero-headline-line1-wrap {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .hero-headline-line1 {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.25em;
+    white-space: nowrap;
+  }
+
+  .hero-headline-line2 {
+    display: block;
+    text-align: center;
     white-space: nowrap;
   }
 
@@ -208,10 +230,10 @@
     display: inline-block;
     vertical-align: baseline;
     position: relative;
-    height: 1.18em;
     line-height: 1.18;
     white-space: nowrap;
-    text-align: left;
+    overflow: visible;
+    padding-bottom: 0.15em;
   }
 
   .hero-role-slot .hero-role-word {
@@ -223,12 +245,13 @@
     opacity: 0;
     transition: opacity 0.45s ease;
     pointer-events: none;
+    overflow: visible;
   }
 
   .hero-role-slot .hero-role-word.is-active {
     position: relative;
     opacity: 1;
-    display: inline-block;
+    display: inline;
     vertical-align: baseline;
   }
 
@@ -1483,7 +1506,25 @@
     Built for solo freelancers
   </div>
 
-  <h1><span class="hero-headline-inner"><span class="hero-headline-nowrap">Organised <span class="hero-role-slot" id="hero-role-slot"><span class="hero-role-word highlight is-active">Freelancers</span><span class="hero-role-word highlight">Designers</span><span class="hero-role-word highlight">Developers</span><span class="hero-role-word highlight">Consultants</span><span class="hero-role-word highlight">Photographers</span><span class="hero-role-word highlight">Copywriters</span><span class="hero-role-word highlight">Strategists</span></span></span> earn more.</span></h1>
+  <h1>
+    <span class="hero-headline-inner">
+      <span class="hero-headline-line1-wrap">
+        <span class="hero-headline-line1">
+          <span class="hero-headline-prefix">Organised</span>
+          <span class="hero-role-slot" id="hero-role-slot">
+            <span class="hero-role-word highlight is-active">Freelancers</span>
+            <span class="hero-role-word highlight">Designers</span>
+            <span class="hero-role-word highlight">Developers</span>
+            <span class="hero-role-word highlight">Consultants</span>
+            <span class="hero-role-word highlight">Photographers</span>
+            <span class="hero-role-word highlight">Copywriters</span>
+            <span class="hero-role-word highlight">Strategists</span>
+          </span>
+        </span>
+      </span>
+      <span class="hero-headline-line2">earn more.</span>
+    </span>
+  </h1>
   <p class="hero-sub visually-hidden" id="hero-role-sr">Organised Freelancers earn more.</p>
 
   <p class="hero-sub" style="margin-top:0;">The average freelancer loses 6 hours a week to admin. Lance gives it back, and makes your business look exactly as professional as your work.</p>
@@ -2176,33 +2217,14 @@
   }, { threshold: 0.08 });
   reveals.forEach(r => observer.observe(r));
 
-  // Hero rotating profession (inline fade — no overflow clip)
+  // Hero rotating profession — line recentres as active word width changes
   (function initHeroRoleRotate() {
     const slot = document.getElementById('hero-role-slot');
     const srEl = document.getElementById('hero-role-sr');
-    const h1 = document.querySelector('.hero h1');
-    if (!slot || !h1) return;
+    if (!slot) return;
     const words = Array.from(slot.querySelectorAll('.hero-role-word'));
     const roles = words.map((w) => w.textContent.trim());
     let index = 0;
-
-    const measureSlot = () => {
-      const probe = document.createElement('span');
-      probe.className = 'hero-role-word highlight';
-      probe.setAttribute('aria-hidden', 'true');
-      probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;pointer-events:none;';
-      const cs = getComputedStyle(h1);
-      probe.style.font = `${cs.fontWeight} ${cs.fontSize} / ${cs.lineHeight} ${cs.fontFamily}`;
-      probe.style.letterSpacing = cs.letterSpacing;
-      h1.appendChild(probe);
-      let maxW = 0;
-      roles.forEach((role) => {
-        probe.textContent = role;
-        maxW = Math.max(maxW, probe.offsetWidth);
-      });
-      probe.remove();
-      slot.style.width = `${maxW}px`;
-    };
 
     const setSr = (role) => {
       if (srEl) srEl.textContent = `Organised ${role} earn more.`;
@@ -2215,9 +2237,7 @@
       setSr(roles[index]);
     };
 
-    measureSlot();
     setSr(roles[0]);
-    window.addEventListener('resize', measureSlot);
 
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 

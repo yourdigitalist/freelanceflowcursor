@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -39,22 +39,22 @@ function orbitOnEllipse(angleDeg: number, rx: number, ry: number) {
 const ORBIT_CENTER_X = 50;
 const ORBIT_CENTER_Y = 46;
 /** Inner dashed ring (top arc). */
-const INNER_ORBIT = { rx: 24, ry: 16.5 };
+const INNER_ORBIT = { rx: 28, ry: 19.5 };
 /** Outer dashed ring. */
-const OUTER_ORBIT = { rx: 34, ry: 25.5 };
+const OUTER_ORBIT = { rx: 42, ry: 31 };
 
 type OrbitRing = "inner" | "outer";
 
 const FEATURE_ORBIT: Record<string, { angle: number; ring: OrbitRing }> = {
   clients: { angle: 0, ring: "inner" },
-  time: { angle: 42, ring: "inner" },
-  projects: { angle: 318, ring: "inner" },
-  invoices: { angle: 78, ring: "outer" },
-  proposals: { angle: 120, ring: "outer" },
-  contracts: { angle: 158, ring: "outer" },
-  approvals: { angle: 186, ring: "outer" },
-  tasks: { angle: 220, ring: "outer" },
-  portal: { angle: 262, ring: "outer" },
+  time: { angle: 62, ring: "inner" },
+  projects: { angle: 298, ring: "inner" },
+  invoices: { angle: 55, ring: "outer" },
+  proposals: { angle: 115, ring: "outer" },
+  contracts: { angle: 148, ring: "outer" },
+  approvals: { angle: 200, ring: "outer" },
+  tasks: { angle: 242, ring: "outer" },
+  portal: { angle: 272, ring: "outer" },
 };
 
 type FeatureDef = Omit<FeatureItem, "top" | "left">;
@@ -171,11 +171,17 @@ function FeaturePill({
   isActive,
   onActivate,
   onClick,
+  onMouseEnter,
+  onMouseLeave,
+  children,
 }: {
   feature: FeatureItem;
   isActive: boolean;
   onActivate: () => void;
   onClick: () => void;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
+  children?: ReactNode;
 }) {
   const reduceMotion = useReducedMotion();
   const Icon = feature.icon;
@@ -185,26 +191,37 @@ function FeaturePill({
     <motion.button
       type="button"
       className="feature-solar-pill"
+      style={{
+        left: `${feature.left}%`,
+        top: `${feature.top}%`,
+      }}
       onClick={onClick}
       onFocus={onActivate}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       aria-expanded={isActive}
       aria-haspopup="dialog"
-      animate={reduceMotion ? undefined : { y: [0, -distance, 0] }}
-      transition={
-        reduceMotion
-          ? undefined
-          : {
-              duration,
-              delay,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }
-      }
-      whileHover={{ scale: 1.03 }}
-      whileTap={{ scale: 0.98 }}
     >
-      <Icon className="feature-solar-pill-icon" strokeWidth={2.2} aria-hidden />
-      <span>{feature.label}</span>
+      <motion.span
+        className="feature-solar-pill-inner"
+        animate={reduceMotion ? undefined : { y: [0, -distance, 0] }}
+        transition={
+          reduceMotion
+            ? undefined
+            : {
+                duration,
+                delay,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }
+        }
+        whileHover={{ scale: 1.03 }}
+        whileTap={{ scale: 0.98 }}
+      >
+        <Icon className="feature-solar-pill-icon" strokeWidth={2.2} aria-hidden />
+        <span>{feature.label}</span>
+      </motion.span>
+      {children}
     </motion.button>
   );
 }
@@ -354,35 +371,28 @@ export default function FeatureSolarSystem() {
         />
 
         <div className="feature-solar-pills feature-solar-pills--overlay" aria-label="Lance features">
-        {FEATURES.map((feature) => (
-          <div
-            key={feature.id}
-            className="feature-solar-pill-anchor"
-            style={{
-              left: `${feature.left}%`,
-              top: `${feature.top}%`,
-            }}
-            onMouseEnter={() => !isMobile && open(feature.id)}
-            onMouseLeave={() => !isMobile && scheduleClose()}
-          >
+          {FEATURES.map((feature) => (
             <FeaturePill
+              key={feature.id}
               feature={feature}
               isActive={activeId === feature.id}
               onActivate={() => open(feature.id)}
               onClick={() => handlePillClick(feature.id)}
-            />
-            <AnimatePresence>
-              {activeId === feature.id && !isMobile && (
-                <FeaturePopover
-                  feature={feature}
-                  onClose={close}
-                  onPointerEnter={cancelClose}
-                  onPointerLeave={scheduleClose}
-                />
-              )}
-            </AnimatePresence>
-          </div>
-        ))}
+              onMouseEnter={() => !isMobile && open(feature.id)}
+              onMouseLeave={() => !isMobile && scheduleClose()}
+            >
+              <AnimatePresence>
+                {activeId === feature.id && !isMobile && (
+                  <FeaturePopover
+                    feature={feature}
+                    onClose={close}
+                    onPointerEnter={cancelClose}
+                    onPointerLeave={scheduleClose}
+                  />
+                )}
+              </AnimatePresence>
+            </FeaturePill>
+          ))}
         </div>
       </div>
 

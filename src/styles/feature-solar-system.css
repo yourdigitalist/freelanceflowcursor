@@ -1,14 +1,14 @@
 .feature-solar {
   position: relative;
   width: 100%;
-  max-width: 720px;
+  max-width: 860px;
   margin: 0 auto;
 }
 
 .feature-solar-stage {
   position: relative;
   width: 100%;
-  aspect-ratio: 1024 / 611;
+  height: 500px;
 }
 
 .feature-solar-bg {
@@ -16,7 +16,9 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+  object-position: center center;
   margin: 0 auto;
+  pointer-events: none;
 }
 
 .feature-solar-pills {
@@ -28,41 +30,44 @@
   inset: 0;
 }
 
-.feature-solar-pill-anchor {
+.feature-solar-pill {
   position: absolute;
   transform: translate(-50%, -50%);
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
   pointer-events: auto;
   z-index: 1;
 }
 
-.feature-solar-pill-anchor:hover,
-.feature-solar-pill-anchor:has(.feature-solar-popover) {
+.feature-solar-pill:hover,
+.feature-solar-pill:focus-visible,
+.feature-solar-pill:has(.feature-solar-popover) {
   z-index: 10;
 }
 
-.feature-solar-pill {
+.feature-solar-pill-inner {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 7px 13px;
+  gap: 8px;
+  padding: 9px 16px;
   border-radius: 999px;
   background: #f8f6ff;
   border: 1px solid #e7e0f4;
   box-shadow: 0 2px 12px rgba(155, 99, 233, 0.12);
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: #1a1a2e;
   letter-spacing: -0.2px;
   white-space: nowrap;
-  cursor: pointer;
-  position: relative;
-  pointer-events: auto;
 }
 
 .feature-solar-pill-icon {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
   color: #9b63e9;
 }
@@ -122,17 +127,22 @@
 }
 
 @media (max-width: 768px) {
-  .feature-solar--mobile .feature-solar-pill {
-    padding: 7px 11px;
-    font-size: 11px;
+  .feature-solar--mobile .feature-solar-stage {
+    height: 380px;
+    margin: 0 auto;
+  }
+
+  .feature-solar--mobile .feature-solar-pill-inner {
+    padding: 8px 12px;
+    font-size: 12px;
     gap: 6px;
     letter-spacing: -0.15px;
     box-shadow: 0 2px 10px rgba(155, 99, 233, 0.14);
   }
 
   .feature-solar--mobile .feature-solar-pill-icon {
-    width: 15px;
-    height: 15px;
+    width: 16px;
+    height: 16px;
   }
 
   .feature-solar--mobile .feature-solar-mobile-detail {
@@ -164,14 +174,14 @@
 }
 
 @media (max-width: 400px) {
-  .feature-solar--mobile .feature-solar-pill {
-    padding: 6px 9px;
-    font-size: 10px;
+  .feature-solar--mobile .feature-solar-pill-inner {
+    padding: 7px 10px;
+    font-size: 11px;
     gap: 5px;
   }
 
   .feature-solar--mobile .feature-solar-pill-icon {
-    width: 13px;
-    height: 13px;
+    width: 14px;
+    height: 14px;
   }
 }
