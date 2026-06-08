@@ -4,6 +4,12 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=denonext";
+import {
+  promotionCodeFromSubscription,
+  SUBSCRIPTION_DISCOUNT_EXPANDS,
+} from "../_shared/stripe-promotion-code.ts";
+import { stripeProfileUpdateForLifetimeUser } from "../_shared/profile-lifetime.ts";
+import { mapStripeSubscriptionStatus } from "../_shared/stripe-subscription-status.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -102,8 +108,13 @@ serve(async (req) => {
     let trialStart: string | null = null;
     let trialEnd: string | null = null;
 
+    let promotionCode: string | null = null;
+
     if (subscriptionId && typeof subscriptionId === "string") {
-      const sub = await stripe.subscriptions.retrieve(subscriptionId);
+      const sub = await stripe.subscriptions.retrieve(subscriptionId, {
+        expand: [...SUBSCRIPTION_DISCOUNT_EXPANDS],
+      });
+      promotionCode = promotionCodeFromSubscription(sub);
       const priceId = sub.items.data[0]?.price?.id;
       if (priceId) {
         const price = await stripe.prices.retrieve(priceId);
@@ -111,16 +122,22 @@ serve(async (req) => {
       }
       if (sub.status === "trialing") {
         subscriptionStatus = "trial";
-      } else if (sub.status === "active") {
-        subscriptionStatus = "active";
+      } else {
+        subscriptionStatus = mapStripeSubscriptionStatus(sub.status);
       }
       trialStart = sub.trial_start ? new Date(sub.trial_start * 1000).toISOString() : null;
       trialEnd = sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null;
     }
 
-    await supabase
+    const { data: existingProfile } = await supabase
       .from("profiles")
-      .update({
+      .select("is_lifetime")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const profileUpdate = stripeProfileUpdateForLifetimeUser(
+      existingProfile?.is_lifetime === true,
+      {
         onboarding_completed: true,
         subscription_status: subscriptionStatus,
         plan_type: planType,
@@ -128,8 +145,11 @@ serve(async (req) => {
         stripe_subscription_id: subscriptionId,
         trial_start_date: trialStart,
         trial_end_date: trialEnd,
-      })
-      .eq("user_id", userId);
+        ...(promotionCode ? { stripe_promotion_code: promotionCode } : {}),
+      },
+    );
+
+    await supabase.from("profiles").update(profileUpdate).eq("user_id", userId);
 
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,

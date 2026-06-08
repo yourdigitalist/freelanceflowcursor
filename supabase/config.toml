@@ -31,6 +31,8 @@ verify_jwt = false
 verify_jwt = false
 [functions.complete-onboarding-after-checkout]
 verify_jwt = false
+[functions.start-free-trial]
+verify_jwt = false
 [functions.stripe-webhook]
 verify_jwt = false
 
@@ -39,12 +41,17 @@ verify_jwt = false
 
 [functions.send-trial-reminders]
 verify_jwt = false
+[functions.cleanup-inactive-accounts]
+verify_jwt = false
 [functions.send-account-deleted]
 verify_jwt = false
 [functions.send-deadline-notifications]
 verify_jwt = false
 
 [functions.billing-health]
+verify_jwt = false
+
+[functions.sync-stripe-promotion-codes]
 verify_jwt = false
 
 [functions.send-feedback-notification]

@@ -114,6 +114,7 @@ serve(async (req) => {
       .from("profiles")
       .select("user_id, email, full_name, trial_end_date")
       .eq("subscription_status", "trial")
+      .eq("is_lifetime", false)
       .not("trial_end_date", "is", null);
 
     if (error) {
@@ -165,10 +166,10 @@ serve(async (req) => {
           : `Your ${LANCE_PRODUCT_NAME} trial ends today`;
     const fallbackBody =
       daysLeft === 5
-        ? `Hi ${name},\n\nYour 15-day free trial ends in 5 days. You'll keep full access until then, and we'll charge your card on the trial end date unless you cancel.\n\nManage your subscription: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`
+        ? `Hi ${name},\n\nYour 15-day free trial ends in 5 days. You'll keep full access until then. Add a payment method before the trial ends to continue after day 15.\n\nManage your subscription: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`
         : daysLeft === 1
-          ? `Hi ${name},\n\nYour free trial ends tomorrow. Your card will be charged automatically to continue your subscription.\n\nTo cancel or update payment: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`
-          : `Hi ${name},\n\nYour free trial ends today. We'll charge your card automatically to continue your plan—no action needed. To update payment or cancel: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`;
+          ? `Hi ${name},\n\nYour free trial ends tomorrow. Add a payment method to keep access after your trial ends.\n\nAdd payment: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`
+          : `Hi ${name},\n\nYour free trial ends today. Add a payment method to keep access to ${LANCE_PRODUCT_NAME}.\n\nAdd payment: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`;
     const customBody =
       daysLeft === 5
         ? (comms?.trial_body_5d as string | null)

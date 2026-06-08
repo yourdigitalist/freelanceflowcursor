@@ -54,6 +54,7 @@ function getPlanBadgeLabel(
     return 'Pro';
   }
   if (status === 'past_due') return 'Past due';
+  if (status === 'paused') return 'Paused';
   return 'Free';
 }
 export function AppLayout({
@@ -139,7 +140,7 @@ export function AppLayout({
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(() => {
     try { return localStorage.getItem('trial_banner_dismissed') === 'true'; } catch { /* ignore */ return false; }
   });
-  const showTrialBanner = isOnTrial && !trialBannerDismissed;
+  const showTrialBanner = isOnTrial && profile?.is_lifetime !== true && !trialBannerDismissed;
   const handleTrialBannerDismiss = () => {
     setTrialBannerDismissed(true);
     try { localStorage.setItem('trial_banner_dismissed', 'true'); } catch { /* ignore localStorage */ }

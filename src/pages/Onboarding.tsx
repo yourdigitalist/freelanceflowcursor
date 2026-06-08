@@ -109,7 +109,7 @@ function StripeSecuredBy() {
     <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 py-6 mt-2 border-t border-border/60">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" aria-hidden />
-        <span>Secure, PCI-compliant checkout</span>
+        <span>No credit card required to start</span>
       </div>
       <div className="hidden sm:block h-4 w-px bg-border shrink-0" aria-hidden />
       <a
@@ -118,7 +118,7 @@ function StripeSecuredBy() {
         rel="noopener noreferrer"
         className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
       >
-        <span className="text-xs uppercase tracking-wide">Secured by</span>
+        <span className="text-xs uppercase tracking-wide">Billing powered by</span>
         <img
           src="/stripe-logo.svg"
           alt="Stripe"
@@ -251,7 +251,7 @@ export default function Onboarding() {
   const stepsOrder: Step[] = ['role', 'useFirst', 'optional', 'plan'];
   const currentStepIndex = stepsOrder.indexOf(step);
 
-  const handleContinueToPayment = async () => {
+  const handleStartFreeTrial = async () => {
     const plan = plans.find((p) => p.id === selectedPlanId);
     const priceId = plan?.priceId;
     if (!priceId) {
@@ -274,32 +274,24 @@ export default function Onboarding() {
         setLoading(false);
         return;
       }
-      const baseUrl = window.location.origin;
-      const successUrl = `${baseUrl}/onboarding?checkout_success=1&session_id={CHECKOUT_SESSION_ID}`;
-      const cancelUrl = `${baseUrl}/onboarding`;
-      const res = await fetch(`${supabaseUrl}/functions/v1/create-checkout-session`, {
+      const res = await fetch(`${supabaseUrl}/functions/v1/start-free-trial`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
           apikey: anonKey,
         },
-        body: JSON.stringify({ priceId, successUrl, cancelUrl }),
+        body: JSON.stringify({ priceId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const errMsg = data?.error || data?.message || res.statusText || `Checkout failed (${res.status})`;
-        toast({ title: 'Error starting checkout', description: String(errMsg), variant: 'destructive' });
+        const errMsg = data?.error || data?.message || res.statusText || `Could not start trial (${res.status})`;
+        toast({ title: 'Could not start trial', description: String(errMsg), variant: 'destructive' });
         setLoading(false);
         return;
       }
-      const url = data?.url ?? data?.data?.url;
-      if (url && typeof url === 'string') {
-        window.location.href = url;
-        return;
-      }
-      toast({ title: 'No checkout URL returned', variant: 'destructive' });
-    } catch (e) {
+      navigate('/dashboard', { replace: true });
+    } catch {
       toast({ title: 'Something went wrong', variant: 'destructive' });
     } finally {
       setLoading(false);
@@ -483,13 +475,13 @@ export default function Onboarding() {
             <div className="text-center space-y-2">
               <h1 className="text-3xl font-bold tracking-tight">Choose your plan</h1>
               <p className="text-muted-foreground text-base max-w-lg mx-auto">
-                Start with a 15-day free trial. You won’t be charged today—cancel anytime before the trial ends.
+                Start with a 15-day free trial. No credit card required—add payment before the trial ends to keep access.
               </p>
             </div>
             <div className="rounded-2xl border border-primary/25 bg-gradient-to-b from-primary/8 to-primary/5 px-5 py-4 text-center shadow-sm">
-              <p className="font-semibold text-foreground">No charge today</p>
+              <p className="font-semibold text-foreground">No card required today</p>
               <p className="text-muted-foreground text-sm mt-1">
-                Full access during your trial. We’ll email you before the trial ends.
+                Full access during your trial. We&apos;ll email you reminders before it ends.
               </p>
             </div>
             <div className="grid gap-5 md:grid-cols-2 md:items-stretch">
@@ -546,9 +538,9 @@ export default function Onboarding() {
             <StripeSecuredBy />
             <div className="flex justify-between items-center pt-2">
               <Button variant="ghost" onClick={() => setStep('optional')}>Back</Button>
-              <Button onClick={handleContinueToPayment} disabled={loading} size="lg" className="min-w-[200px]">
+              <Button onClick={handleStartFreeTrial} disabled={loading} size="lg" className="min-w-[200px]">
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Continue to payment
+                Start free trial
               </Button>
             </div>
             <p className="text-center text-sm text-muted-foreground">

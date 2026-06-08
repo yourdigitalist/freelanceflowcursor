@@ -68,6 +68,8 @@ import { IconSlotProvider } from "@/contexts/IconSlotContext";
 import { CrispChat } from "@/components/CrispChat";
 import { canAccessContracts, canAccessNotes } from "@/lib/features";
 
+import { hasBillingAccess as profileHasBillingAccess } from '@/lib/billingAccess';
+
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -86,15 +88,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       
       const { data } = await supabase
         .from('profiles')
-        .select('onboarding_completed, subscription_status, trial_end_date')
+        .select('onboarding_completed, subscription_status, trial_end_date, is_lifetime')
         .eq('user_id', user.id)
         .maybeSingle();
       
       setOnboardingCompleted(data?.onboarding_completed ?? false);
-      const status = data?.subscription_status ?? null;
-      const trialEndDate = data?.trial_end_date ? new Date(data.trial_end_date) : null;
-      const trialIsValid = status === 'trial' && !!trialEndDate && trialEndDate >= new Date();
-      setHasBillingAccess(status === 'active' || trialIsValid);
+      setHasBillingAccess(profileHasBillingAccess(data));
       setCheckingOnboarding(false);
     };
     

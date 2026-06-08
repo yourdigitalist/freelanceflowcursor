@@ -79,7 +79,7 @@ serve(async (req) => {
   const stripe = new Stripe(stripeSecret);
 
   // If user is on trial/active but profile has no stripe_customer_id (e.g. return from checkout was missed), try to recover from Stripe by email
-  if (!customerId && (profile?.subscription_status === "trial" || profile?.subscription_status === "active")) {
+  if (!customerId && (profile?.subscription_status === "trial" || profile?.subscription_status === "active" || profile?.subscription_status === "paused")) {
     const email = user.email?.trim();
     if (email) {
       const customers = await stripe.customers.list({ email, limit: 1 });

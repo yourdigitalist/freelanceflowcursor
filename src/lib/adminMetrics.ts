@@ -21,7 +21,10 @@ export type AdminMetricsSummary = {
   trial_to_paid_conversion_rate: number;
   ever_trialed: number;
   converted_active: number;
+  beta_testers: number;
 };
+
+export const BETA_PROMOTION_CODES = ['betatesters', 'mgtest', 'mgtest2'] as const;
 
 export type AdminUserRow = {
   user_id: string;
@@ -34,7 +37,19 @@ export type AdminUserRow = {
   updated_at: string;
   onboarding_completed: boolean;
   last_sign_in_at: string | null;
+  stripe_promotion_code: string | null;
 };
+
+export type AdminUserListTab = 'all' | 'coupons' | 'trials';
+
+export type AdminCouponFilter = 'all' | (typeof BETA_PROMOTION_CODES)[number];
+
+export const ADMIN_COUPON_FILTER_OPTIONS: { value: AdminCouponFilter; label: string }[] = [
+  { value: 'all', label: 'All coupons' },
+  { value: 'betatesters', label: 'BETATESTERS' },
+  { value: 'mgtest', label: 'MGTEST' },
+  { value: 'mgtest2', label: 'MGTEST2' },
+];
 
 export type AdminUserFilter =
   | 'all'
@@ -65,6 +80,55 @@ export function formatAdminPlan(planType: string | null): string {
     default:
       return planType.replace(/_/g, ' ');
   }
+}
+
+/** Admin accounts hidden from the metrics user tables (not from aggregate RPC counts). */
+export function normalizePromotionCode(code: string | null | undefined): string {
+  return (code ?? '').trim().toLowerCase();
+}
+
+export function hasBetaPromotionCode(row: AdminUserRow): boolean {
+  const code = normalizePromotionCode(row.stripe_promotion_code);
+  return BETA_PROMOTION_CODES.includes(code as (typeof BETA_PROMOTION_CODES)[number]);
+}
+
+export function isPayingSubscriber(row: AdminUserRow): boolean {
+  return (row.subscription_status ?? '').toLowerCase() === 'active';
+}
+
+/** Users on a tracked comp promotion code (includes comped active subs). */
+export function isCouponUser(row: AdminUserRow): boolean {
+  return hasBetaPromotionCode(row);
+}
+
+export function isTrialUser(row: AdminUserRow): boolean {
+  return (row.subscription_status ?? '').toLowerCase() === 'trial';
+}
+
+/** Signed up but no tracked coupon yet (usually still in trial / pre-checkout). */
+export function isOrganicUser(row: AdminUserRow): boolean {
+  return !isCouponUser(row);
+}
+
+/** @deprecated Use isCouponUser */
+export function isBetaTester(row: AdminUserRow): boolean {
+  return isCouponUser(row);
+}
+
+export function matchesCouponFilter(row: AdminUserRow, filter: AdminCouponFilter): boolean {
+  if (!isCouponUser(row)) return false;
+  if (filter === 'all') return true;
+  return normalizePromotionCode(row.stripe_promotion_code) === filter;
+}
+
+export function formatPromotionCodeTag(code: string | null | undefined): string {
+  const trimmed = (code ?? '').trim();
+  return trimmed ? trimmed.toUpperCase() : '';
+}
+
+export function isAdminMetricsExcludedUser(row: AdminUserRow): boolean {
+  const name = (row.full_name ?? '').trim().toLowerCase();
+  return name === 'marina gurgel';
 }
 
 export function isGhostedUser(lastSignIn: string | null, days = 30): boolean {

@@ -10,6 +10,7 @@ import { Loader2, Check, Crown } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { differenceInDays, format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { hasBillingAccess } from '@/lib/billingAccess';
 
 interface SubscriptionProfile {
   plan_type: string | null;
@@ -17,6 +18,7 @@ interface SubscriptionProfile {
   trial_start_date: string | null;
   trial_end_date: string | null;
   stripe_customer_id: string | null;
+  is_lifetime: boolean | null;
 }
 
 const STRIPE_PRICE_MONTHLY = import.meta.env.VITE_STRIPE_PRICE_MONTHLY as string | undefined;
@@ -69,7 +71,7 @@ export default function SubscriptionSettings() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('plan_type, subscription_status, trial_start_date, trial_end_date, stripe_customer_id')
+        .select('plan_type, subscription_status, trial_start_date, trial_end_date, stripe_customer_id, is_lifetime')
         .eq('user_id', user!.id)
         .maybeSingle();
 
@@ -197,14 +199,39 @@ export default function SubscriptionSettings() {
   const trialEndDate = profile?.trial_end_date ? new Date(profile.trial_end_date) : null;
   const isOnTrial = profile?.subscription_status === 'trial' && !!trialEndDate && trialEndDate >= new Date();
   const hadTrialExpired = profile?.subscription_status === 'trial' && !!trialEndDate && trialEndDate < new Date();
+  const isPaused = profile?.subscription_status === 'paused';
   const isPastDue = profile?.subscription_status === 'past_due';
   const isActive = profile?.subscription_status === 'active';
+  const billingAccess = hasBillingAccess(profile);
+  const isLocked = profile?.is_lifetime !== true && !billingAccess;
   const daysLeft = profile?.trial_end_date 
     ? Math.max(0, differenceInDays(new Date(profile.trial_end_date), new Date()))
     : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {isLocked && (
+        <Card className="border-destructive/40 bg-destructive/5 shadow-md">
+          <CardHeader>
+            <CardTitle className="text-destructive">Your trial has ended</CardTitle>
+            <CardDescription>
+              Add a payment method to restore full access to Lance.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            {profile?.stripe_customer_id ? (
+              <Button onClick={handleManageSubscription}>
+                Add payment method
+              </Button>
+            ) : (
+              <Button onClick={() => handleUpgrade(profile?.plan_type === 'pro_annual' ? 'pro_annual' : 'pro_monthly')} disabled={upgrading}>
+                {upgrading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Subscribe to continue
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
       {/* Current Plan Status */}
       <Card className="border-0 shadow-sm">
         <CardHeader>
@@ -217,10 +244,10 @@ export default function SubscriptionSettings() {
               <CardDescription>Your subscription details</CardDescription>
             </div>
             <Badge 
-              variant={isOnTrial ? 'secondary' : isPastDue ? 'destructive' : 'default'}
+              variant={isOnTrial ? 'secondary' : isPastDue || isPaused ? 'destructive' : 'default'}
               className={isActive ? 'bg-primary' : ''}
             >
-              {isOnTrial ? 'Free Trial' : isActive ? 'Active' : isPastDue ? 'Past Due' : 'Inactive'}
+              {isOnTrial ? 'Free Trial' : isActive ? 'Active' : isPaused ? 'Paused' : isPastDue ? 'Past Due' : 'Inactive'}
             </Badge>
           </div>
         </CardHeader>
@@ -248,7 +275,7 @@ export default function SubscriptionSettings() {
                     )}
                   </p>
                   <p className="text-sm text-muted-foreground mt-2">
-                    Your card will be charged automatically when your trial ends—no action needed. You can update payment or cancel anytime in the billing portal below.
+                    No card on file yet. Add a payment method before your trial ends to keep access after day 15.
                   </p>
                 </div>
               </div>
@@ -264,15 +291,17 @@ export default function SubscriptionSettings() {
               </p>
             </div>
           )}
-          {(hadTrialExpired || isPastDue) && (
+          {(hadTrialExpired || isPaused || isPastDue) && (
             <div className="space-y-2">
               <p className="font-medium">
                 {isPastDue
                   ? "We couldn't charge your card for your subscription."
-                  : "Your free trial has ended."}
+                  : isPaused
+                    ? 'Your subscription is paused until you add a payment method.'
+                    : 'Your free trial has ended.'}
               </p>
               <p className="text-sm text-muted-foreground">
-                Update your payment method or subscribe to a plan below to restore full access.
+                Add a payment method below to restore full access.
               </p>
             </div>
           )}
@@ -349,13 +378,13 @@ export default function SubscriptionSettings() {
                     >
                       Manage plan
                     </Button>
-                  ) : (isOnTrial || isActive || isPastDue) ? (
+                  ) : (isOnTrial || isActive || isPastDue || isPaused) ? (
                     <Button
                       className="w-full"
                       variant={plan.highlighted ? 'default' : 'outline'}
-                      onClick={isPastDue ? () => handleUpgrade(plan.id) : handleManageSubscription}
+                      onClick={isPastDue || isPaused || hadTrialExpired ? () => handleUpgrade(plan.id) : handleManageSubscription}
                     >
-                      {isPastDue ? 'Update and subscribe' : 'Change plan'}
+                      {isPastDue || isPaused || hadTrialExpired ? 'Add payment method' : 'Change plan'}
                     </Button>
                   ) : (
                     <Button
@@ -384,7 +413,7 @@ export default function SubscriptionSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {(profile?.stripe_customer_id || isOnTrial || isActive || isPastDue) ? (
+          {(profile?.stripe_customer_id || isOnTrial || isActive || isPastDue || isPaused) ? (
             <>
               <Button variant="outline" onClick={handleManageSubscription}>
                 Open billing portal

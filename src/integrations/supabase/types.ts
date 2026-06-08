@@ -1243,6 +1243,9 @@ export type Database = {
           currency: string | null
           currency_display: string | null
           date_format: string | null
+          deletion_warning_sent: boolean
+          deletion_warning_sent_at: string | null
+          scheduled_deletion_at: string | null
           email: string | null
           first_name: string | null
           full_name: string | null
@@ -1265,6 +1268,7 @@ export type Database = {
           invoice_show_quantity: boolean | null
           invoice_show_rate: boolean | null
           is_admin: boolean | null
+          is_lifetime: boolean
           last_name: string | null
           notification_preferences: Json | null
           number_format: string | null
@@ -1284,6 +1288,7 @@ export type Database = {
           reminder_enabled: boolean | null
           reminder_subject_default: string | null
           stripe_customer_id: string | null
+          stripe_promotion_code: string | null
           stripe_subscription_id: string | null
           subscription_status: string | null
           tax_id: string | null
@@ -1320,6 +1325,8 @@ export type Database = {
           currency?: string | null
           currency_display?: string | null
           date_format?: string | null
+          deletion_warning_sent?: boolean
+          deletion_warning_sent_at?: string | null
           email?: string | null
           first_name?: string | null
           full_name?: string | null
@@ -1342,6 +1349,7 @@ export type Database = {
           invoice_show_quantity?: boolean | null
           invoice_show_rate?: boolean | null
           is_admin?: boolean | null
+          is_lifetime?: boolean
           last_name?: string | null
           notification_preferences?: Json | null
           number_format?: string | null
@@ -1360,7 +1368,9 @@ export type Database = {
           reminder_days_before?: number | null
           reminder_enabled?: boolean | null
           reminder_subject_default?: string | null
+          scheduled_deletion_at?: string | null
           stripe_customer_id?: string | null
+          stripe_promotion_code?: string | null
           stripe_subscription_id?: string | null
           subscription_status?: string | null
           tax_id?: string | null
@@ -1397,6 +1407,8 @@ export type Database = {
           currency?: string | null
           currency_display?: string | null
           date_format?: string | null
+          deletion_warning_sent?: boolean
+          deletion_warning_sent_at?: string | null
           email?: string | null
           first_name?: string | null
           full_name?: string | null
@@ -1419,6 +1431,7 @@ export type Database = {
           invoice_show_quantity?: boolean | null
           invoice_show_rate?: boolean | null
           is_admin?: boolean | null
+          is_lifetime?: boolean
           last_name?: string | null
           notification_preferences?: Json | null
           number_format?: string | null
@@ -1437,7 +1450,9 @@ export type Database = {
           reminder_days_before?: number | null
           reminder_enabled?: boolean | null
           reminder_subject_default?: string | null
+          scheduled_deletion_at?: string | null
           stripe_customer_id?: string | null
+          stripe_promotion_code?: string | null
           stripe_subscription_id?: string | null
           subscription_status?: string | null
           tax_id?: string | null
@@ -2258,6 +2273,8 @@ export type Database = {
       get_admin_stats: { Args: never; Returns: Json }
       get_admin_metrics: { Args: never; Returns: Json }
       get_admin_users_list: { Args: never; Returns: Json }
+      get_account_deletion_candidates: { Args: never; Returns: Json }
+      get_deletion_warning_candidates: { Args: never; Returns: Json }
       get_announcement_recipient_count: { Args: never; Returns: number }
       next_invoice_number: { Args: { p_user_id: string }; Returns: string }
     }

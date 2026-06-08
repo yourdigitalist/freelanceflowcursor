@@ -31,11 +31,11 @@ export function TrialBanner({ onUpgrade, onDismiss }: TrialBannerProps) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('plan_type, trial_end_date, subscription_status')
+        .select('plan_type, trial_end_date, subscription_status, is_lifetime')
         .eq('user_id', user!.id)
         .maybeSingle();
 
-      if (error || !data) return;
+      if (error || !data || data.is_lifetime === true) return;
 
       if (data.subscription_status === 'trial' && data.trial_end_date) {
         const trialEnd = new Date(data.trial_end_date);
@@ -53,6 +53,13 @@ export function TrialBanner({ onUpgrade, onDismiss }: TrialBannerProps) {
           show: true,
           daysLeft: 0,
           isExpired: false,
+          status: data.subscription_status,
+        });
+      } else if (data.subscription_status === 'paused') {
+        setTrialInfo({
+          show: true,
+          daysLeft: 0,
+          isExpired: true,
           status: data.subscription_status,
         });
       } else {
@@ -78,13 +85,15 @@ export function TrialBanner({ onUpgrade, onDismiss }: TrialBannerProps) {
         <SlotIcon slot="nav_billing" className="h-4 w-4 text-primary shrink-0" />
         <span className="text-foreground">
           {trialInfo.status === 'past_due' ? (
-            <>Your payment is past due. We couldn&apos;t charge your card. Update your payment method in Billing to keep access.</>
-          ) : trialInfo.isExpired ? (
-            <>Your free trial has ended. Update your payment method in Billing to keep access.</>
+            <>Your payment is past due. Update your payment method in Billing to keep access.</>
+          ) : trialInfo.status === 'paused' || trialInfo.isExpired ? (
+            <>Your free trial has ended. Add a payment method in Billing to restore access.</>
           ) : trialInfo.daysLeft === 0 ? (
-            <>Your trial ends today. We&apos;ll charge your card automatically to continue your plan. To update payment or cancel, open Billing.</>
+            <>Your trial ends today. Add a payment method in Billing to keep access after the trial.</>
+          ) : trialInfo.daysLeft <= 3 ? (
+            <>Your trial ends in {trialInfo.daysLeft} day{trialInfo.daysLeft === 1 ? '' : 's'}. Add a payment method before it ends to keep access.</>
           ) : (
-            <>Your free trial is active. {trialInfo.daysLeft} day{trialInfo.daysLeft === 1 ? '' : 's'} left. Your card will be charged automatically when the trial ends—no action needed.</>
+            <>Your free trial is active—{trialInfo.daysLeft} day{trialInfo.daysLeft === 1 ? '' : 's'} left. No card required until you choose to subscribe.</>
           )}
         </span>
         <Button

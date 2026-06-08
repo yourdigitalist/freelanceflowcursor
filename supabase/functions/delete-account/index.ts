@@ -1,53 +1,12 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendAccountDeletedEmail } from "../_shared/lance-email.ts";
+import { deleteUserAccount } from "../_shared/delete-user-account.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-async function listAllFilesInFolder(
-  supabase: ReturnType<typeof createClient>,
-  bucket: string,
-  folder: string,
-): Promise<string[]> {
-  const paths: string[] = [];
-
-  const walk = async (prefix: string) => {
-    let offset = 0;
-    const limit = 100;
-
-    while (true) {
-      const { data, error } = await supabase.storage.from(bucket).list(prefix, {
-        limit,
-        offset,
-      });
-
-      if (error) {
-        throw new Error(`Failed to list storage files: ${error.message}`);
-      }
-
-      if (!data || data.length === 0) break;
-
-      for (const item of data) {
-        const nextPath = prefix ? `${prefix}/${item.name}` : item.name;
-        if (item.id) {
-          paths.push(nextPath);
-        } else {
-          await walk(nextPath);
-        }
-      }
-
-      if (data.length < limit) break;
-      offset += limit;
-    }
-  };
-
-  await walk(folder);
-  return paths;
-}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -100,7 +59,7 @@ serve(async (req) => {
 
     const { data: profile } = await adminClient
       .from("profiles")
-      .select("email, full_name, first_name, last_name")
+      .select("email, full_name, first_name, last_name, stripe_customer_id, stripe_subscription_id")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -122,49 +81,20 @@ serve(async (req) => {
       recipientEmail.split("@")[0] ||
       "there";
 
-    // Send confirmation before deleting auth user (profile row cascades or is removed with user).
-    const emailResult = await sendAccountDeletedEmail(adminClient, {
+    const result = await deleteUserAccount(adminClient, {
+      userId,
       email: recipientEmail,
       name: recipientName,
+      stripeCustomerId: profile?.stripe_customer_id as string | null,
+      stripeSubscriptionId: profile?.stripe_subscription_id as string | null,
+      sendConfirmationEmail: true,
     });
-    if (!emailResult.ok) {
-      return new Response(
-        JSON.stringify({
-          error: emailResult.error || "Failed to send account deleted confirmation email",
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
 
-    const reviewFilePaths = await listAllFilesInFolder(adminClient, "review-files", userId);
-    if (reviewFilePaths.length > 0) {
-      const { error: removeError } = await adminClient.storage
-        .from("review-files")
-        .remove(reviewFilePaths);
-
-      if (removeError) {
-        return new Response(
-          JSON.stringify({ error: `Failed to delete storage files: ${removeError.message}` }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
-      }
-    }
-
-    const { error: deleteUserError } = await adminClient.auth.admin.deleteUser(userId);
-    if (deleteUserError) {
-      return new Response(
-        JSON.stringify({ error: `Failed to delete user: ${deleteUserError.message}` }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+    if (!result.ok) {
+      return new Response(JSON.stringify({ error: result.error || "Failed to delete account" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(JSON.stringify({ success: true, emailSent: true }), {

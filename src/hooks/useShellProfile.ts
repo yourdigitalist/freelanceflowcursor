@@ -10,6 +10,7 @@ export type ShellProfile = {
   subscription_status: string | null;
   plan_type: string | null;
   trial_end_date: string | null;
+  is_lifetime: boolean | null;
   is_admin: boolean | null;
 };
 
@@ -23,7 +24,7 @@ export function useShellProfile(userId: string | undefined) {
       const { data, error } = await supabase
         .from('profiles')
         .select(
-          'first_name, last_name, full_name, email, avatar_url, subscription_status, plan_type, trial_end_date, is_admin',
+          'first_name, last_name, full_name, email, avatar_url, subscription_status, plan_type, trial_end_date, is_lifetime, is_admin',
         )
         .eq('user_id', userId)
         .single();
