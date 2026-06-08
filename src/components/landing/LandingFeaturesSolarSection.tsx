@@ -9,8 +9,8 @@ export default function LandingFeaturesSolarSection() {
         <span className="landing-section-label">✦ Features</span>
         <h2 className="landing-section-title">Your entire freelance stack. $29/month.</h2>
         <p className="landing-section-sub">
-          Lance replaces the scattered pile of tools freelancers actually pay for — without the
-          overlap, the logins, or the monthly guilt.
+          Lance replaces the scattered pile of tools freelancers actually pay for. No overlap, no
+          extra logins, no monthly guilt.
         </p>
         <div className="landing-features-solar-wrap">
           <FeatureSolarSystem />

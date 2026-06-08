@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { AppLogo } from '@/components/AppLogo';
 import { Loader2 } from '@/components/icons';
+
+const LANCE_LOGO_SRC = '/lance-logo-black-colour.png';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import type { IconSlotKey } from '@/lib/iconSlots';
 
@@ -243,7 +244,11 @@ export default function Auth() {
       <div className="hidden lg:flex lg:w-1/2 bg-[linear-gradient(160deg,#f8f6ff_0%,#fff_100%)] p-12 flex-col justify-between border-r border-[#ede8fa]">
         <div>
           <Link to="/" className="flex items-center gap-2 mb-12">
-            <AppLogo full height={32} className="text-gradient" />
+            <img
+              src={LANCE_LOGO_SRC}
+              alt="Lance"
+              className="block h-auto w-auto max-h-[30px] max-w-[96px] object-contain object-left"
+            />
           </Link>
           
           <div className="space-y-2 mb-12">
@@ -290,7 +295,11 @@ export default function Auth() {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-4 lg:p-12">
         <div className="w-full max-w-md animate-fade-in">
           <div className="flex items-center justify-center gap-2 mb-8 lg:hidden">
-            <AppLogo full height={32} className="text-gradient" />
+            <img
+              src={LANCE_LOGO_SRC}
+              alt="Lance"
+              className="block h-auto w-auto max-h-[30px] max-w-[96px] object-contain object-left"
+            />
           </div>
 
           <Card className="border border-[#ede8fa] shadow-[0_24px_72px_rgba(155,99,233,0.18)]">

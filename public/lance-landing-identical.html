@@ -66,7 +66,15 @@
   }
   nav.scrolled { box-shadow: 0 2px 24px rgba(155,99,233,0.10); }
 
-  .nav-logo img { height: 30px; }
+  .nav-logo img {
+    display: block;
+    max-height: 30px;
+    max-width: 96px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    object-position: left center;
+  }
 
   .nav-links {
     display: flex;
@@ -766,6 +774,7 @@
   .price-amount {
     display: flex;
     align-items: baseline;
+    justify-content: center;
     gap: 2px;
     margin-bottom: 4px;
   }
@@ -1024,11 +1033,13 @@
     margin-bottom: 12px;
     color: var(--body);
   }
-  .cta-band p {
+  .cta-band-sub {
+    max-width: 480px;
+    margin: 0 auto 32px;
     font-size: 17px;
     color: var(--muted);
-    margin-bottom: 32px;
     font-weight: 500;
+    line-height: 1.65;
   }
   .btn-cta-primary {
     font-family: 'Plus Jakarta Sans', sans-serif;
@@ -1538,7 +1549,7 @@
 <!-- NAV -->
 <nav id="nav" class="landing-part-top">
   <div class="nav-logo">
-    <img src="uploads/logo-1776927478688.png" alt="Lance">
+    <img src="lance-logo-black-colour.png" alt="Lance">
   </div>
   <ul class="nav-links">
     <li><a href="#features" data-landing-nav>Features</a></li>
@@ -1629,7 +1640,7 @@
     <div class="showcase-text">
       <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg></span>Dashboard</span>
       <h3>Your entire business, one glance.</h3>
-      <p>Active projects, pending payments, unbilled hours, and what needs your attention today — all before your first coffee.</p>
+      <p>Active projects, pending payments, unbilled hours, and what needs your attention today. All before your first coffee.</p>
       <ul class="showcase-points">
         <li>Every live number that matters: clients, hours, invoices, proposals</li>
         <li>Upcoming follow-ups and overdue tasks surfaced automatically</li>
@@ -1645,7 +1656,7 @@
     <div class="showcase-text">
       <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><path d="M20 8v6"></path><path d="M23 11h-6"></path></svg></span>Clients &amp; CRM</span>
       <h3>Every client relationship, properly managed.</h3>
-      <p>A full pipeline from first contact to active client — with activity logs, follow-up reminders, and everything in one place instead of your inbox.</p>
+      <p>A full pipeline from first contact to active client, with activity logs, follow-up reminders, and everything in one place instead of your inbox.</p>
       <ul class="showcase-points">
         <li>CRM board with 11 pipeline stages, drag-and-drop</li>
         <li>Log calls, emails, and meetings against each client</li>
@@ -1661,7 +1672,7 @@
     <div class="showcase-text">
       <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1H3z"></path><path d="M3 9h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></span>Projects</span>
       <h3>Projects that don't fall apart mid-way.</h3>
-      <p>Custom Kanban boards, task priorities, and due dates — all linked to the client and billable hours they belong to.</p>
+      <p>Custom Kanban boards, task priorities, and due dates. All linked to the client and billable hours they belong to.</p>
       <ul class="showcase-points">
         <li>Build your own workflow columns, not someone else's template</li>
         <li>Tasks with priorities, due dates, and estimated hours</li>
@@ -1693,7 +1704,7 @@
     <div class="showcase-text">
       <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 2.5"></path><path d="M9 2h6"></path><path d="M12 2v3"></path></svg></span>Time Tracking</span>
       <h3>Every hour logged. Every hour billed.</h3>
-      <p>Start a timer or log manually. Mark time as billable and pull it straight into an invoice — no spreadsheet, no guessing, no lost hours.</p>
+      <p>Start a timer or log manually. Mark time as billable and pull it straight into an invoice. No spreadsheet required, no hours lost in translation.</p>
       <ul class="showcase-points">
         <li>Live timer that runs while you work in the app</li>
         <li>Billable vs non-billable tracking per entry</li>
@@ -1709,7 +1720,7 @@
     <div class="showcase-text">
       <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M7 15h4"></path></svg></span>Invoices</span>
       <h3>Invoices that go out fast and come back paid.</h3>
-      <p>Build branded invoices, import your tracked time as line items, and send — with automatic reminders so you're not the one chasing.</p>
+      <p>Build branded invoices, import your tracked time as line items, and send. Automatic reminders handle the chasing so you don't have to.</p>
       <ul class="showcase-points">
         <li>Auto-generated invoice numbers, your format</li>
         <li>Import billable time entries directly as line items</li>
@@ -1725,7 +1736,7 @@
     <div class="showcase-text">
       <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6"></path><path d="M8 13h8"></path><path d="M8 17h6"></path></svg></span>Proposals</span>
       <h3>Proposals your clients actually read.</h3>
-      <p>Build and send professional proposals with your services, timeline, and payment terms. Clients accept with one click — you get notified the moment they do.</p>
+      <p>Build and send professional proposals with your services, timeline, and payment terms. Clients accept with one click and you get notified the moment they do.</p>
       <ul class="showcase-points">
         <li>Cover image, brand colour, and custom terms per proposal</li>
         <li>Services pulled from your catalogue, priced and ready</li>
@@ -1741,7 +1752,7 @@
     <div class="showcase-text">
       <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21h16"></path><path d="M7 17h10"></path><path d="M9 3h6"></path><path d="M8 7h8"></path><path d="M8 11h8"></path><path d="M14 14l4-4"></path><path d="M13 18l5-5"></path></svg></span>Contracts</span>
       <h3>Signed contracts without the back-and-forth.</h3>
-      <p>Send a contract, your client verifies with a one-time email code and signs. No printing, no PDFs by email, no chasing a signature for two weeks.</p>
+      <p>Send a contract, your client verifies with a one-time email code and signs. Nothing to print, nothing to scan, no two-week wait for a signature.</p>
       <ul class="showcase-points">
         <li>Import everything from an accepted proposal automatically</li>
         <li>Dual e-signature with OTP email verification</li>
@@ -1757,7 +1768,7 @@
     <div class="showcase-text">
       <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4"></path><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path></svg></span>Approvals</span>
       <h3>Client feedback that's actually useful.</h3>
-      <p>Share files, get pinned comments directly on images, and collect a formal approval — all without your client needing an account.</p>
+      <p>Share files, get pinned comments directly on images, and collect a formal approval. Your client needs no account to do any of it.</p>
       <ul class="showcase-points">
         <li>Clients pin comments to exact spots on your designs</li>
         <li>Approve or reject with one click, timestamped</li>
@@ -1773,7 +1784,7 @@
     <div class="showcase-text">
       <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a14 14 0 0 1 0 18"></path><path d="M12 3a14 14 0 0 0 0 18"></path></svg></span>Client Portal</span>
       <h3>Give clients a window. Not your inbox.</h3>
-      <p>Every client gets a private link to view their invoices, proposals, contracts, and approvals — without creating an account or emailing you for files.</p>
+      <p>Every client gets a private link to view their invoices, proposals, contracts, and approvals. No account required, no emailing you for files.</p>
       <ul class="showcase-points">
         <li>Choose exactly which sections each client can see</li>
         <li>Clients sign contracts and approve work directly from the portal</li>
@@ -1789,7 +1800,7 @@
     <div class="showcase-text">
       <span class="showcase-pill"><span class="showcase-pill-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"></path></svg></span>Notes</span>
       <h3>Every brief, idea, and meeting note in one place.</h3>
-      <p>Rich text notes linked to clients and projects, with tags, folders, and one trick no other notes tool has — highlight any text and turn it into a task.</p>
+      <p>Rich text notes linked to clients and projects, with tags, folders, and one trick no other notes tool has. Highlight any text and turn it into a task.</p>
       <ul class="showcase-points">
         <li>Full rich text editor with images, lists, and headings</li>
         <li>Linked to clients and projects for instant context</li>
@@ -2023,7 +2034,7 @@
   <div class="pricing-inner centered">
     <span class="section-label">✦ Pricing</span>
     <h2 class="section-title">Simple, honest pricing.</h2>
-    <p class="section-sub">Full access from day one. 15-day free trial on both plans — .</p>
+    <p class="section-sub">Full access from day one. 15-day free trial on both plans.</p>
 
     <div class="pricing-cards" style="width:100%;">
       <div class="price-card reveal">
@@ -2146,8 +2157,8 @@
 <div class="cta-band-outer landing-part-bottom-tail">
   <div class="cta-band reveal">
     <h2>Ready to cancel six subscriptions?</h2>
-    <p>Join thousands of freelancers running their business with Lance.</p>
-    <a href="/auth?tab=signup" target="_top" class="btn-cta-primary">Try Lance Free — 15 days</a>
+    <p class="cta-band-sub">If you value your time and know that less energy on admin means more time doing the work that actually pays, Lance is for you.</p>
+    <a href="/auth?tab=signup" target="_top" class="btn-cta-primary">Try Lance Free</a>
     <p class="cta-note">Cancel anytime</p>
   </div>
 </div>
@@ -2157,7 +2168,7 @@
   <div class="footer-inner" style="grid-template-columns: 1fr auto;">
     <div class="footer-brand">
       <img src="uploads/logo-1776927478688.png" alt="Lance" class="footer-logo">
-      <p>All-in-one workspace for freelancers and small agencies. Run client work from kickoff to invoice.</p>
+      <p>Everything your freelance business needs, built around the way you actually work.</p>
     </div>
     <div class="footer-col">
       <h4>Legal</h4>
@@ -2170,7 +2181,7 @@
   </div>
   <div class="footer-bottom">
     <span>© 2026 Lance. All rights reserved.</span>
-    <span style="color:rgba(255,255,255,0.25);">Built for the independent worker.</span>
+    <span style="color:rgba(255,255,255,0.25);">Built by freelancers for freelancers</span>
   </div>
 </footer>
 
