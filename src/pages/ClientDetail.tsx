@@ -369,10 +369,6 @@ export default function ClientDetail() {
     void refreshClientData();
   }, [refreshClientData]);
 
-  useEffect(() => {
-    setSelectedTimeDay(timeAnchor);
-  }, [timeView]);
-
   const activityFeedItems = useMemo(() => {
     if (!client) return [];
     return buildClientActivityFeed({
@@ -400,6 +396,17 @@ export default function ClientDetail() {
   const monthGridStart = useMemo(() => startOfWeek(monthStart, { weekStartsOn: 1 }), [monthStart]);
   const monthGridEnd = useMemo(() => endOfWeek(monthEnd, { weekStartsOn: 1 }), [monthEnd]);
   const monthGridDays = useMemo(() => eachDayOfInterval({ start: monthGridStart, end: monthGridEnd }), [monthGridStart, monthGridEnd]);
+
+  const switchTimeView = (view: "day" | "week" | "month") => {
+    if (view === "day" && timeView !== "day") {
+      setSelectedTimeDay((prev) => {
+        if (timeView === "week" && prev >= weekRange.start && prev <= weekRange.end) return prev;
+        if (timeView === "month" && prev >= monthStart && prev <= monthEnd) return prev;
+        return timeAnchor;
+      });
+    }
+    setTimeView(view);
+  };
 
   const groupedRows = useMemo(() => {
     const map = new Map<string, { projectId: string | null; taskId: string | null; projectName: string; taskName: string; notes: string; byDay: Record<string, number> }>();
@@ -1409,9 +1416,9 @@ export default function ClientDetail() {
                 )}
               </div>
               <div className="flex rounded-lg border bg-muted/50 p-0.5">
-                <Button variant={timeView === "day" ? "default" : "ghost"} size="sm" onClick={() => setTimeView("day")}>Day</Button>
-                <Button variant={timeView === "week" ? "default" : "ghost"} size="sm" onClick={() => setTimeView("week")}>Week</Button>
-                <Button variant={timeView === "month" ? "default" : "ghost"} size="sm" onClick={() => setTimeView("month")}>Month</Button>
+                <Button variant={timeView === "day" ? "default" : "ghost"} size="sm" onClick={() => switchTimeView("day")}>Day</Button>
+                <Button variant={timeView === "week" ? "default" : "ghost"} size="sm" onClick={() => switchTimeView("week")}>Week</Button>
+                <Button variant={timeView === "month" ? "default" : "ghost"} size="sm" onClick={() => switchTimeView("month")}>Month</Button>
               </div>
             </div>
             {timeView === "week" ? (
@@ -1451,8 +1458,10 @@ export default function ClientDetail() {
                               key={k}
                               className="font-mono cursor-pointer hover:bg-muted/40"
                               onClick={() => {
-                                setSelectedTimeDay(new Date(`${k}T12:00:00`));
-                                setTimeView("day");
+                                const day = new Date(`${k}T12:00:00`);
+                                setSelectedTimeDay(day);
+                                setTimeAnchor(day);
+                                switchTimeView("day");
                               }}
                             >
                               {row.byDay[k] ? formatHm(row.byDay[k]) : <EmptyValue variant="table" />}
@@ -1510,7 +1519,8 @@ export default function ClientDetail() {
                         key={key}
                         onClick={() => {
                           setSelectedTimeDay(d);
-                          setTimeView("day");
+                          setTimeAnchor(d);
+                          switchTimeView("day");
                         }}
                         className={timeMonthCalendarDayClassName({
                           inMonth,
@@ -1826,6 +1836,7 @@ export default function ClientDetail() {
           onOpenChange={setTimeEntryOpen}
           restrictToClientId={client.id}
           defaultProjectId={projects.length === 1 ? projects[0].id : ""}
+          defaultDate={format(selectedTimeDay, "yyyy-MM-dd")}
           onSaved={() => void refreshClientData()}
         />
       </div>

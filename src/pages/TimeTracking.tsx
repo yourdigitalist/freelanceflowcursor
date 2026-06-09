@@ -461,6 +461,11 @@ export default function TimeTracking() {
     setTimerTask(data.id);
   };
 
+  const getLogDialogDefaultDate = (): string | undefined => {
+    if (!isTimesheetView) return undefined;
+    return format(selectedDay, 'yyyy-MM-dd');
+  };
+
   const openLogDialog = (entry?: TimeEntry) => {
     setEditingEntry(entry ?? null);
     setLogDialogDefaults(
@@ -469,6 +474,7 @@ export default function TimeTracking() {
         : {
             projectId: prefilledProjectId || undefined,
             taskId: prefilledTaskId || undefined,
+            date: getLogDialogDefaultDate(),
           },
     );
     setIsDialogOpen(true);
@@ -971,8 +977,7 @@ export default function TimeTracking() {
         const key = format(d, 'yyyy-MM-dd');
         const daySeconds = weekDayTotals[key] || 0;
         const isToday = isTodayVisible(d);
-        const isSelected =
-          timesheetView === 'day' && isSameDay(d, selectedDay);
+        const isSelected = isSameDay(d, selectedDay);
         const isWeekend = getDay(d) === 0 || getDay(d) === 6;
         const hasHours = daySeconds > 0;
 
