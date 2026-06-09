@@ -290,10 +290,7 @@ export default function PublicContract() {
         signer_name: clientData.client_name,
         signer_email: clientData.client_email,
         signer_tax_id: clientData.client_tax_id,
-        signer_ip: null,
-        signer_geo: null,
         signer_device: typeof navigator !== "undefined" ? `${navigator.platform}/${navigator.userAgent}` : "Unknown device",
-        signer_isp: null,
         email_verified: true,
       },
     });

@@ -14,6 +14,7 @@ import {
   type NotificationPreferences,
   upsertUserNotification,
 } from "../_shared/user-notification.ts";
+import { resolveSignerNetworkMetadata } from "../_shared/signer-metadata.ts";
 
 declare const EdgeRuntime: {
   waitUntil: (promise: Promise<unknown>) => void;
@@ -370,26 +371,32 @@ serve(async (req) => {
       });
     }
 
+    const network = await resolveSignerNetworkMetadata(req, {
+      ip: typeof signer_ip === "string" ? signer_ip : null,
+      geo: typeof signer_geo === "string" ? signer_geo : null,
+      isp: typeof signer_isp === "string" ? signer_isp : null,
+    });
+
     const updatePayload: Record<string, string | boolean | null> =
       signerType === "freelancer"
         ? {
             freelancer_signed_at: nowIso,
             freelancer_signed_name: signer_name || null,
             freelancer_tax_id: signer_tax_id || null,
-            freelancer_sign_ip: signer_ip || null,
-            freelancer_sign_geo: signer_geo || null,
+            freelancer_sign_ip: network.ip,
+            freelancer_sign_geo: network.geo,
             freelancer_sign_device: signer_device || null,
-            freelancer_sign_isp: signer_isp || null,
+            freelancer_sign_isp: network.isp,
             freelancer_sign_email_verified: !!email_verified,
           }
         : {
             client_signed_at: nowIso,
             client_signed_name: signer_name || null,
             client_tax_id: signer_tax_id || null,
-            client_sign_ip: signer_ip || null,
-            client_sign_geo: signer_geo || null,
+            client_sign_ip: network.ip,
+            client_sign_geo: network.geo,
             client_sign_device: signer_device || null,
-            client_sign_isp: signer_isp || null,
+            client_sign_isp: network.isp,
             client_sign_email_verified: !!email_verified,
           };
     const hasFreelancer = signerType === "freelancer" ? true : !!contract.freelancer_signed_at;

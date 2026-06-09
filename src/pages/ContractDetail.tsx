@@ -620,10 +620,7 @@ export default function ContractDetail() {
         signer_name: contract.freelancer_name,
         signer_email: user.email,
         signer_tax_id: contract.freelancer_tax_id,
-        signer_ip: null,
-        signer_geo: null,
         signer_device: signerDevice,
-        signer_isp: null,
         email_verified: true,
       },
     });
