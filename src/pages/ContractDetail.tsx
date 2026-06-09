@@ -13,6 +13,7 @@ import { formatStatusLabel, getStatusBadgeClass } from "@/lib/statusDisplay";
 import { normalizeProposalPaymentMethods } from "@/lib/proposalDefaults";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { normalizeOtpCode, readFunctionErrorMessage } from "@/lib/supabaseFunctions";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -594,7 +595,11 @@ export default function ContractDetail() {
       },
     });
     if (error || data?.error) {
-      toast({ title: "Could not send OTP", description: data?.error || error?.message, variant: "destructive" });
+      toast({
+        title: "Could not send OTP",
+        description: await readFunctionErrorMessage(error, "Could not send verification code. Please try again.", data),
+        variant: "destructive",
+      });
       return;
     }
     setFreelancerOtpOpen(true);
@@ -604,11 +609,13 @@ export default function ContractDetail() {
 
   const verifyFreelancerOtp = async () => {
     if (!id || !contract || !user?.email || freelancerOtpCode.length !== 6) return;
+    const code = normalizeOtpCode(freelancerOtpCode);
+    if (code.length !== 6) return;
     setFreelancerSigning(true);
     const { error, data } = await supabase.functions.invoke("verify-contract-otp", {
       body: {
         contract_id: id,
-        code: freelancerOtpCode,
+        code,
         signer_type: "freelancer",
         signer_name: contract.freelancer_name,
         signer_email: user.email,
@@ -622,7 +629,11 @@ export default function ContractDetail() {
     });
     setFreelancerSigning(false);
     if (error || data?.error) {
-      toast({ title: "Could not verify code", description: data?.error || error?.message, variant: "destructive" });
+      toast({
+        title: "Could not verify code",
+        description: await readFunctionErrorMessage(error, "Invalid or expired code. Please request a new one.", data),
+        variant: "destructive",
+      });
       return;
     }
     setFreelancerOtpOpen(false);

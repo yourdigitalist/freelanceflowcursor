@@ -17,6 +17,7 @@ import {
   DEFAULT_CONTRACT_TEMPLATE_CONTENT,
   renderTemplate,
 } from "@/lib/contractTemplate";
+import { normalizeOtpCode, readFunctionErrorMessage } from "@/lib/supabaseFunctions";
 import type { Contract, ContractService } from "@/types/contracts";
 
 type Step = "view" | "details" | "agree" | "otp" | "done";
@@ -141,30 +142,6 @@ export default function PublicContract() {
       setPdfGenerating(false);
       pdfOpenInFlightRef.current = false;
     }
-  };
-
-  const readFunctionErrorMessage = async (
-    error: unknown,
-    fallback: string,
-    data?: { error?: string } | null,
-  ) => {
-    if (data?.error) return data.error;
-    if (error && typeof error === "object" && "context" in error) {
-      try {
-        const response = (error as { context?: Response }).context;
-        if (response) {
-          const body = (await response.json()) as { error?: string };
-          if (body?.error) return body.error;
-        }
-      } catch {
-        // Ignore parse issues and use fallback below.
-      }
-    }
-    if (error && typeof error === "object" && "message" in error) {
-      const message = String((error as { message?: unknown }).message || "").trim();
-      if (message) return message;
-    }
-    return fallback;
   };
 
 
@@ -308,7 +285,7 @@ export default function PublicContract() {
     const { data, error } = await supabase.functions.invoke("verify-contract-otp", {
       body: {
         token,
-        code: otpCode,
+        code: normalizeOtpCode(otpCode),
         signer_type: "client",
         signer_name: clientData.client_name,
         signer_email: clientData.client_email,

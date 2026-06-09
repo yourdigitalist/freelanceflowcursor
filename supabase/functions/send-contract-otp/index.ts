@@ -8,18 +8,57 @@ import {
   loadLanceEmailComms,
 } from "../_shared/lance-email.ts";
 
+declare const EdgeRuntime: {
+  waitUntil: (promise: Promise<unknown>) => void;
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
-const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
+
+function normalizeEmail(email: unknown): string {
+  return String(email ?? "").trim().toLowerCase();
+}
+
+async function sendOtpEmail(
+  supabase: ReturnType<typeof createClient>,
+  contract: { identifier: string },
+  email: string,
+  signerType: string,
+  code: string,
+) {
+  if (!Deno.env.get("RESEND_API_KEY")) {
+    throw new Error("Email provider not configured.");
+  }
+  const lanceComms = await loadLanceEmailComms(supabase);
+  const safeIdentifier = escapeHtml(contract.identifier);
+  const safeSigner = escapeHtml(signerType);
+  const safeCode = escapeHtml(code);
+  const subject = `Your ${signerType} signing code for contract ${contract.identifier}`;
+  const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(lanceComms.primaryColor)};">Contract verification code</h2>
+<p style="margin:0 0 16px;color:#374151;">Use the code below to sign contract <strong>${safeIdentifier}</strong> as ${safeSigner}. This code expires in 10 minutes.</p>
+<div style="font-size:36px;font-weight:700;letter-spacing:8px;color:#111827;margin:18px 0;">${safeCode}</div>
+<p style="margin:0;font-size:13px;color:#6b7280;">If you did not request this code, you can ignore this email.</p>`;
+  const html = buildLanceUserEmail(lanceComms, contentHtml, {}, email);
+  const text = `Your signing code for contract ${contract.identifier} is ${code}. It expires in 10 minutes.`;
+
+  await resend.emails.send({
+    from: getLanceFromAddress(),
+    to: [email],
+    subject,
+    text,
+    html,
+  });
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const { token, email, signer_type, contract_id } = await req.json();
+    const { token, email: rawEmail, signer_type, contract_id } = await req.json();
     const signerType = signer_type === "freelancer" ? "freelancer" : "client";
+    const email = normalizeEmail(rawEmail);
     if ((!token && !contract_id) || !email) {
       return new Response(JSON.stringify({ error: "Token/contract_id and email are required" }), {
         status: 400,
@@ -107,32 +146,14 @@ serve(async (req) => {
       });
     }
 
-    if (!Deno.env.get("RESEND_API_KEY")) {
-      return new Response(JSON.stringify({ error: "Email provider not configured." }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const lanceComms = await loadLanceEmailComms(supabase);
-    const safeIdentifier = escapeHtml(contract.identifier);
-    const safeSigner = escapeHtml(signerType);
-    const safeCode = escapeHtml(code);
-    const subject = `Your ${signerType} signing code for contract ${contract.identifier}`;
-    const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(lanceComms.primaryColor)};">Contract verification code</h2>
-<p style="margin:0 0 16px;color:#374151;">Use the code below to sign contract <strong>${safeIdentifier}</strong> as ${safeSigner}. This code expires in 10 minutes.</p>
-<div style="font-size:36px;font-weight:700;letter-spacing:8px;color:#111827;margin:18px 0;">${safeCode}</div>
-<p style="margin:0;font-size:13px;color:#6b7280;">If you did not request this code, you can ignore this email.</p>`;
-    const html = buildLanceUserEmail(lanceComms, contentHtml, {}, email);
-    const text = `Your signing code for contract ${contract.identifier} is ${code}. It expires in 10 minutes.`;
-
-    await resend.emails.send({
-      from: getLanceFromAddress(),
-      to: [email],
-      subject,
-      text,
-      html,
+    const emailTask = sendOtpEmail(supabase, contract, email, signerType, code).catch((error) => {
+      console.error("send-contract-otp email failed:", error);
     });
+    if (typeof EdgeRuntime !== "undefined") {
+      EdgeRuntime.waitUntil(emailTask);
+    } else {
+      void emailTask;
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

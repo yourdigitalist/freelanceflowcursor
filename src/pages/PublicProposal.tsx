@@ -3,12 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { PortalBackLink, usePortalTokenFromSearch } from "@/components/clients/PortalBackLink";
 import { ProposalDocument } from "@/components/proposals/ProposalDocument";
-
-function getInvokeErrorMessage(error: unknown, data: { error?: string } | null): string {
-  if (data?.error) return data.error;
-  if (error instanceof Error) return error.message;
-  return "Could not accept proposal. Please try again.";
-}
+import { readFunctionErrorMessage } from "@/lib/supabaseFunctions";
 
 export default function PublicProposal() {
   const { token } = useParams<{ token: string }>();
@@ -36,8 +31,8 @@ export default function PublicProposal() {
     setAcceptError(null);
     try {
       const { data: result, error } = await supabase.functions.invoke("accept-proposal", { body: { token } });
-      if (error || result?.error) {
-        throw new Error(getInvokeErrorMessage(error, result));
+      if (error || result?.error || result?.ok !== true) {
+        throw new Error(await readFunctionErrorMessage(error, "Could not accept proposal. Please try again.", result));
       }
       const acceptedAt = result?.accepted_at || new Date().toISOString();
       setData((prev: typeof data) =>
@@ -52,8 +47,14 @@ export default function PublicProposal() {
             }
           : prev,
       );
+      // Confirm server state without blocking the UI update above.
+      void supabase.functions.invoke("view-proposal", { body: { token, preview: isPreviewMode } }).then(({ data: refreshed }) => {
+        if (refreshed?.proposal?.status === "accepted") {
+          setData(refreshed);
+        }
+      });
     } catch (error: unknown) {
-      setAcceptError(getInvokeErrorMessage(error, null));
+      setAcceptError(error instanceof Error ? error.message : "Could not accept proposal. Please try again.");
     } finally {
       setAccepting(false);
     }

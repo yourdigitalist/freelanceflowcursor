@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
+import { isPublicClientRoute } from '@/lib/publicClientRoutes';
 
 declare global {
   interface Window {
@@ -11,9 +12,6 @@ declare global {
 
 const CRISP_WEBSITE_ID =
   import.meta.env.VITE_CRISP_WEBSITE_ID || 'dfd412fb-fc85-4788-b95e-72fa04284f19';
-
-const HIDE_ON_PREFIXES = ['/auth', '/reset-password', '/onboarding', '/review/', '/contract/', '/portal/', '/proposal/'];
-const HIDE_ON_EXACT = ['/terms', '/privacy'];
 
 export function CrispChat() {
   const { user } = useAuth();
@@ -39,10 +37,7 @@ export function CrispChat() {
   useEffect(() => {
     if (typeof window === 'undefined' || !window.$crisp) return;
 
-    const path = location.pathname;
-    const hiddenByPrefix = HIDE_ON_PREFIXES.some((prefix) => path.startsWith(prefix));
-    const hiddenByExact = HIDE_ON_EXACT.includes(path);
-    const shouldShow = !hiddenByPrefix && !hiddenByExact;
+    const shouldShow = !isPublicClientRoute(location.pathname);
 
     if (shouldShow) {
       window.$crisp.push(['do', 'chat:show']);
