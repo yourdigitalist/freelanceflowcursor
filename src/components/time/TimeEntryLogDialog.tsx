@@ -70,6 +70,8 @@ interface TimeEntryLogDialogProps {
   defaultDate?: string;
   defaultHours?: string;
   lockProject?: boolean;
+  /** When set, only projects for this client appear in the project picker. */
+  restrictToClientId?: string;
   onSaved?: () => void;
 }
 
@@ -84,6 +86,7 @@ export function TimeEntryLogDialog({
   defaultDate,
   defaultHours,
   lockProject = false,
+  restrictToClientId,
   onSaved,
 }: TimeEntryLogDialogProps) {
   const { user } = useAuth();
@@ -116,18 +119,18 @@ export function TimeEntryLogDialog({
 
   useEffect(() => {
     if (!open || !user) return;
-    void supabase
-      .from('projects')
-      .select('id, name, client_id, hourly_rate')
-      .order('name')
-      .then(({ data }) => setProjects(data || []));
+    let projectQuery = supabase.from('projects').select('id, name, client_id, hourly_rate').order('name');
+    if (restrictToClientId) {
+      projectQuery = projectQuery.eq('client_id', restrictToClientId);
+    }
+    void projectQuery.then(({ data }) => setProjects(data || []));
     void supabase
       .from('clients')
       .select('id, name')
       .is('archived_at', null)
       .order('name')
       .then(({ data }) => setClients(data || []));
-  }, [open, user]);
+  }, [open, user, restrictToClientId]);
 
   useEffect(() => {
     if (!dialogProject) {

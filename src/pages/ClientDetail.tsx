@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useBeforeUnload, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ClientAvatar } from "@/components/clients/ClientAvatar";
 import { ClientFormFields } from "@/components/clients/ClientFormFields";
@@ -56,6 +56,11 @@ import { ClientPortalSettings } from "@/components/clients/ClientPortalSettings"
 import { ClientActivityTimeline } from "@/components/clients/ClientActivityTimeline";
 import { buildClientActivityFeed, type ClientActivityRecord } from "@/lib/clientActivityFeed";
 import { TimeEntriesTable, type TimeEntriesTableEntry } from "@/components/time/TimeEntriesTable";
+import { TimeEntryLogDialog } from "@/components/time/TimeEntryLogDialog";
+import {
+  ClientDetailCreateDialogs,
+  type ClientDetailCreateType,
+} from "@/components/clients/ClientDetailCreateDialogs";
 import { usePagination } from "@/hooks/usePagination";
 import { useTableSort } from "@/hooks/useTableSort";
 import { SortableTableHead } from "@/components/ui/sortable-table-head";
@@ -251,11 +256,14 @@ export default function ClientDetail() {
   const [clientLogoPreview, setClientLogoPreview] = useState<string | null>(null);
   const [selectedAvatarColor, setSelectedAvatarColor] = useState(DEFAULT_CLIENT_AVATAR_COLOR);
   const clientLogoInputRef = useRef<HTMLInputElement>(null);
+  const loadedClientIdRef = useRef<string | null>(null);
   const { currency: profileCurrency } = useProfileCurrency();
   const clientMoneyCurrency = resolveMoneyCurrency(client?.currency, profileCurrency);
   const formatClientMoney = (amount: number | null | undefined) =>
     formatPortalMoney(amount, clientMoneyCurrency);
   const [loading, setLoading] = useState(true);
+  const [createType, setCreateType] = useState<ClientDetailCreateType>(null);
+  const [timeEntryOpen, setTimeEntryOpen] = useState(false);
   const { dateFormat, timeFormat } = useLocalePreferences();
 
   const [timeView, setTimeView] = useState<"day" | "week" | "month">("week");
@@ -296,60 +304,70 @@ export default function ClientDetail() {
     ),
   );
 
-  useEffect(() => {
-    const load = async () => {
-      if (!user?.id || !id) return;
-      const isInitialLoad = !client || client.id !== id;
-      if (isInitialLoad) setLoading(true);
-      try {
-        const [{ data: c, error: cErr }, { data: p }, { data: inv }, { data: prop }, { data: ctr }, { data: appr }, { data: fu }, { data: act }, { data: noteRows }] = await Promise.all([
-          supabase.from("clients").select("*").eq("id", id).eq("user_id", user.id).maybeSingle(),
-          supabase.from("projects").select("id, name, status, due_date, budget").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
-          supabase.from("invoices").select("id, invoice_number, status, total, due_date, created_at, updated_at").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
-          supabase.from("proposals").select("id, identifier, status, total, expires_at, sent_at, accepted_at, created_at").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
-          supabase.from("contracts").select("id, identifier, status, total, sent_at, created_at").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
-          supabase.from("review_requests").select("id, title, status, created_at, project_id, projects(name)").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
-          supabase.from("client_follow_ups").select("id, title, due_at, completed_at").eq("client_id", id).order("created_at", { ascending: false }),
-          supabase.from("client_activities").select("id, type, body, occurred_at").eq("client_id", id).order("occurred_at", { ascending: false }),
-          supabase.from("notes").select("id, title, note_comment, content, created_at").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
-        ]);
+  const refreshClientData = useCallback(async () => {
+    if (!user?.id || !id) return;
+    const isInitialLoad = loadedClientIdRef.current !== id;
+    if (isInitialLoad) setLoading(true);
+    try {
+      const [{ data: c, error: cErr }, { data: p }, { data: inv }, { data: prop }, { data: ctr }, { data: appr }, { data: fu }, { data: act }, { data: noteRows }] = await Promise.all([
+        supabase.from("clients").select("*").eq("id", id).eq("user_id", user.id).maybeSingle(),
+        supabase.from("projects").select("id, name, status, due_date, budget").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("invoices").select("id, invoice_number, status, total, due_date, created_at, updated_at").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("proposals").select("id, identifier, status, total, expires_at, sent_at, accepted_at, created_at").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("contracts").select("id, identifier, status, total, sent_at, created_at").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("review_requests").select("id, title, status, created_at, project_id, projects(name)").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("client_follow_ups").select("id, title, due_at, completed_at").eq("client_id", id).order("created_at", { ascending: false }),
+        supabase.from("client_activities").select("id, type, body, occurred_at").eq("client_id", id).order("occurred_at", { ascending: false }),
+        supabase.from("notes").select("id, title, note_comment, content, created_at").eq("client_id", id).eq("user_id", user.id).order("created_at", { ascending: false }),
+      ]);
 
-        if (cErr) throw cErr;
-        const loadedClient = (c as Client) || null;
-        setClient(loadedClient);
-        if (loadedClient) {
-          setFormValues(clientToFormValues(loadedClient, profileCurrency));
-          setFormPhone(loadedClient.phone || "");
-        }
-        setProjects((p || []) as Project[]);
-        setInvoices((inv || []) as Invoice[]);
-        setProposals((prop || []) as Proposal[]);
-        setContracts((ctr || []) as Contract[]);
-        setApprovals((appr || []) as Approval[]);
-        setFollowUps((fu || []) as FollowUp[]);
-        setActivities((act || []) as ClientActivityRecord[]);
-        setClientNotes((noteRows || []) as ClientNote[]);
-
-        const projectIds = ((p || []) as Project[]).map((row) => row.id);
-        if (projectIds.length > 0) {
-          const { data: te } = await supabase
-            .from("time_entries")
-            .select("id, project_id, task_id, description, started_at, start_time, end_time, total_duration_seconds, duration_minutes, billable, billing_status, projects(name, client_id), tasks(title)")
-            .in("project_id", projectIds)
-            .eq("user_id", user.id)
-            .order("started_at", { ascending: false });
-          setTimeEntries((te || []) as TimeEntry[]);
-        } else {
-          setTimeEntries([]);
-        }
-      } catch (error: any) {
-        toast({ title: "Failed to load client", description: error.message, variant: "destructive" });
-      } finally {
-        setLoading(false);
+      if (cErr) throw cErr;
+      const loadedClient = (c as Client) || null;
+      setClient(loadedClient);
+      if (loadedClient) {
+        setFormValues(clientToFormValues(loadedClient, profileCurrency));
+        setFormPhone(loadedClient.phone || "");
       }
-    };
-    void load();
-  }, [id, user?.id]);
+      setProjects((p || []) as Project[]);
+      setInvoices((inv || []) as Invoice[]);
+      setProposals((prop || []) as Proposal[]);
+      setContracts((ctr || []) as Contract[]);
+      setApprovals((appr || []) as Approval[]);
+      setFollowUps((fu || []) as FollowUp[]);
+      setActivities((act || []) as ClientActivityRecord[]);
+      setClientNotes((noteRows || []) as ClientNote[]);
+
+      const projectIds = ((p || []) as Project[]).map((row) => row.id);
+      if (projectIds.length > 0) {
+        const { data: te } = await supabase
+          .from("time_entries")
+          .select("id, project_id, task_id, description, started_at, start_time, end_time, total_duration_seconds, duration_minutes, billable, billing_status, projects(name, client_id), tasks(title)")
+          .in("project_id", projectIds)
+          .eq("user_id", user.id)
+          .order("started_at", { ascending: false });
+        setTimeEntries((te || []) as TimeEntry[]);
+      } else {
+        setTimeEntries([]);
+      }
+      loadedClientIdRef.current = id;
+    } catch (error: unknown) {
+      toast({
+        title: "Failed to load client",
+        description: error instanceof Error ? error.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [id, user?.id, profileCurrency, toast]);
+
+  useEffect(() => {
+    loadedClientIdRef.current = null;
+  }, [id]);
+
+  useEffect(() => {
+    void refreshClientData();
+  }, [refreshClientData]);
 
   useEffect(() => {
     setSelectedTimeDay(timeAnchor);
@@ -1224,7 +1242,7 @@ export default function ClientDetail() {
           <TabsContent value="projects" className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold">Projects</h3>
-              <Button asChild><Link to={`/projects?new=1&client=${client.id}`}>Add Project</Link></Button>
+              <Button onClick={() => setCreateType("project")}>Add Project</Button>
             </div>
             <Card><CardContent className="flex flex-col p-0">
               <DataTableFrame>
@@ -1586,8 +1604,8 @@ export default function ClientDetail() {
                   </div>
                 ) : null}
                 <div className="flex items-center justify-end border-t px-4 py-3">
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={`/time?view=day&client=${client.id}`}>+ Add entry</Link>
+                  <Button variant="outline" size="sm" onClick={() => setTimeEntryOpen(true)}>
+                    + Add entry
                   </Button>
                 </div>
               </CardContent>
@@ -1597,7 +1615,7 @@ export default function ClientDetail() {
           <TabsContent value="invoices" className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold">Invoices</h3>
-              <Button asChild><Link to={`/invoices?client=${client.id}`}>Create Invoice</Link></Button>
+              <Button onClick={() => setCreateType("invoice")}>Create Invoice</Button>
             </div>
             <Card><CardContent className="flex flex-col p-0">
               <DataTableFrame>
@@ -1646,7 +1664,7 @@ export default function ClientDetail() {
           <TabsContent value="proposals" className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold">Proposals</h3>
-              <Button asChild><Link to={`/proposals?client=${client.id}`}>Create Proposal</Link></Button>
+              <Button onClick={() => setCreateType("proposal")}>Create Proposal</Button>
             </div>
             <Card><CardContent className="flex flex-col p-0">
               <DataTableFrame>
@@ -1689,7 +1707,7 @@ export default function ClientDetail() {
           <TabsContent value="contracts" className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold">Contracts</h3>
-              <Button asChild><Link to={`/contracts?new=1&client=${client.id}`}>Create Contract</Link></Button>
+              <Button onClick={() => setCreateType("contract")}>Create Contract</Button>
             </div>
             <Card><CardContent className="flex flex-col p-0">
               <DataTableFrame>
@@ -1728,7 +1746,7 @@ export default function ClientDetail() {
           <TabsContent value="approvals" className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold">Approvals</h3>
-              <Button asChild><Link to={`/reviews?client=${client.id}`}>Create Approval</Link></Button>
+              <Button onClick={() => setCreateType("approval")}>Create Approval</Button>
             </div>
             <Card><CardContent className="flex flex-col p-0">
               <DataTableFrame>
@@ -1784,6 +1802,32 @@ export default function ClientDetail() {
             />
           </TabsContent>
         </Tabs>
+
+        <ClientDetailCreateDialogs
+          client={client}
+          projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+          createType={createType}
+          onCreateTypeChange={setCreateType}
+          onRefresh={refreshClientData}
+          onProjectsChange={(next) =>
+            setProjects((prev) => {
+              const byId = new Map(prev.map((p) => [p.id, p]));
+              for (const p of next) {
+                const existing = byId.get(p.id);
+                byId.set(p.id, existing ? { ...existing, name: p.name } : { ...p, status: "active", due_date: null, budget: null });
+              }
+              return Array.from(byId.values());
+            })
+          }
+        />
+
+        <TimeEntryLogDialog
+          open={timeEntryOpen}
+          onOpenChange={setTimeEntryOpen}
+          restrictToClientId={client.id}
+          defaultProjectId={projects.length === 1 ? projects[0].id : ""}
+          onSaved={() => void refreshClientData()}
+        />
       </div>
     </AppLayout>
   );
