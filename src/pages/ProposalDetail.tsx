@@ -15,8 +15,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ServiceFormModal } from "@/components/services/ServiceFormModal";
-import { CheckCircle, Plus, Trash2, Upload } from "@/components/icons";
+import { CheckCircle, Loader2, Plus, Trash2, Upload } from "@/components/icons";
+import { SlotIcon } from "@/contexts/IconSlotContext";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import { detailPageBreadcrumb } from "@/lib/breadcrumbs";
 import { useProfileCurrency } from "@/hooks/useProfileCurrency";
@@ -55,10 +57,23 @@ const PAYMENT_METHOD_OPTIONS = [
   "other",
 ];
 
+const DEFAULT_PROPOSAL_EMAIL_SUBJECT = "Proposal {{proposal_id}} from {{business_name}}";
+const DEFAULT_PROPOSAL_EMAIL_MESSAGE =
+  "Hi {{client_name}}, your proposal is ready for review. Total: {{total}}. Valid until {{expires_at}}.";
+
+const PROPOSAL_EMAIL_MERGE_TAGS = [
+  { tag: "{{client_name}}", label: "Client Name" },
+  { tag: "{{proposal_id}}", label: "Proposal ID" },
+  { tag: "{{total}}", label: "Total" },
+  { tag: "{{expires_at}}", label: "Valid Until" },
+  { tag: "{{business_name}}", label: "Business Name" },
+  { tag: "{{project_name}}", label: "Project Name" },
+];
+
 async function fetchProposalRow(proposalId: string, attempt = 0): Promise<{ data: Record<string, unknown> | null; error: Error | null }> {
   const { data, error } = await supabase
     .from("proposals")
-    .select("*, clients(name, company, currency, logo_url), projects(name)")
+    .select("*, clients(name, company, currency, logo_url, email), projects(name)")
     .eq("id", proposalId)
     .maybeSingle();
   if (data && !error) return { data: data as Record<string, unknown>, error: null };
@@ -99,6 +114,13 @@ export default function ProposalDetail() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [lastSaveError, setLastSaveError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  const [sendingProposal, setSendingProposal] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [ccEmails, setCcEmails] = useState<string[]>([]);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailMessage, setEmailMessage] = useState("");
+  const sendModalDefaultsAppliedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const saveInFlightRef = useRef(false);
   const skipAutosaveRef = useRef(true);
@@ -428,35 +450,105 @@ export default function ProposalDetail() {
           return false;
         }
       }
-      if (send) {
-        const { data: sendData, error: sendError } = await supabase.functions.invoke("send-proposal", {
-          body: {
-            proposalId: id,
-            origin: window.location.origin,
-          },
-        });
-        if (sendError || sendData?.error) {
-          setSaveStatus("failed");
-          setLastSaveError(sendData?.error || sendError?.message || "Failed to send proposal email");
-          if (!silent) {
-            toast({
-              title: "Proposal saved but email failed",
-              description: sendData?.error || sendError?.message || "Please try again.",
-              variant: "destructive",
-            });
-          }
-          return false;
-        }
-      }
       setSaveStatus("saved");
       setLastSaveError(null);
-      if (!silent) toast({ title: send ? "Proposal sent" : "Proposal saved" });
+      if (!silent) toast({ title: "Proposal saved" });
       await load();
       return true;
     } finally {
       saveInFlightRef.current = false;
     }
   };
+
+  const resolveEmailMessage = (template: string) => {
+    if (!template?.trim()) return "";
+    const projectName =
+      proposal?.projects?.name ||
+      (proposal?.project_id ? projects.find((p) => p.id === proposal.project_id)?.name : null) ||
+      projectNameInput.trim() ||
+      "";
+    return template
+      .replace(/\{\{client_name\}\}/gi, proposal?.clients?.name ?? "")
+      .replace(/\{\{proposal_id\}\}/gi, proposal?.identifier ?? "")
+      .replace(/\{\{total\}\}/gi, formatMoney(total))
+      .replace(/\{\{expires_at\}\}/gi, expiresOnLabel)
+      .replace(/\{\{business_name\}\}/gi, businessName || "")
+      .replace(/\{\{project_name\}\}/gi, projectName);
+  };
+
+  const applySendModalDefaults = () => {
+    setEmailSubject(resolveEmailMessage(DEFAULT_PROPOSAL_EMAIL_SUBJECT));
+    setEmailMessage(resolveEmailMessage(DEFAULT_PROPOSAL_EMAIL_MESSAGE));
+  };
+
+  const openSendModal = () => {
+    const requiredErrors = getRequiredFieldErrors();
+    if (requiredErrors.length) {
+      toast({
+        title: "Missing required fields",
+        description: requiredErrors[0],
+        variant: "destructive",
+      });
+      return;
+    }
+    const clientEmail = (proposal?.clients as { email?: string | null } | null)?.email || "";
+    setRecipientEmail(clientEmail);
+    setCcEmails([]);
+    sendModalDefaultsAppliedRef.current = false;
+    setIsSendModalOpen(true);
+  };
+
+  const handleSendProposal = async () => {
+    if (!recipientEmail.trim()) {
+      toast({
+        title: "Email required",
+        description: "Please enter the recipient email address",
+        variant: "destructive",
+      });
+      return;
+    }
+    setSendingProposal(true);
+    try {
+      const saved = await save(true, true);
+      if (!saved) return;
+
+      const { data: sendData, error: sendError } = await supabase.functions.invoke("send-proposal", {
+        body: {
+          proposalId: id,
+          origin: window.location.origin,
+          recipientEmail: recipientEmail.trim(),
+          cc: ccEmails.filter(Boolean),
+          message: emailMessage,
+          subject: emailSubject.trim() || undefined,
+        },
+      });
+      if (sendError || sendData?.error) {
+        toast({
+          title: "Proposal saved but email failed",
+          description: sendData?.error || sendError?.message || "Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({ title: "Proposal sent" });
+      setIsSendModalOpen(false);
+      setEmailMessage("");
+      setCcEmails([]);
+      await load();
+    } finally {
+      setSendingProposal(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isSendModalOpen) {
+      sendModalDefaultsAppliedRef.current = false;
+      return;
+    }
+    if (sendModalDefaultsAppliedRef.current || !proposal) return;
+    applySendModalDefaults();
+    sendModalDefaultsAppliedRef.current = true;
+  }, [isSendModalOpen, proposal?.identifier, proposal?.clients?.name, total, expiresOnLabel, businessName]);
 
   const onCoverUpload = async (file: File) => {
     if (!user || !proposal) return;
@@ -561,7 +653,7 @@ export default function ProposalDetail() {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => save(false)}>Save Changes</Button>
-            <Button onClick={() => save(true)}>Save and Send</Button>
+            <Button onClick={openSendModal}>Save and Send</Button>
           </div>
         </div>
 
@@ -840,7 +932,7 @@ export default function ProposalDetail() {
               <Button variant="outline" onClick={() => window.open(`/proposal/${proposal.public_token}?preview=1`, "_blank", "noopener,noreferrer")}>
                 Open client view
               </Button>
-              <Button onClick={() => save(true)}>Save and Send</Button>
+              <Button onClick={openSendModal}>Save and Send</Button>
             </div>
             <div className="max-h-[min(70vh,900px)] overflow-y-auto rounded-xl border bg-background">
               <ProposalDocument
@@ -974,6 +1066,150 @@ export default function ProposalDetail() {
           );
         }}
       />
+
+      <Dialog open={isSendModalOpen} onOpenChange={setIsSendModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send Proposal</DialogTitle>
+            <DialogDescription>
+              Send this proposal to your client via email with a link to review and accept.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="proposal-recipient-email">Recipient Email</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 shrink-0 text-xs"
+                  onClick={() => setCcEmails((prev) => [...prev, ""])}
+                >
+                  + Add CC
+                </Button>
+              </div>
+              <Input
+                id="proposal-recipient-email"
+                type="email"
+                value={recipientEmail}
+                onChange={(e) => setRecipientEmail(e.target.value)}
+                placeholder="client@example.com"
+              />
+            </div>
+            {ccEmails.length > 0 ? (
+              <div className="space-y-2">
+                {ccEmails.map((email, i) => (
+                  <div key={i} className="flex gap-2">
+                    <Input
+                      type="email"
+                      value={email}
+                      onChange={(e) =>
+                        setCcEmails((prev) => {
+                          const next = [...prev];
+                          next[i] = e.target.value;
+                          return next;
+                        })
+                      }
+                      placeholder="cc@example.com"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0"
+                      onClick={() => setCcEmails((prev) => prev.filter((_, j) => j !== i))}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="proposal-email-subject">Subject</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" className="h-8">
+                      Insert placeholder
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {PROPOSAL_EMAIL_MERGE_TAGS.map(({ tag, label }) => (
+                      <DropdownMenuItem
+                        key={tag}
+                        onSelect={() => setEmailSubject((s) => s + (s ? " " : "") + tag)}
+                      >
+                        {label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <Input
+                id="proposal-email-subject"
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+                placeholder="Email subject"
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="proposal-email-message">Message</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" className="h-8">
+                      Insert placeholder
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {PROPOSAL_EMAIL_MERGE_TAGS.map(({ tag, label }) => (
+                      <DropdownMenuItem
+                        key={tag}
+                        onSelect={() => setEmailMessage((m) => m + (m ? " " : "") + tag)}
+                      >
+                        {label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <Textarea
+                id="proposal-email-message"
+                value={emailMessage}
+                onChange={(e) => setEmailMessage(e.target.value)}
+                placeholder="Customize the message your client will receive."
+                rows={4}
+              />
+            </div>
+            <div className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
+              <p className="mb-1 font-medium text-foreground">Proposal Summary</p>
+              <p>Proposal: {proposal?.identifier || "Draft"}</p>
+              <p>Amount: {formatMoney(total)}</p>
+              <p>Valid until: {expiresOnLabel}</p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button variant="outline" onClick={() => setIsSendModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void handleSendProposal()} disabled={sendingProposal}>
+              {sendingProposal ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <SlotIcon slot="action_send" className="mr-2 h-4 w-4" />
+                  Send Proposal
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

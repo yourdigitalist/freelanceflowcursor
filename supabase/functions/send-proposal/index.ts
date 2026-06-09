@@ -113,7 +113,7 @@ serve(async (req) => {
       });
     }
 
-    const { proposalId, origin } = await req.json();
+    const { proposalId, origin, message, subject, recipientEmail, cc } = await req.json();
     if (!proposalId) {
       return new Response(JSON.stringify({ error: "Missing proposalId" }), {
         status: 400,
@@ -123,7 +123,7 @@ serve(async (req) => {
 
     const { data: proposal, error: proposalError } = await supabase
       .from("proposals")
-      .select("id, identifier, public_token, objective, presentation, total, client_id")
+      .select("id, identifier, public_token, objective, presentation, total, expires_at, client_id, projects(name)")
       .eq("id", proposalId)
       .eq("user_id", user.id)
       .single();
@@ -140,16 +140,24 @@ serve(async (req) => {
       .select("name, email")
       .eq("id", proposal.client_id)
       .single();
-    if (clientError || !client?.email) {
+    if (clientError || (!client?.email && !(typeof recipientEmail === "string" && recipientEmail.trim()))) {
       return new Response(JSON.stringify({ error: "Client email not found" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    const toEmail = (typeof recipientEmail === "string" && recipientEmail.trim())
+      ? recipientEmail.trim()
+      : String(client.email).trim();
+
+    const ccList = Array.isArray(cc)
+      ? cc.map((entry: unknown) => String(entry || "").trim()).filter(Boolean)
+      : [];
+
     const { data: profile } = await supabase
       .from("profiles")
-      .select("full_name, business_name, business_email, email, business_logo, client_email_primary_color, client_email_header_html, client_email_footer_html")
+      .select("full_name, business_name, business_email, email, business_logo, client_email_primary_color, client_email_header_html, client_email_footer_html, currency, currency_display, number_format")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -167,14 +175,37 @@ serve(async (req) => {
         : `${(Deno.env.get("SUPABASE_URL") || "").replace(/\/$/, "")}${rawLogo.startsWith("/") ? rawLogo : `/${rawLogo}`}`
       : "";
 
+    const formatTotal = (amount: number) => {
+      const code = (profile?.currency || "USD").toUpperCase();
+      const numStr = Number(amount || 0).toFixed(2);
+      return `${code} ${numStr}`;
+    };
+
+    const mergeTokens = {
+      client_name: String(client.name ?? ""),
+      proposal_id: String(proposal.identifier ?? ""),
+      total: formatTotal(Number(proposal.total || 0)),
+      expires_at: proposal.expires_at ? String(proposal.expires_at).slice(0, 10) : "",
+      business_name: String(profile?.business_name || profile?.full_name || "Your Business"),
+      project_name: String((proposal.projects as { name?: string } | null)?.name ?? ""),
+    };
+    const resolvedMessage = replaceTokens(String(message || ""), mergeTokens).trim();
+    const resolvedSubject = replaceTokens(
+      String(subject || "").trim() || `Proposal ${proposal.identifier} from ${mergeTokens.business_name}`,
+      mergeTokens,
+    );
+
+    const safeMessage = escapeHtml(resolvedMessage);
+    const messageBlock = safeMessage
+      ? `<div style="color: #333; white-space: pre-wrap; margin-bottom: 16px;">${safeMessage}</div>`
+      : `<p style="color: #333;">Hi ${escapeHtml(client.name)}, your proposal is ready for review.</p>`;
+
     const coreHtml = `
       <h2 style="color: ${primaryColor}; margin-top: 0;">Proposal ${escapeHtml(proposal.identifier)}</h2>
-      <p style="color: #333;">Hi ${escapeHtml(client.name)}, your proposal is ready for review.</p>
+      ${messageBlock}
       <p style="margin: 24px 0;">
         <a href="${escapeHtml(proposalUrl)}" style="display: inline-block; background: ${primaryColor}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px;">Open proposal</a>
       </p>
-      <p style="color: #666;">${escapeHtml(proposal.presentation || "")}</p>
-      <p style="color: #666;">${escapeHtml(proposal.objective || "")}</p>
       <p style="color: #999; font-size: 12px;">Or copy this link: ${escapeHtml(proposalUrl)}</p>
     `;
 
@@ -203,8 +234,9 @@ serve(async (req) => {
 
     const { data: emailData, error: emailError } = await resend.emails.send({
       from: `${fromDisplayName} <${RESEND_FROM_EMAIL}>`,
-      to: [client.email],
-      subject: `Proposal ${proposal.identifier} from ${fromDisplayName}`,
+      to: [toEmail],
+      ...(ccList.length ? { cc: ccList } : {}),
+      subject: resolvedSubject,
       html: emailHtml,
       ...(replyToEmail ? { reply_to: replyToEmail } : {}),
     });
