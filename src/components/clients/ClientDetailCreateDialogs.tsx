@@ -147,6 +147,7 @@ export function ClientDetailCreateDialogs({
         onOpenChange={(open) => !open && close()}
         lockedClientId={client.id}
         lockedClientName={client.name}
+        lockedClientEmail={client.email}
         projects={clientProjects.map((p) => ({ ...p, client_id: client.id }))}
         onSuccess={async () => {
           await onRefresh();

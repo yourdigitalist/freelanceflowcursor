@@ -79,6 +79,7 @@ import { SlotIcon } from '@/contexts/IconSlotContext';
 import { getSiteUrl } from '@/lib/site-url';
 import { uploadReviewFile } from '@/lib/reviewFileUpload';
 import { sendReviewRequestEmail } from '@/lib/sendReviewRequest';
+import { applyClientEmailToRecipients } from '@/lib/reviewRecipients';
 import { ProjectFormDialog } from '@/components/projects/ProjectFormDialog';
 
 interface ReviewFolder {
@@ -173,15 +174,21 @@ export default function ReviewRequests() {
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [folderFilter, setFolderFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  // When creating a new request, auto-fill recipients with the selected client's email
+  const autoClientEmailRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (editingRequest || !requestClientId) return;
-    const client = clients.find(c => c.id === requestClientId);
-    const email = client?.email?.trim();
-    if (email) {
-      setRequestRecipients(prev => (prev.includes(email) ? prev : [...prev, email]));
-    }
-  }, [requestClientId, editingRequest, clients]);
+    if (editingRequest || !requestDialogOpen) return;
+
+    const clientEmail = requestClientId
+      ? (clients.find((c) => c.id === requestClientId)?.email?.trim() || null)
+      : null;
+
+    setRequestRecipients((prev) => {
+      const synced = applyClientEmailToRecipients(prev, autoClientEmailRef.current, clientEmail);
+      autoClientEmailRef.current = synced.autoEmail;
+      return synced.recipients;
+    });
+  }, [requestClientId, editingRequest, clients, requestDialogOpen]);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -251,6 +258,7 @@ export default function ReviewRequests() {
     setShowCreateFolderInline(false);
     setInlineFolderName('');
     setCreateProjectDialogOpen(false);
+    autoClientEmailRef.current = null;
   };
 
   const createFolderInline = async () => {

@@ -33,6 +33,7 @@ import { ProjectFormDialog } from "@/components/projects/ProjectFormDialog";
 import { getSiteUrl } from "@/lib/site-url";
 import { uploadReviewFile } from "@/lib/reviewFileUpload";
 import { sendReviewRequestEmail } from "@/lib/sendReviewRequest";
+import { applyClientEmailToRecipients } from "@/lib/reviewRecipients";
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const PDF_TYPES = ["application/pdf"];
@@ -71,6 +72,7 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   lockedClientId?: string;
   lockedClientName?: string;
+  lockedClientEmail?: string | null;
   projects?: Project[];
   onSuccess?: () => void | Promise<void>;
 };
@@ -80,6 +82,7 @@ export function ReviewRequestCreateDialog({
   onOpenChange,
   lockedClientId,
   lockedClientName,
+  lockedClientEmail,
   projects: projectsProp = [],
   onSuccess,
 }: Props) {
@@ -105,6 +108,7 @@ export function ReviewRequestCreateDialog({
   const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
   const [wordWarningOpen, setWordWarningOpen] = useState(false);
   const pendingWordFilesRef = useRef<File[]>([]);
+  const autoClientEmailRef = useRef<string | null>(null);
 
   const resetForm = () => {
     setTitle("");
@@ -120,6 +124,7 @@ export function ReviewRequestCreateDialog({
     setShowCreateFolderInline(false);
     setInlineFolderName("");
     setCreateProjectDialogOpen(false);
+    autoClientEmailRef.current = null;
   };
 
   useEffect(() => {
@@ -142,6 +147,23 @@ export function ReviewRequestCreateDialog({
       setClientId(lockedClientId);
     }
   }, [open, user, lockedClientId]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const selectedClientId = lockedClientId || clientId;
+    const clientEmail = !selectedClientId
+      ? null
+      : lockedClientId
+        ? (lockedClientEmail?.trim() || clients.find((c) => c.id === lockedClientId)?.email?.trim() || null)
+        : (clients.find((c) => c.id === clientId)?.email?.trim() || null);
+
+    setRecipients((prev) => {
+      const synced = applyClientEmailToRecipients(prev, autoClientEmailRef.current, clientEmail);
+      autoClientEmailRef.current = synced.autoEmail;
+      return synced.recipients;
+    });
+  }, [open, clientId, clients, lockedClientId, lockedClientEmail]);
 
   const filteredProjects = projects.filter((p) => !clientId || p.client_id === clientId);
 
