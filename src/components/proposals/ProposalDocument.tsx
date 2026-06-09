@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Loader2 } from "@/components/icons";
 import { SlotIcon } from "@/contexts/IconSlotContext";
 import { clientLogoPublicUrl } from "@/lib/clientLogo";
 import { displayProposalClientCompany, displayProposalClientName } from "@/lib/proposalClientDisplay";
@@ -20,6 +21,8 @@ export type ProposalDocumentProps = {
   showAcceptActions?: boolean;
   onAccept?: () => void;
   onSendMessage?: () => void;
+  accepting?: boolean;
+  acceptError?: string | null;
 };
 
 const DEFAULT_MAIN_COLOR = "#9b63e9";
@@ -55,6 +58,8 @@ export function ProposalDocument({
   showAcceptActions = true,
   onAccept,
   onSendMessage,
+  accepting = false,
+  acceptError = null,
 }: ProposalDocumentProps) {
   const proposalMainColor =
     proposalMainColorProp ||
@@ -280,20 +285,34 @@ export function ProposalDocument({
               </p>
             </div>
           ) : (
-            <div className="flex justify-center gap-2.5">
-              <Button
-                variant="outline"
-                className="border-[#a0a0b8] bg-transparent text-xs text-white hover:bg-white/10"
-                onClick={onSendMessage}
-              >
-                Send a message
-              </Button>
-              <Button
-                className="bg-[#22c55e] text-xs text-white hover:bg-[#16a34a]"
-                onClick={onAccept}
-              >
-                Accept Proposal
-              </Button>
+            <div className="space-y-3">
+              {acceptError ? (
+                <p className="text-sm text-red-300">{acceptError}</p>
+              ) : null}
+              <div className="flex justify-center gap-2.5">
+                <Button
+                  variant="outline"
+                  className="border-[#a0a0b8] bg-transparent text-xs text-white hover:bg-white/10"
+                  onClick={onSendMessage}
+                  disabled={accepting}
+                >
+                  Send a message
+                </Button>
+                <Button
+                  className="bg-[#22c55e] text-xs text-white hover:bg-[#16a34a]"
+                  onClick={onAccept}
+                  disabled={accepting}
+                >
+                  {accepting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Accepting...
+                    </>
+                  ) : (
+                    "Accept Proposal"
+                  )}
+                </Button>
+              </div>
             </div>
           )}
         </section>

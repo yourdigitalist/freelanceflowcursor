@@ -14,6 +14,10 @@ import {
   upsertUserNotification,
 } from "../_shared/user-notification.ts";
 
+declare const EdgeRuntime: {
+  waitUntil: (promise: Promise<unknown>) => void;
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -21,6 +25,61 @@ const corsHeaders = {
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
 const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") || "https://www.getlance.app").trim().replace(/\/$/, "");
+
+async function notifyOwnerOfFirstRead(
+  supabase: ReturnType<typeof createClient>,
+  proposal: { id: string; user_id: string },
+  identifier: string,
+  normalizedBusiness: {
+    business_email?: string | null;
+    email?: string | null;
+    notification_preferences?: unknown;
+  } | null,
+) {
+  const prefs = getProposalPrefs(
+    (normalizedBusiness?.notification_preferences as NotificationPreferences | null) || null,
+  );
+  const title = "Proposal viewed by client";
+  const body = `Your proposal ${identifier} was opened by the client.`;
+  const link = `/proposals/${proposal.id}`;
+  const eventKey = `proposal_viewed:${proposal.id}`;
+
+  if (channelEnabled(prefs?.viewed, "inApp")) {
+    await upsertUserNotification(supabase, {
+      user_id: proposal.user_id,
+      type: "proposal",
+      title,
+      body,
+      link,
+      event_key: eventKey,
+    });
+  }
+
+  const ownerEmail = (normalizedBusiness?.business_email || normalizedBusiness?.email || "").trim();
+  if (channelEnabled(prefs?.viewed, "email") && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
+    const lanceComms = await loadLanceEmailComms(supabase);
+    const primaryColor = lanceComms.primaryColor;
+    const proposalUrl = `${APP_BASE_URL}/proposals/${proposal.id}`;
+    const safeIdentifier = escapeHtml(identifier);
+    const safeUrl = escapeHtml(proposalUrl);
+    const coreHtml = `
+              <h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">Proposal viewed by client</h2>
+              <p style="color:#374151;margin:0 0 20px;">Your proposal <strong>${safeIdentifier}</strong> was opened by the client.</p>
+              <p style="margin:0;">
+                <a href="${safeUrl}" style="display:inline-block;background:${escapeHtml(primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">View proposal</a>
+              </p>`;
+    const html = buildLanceUserEmail(lanceComms, coreHtml, {}, ownerEmail);
+    const text = `${body}\n\nView proposal: ${proposalUrl}`;
+
+    await resend.emails.send({
+      from: getLanceFromAddress(),
+      to: [ownerEmail],
+      subject: `Proposal viewed: ${identifier}`,
+      text,
+      html,
+    });
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -83,49 +142,14 @@ serve(async (req) => {
     if (firstRead && !isOwnerView) {
       proposal.status = "read";
       proposal.read_at = new Date().toISOString();
-      const prefs = getProposalPrefs(
-        (normalizedBusiness?.notification_preferences as NotificationPreferences | null) || null,
-      );
       const identifier = firstRead.identifier || proposal.identifier;
-      const title = "Proposal viewed by client";
-      const body = `Your proposal ${identifier} was opened by the client.`;
-      const link = `/proposals/${proposal.id}`;
-      const eventKey = `proposal_viewed:${proposal.id}`;
-
-      if (channelEnabled(prefs?.viewed, "inApp")) {
-        await upsertUserNotification(supabase, {
-          user_id: proposal.user_id,
-          type: "proposal",
-          title,
-          body,
-          link,
-          event_key: eventKey,
-        });
-      }
-
-      const ownerEmail = (normalizedBusiness?.business_email || normalizedBusiness?.email || "").trim();
-      if (channelEnabled(prefs?.viewed, "email") && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
-        const lanceComms = await loadLanceEmailComms(supabase);
-        const primaryColor = lanceComms.primaryColor;
-        const proposalUrl = `${APP_BASE_URL}/proposals/${proposal.id}`;
-        const safeIdentifier = escapeHtml(identifier);
-        const safeUrl = escapeHtml(proposalUrl);
-        const coreHtml = `
-              <h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">Proposal viewed by client</h2>
-              <p style="color:#374151;margin:0 0 20px;">Your proposal <strong>${safeIdentifier}</strong> was opened by the client.</p>
-              <p style="margin:0;">
-                <a href="${safeUrl}" style="display:inline-block;background:${escapeHtml(primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">View proposal</a>
-              </p>`;
-        const html = buildLanceUserEmail(lanceComms, coreHtml, {}, ownerEmail);
-        const text = `${body}\n\nView proposal: ${proposalUrl}`;
-
-        await resend.emails.send({
-          from: getLanceFromAddress(),
-          to: [ownerEmail],
-          subject: `Proposal viewed: ${identifier}`,
-          text,
-          html,
-        });
+      const notifyTask = notifyOwnerOfFirstRead(supabase, proposal, identifier, normalizedBusiness).catch((error) => {
+        console.error("view-proposal notify failed:", error);
+      });
+      if (typeof EdgeRuntime !== "undefined") {
+        EdgeRuntime.waitUntil(notifyTask);
+      } else {
+        void notifyTask;
       }
     }
 

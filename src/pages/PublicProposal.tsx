@@ -4,11 +4,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { PortalBackLink, usePortalTokenFromSearch } from "@/components/clients/PortalBackLink";
 import { ProposalDocument } from "@/components/proposals/ProposalDocument";
 
+function getInvokeErrorMessage(error: unknown, data: { error?: string } | null): string {
+  if (data?.error) return data.error;
+  if (error instanceof Error) return error.message;
+  return "Could not accept proposal. Please try again.";
+}
+
 export default function PublicProposal() {
   const { token } = useParams<{ token: string }>();
   const [searchParams] = useSearchParams();
   const [data, setData] = useState<any>(null);
   const [state, setState] = useState<"loading" | "unavailable" | "live">("loading");
+  const [accepting, setAccepting] = useState(false);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
   const isPreviewMode = searchParams.get("preview") === "1";
   const portalToken = usePortalTokenFromSearch();
 
@@ -23,9 +31,32 @@ export default function PublicProposal() {
   }, [token, isPreviewMode]);
 
   const accept = async () => {
-    await supabase.functions.invoke("accept-proposal", { body: { token } });
-    const { data } = await supabase.functions.invoke("view-proposal", { body: { token } });
-    setData(data);
+    if (!token || accepting || data?.proposal?.status === "accepted") return;
+    setAccepting(true);
+    setAcceptError(null);
+    try {
+      const { data: result, error } = await supabase.functions.invoke("accept-proposal", { body: { token } });
+      if (error || result?.error) {
+        throw new Error(getInvokeErrorMessage(error, result));
+      }
+      const acceptedAt = result?.accepted_at || new Date().toISOString();
+      setData((prev: typeof data) =>
+        prev
+          ? {
+              ...prev,
+              proposal: {
+                ...prev.proposal,
+                status: "accepted",
+                accepted_at: acceptedAt,
+              },
+            }
+          : prev,
+      );
+    } catch (error: unknown) {
+      setAcceptError(getInvokeErrorMessage(error, null));
+    } finally {
+      setAccepting(false);
+    }
   };
 
   if (state === "loading") return <div className="min-h-screen grid place-items-center text-sm text-muted-foreground">Loading proposal...</div>;
@@ -45,6 +76,8 @@ export default function PublicProposal() {
         business={data.business}
         coverImageUrl={data.cover_image_signed_url}
         onAccept={accept}
+        accepting={accepting}
+        acceptError={acceptError}
         onSendMessage={() => {
           window.location.href = `mailto:${data.business?.business_email || data.business?.email || ""}`;
         }}

@@ -14,78 +14,147 @@ import {
   upsertUserNotification,
 } from "../_shared/user-notification.ts";
 
+declare const EdgeRuntime: {
+  waitUntil: (promise: Promise<unknown>) => void;
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
-const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
 const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") || "https://www.getlance.app").trim().replace(/\/$/, "");
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  try {
-    const { token } = await req.json();
-    if (!token) return new Response(JSON.stringify({ error: "Token is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+async function notifyOwnerOfAcceptance(
+  supabase: ReturnType<typeof createClient>,
+  proposal: { id: string; identifier: string; user_id: string },
+) {
+  const { data: business } = await supabase
+    .from("profiles")
+    .select("business_email, email, notification_preferences")
+    .eq("user_id", proposal.user_id)
+    .maybeSingle();
+  const prefs = getProposalPrefs(
+    (business?.notification_preferences as NotificationPreferences | null) || null,
+  );
+  const title = "Proposal accepted";
+  const body = `Your proposal ${proposal.identifier} was accepted by the client.`;
+  const link = `/proposals/${proposal.id}`;
+  const eventKey = `proposal_accepted:${proposal.id}`;
 
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const { data: proposal } = await supabase.from("proposals").select("id, status, identifier, user_id").eq("public_token", token).single();
-    if (!proposal || proposal.status === "draft") {
-      return new Response(JSON.stringify({ error: "Invalid proposal state" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    if (proposal.status !== "accepted") {
-      await supabase.from("proposals").update({ status: "accepted", accepted_at: new Date().toISOString() }).eq("id", proposal.id);
-      const { data: business } = await supabase
-        .from("profiles")
-        .select("business_email, email, notification_preferences")
-        .eq("user_id", proposal.user_id)
-        .maybeSingle();
-      const prefs = getProposalPrefs(
-        (business?.notification_preferences as NotificationPreferences | null) || null,
-      );
-      const title = "Proposal accepted";
-      const body = `Your proposal ${proposal.identifier} was accepted by the client.`;
-      const link = `/proposals/${proposal.id}`;
-      const eventKey = `proposal_accepted:${proposal.id}`;
+  if (channelEnabled(prefs?.accepted, "inApp")) {
+    await upsertUserNotification(supabase, {
+      user_id: proposal.user_id,
+      type: "proposal",
+      title,
+      body,
+      link,
+      event_key: eventKey,
+    });
+  }
 
-      if (channelEnabled(prefs?.accepted, "inApp")) {
-        await upsertUserNotification(supabase, {
-          user_id: proposal.user_id,
-          type: "proposal",
-          title,
-          body,
-          link,
-          event_key: eventKey,
-        });
-      }
-
-      const ownerEmail = (business?.business_email || business?.email || "").trim();
-      if (channelEnabled(prefs?.accepted, "email") && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
-        const lanceComms = await loadLanceEmailComms(supabase);
-        const primaryColor = lanceComms.primaryColor;
-        const proposalUrl = `${APP_BASE_URL}/proposals/${proposal.id}`;
-        const safeIdentifier = escapeHtml(proposal.identifier);
-        const safeUrl = escapeHtml(proposalUrl);
-        const coreHtml = `
+  const ownerEmail = (business?.business_email || business?.email || "").trim();
+  if (channelEnabled(prefs?.accepted, "email") && ownerEmail && Deno.env.get("RESEND_API_KEY")) {
+    const lanceComms = await loadLanceEmailComms(supabase);
+    const primaryColor = lanceComms.primaryColor;
+    const proposalUrl = `${APP_BASE_URL}/proposals/${proposal.id}`;
+    const safeIdentifier = escapeHtml(proposal.identifier);
+    const safeUrl = escapeHtml(proposalUrl);
+    const coreHtml = `
               <h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">Proposal accepted</h2>
               <p style="color:#374151;margin:0 0 20px;">Great news! Your proposal <strong>${safeIdentifier}</strong> was accepted by the client.</p>
               <p style="margin:0;">
                 <a href="${safeUrl}" style="display:inline-block;background:${escapeHtml(primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">View proposal</a>
               </p>`;
-        const html = buildLanceUserEmail(lanceComms, coreHtml, {}, ownerEmail);
-        const text = `${body}\n\nView proposal: ${proposalUrl}`;
+    const html = buildLanceUserEmail(lanceComms, coreHtml, {}, ownerEmail);
+    const text = `${body}\n\nView proposal: ${proposalUrl}`;
 
-        await resend.emails.send({
-          from: getLanceFromAddress(),
-          to: [ownerEmail],
-          subject: `Proposal accepted: ${proposal.identifier}`,
-          text,
-          html,
-        });
+    await resend.emails.send({
+      from: getLanceFromAddress(),
+      to: [ownerEmail],
+      subject: `Proposal accepted: ${proposal.identifier}`,
+      text,
+      html,
+    });
+  }
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  try {
+    const { token } = await req.json();
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Token is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { data: proposal } = await supabase
+      .from("proposals")
+      .select("id, status, identifier, user_id, accepted_at")
+      .eq("public_token", token)
+      .single();
+
+    if (!proposal || proposal.status === "draft") {
+      return new Response(JSON.stringify({ error: "Invalid proposal state" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (proposal.status === "accepted") {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          already_accepted: true,
+          accepted_at: proposal.accepted_at || new Date().toISOString(),
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const acceptedAt = new Date().toISOString();
+    const { data: updated, error: updateError } = await supabase
+      .from("proposals")
+      .update({ status: "accepted", accepted_at: acceptedAt })
+      .eq("id", proposal.id)
+      .neq("status", "accepted")
+      .select("id, identifier, user_id")
+      .maybeSingle();
+
+    if (updateError) {
+      return new Response(JSON.stringify({ error: updateError.message }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (updated) {
+      const notifyTask = notifyOwnerOfAcceptance(supabase, updated).catch((error) => {
+        console.error("accept-proposal notify failed:", error);
+      });
+      if (typeof EdgeRuntime !== "undefined") {
+        EdgeRuntime.waitUntil(notifyTask);
+      } else {
+        void notifyTask;
       }
     }
-    return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  } catch (error: any) {
-    return new Response(JSON.stringify({ error: error?.message || "Unknown error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        accepted_at: acceptedAt,
+        already_accepted: !updated,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
