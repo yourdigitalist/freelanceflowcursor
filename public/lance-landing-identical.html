@@ -330,6 +330,7 @@
   }
 
   .hero-screenshot-wrapper {
+    position: relative;
     border-radius: 18px;
     overflow: hidden;
     box-shadow: 0 40px 100px rgba(155,99,233,0.18), 0 8px 32px rgba(0,0,0,0.08);
@@ -343,6 +344,104 @@
     will-change: transform;
   }
   .hero-screenshot-wrapper:hover { transform: perspective(1400px) translateZ(0) rotateX(3deg); }
+  .hero-video-play {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    height: 72px;
+    margin: 0;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.60);
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transform: translate(-50%, -50%);
+    transition: all 200ms ease;
+  }
+  .hero-video-play:hover {
+    background: rgba(255, 255, 255, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.80);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.20),
+      inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    transform: translate(-50%, -50%) scale(1.06);
+  }
+  .hero-video-play:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.65);
+    outline-offset: 3px;
+  }
+  .hero-video-play-icon {
+    display: block;
+    width: 0;
+    height: 0;
+    border-top: 9px solid transparent;
+    border-bottom: 9px solid transparent;
+    border-left: 15px solid rgba(255, 255, 255, 0.95);
+    margin-left: 4px;
+  }
+  .hero-video-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 16px;
+  }
+  .hero-video-lightbox.is-open {
+    display: flex;
+  }
+  .hero-video-lightbox-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.88);
+  }
+  .hero-video-lightbox-dialog {
+    position: relative;
+    z-index: 1;
+    width: min(92vw, 960px);
+  }
+  .hero-video-lightbox-close {
+    position: absolute;
+    right: 0;
+    top: -40px;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: rgba(255,255,255,0.85);
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+  .hero-video-lightbox-close:hover {
+    color: #fff;
+  }
+  .hero-video-lightbox-frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: 12px;
+    background: #000;
+  }
+  .hero-video-lightbox-frame iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
   .hero-screenshot img {
     width: 100%;
     height: auto;
@@ -1689,6 +1788,19 @@
         decoding="async"
         fetchpriority="high"
       >
+      <button type="button" class="hero-video-play" id="hero-video-play" aria-label="Play product demo video">
+        <span class="hero-video-play-icon" aria-hidden="true"></span>
+      </button>
+    </div>
+  </div>
+
+  <div id="hero-video-lightbox" class="hero-video-lightbox landing-part-top" hidden>
+    <div class="hero-video-lightbox-backdrop" id="hero-video-lightbox-backdrop"></div>
+    <div class="hero-video-lightbox-dialog" role="dialog" aria-modal="true" aria-label="Lance demo video">
+      <button type="button" class="hero-video-lightbox-close" id="hero-video-lightbox-close" aria-label="Close video">&times;</button>
+      <div class="hero-video-lightbox-frame">
+        <iframe id="hero-video-iframe" title="Lance - Demo Video" allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+      </div>
     </div>
   </div>
 
@@ -2479,6 +2591,40 @@
     });
   }, { threshold: 0.08 });
   reveals.forEach(r => observer.observe(r));
+
+  // Hero demo video lightbox (Vimeo)
+  (function initHeroVideoLightbox() {
+    const playBtn = document.getElementById('hero-video-play');
+    const lightbox = document.getElementById('hero-video-lightbox');
+    const iframe = document.getElementById('hero-video-iframe');
+    const closeBtn = document.getElementById('hero-video-lightbox-close');
+    const backdrop = document.getElementById('hero-video-lightbox-backdrop');
+    if (!playBtn || !lightbox || !iframe) return;
+
+    const vimeoId = '1200015357';
+    const buildUrl = () => `https://player.vimeo.com/video/${vimeoId}?badge=0&autopause=0&title=0&byline=0&portrait=0&dnt=1&autoplay=1`;
+
+    const open = () => {
+      iframe.src = buildUrl();
+      lightbox.classList.add('is-open');
+      lightbox.removeAttribute('hidden');
+      document.body.style.overflow = 'hidden';
+    };
+
+    const close = () => {
+      lightbox.classList.remove('is-open');
+      lightbox.setAttribute('hidden', '');
+      iframe.removeAttribute('src');
+      document.body.style.overflow = '';
+    };
+
+    playBtn.addEventListener('click', open);
+    closeBtn?.addEventListener('click', close);
+    backdrop?.addEventListener('click', close);
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && lightbox.classList.contains('is-open')) close();
+    });
+  })();
 
   // Hero rotating profession — line recentres as active word width changes
   (function initHeroRoleRotate() {

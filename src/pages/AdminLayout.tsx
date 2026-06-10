@@ -13,7 +13,6 @@ import { SlotIcon } from '@/contexts/IconSlotContext';
 const adminNavItems = [
   { path: '/admin/overview', label: 'Overview', slot: 'admin_overview' as const },
   { path: '/admin/metrics', label: 'Metrics', slot: 'admin_metrics' as const },
-  { path: '/admin/landing-content', label: 'Landing content', slot: 'admin_landing_content' as const },
   { path: '/admin/announcements', label: 'Announcements', slot: 'admin_announcements' as const },
   { path: '/admin/comms', label: 'Comms & templates', slot: 'admin_comms' as const },
   { path: '/admin/branding', label: 'Branding', slot: 'admin_branding' as const },

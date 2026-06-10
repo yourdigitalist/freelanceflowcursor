@@ -9,7 +9,6 @@ export function getAdminBreadcrumbs(pathname: string): BreadcrumbSegment[] {
   const pageLabels: Record<string, string> = {
     '/admin/overview': 'Overview',
     '/admin/metrics': 'Metrics',
-    '/admin/landing-content': 'Landing content',
     '/admin/announcements': 'Announcements',
     '/admin/comms': 'Comms & templates',
     '/admin/branding': 'Branding',

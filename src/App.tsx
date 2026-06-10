@@ -43,7 +43,6 @@ import AdminMetrics from "./pages/admin/AdminMetrics";
 import AdminIcons from "./pages/admin/AdminIcons";
 import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
 import AdminComms from "./pages/admin/AdminComms";
-import LandingContentSettings from "./pages/admin/LandingContentSettings";
 import SystemCheck from "./pages/admin/SystemCheck";
 import Notifications from "./pages/Notifications";
 import SearchResults from "./pages/SearchResults";
@@ -297,7 +296,6 @@ function AppRoutes() {
         <Route path="help-content" element={<HelpContentSettings />} />
         <Route path="feature-requests" element={<FeatureRequestSettings />} />
         <Route path="feedback" element={<FeedbackSettings />} />
-        <Route path="landing-content" element={<LandingContentSettings />} />
       </Route>
       <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>
         <Route index element={<Navigate to="profile" replace />} />
