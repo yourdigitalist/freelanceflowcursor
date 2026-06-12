@@ -2,10 +2,13 @@
 /** Build HTML previews for all transactional emails (admin catalog). */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import {
+  buildAnnouncementEmail,
   buildLanceUserEmail,
+  buildTrialReminderEmail,
   escapeHtml,
   getLanceFromAddress,
   getLanceSignature,
+  getLanceUserFirstName,
   LANCE_EMAIL_LOGO_BLACK_URL,
   LANCE_EMAIL_LOGO_WHITE_URL,
   LANCE_PRODUCT_NAME,
@@ -180,7 +183,8 @@ export async function buildAllEmailPreviews(
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
   const lanceComms = await loadLanceEmailComms(supabase);
   const primaryColor = lanceComms.primaryColor;
-  const userName = (profile.full_name || "there").trim() || "there";
+  const firstName = getLanceUserFirstName(profile.full_name);
+  const userName = firstName;
   const userEmail = (profile.email || "you@example.com").trim();
   const businessName = (profile.business_name || profile.full_name || "Your Business").trim();
   const clientName = "Acme Design Co.";
@@ -242,39 +246,17 @@ export async function buildAllEmailPreviews(
   }
 
   // —— Lance → User ——
-  const trialVariants = [
-    { id: "lance-trial-3d", daysLeft: 3, subject: `Your ${LANCE_PRODUCT_NAME} trial ends in 3 days`, bodyKey: "trial_body_5d" as const },
-    { id: "lance-trial-1d", daysLeft: 1, subject: `Your ${LANCE_PRODUCT_NAME} trial ends tomorrow`, bodyKey: "trial_body_1d" as const },
-    { id: "lance-trial-0d", daysLeft: 0, subject: `Your ${LANCE_PRODUCT_NAME} trial ends today`, bodyKey: "trial_body_0d" as const },
-  ];
-  for (const v of trialVariants) {
-    const fallbackBody =
-      v.daysLeft === 3
-        ? `Hi ${userName},\n\nYour 15-day free trial ends in 3 days. Add your payment details to keep access to all your clients, projects, invoices, and contracts.\n\nAdd payment details: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`
-        : v.daysLeft === 1
-          ? `Hi ${userName},\n\nYour free trial ends tomorrow. Add a payment method to keep access after your trial ends.\n\nAdd payment: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`
-          : `Hi ${userName},\n\nYour free trial ends today. Add a payment method to keep access to ${LANCE_PRODUCT_NAME}.\n\nAdd payment: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`;
-    const customBody = (commsRow?.[v.bodyKey] as string | null) || "";
-    const body = customBody.trim() ? customBody : fallbackBody;
-    const safeBody = escapeHtml(body).replace(/\n/g, "<br>");
-    const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">${escapeHtml(v.subject)}</h2><p style="margin:0;color:#374151;">${safeBody}</p>
-<p style="margin:16px 0 0;"><a href="${escapeHtml(billingUrl)}" style="display:inline-block;background:${escapeHtml(primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Manage subscription</a></p>`;
+  for (const daysLeft of [3, 1, 0] as const) {
+    const trialEmail = buildTrialReminderEmail(daysLeft, profile.full_name, billingUrl, primaryColor);
     templates.push({
-      id: v.id,
-      name: `Trial reminder (${v.daysLeft === 3 ? "3 days left" : v.daysLeft === 1 ? "1 day left" : "ends today"})`,
+      id: daysLeft === 3 ? "lance-trial-3d" : daysLeft === 1 ? "lance-trial-1d" : "lance-trial-0d",
+      name: `Trial reminder (${daysLeft === 3 ? "3 days left" : daysLeft === 1 ? "1 day left" : "ends today"})`,
       category: "lance_to_user",
       from: lanceFrom,
       to: userEmail,
       trigger: "Cron: send-trial-reminders",
-      subject: v.subject,
-      html: buildLanceUserEmail(lanceComms, contentHtml, {
-        user_name: escapeHtml(userName),
-        billing_url: escapeHtml(billingUrl),
-        body_html: `<p>${safeBody}</p>`,
-        primary_color: primaryColor,
-        logo_url: LANCE_EMAIL_LOGO_WHITE_URL,
-        logo_footer_url: LANCE_EMAIL_LOGO_BLACK_URL,
-      }, userEmail),
+      subject: trialEmail.subject,
+      html: buildLanceUserEmail(lanceComms, trialEmail.contentHtml, {}, userEmail),
     });
   }
 
@@ -331,24 +313,19 @@ export async function buildAllEmailPreviews(
     ),
   });
 
-  const announcementTitle = "Product update";
-  const announcementBodySource = (commsRow?.announcement_default_body || "You have a new announcement.").trim();
+  const announcementTitle = "New feature: Time reports";
+  const announcementBodySource =
+    "You can now export time tracked on projects as a PDF report — handy for client updates or your own records.";
   const announcementLink = `${APP_BASE_URL}/dashboard`;
-  const safeAnnouncementTitle = escapeHtml(announcementTitle);
-  const safeAnnouncementBody = escapeHtml(announcementBodySource).replace(/\n/g, "<br>");
-  const announcementBodyBlock = `<p>Hi ${escapeHtml(userName)},</p><p>${safeAnnouncementBody}</p><p><a href="${escapeHtml(announcementLink)}">View announcement</a></p>`;
-  const announcementTokens = {
-    user_name: escapeHtml(userName),
-    title: safeAnnouncementTitle,
-    body_html: announcementBodyBlock,
-    announcement_body: safeAnnouncementBody,
-    link: escapeHtml(announcementLink),
-    logo_url: LANCE_EMAIL_LOGO_WHITE_URL,
-    logo_footer_url: LANCE_EMAIL_LOGO_BLACK_URL,
-    primary_color: primaryColor,
-  };
+  const announcementEmail = buildAnnouncementEmail({
+    title: announcementTitle,
+    body: announcementBodySource,
+    fullName: profile.full_name,
+    link: announcementLink,
+    ctaLabel: "Learn more",
+    primaryColor,
+  });
   const customAnnouncementTpl = (commsRow?.announcement_custom_html || "").trim();
-  const announcementContentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">${safeAnnouncementTitle}</h2>${announcementBodyBlock}`;
   templates.push({
     id: "lance-announcement",
     name: "Admin announcement",
@@ -356,10 +333,17 @@ export async function buildAllEmailPreviews(
     from: lanceFrom,
     to: userEmail,
     trigger: "Admin sends announcement",
-    subject: announcementTitle,
+    subject: announcementEmail.subject,
     html: customAnnouncementTpl
-      ? replaceTokens(customAnnouncementTpl, announcementTokens)
-      : buildLanceUserEmail(lanceComms, announcementContentHtml, announcementTokens, userEmail),
+      ? replaceTokens(customAnnouncementTpl, {
+        user_name: escapeHtml(firstName),
+        title: escapeHtml(announcementTitle),
+        body_html: announcementEmail.contentHtml,
+        announcement_body: escapeHtml(announcementBodySource).replace(/\n/g, "<br>"),
+        link: escapeHtml(announcementLink),
+        primary_color: primaryColor,
+      })
+      : buildLanceUserEmail(lanceComms, announcementEmail.contentHtml, {}, userEmail),
     note: customAnnouncementTpl ? "Using custom announcement HTML from app_comms_defaults." : undefined,
   });
 
@@ -466,7 +450,7 @@ export async function buildAllEmailPreviews(
     html: buildLanceUserEmail(
       lanceComms,
       `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">New approval comment</h2>
-<p style="margin:0 0 8px;color:#374151;">Hi ${escapeHtml(userName)},</p>
+<p style="margin:0 0 8px;color:#374151;">Hi ${escapeHtml(firstName)},</p>
 <p style="margin:0 0 20px;color:#374151;">${escapeHtml(commenterName)} left a comment on ${escapeHtml(reviewTitle)}.</p>
 <p style="margin:0;"><a href="${escapeHtml(reviewUrl)}" style="display:inline-block;background:${escapeHtml(primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">View approval</a></p>`,
       {},
@@ -488,7 +472,7 @@ export async function buildAllEmailPreviews(
       html: buildLanceUserEmail(
         lanceComms,
         `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">${escapeHtml(title)}</h2>
-<p style="margin:0 0 8px;color:#374151;">Hi ${escapeHtml(userName)},</p>
+<p style="margin:0 0 8px;color:#374151;">Hi ${escapeHtml(firstName)},</p>
 <p style="margin:0 0 20px;color:#374151;">${escapeHtml(messageBody)}</p>
 <p style="margin:0;"><a href="${escapeHtml(reviewUrl)}" style="display:inline-block;background:${escapeHtml(primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Open approvals</a></p>`,
         {},

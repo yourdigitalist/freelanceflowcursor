@@ -6,11 +6,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import {
   buildLanceUserEmail,
-  escapeHtml,
+  buildTrialReminderEmail,
   getLanceFromAddress,
-  LANCE_EMAIL_LOGO_BLACK_URL,
-  LANCE_EMAIL_LOGO_WHITE_URL,
-  LANCE_PRODUCT_NAME,
   loadLanceEmailComms,
 } from "../_shared/lance-email.ts";
 
@@ -102,13 +99,13 @@ serve(async (req) => {
     // ignore
   }
 
-  const toSend: { email: string; name: string; daysLeft: number }[] = [];
+  const toSend: { email: string; fullName: string | null; daysLeft: number }[] = [];
   const testEmail = (testBody.testEmail || "").trim();
   if (testEmail) {
     const daysLeft = testBody.testDaysLeft === 3 || testBody.testDaysLeft === 1 || testBody.testDaysLeft === 0
       ? testBody.testDaysLeft
       : 3;
-    toSend.push({ email: testEmail, name: (testBody.testName || "there").trim() || "there", daysLeft });
+    toSend.push({ email: testEmail, fullName: (testBody.testName || "").trim() || null, daysLeft });
   } else {
     const { data: profiles, error } = await supabase
       .from("profiles")
@@ -136,7 +133,7 @@ serve(async (req) => {
       if (daysLeft === 3 || daysLeft === 1 || daysLeft === 0) {
         toSend.push({
           email,
-          name: (p.full_name as string) || "there",
+          fullName: (p.full_name as string) || null,
           daysLeft,
         });
       }
@@ -145,58 +142,24 @@ serve(async (req) => {
 
   const baseUrl = APP_BASE_URL || req.headers.get("origin") || "https://app.lance.com";
   const billingUrl = `${baseUrl}/settings/subscription`;
-  const [{ data: comms }, lanceComms] = await Promise.all([
-    supabase
-      .from("app_comms_defaults")
-      .select("trial_body_5d, trial_body_1d, trial_body_0d")
-      .eq("id", 1)
-      .maybeSingle(),
-    loadLanceEmailComms(supabase),
-  ]);
+  const lanceComms = await loadLanceEmailComms(supabase);
   const primaryColor = lanceComms.primaryColor;
-  const logoUrl = LANCE_EMAIL_LOGO_WHITE_URL;
 
   let sent = 0;
-  for (const { email, name, daysLeft } of toSend) {
-    const subject =
-      daysLeft === 3
-        ? `Your ${LANCE_PRODUCT_NAME} trial ends in 3 days`
-        : daysLeft === 1
-          ? `Your ${LANCE_PRODUCT_NAME} trial ends tomorrow`
-          : `Your ${LANCE_PRODUCT_NAME} trial ends today`;
-    const fallbackBody =
-      daysLeft === 3
-        ? `Hi ${name},\n\nYour 15-day free trial ends in 3 days. Add your payment details to keep access to all your clients, projects, invoices, and contracts.\n\nAdd payment details: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`
-        : daysLeft === 1
-          ? `Hi ${name},\n\nYour free trial ends tomorrow. Add a payment method to keep access after your trial ends.\n\nAdd payment: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`
-          : `Hi ${name},\n\nYour free trial ends today. Add a payment method to keep access to ${LANCE_PRODUCT_NAME}.\n\nAdd payment: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`;
-    const customBody =
-      daysLeft === 3
-        ? (comms?.trial_body_5d as string | null)
-        : daysLeft === 1
-          ? (comms?.trial_body_1d as string | null)
-          : (comms?.trial_body_0d as string | null);
-    const body = (customBody && customBody.trim()) ? customBody : fallbackBody;
-    const safeName = escapeHtml(name);
-    const safeBilling = escapeHtml(billingUrl);
-    const safeBody = escapeHtml(body).replace(/\n/g, "<br>");
-    const tokens = {
-      user_name: safeName,
-      billing_url: safeBilling,
-      body_html: `<p>${safeBody}</p>`,
-      primary_color: primaryColor,
-      logo_url: logoUrl,
-      logo_footer_url: LANCE_EMAIL_LOGO_BLACK_URL,
-    };
-    const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">${escapeHtml(subject)}</h2><p style="margin:0;color:#374151;">${safeBody}</p>
-<p style="margin:16px 0 0;"><a href="${safeBilling}" style="display:inline-block;background:${escapeHtml(primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Manage subscription</a></p>`;
-    const html = buildLanceUserEmail(lanceComms, contentHtml, tokens, email);
+  for (const { email, fullName, daysLeft } of toSend) {
+    const trialEmail = buildTrialReminderEmail(
+      daysLeft as 0 | 1 | 3,
+      fullName,
+      billingUrl,
+      primaryColor,
+    );
+    const html = buildLanceUserEmail(lanceComms, trialEmail.contentHtml, {}, email);
 
     const { error: sendError } = await resend.emails.send({
       from: getLanceFromAddress(),
       to: email,
-      subject,
-      text: body,
+      subject: trialEmail.subject,
+      text: trialEmail.text,
       html,
     });
     if (sendError) {

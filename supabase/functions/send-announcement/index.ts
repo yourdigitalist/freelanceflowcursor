@@ -5,13 +5,12 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import {
+  buildAnnouncementEmail,
   buildLanceUserEmail,
   escapeHtml,
   getLanceFromAddress,
+  getLanceUserFirstName,
   getResendFromEmail,
-  LANCE_EMAIL_LOGO_BLACK_URL,
-  LANCE_EMAIL_LOGO_WHITE_URL,
-  LANCE_PRODUCT_NAME,
   loadLanceEmailComms,
   replaceTokens,
 } from "../_shared/lance-email.ts";
@@ -97,7 +96,7 @@ serve(async (req) => {
 
   const { data: profiles, error: fetchError } = await serviceClient
     .from("profiles")
-    .select("user_id, email, full_name")
+    .select("user_id, email, full_name, first_name")
     .eq("onboarding_completed", true);
 
   if (fetchError) {
@@ -138,51 +137,47 @@ serve(async (req) => {
 
   let emailsSent = 0;
   if (sendEmail) {
-    const safeTitle = escapeHtml(title);
-    const safeLink = link ? escapeHtml(link) : "";
-
     const [{ data: comms }, lanceComms] = await Promise.all([
       serviceClient
         .from("app_comms_defaults")
-        .select("announcement_default_body, announcement_custom_html")
+        .select("announcement_custom_html")
         .eq("id", 1)
         .maybeSingle(),
       loadLanceEmailComms(serviceClient),
     ]);
 
     const primaryColor = lanceComms.primaryColor;
-    const logoUrl = LANCE_EMAIL_LOGO_WHITE_URL;
     const customTpl = (comms?.announcement_custom_html as string | null) || "";
-    const defaultAnnouncementBody = (comms?.announcement_default_body as string | null) || "You have a new announcement.";
 
     for (const p of recipients) {
       const email = (p.email as string).trim();
-      const name = (p.full_name as string) || "there";
-      const bodySource = bodyText || defaultAnnouncementBody;
-      const safeBody = escapeHtml(bodySource).replace(/\n/g, "<br>");
-      const bodyBlock = safeLink
-        ? `<p>Hi ${escapeHtml(name)},</p><p>${safeBody}</p><p><a href="${safeLink}">View announcement</a></p>`
-        : `<p>Hi ${escapeHtml(name)},</p><p>${safeBody}</p>`;
-      const tokens = {
-        user_name: escapeHtml(name),
-        title: safeTitle,
-        body_html: bodyBlock,
-        announcement_body: safeBody,
-        link: safeLink,
-        logo_url: logoUrl,
-        logo_footer_url: LANCE_EMAIL_LOGO_BLACK_URL,
-        primary_color: primaryColor,
-      };
+      const displayName = (p.first_name as string) || (p.full_name as string) || null;
+      const announcement = buildAnnouncementEmail({
+        title,
+        body: bodyText,
+        fullName: displayName,
+        link: link || undefined,
+        ctaLabel: link ? "Learn more" : undefined,
+        primaryColor,
+      });
+      const firstName = getLanceUserFirstName(displayName);
       const customHtml = customTpl.trim()
-        ? replaceTokens(customTpl, tokens)
+        ? replaceTokens(customTpl, {
+          user_name: escapeHtml(firstName),
+          title: escapeHtml(title),
+          body_html: announcement.contentHtml,
+          announcement_body: escapeHtml(bodyText).replace(/\n/g, "<br>"),
+          link: link ? escapeHtml(link) : "",
+          primary_color: primaryColor,
+        })
         : "";
-      const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">${safeTitle}</h2>${bodyBlock}`;
-      const html = customHtml || buildLanceUserEmail(lanceComms, contentHtml, tokens, email);
+      const html = customHtml || buildLanceUserEmail(lanceComms, announcement.contentHtml, {}, email);
 
       const { error: sendError } = await resend.emails.send({
         from: getLanceFromAddress(getResendFromEmail()),
         to: email,
-        subject: title,
+        subject: announcement.subject,
+        text: announcement.text,
         html,
       });
       if (sendError) {

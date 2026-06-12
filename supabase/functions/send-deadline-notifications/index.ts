@@ -8,6 +8,7 @@ import { Resend } from "https://esm.sh/resend@2.0.0";
 import {
   buildLanceUserEmail,
   getLanceFromAddress,
+  getLanceUserFirstName,
   loadLanceEmailComms,
   plainTextToLanceContentHtml,
 } from "../_shared/lance-email.ts";
@@ -159,7 +160,7 @@ serve(async (req) => {
   for (const p of profiles || []) {
     const userId = p.user_id as string;
     const userEmail = ((p.email as string | null) || "").trim();
-    const userName = ((p.full_name as string | null) || "there").trim() || "there";
+    const userName = getLanceUserFirstName(p.full_name as string | null);
     const prefs = prefsWithDefaults((p.notification_preferences as NotificationPreferences | null) || null);
 
     const pDays = getDaysBefore(prefs.projects?.daysBefore);

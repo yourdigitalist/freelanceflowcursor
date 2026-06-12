@@ -5,6 +5,7 @@ import {
   buildLanceUserEmail,
   escapeHtml,
   getLanceFromAddress,
+  getLanceUserFirstName,
   loadLanceEmailComms,
 } from "../_shared/lance-email.ts";
 import {
@@ -177,7 +178,7 @@ serve(async (req) => {
         (ownerProfile?.notification_preferences as NotificationPreferences | null) || null,
       );
       const ownerEmail = (ownerProfile?.email || "").trim();
-      const ownerName = (ownerProfile?.full_name || "there").trim() || "there";
+      const ownerName = getLanceUserFirstName(ownerProfile?.full_name);
       // Include timestamp so approve → reject (or retries) each produce a distinct in-app notification.
       const eventKey = `review_status:${request.id}:${status}:${commenter_email.trim().toLowerCase()}:${Date.now()}`;
       let title = "";

@@ -9,6 +9,7 @@ import {
   buildLanceUserEmail,
   escapeHtml,
   getLanceFromAddress,
+  getLanceUserFirstName,
   LANCE_EMAIL_LOGO_BLACK_URL,
   LANCE_EMAIL_LOGO_WHITE_URL,
   LANCE_PRODUCT_NAME,
@@ -126,7 +127,7 @@ serve(async (req) => {
     const email = (row.email || "").trim();
     if (!email) continue;
 
-    const name = (row.full_name || "there").trim() || "there";
+    const name = getLanceUserFirstName(row.full_name);
     const deletionDate = row.scheduled_deletion_at
       ? format(new Date(row.scheduled_deletion_at), "MMMM d, yyyy")
       : "soon";

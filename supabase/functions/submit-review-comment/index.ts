@@ -5,6 +5,7 @@ import {
   buildLanceUserEmail,
   escapeHtml,
   getLanceFromAddress,
+  getLanceUserFirstName,
   loadLanceEmailComms,
 } from "../_shared/lance-email.ts";
 import {
@@ -213,7 +214,7 @@ serve(async (req) => {
         (ownerProfile?.notification_preferences as NotificationPreferences | null) || null,
       );
       const ownerEmail = (ownerProfile?.email || "").trim();
-      const ownerName = (ownerProfile?.full_name || "there").trim() || "there";
+      const ownerName = getLanceUserFirstName(ownerProfile?.full_name);
       const title = "New approval comment";
       const body = `${commenter_name.trim()} left a comment on ${request.title || "your approval request"}.`;
       const link = `/reviews/${request.id}`;

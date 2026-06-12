@@ -47,6 +47,168 @@ export function replaceTokens(template: string, tokens: Record<string, string>):
   }, template);
 }
 
+/** First name for Lance → user salutations; falls back to "Freelancer". */
+export function getLanceUserFirstName(fullName: string | null | undefined): string {
+  const trimmed = (fullName || "").trim();
+  if (!trimmed) return "Freelancer";
+  const first = trimmed.split(/\s+/)[0]?.trim();
+  return first || "Freelancer";
+}
+
+export function getLanceNotificationSettingsUrl(): string {
+  return `${APP_BASE_URL}/settings/notifications`;
+}
+
+/** Recipient lines below the standard Lance footer links (not used on auth emails). */
+export function getLanceRecipientMetaHtml(recipientEmail?: string): string {
+  if (!recipientEmail) return "";
+  const prefsUrl = escapeHtml(getLanceNotificationSettingsUrl());
+  return `<p style="margin:12px 0 0 0;">This email was sent to ${escapeHtml(recipientEmail)}.</p>
+<p style="margin:8px 0 0 0;">You can edit your communication preferences at any time <a href="${prefsUrl}" style="color:#6b7280;text-decoration:underline;">here</a>.</p>`;
+}
+
+function appendLanceRecipientMetaToEmail(html: string, recipientEmail?: string): string {
+  if (!recipientEmail || html.includes("communication preferences")) return html;
+  const meta = getLanceRecipientMetaHtml(recipientEmail);
+  const privacyIdx = html.indexOf("/privacy\"");
+  if (privacyIdx !== -1) {
+    const anchorEnd = html.indexOf("</a>", privacyIdx);
+    if (anchorEnd !== -1) {
+      return html.slice(0, anchorEnd + 4) + meta + html.slice(anchorEnd + 4);
+    }
+  }
+  return html.replace(/<\/body>/i, `${meta}</body>`);
+}
+
+function lanceButtonHtml(href: string, label: string, primaryColor: string): string {
+  return `<p style="margin:16px 0 0;"><a href="${escapeHtml(href)}" style="display:inline-block;background:${escapeHtml(primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">${escapeHtml(label)}</a></p>`;
+}
+
+export type TrialReminderEmail = {
+  subject: string;
+  contentHtml: string;
+  text: string;
+};
+
+export function buildTrialReminderEmail(
+  daysLeft: 0 | 1 | 3,
+  fullName: string | null | undefined,
+  billingUrl: string,
+  primaryColor: string,
+): TrialReminderEmail {
+  const firstName = getLanceUserFirstName(fullName);
+  const safeColor = escapeHtml(primaryColor);
+  const safeBilling = escapeHtml(billingUrl);
+
+  if (daysLeft === 3) {
+    const subject = "Your Lance trial ends in 3 days";
+    const heading = "Your trial ends in 3 days";
+    const text = `Hi ${firstName},
+
+You've got 3 days left on your Lance trial. After that, you'll lose access to your clients, projects, invoices, and contracts.
+
+Add your payment details now to keep everything exactly as you left it.
+
+Upgrade now: ${billingUrl}
+
+Questions about the plan? Reply to this email.`;
+    const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${safeColor};">${escapeHtml(heading)}</h2>
+<p style="margin:0 0 12px;color:#374151;">Hi ${escapeHtml(firstName)},</p>
+<p style="margin:0 0 12px;color:#374151;">You've got 3 days left on your Lance trial. After that, you'll lose access to your clients, projects, invoices, and contracts.</p>
+<p style="margin:0 0 16px;color:#374151;">Add your payment details now to keep everything exactly as you left it.</p>
+${lanceButtonHtml(billingUrl, "Upgrade now", primaryColor)}
+<p style="margin:16px 0 0;color:#374151;">Questions about the plan? Reply to this email.</p>`;
+    return { subject, contentHtml, text };
+  }
+
+  if (daysLeft === 1) {
+    const subject = "Your Lance trial ends tomorrow";
+    const heading = "Last day of your trial";
+    const text = `Hi ${firstName},
+
+Your Lance trial ends tomorrow. Add your payment details now to keep access to everything you've set up.
+
+Upgrade now: ${billingUrl}
+
+Questions? Just reply to this email.`;
+    const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${safeColor};">${escapeHtml(heading)}</h2>
+<p style="margin:0 0 12px;color:#374151;">Hi ${escapeHtml(firstName)},</p>
+<p style="margin:0 0 16px;color:#374151;">Your Lance trial ends tomorrow. Add your payment details now to keep access to everything you've set up.</p>
+${lanceButtonHtml(billingUrl, "Upgrade now", primaryColor)}
+<p style="margin:16px 0 0;font-size:13px;color:#6b7280;">Questions? Just reply to this email.</p>`;
+    return { subject, contentHtml, text };
+  }
+
+  const subject = "Your Lance trial ends today";
+  const heading = "Today's your last day";
+  const text = `Hi ${firstName},
+
+Your Lance trial ends today. After that, you won't be able to access your clients, projects, invoices, or contracts.
+
+It takes a minute to upgrade and everything stays exactly as you left it.
+
+Upgrade now: ${billingUrl}
+
+Questions? Just reply to this email.`;
+  const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${safeColor};">${escapeHtml(heading)}</h2>
+<p style="margin:0 0 12px;color:#374151;">Hi ${escapeHtml(firstName)},</p>
+<p style="margin:0 0 12px;color:#374151;">Your Lance trial ends today. After that, you won't be able to access your clients, projects, invoices, or contracts.</p>
+<p style="margin:0 0 16px;color:#374151;">It takes a minute to upgrade and everything stays exactly as you left it.</p>
+${lanceButtonHtml(billingUrl, "Upgrade now", primaryColor)}
+<p style="margin:16px 0 0;color:#374151;">Questions? Just reply to this email.</p>`;
+  return { subject, contentHtml, text };
+}
+
+export type AnnouncementEmailInput = {
+  title: string;
+  body: string;
+  fullName: string | null | undefined;
+  link?: string;
+  ctaLabel?: string;
+  primaryColor: string;
+};
+
+export function buildAnnouncementEmail(input: AnnouncementEmailInput): {
+  subject: string;
+  contentHtml: string;
+  text: string;
+} {
+  const firstName = getLanceUserFirstName(input.fullName);
+  const safeTitle = escapeHtml(input.title.trim());
+  const bodySource = (input.body || "").trim();
+  const safeBody = bodySource
+    ? escapeHtml(bodySource).replace(/\n/g, "<br>")
+    : "";
+  const link = (input.link || "").trim();
+  const ctaLabel = (input.ctaLabel || "Learn more").trim() || "Learn more";
+  const safeColor = escapeHtml(input.primaryColor);
+
+  const bodyParagraph = safeBody
+    ? `<p style="margin:0 0 16px;color:#374151;">${safeBody}</p>`
+    : "";
+  const ctaBlock = link
+    ? lanceButtonHtml(link, ctaLabel, input.primaryColor)
+    : "";
+
+  const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${safeColor};">${safeTitle}</h2>
+<p style="margin:0 0 12px;color:#374151;">Hi ${escapeHtml(firstName)},</p>
+${bodyParagraph}
+${ctaBlock}`;
+
+  const textParts = [
+    `Hi ${firstName},`,
+    "",
+    bodySource || "",
+    link ? `\n${ctaLabel}: ${link}` : "",
+  ].filter((part, i, arr) => !(part === "" && arr[i + 1] === ""));
+
+  return {
+    subject: input.title.trim(),
+    contentHtml,
+    text: textParts.join("\n").trim(),
+  };
+}
+
 /** Matches docs/EMAIL_TEMPLATE_SUPABASE.html — purple header + content area open. */
 export function getDefaultLanceHeader(primaryColor: string, logoUrl: string = LANCE_EMAIL_LOGO_WHITE_URL): string {
   const safeLogo = escapeHtml(logoUrl);
@@ -80,9 +242,7 @@ export function getDefaultLanceFooter(primaryColor: string, recipientEmail?: str
   const safeColor = escapeHtml(primaryColor);
   const safeName = escapeHtml(LANCE_PRODUCT_NAME);
   const safeBase = escapeHtml(APP_BASE_URL);
-  const sentToLine = recipientEmail
-    ? `<p style="margin:12px 0 0 0;">This email was sent to ${escapeHtml(recipientEmail)}.</p>`
-    : "";
+  const recipientMeta = getLanceRecipientMetaHtml(recipientEmail);
   return `</div>
               <div style="padding:14px 20px;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb;">
                 <img src="${safeLogo}" alt="${safeName}" width="${LANCE_EMAIL_LOGO_BLACK_WIDTH_PX}" height="${LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX}" style="height:${LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX}px;max-width:80px;width:auto;display:block;margin-bottom:8px;border:0;" />
@@ -93,7 +253,7 @@ export function getDefaultLanceFooter(primaryColor: string, recipientEmail?: str
                 <a href="${safeBase}/terms" style="color:#6b7280;font-weight:normal;text-decoration:none;">Terms</a>
                 <span style="color:#9ca3af;"> · </span>
                 <a href="${safeBase}/privacy" style="color:#6b7280;font-weight:normal;text-decoration:none;">Privacy</a>
-                ${sentToLine}
+                ${recipientMeta}
               </div>
             </td>
           </tr>
@@ -165,9 +325,12 @@ export function buildLanceUserEmail(
       ? replaceTokens(comms.footerTpl, tokens)
       : getDefaultLanceFooter(comms.primaryColor, recipientEmail);
     if (header.includes("{{body_html}}") || footer.includes("{{body_html}}")) {
-      return replaceTokens(`${header}${footer}`, { ...tokens, body_html: contentHtml });
+      return appendLanceRecipientMetaToEmail(
+        replaceTokens(`${header}${footer}`, { ...tokens, body_html: contentHtml }),
+        recipientEmail,
+      );
     }
-    return `${header}${contentHtml}${footer}`;
+    return appendLanceRecipientMetaToEmail(`${header}${contentHtml}${footer}`, recipientEmail);
   }
 
   return `${getDefaultLanceHeader(comms.primaryColor)}${contentHtml}${getDefaultLanceFooter(comms.primaryColor, recipientEmail)}`;
@@ -245,7 +408,7 @@ export async function sendAccountDeletedEmail(
     return { ok: false, error: "Missing recipient email" };
   }
 
-  const name = (input.name || "there").trim() || "there";
+  const name = getLanceUserFirstName(input.name);
   const supportUrl = `${APP_BASE_URL}/help`;
 
   const [{ data: commsRow }, comms] = await Promise.all([
@@ -263,7 +426,7 @@ export async function sendAccountDeletedEmail(
 
   const fallbackBody = `Hi ${name},
 
-Your ${LANCE_PRODUCT_NAME} account has been deleted as requested. Your data has been removed from our systems.
+Your Lance account has been deleted as requested. Your data has been removed from our systems.
 
 You will not be charged — if you had not completed checkout, no payment method was on file.
 
