@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.send-client-portal-link]
 verify_jwt = false
+
+[functions.preview-email-templates]
+verify_jwt = false

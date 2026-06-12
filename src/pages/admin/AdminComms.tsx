@@ -1,142 +1,133 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, FileText, Mail } from '@/components/icons';
+import { Loader2, Mail, RotateCcw } from '@/components/icons';
+import { cn } from '@/lib/utils';
 
-interface AppCommsDefaults {
-  id: number;
-  invoice_footer: string | null;
-  invoice_email_subject_default: string | null;
-  invoice_email_message_default: string | null;
-  reminder_subject_default: string | null;
-  reminder_body_default: string | null;
-  email_header_html: string | null;
-  email_footer_html: string | null;
-  lance_email_header_html: string | null;
-  lance_email_footer_html: string | null;
-  trial_body_5d: string | null;
-  trial_body_1d: string | null;
-  trial_body_0d: string | null;
-  announcement_default_body: string | null;
-  announcement_custom_html: string | null;
-  account_deleted_subject: string | null;
-  account_deleted_body: string | null;
-  updated_at: string;
-}
+type EmailCategory = 'auth' | 'lance_to_user' | 'user_to_client' | 'internal';
 
-const defaultInvoiceEmailSubject = 'Invoice {{invoice_number}} from {{business_name}}';
-const defaultReminderSubject = 'Reminder: Invoice {{invoice_number}} Due Soon';
-const defaultReminderBody = `Hi {{client_name}},
-This is a friendly reminder that invoice {{invoice_number}} for {{project_name}} is due on {{due_date}}.
-Please let us know if you have any questions.`;
+type EmailPreviewTemplate = {
+  id: string;
+  name: string;
+  category: EmailCategory;
+  from: string;
+  to: string;
+  trigger: string;
+  subject: string;
+  html: string;
+  note?: string;
+};
+
+type PreviewResponse = {
+  templates: EmailPreviewTemplate[];
+  profile: { name: string; email: string; business_name: string | null };
+  auth_templates_available: boolean;
+  auth_templates_error: string | null;
+  counts: {
+    auth: number;
+    lance_to_user: number;
+    user_to_client: number;
+    internal: number;
+    total: number;
+  };
+  error?: string;
+};
+
+const CATEGORY_META: Record<
+  EmailCategory,
+  { label: string; description: string }
+> = {
+  auth: {
+    label: 'Supabase Auth',
+    description: 'Sign-up, magic link, and password reset (live templates from Supabase)',
+  },
+  lance_to_user: {
+    label: 'Lance → User',
+    description: 'Automated emails from Get Lance to your users',
+  },
+  user_to_client: {
+    label: 'User → Client',
+    description: 'Branded emails your users send to their clients (preview uses your profile)',
+  },
+  internal: {
+    label: 'Internal',
+    description: 'Emails to the Lance support inbox',
+  },
+};
+
+const CATEGORY_ORDER: EmailCategory[] = ['auth', 'lance_to_user', 'user_to_client', 'internal'];
 
 export default function AdminComms() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<AppCommsDefaults>({
-    id: 1,
-    invoice_footer: null,
-    invoice_email_subject_default: null,
-    invoice_email_message_default: null,
-    reminder_subject_default: null,
-    reminder_body_default: null,
-    email_header_html: null,
-    email_footer_html: null,
-    lance_email_header_html: null,
-    lance_email_footer_html: null,
-    trial_body_5d: null,
-    trial_body_1d: null,
-    trial_body_0d: null,
-    announcement_default_body: null,
-    announcement_custom_html: null,
-    account_deleted_subject: null,
-    account_deleted_body: null,
-    updated_at: '',
-  });
+  const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [data, setData] = useState<PreviewResponse | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase
-        .from('app_comms_defaults')
-        .select('*')
-        .eq('id', 1)
-        .maybeSingle();
-      if (cancelled) return;
-      if (error) {
-        toast({ title: 'Error loading defaults', description: error.message, variant: 'destructive' });
-      } else if (data) {
-        setForm({
-          id: 1,
-          invoice_footer: data.invoice_footer ?? null,
-          invoice_email_subject_default: data.invoice_email_subject_default ?? null,
-          invoice_email_message_default: data.invoice_email_message_default ?? null,
-          reminder_subject_default: data.reminder_subject_default ?? null,
-          reminder_body_default: data.reminder_body_default ?? null,
-          email_header_html: data.email_header_html ?? null,
-          email_footer_html: data.email_footer_html ?? null,
-          lance_email_header_html: data.lance_email_header_html ?? null,
-          lance_email_footer_html: data.lance_email_footer_html ?? null,
-          trial_body_5d: data.trial_body_5d ?? null,
-          trial_body_1d: data.trial_body_1d ?? null,
-          trial_body_0d: data.trial_body_0d ?? null,
-          announcement_default_body: data.announcement_default_body ?? null,
-          announcement_custom_html: data.announcement_custom_html ?? null,
-          account_deleted_subject: data.account_deleted_subject ?? null,
-          account_deleted_body: data.account_deleted_body ?? null,
-          updated_at: data.updated_at ?? '',
-        });
+  const loadPreviews = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('preview-email-templates', {
+        body: {},
+      });
+      if (error) throw error;
+      const payload = result as PreviewResponse | null;
+      if (payload?.error) throw new Error(payload.error);
+      if (!payload?.templates?.length) {
+        throw new Error('No email templates returned');
       }
+      setData(payload);
+      setSelectedId((prev) => {
+        if (prev && payload.templates.some((t) => t.id === prev)) return prev;
+        return payload.templates[0]?.id ?? null;
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load email previews';
+      toast({ title: 'Could not load emails', description: message, variant: 'destructive' });
+    } finally {
       setLoading(false);
-    })();
-    return () => { cancelled = true; };
+      setRefreshing(false);
+    }
   }, [toast]);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from('app_comms_defaults')
-        .update({
-          invoice_footer: form.invoice_footer || null,
-          invoice_email_subject_default: form.invoice_email_subject_default || null,
-          invoice_email_message_default: form.invoice_email_message_default || null,
-          reminder_subject_default: form.reminder_subject_default || null,
-          reminder_body_default: form.reminder_body_default || null,
-          email_header_html: form.email_header_html || null,
-          email_footer_html: form.email_footer_html || null,
-          lance_email_header_html: form.lance_email_header_html || null,
-          lance_email_footer_html: form.lance_email_footer_html || null,
-          trial_body_5d: form.trial_body_5d || null,
-          trial_body_1d: form.trial_body_1d || null,
-          trial_body_0d: form.trial_body_0d || null,
-          announcement_default_body: form.announcement_default_body || null,
-          announcement_custom_html: form.announcement_custom_html || null,
-          account_deleted_subject: form.account_deleted_subject || null,
-          account_deleted_body: form.account_deleted_body || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', 1);
-      if (error) throw error;
-      toast({ title: 'Comms defaults saved' });
-    } catch (err: any) {
-      toast({ title: 'Error saving', description: err?.message, variant: 'destructive' });
-    } finally {
-      setSaving(false);
-    }
-  };
+  useEffect(() => {
+    void loadPreviews();
+  }, [loadPreviews]);
 
-  const update = (key: keyof AppCommsDefaults, value: string | null) => {
-    if (key === 'id' || key === 'updated_at') return;
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
+  const filteredTemplates = useMemo(() => {
+    if (!data?.templates) return [];
+    const q = search.trim().toLowerCase();
+    if (!q) return data.templates;
+    return data.templates.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        t.subject.toLowerCase().includes(q) ||
+        t.trigger.toLowerCase().includes(q) ||
+        t.id.toLowerCase().includes(q),
+    );
+  }, [data?.templates, search]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<EmailCategory, EmailPreviewTemplate[]>();
+    for (const cat of CATEGORY_ORDER) map.set(cat, []);
+    for (const t of filteredTemplates) {
+      const list = map.get(t.category);
+      if (list) list.push(t);
+    }
+    return map;
+  }, [filteredTemplates]);
+
+  const selected = useMemo(
+    () => data?.templates.find((t) => t.id === selectedId) ?? null,
+    [data?.templates, selectedId],
+  );
 
   if (loading) {
     return (
@@ -148,229 +139,154 @@ export default function AdminComms() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Comms & templates</h1>
-        <p className="text-muted-foreground mt-1">
-          Configure Lance-to-user comms and default templates users can inherit for client-facing comms.
-        </p>
-      </div>
-      <form onSubmit={handleSave} className="space-y-6">
-      <Card className="border-0 shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5" />
-            Lance → User email wrapper
-          </CardTitle>
-          <CardDescription>Used by trial reminders, account-deleted confirmations, and announcements unless custom HTML is provided.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="lance_email_header">Header HTML</Label>
-            <Textarea
-              id="lance_email_header"
-              value={form.lance_email_header_html ?? ''}
-              onChange={(e) => update('lance_email_header_html', e.target.value || null)}
-              placeholder="Use tokens like {{logo_url}}, {{primary_color}}, {{body_html}}"
-              rows={4}
-              className="font-mono text-sm"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="lance_email_footer">Footer HTML</Label>
-            <Textarea
-              id="lance_email_footer"
-              value={form.lance_email_footer_html ?? ''}
-              onChange={(e) => update('lance_email_footer_html', e.target.value || null)}
-              placeholder="Use tokens like {{primary_color}}"
-              rows={3}
-              className="font-mono text-sm"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-0 shadow-sm">
-        <CardHeader>
-          <CardTitle>Lance automated body copy</CardTitle>
-          <CardDescription>Default bodies for trial reminders and announcements to users.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="account_deleted_subject">Account deleted subject</Label>
-            <Input
-              id="account_deleted_subject"
-              value={form.account_deleted_subject ?? ''}
-              onChange={(e) => update('account_deleted_subject', e.target.value || null)}
-              placeholder="Your Get Lance account has been deleted"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="account_deleted_body">Account deleted body</Label>
-            <Textarea
-              id="account_deleted_body"
-              value={form.account_deleted_body ?? ''}
-              onChange={(e) => update('account_deleted_body', e.target.value || null)}
-              placeholder="Tokens: {{user_name}}, {{support_url}}"
-              rows={5}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="trial_body_5d">Trial body (3 days left)</Label>
-            <Textarea
-              id="trial_body_5d"
-              value={form.trial_body_5d ?? ''}
-              onChange={(e) => update('trial_body_5d', e.target.value || null)}
-              rows={4}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="trial_body_1d">Trial body (1 day left)</Label>
-            <Textarea
-              id="trial_body_1d"
-              value={form.trial_body_1d ?? ''}
-              onChange={(e) => update('trial_body_1d', e.target.value || null)}
-              rows={4}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="trial_body_0d">Trial body (ends today)</Label>
-            <Textarea
-              id="trial_body_0d"
-              value={form.trial_body_0d ?? ''}
-              onChange={(e) => update('trial_body_0d', e.target.value || null)}
-              rows={4}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="announcement_default_body">Announcement default body</Label>
-            <Textarea
-              id="announcement_default_body"
-              value={form.announcement_default_body ?? ''}
-              onChange={(e) => update('announcement_default_body', e.target.value || null)}
-              rows={3}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="announcement_custom_html">Announcement custom HTML (optional full template)</Label>
-            <Textarea
-              id="announcement_custom_html"
-              value={form.announcement_custom_html ?? ''}
-              onChange={(e) => update('announcement_custom_html', e.target.value || null)}
-              rows={5}
-              className="font-mono text-sm"
-            />
-          </div>
-        </CardContent>
-      </Card>
-        <Card className="border-0 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Invoice defaults
-            </CardTitle>
-            <CardDescription>Default footer and email templates for new invoices</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="invoice_footer">Invoice footer</Label>
-              <Textarea
-                id="invoice_footer"
-                value={form.invoice_footer ?? ''}
-                onChange={(e) => update('invoice_footer', e.target.value || null)}
-                placeholder="Thank you for your business!"
-                rows={2}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="invoice_email_subject">Default invoice email subject</Label>
-              <Input
-                id="invoice_email_subject"
-                value={form.invoice_email_subject_default ?? ''}
-                onChange={(e) => update('invoice_email_subject_default', e.target.value || null)}
-                placeholder={defaultInvoiceEmailSubject}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="invoice_email_message">Default invoice email body</Label>
-              <Textarea
-                id="invoice_email_message"
-                value={form.invoice_email_message_default ?? ''}
-                onChange={(e) => update('invoice_email_message_default', e.target.value || null)}
-                placeholder="Please find your invoice attached."
-                rows={4}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-sm">
-          <CardHeader>
-            <CardTitle>Reminder defaults</CardTitle>
-            <CardDescription>Default subject and body for invoice reminder emails</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="reminder_subject">Default reminder subject</Label>
-              <Input
-                id="reminder_subject"
-                value={form.reminder_subject_default ?? ''}
-                onChange={(e) => update('reminder_subject_default', e.target.value || null)}
-                placeholder={defaultReminderSubject}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="reminder_body">Default reminder body</Label>
-              <Textarea
-                id="reminder_body"
-                value={form.reminder_body_default ?? ''}
-                onChange={(e) => update('reminder_body_default', e.target.value || null)}
-                placeholder={defaultReminderBody}
-                rows={6}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Mail className="h-5 w-5" />
-              Email wrapper (optional)
-            </CardTitle>
-            <CardDescription>HTML header and footer for transactional emails. Leave empty to use plain content.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email_header">Email header HTML</Label>
-              <Textarea
-                id="email_header"
-                value={form.email_header_html ?? ''}
-                onChange={(e) => update('email_header_html', e.target.value || null)}
-                placeholder="<div style='font-family: sans-serif;'>"
-                rows={3}
-                className="font-mono text-sm"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email_footer">Email footer HTML</Label>
-              <Textarea
-                id="email_footer"
-                value={form.email_footer_html ?? ''}
-                onChange={(e) => update('email_footer_html', e.target.value || null)}
-                placeholder="<p>— Your Company</p></div>"
-                rows={3}
-                className="font-mono text-sm"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Button type="submit" disabled={saving}>
-          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          <Save className="mr-2 h-4 w-4" />
-          Save defaults
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Email catalog</h1>
+          <p className="text-muted-foreground mt-1 max-w-2xl">
+            Preview every email Lance sends — auth, user notifications, and client-facing comms.
+            User → client previews use your logged-in admin profile for branding and merge fields.
+          </p>
+          {data?.profile && (
+            <p className="text-sm text-muted-foreground mt-2">
+              Previewing as <span className="font-medium text-foreground">{data.profile.business_name || data.profile.name}</span>
+              {' · '}
+              {data.profile.email}
+            </p>
+          )}
+        </div>
+        <Button variant="outline" size="sm" onClick={() => void loadPreviews(true)} disabled={refreshing}>
+          {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
+          Refresh
         </Button>
-      </form>
+      </div>
+
+      {data && (
+        <div className="flex flex-wrap gap-2">
+          {CATEGORY_ORDER.map((cat) => (
+            <Badge key={cat} variant="secondary">
+              {CATEGORY_META[cat].label}: {data.counts[cat]}
+            </Badge>
+          ))}
+          <Badge variant="outline">{data.counts.total} total</Badge>
+        </div>
+      )}
+
+      {!data?.auth_templates_available && (
+        <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Auth templates not loaded</CardTitle>
+            <CardDescription>
+              {data?.auth_templates_error ||
+                'Set LANCE_MANAGEMENT_ACCESS_TOKEN on the preview-email-templates edge function to fetch live Supabase Auth email HTML.'}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+        <Card className="border-0 shadow-sm lg:max-h-[calc(100vh-12rem)] lg:flex lg:flex-col">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              All emails
+            </CardTitle>
+            <Input
+              placeholder="Search emails…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="mt-2"
+            />
+          </CardHeader>
+          <CardContent className="flex-1 overflow-hidden p-0 pt-0">
+            <ScrollArea className="h-[min(60vh,640px)] px-4 pb-4">
+              <div className="space-y-5">
+                {CATEGORY_ORDER.map((cat) => {
+                  const items = grouped.get(cat) || [];
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={cat}>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                        {CATEGORY_META[cat].label}
+                      </p>
+                      <ul className="space-y-1">
+                        {items.map((t) => (
+                          <li key={t.id}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedId(t.id)}
+                              className={cn(
+                                'w-full rounded-md px-3 py-2 text-left text-sm transition-colors',
+                                selectedId === t.id
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'hover:bg-muted',
+                              )}
+                            >
+                              <span className="font-medium line-clamp-2">{t.name}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm">
+          {selected ? (
+            <>
+              <CardHeader>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <CardTitle>{selected.name}</CardTitle>
+                    <CardDescription className="mt-1">
+                      {CATEGORY_META[selected.category].description}
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline">{CATEGORY_META[selected.category].label}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="text-muted-foreground">Subject</dt>
+                    <dd className="font-medium mt-0.5">{selected.subject}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Trigger</dt>
+                    <dd className="mt-0.5">{selected.trigger}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">From</dt>
+                    <dd className="mt-0.5 break-all">{selected.from}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">To</dt>
+                    <dd className="mt-0.5 break-all">{selected.to}</dd>
+                  </div>
+                </dl>
+                {selected.note && (
+                  <p className="text-sm text-muted-foreground rounded-md bg-muted px-3 py-2">{selected.note}</p>
+                )}
+                <div className="rounded-lg border overflow-hidden bg-white">
+                  <iframe
+                    title={`Preview: ${selected.name}`}
+                    srcDoc={selected.html}
+                    className="w-full min-h-[520px] border-0"
+                    sandbox="allow-same-origin"
+                  />
+                </div>
+              </CardContent>
+            </>
+          ) : (
+            <CardContent className="py-12 text-center text-muted-foreground">
+              Select an email from the list to preview it.
+            </CardContent>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }

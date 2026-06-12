@@ -74,8 +74,8 @@ serve(async (req) => {
     const senderEmail = email || profile?.email || user?.email || "";
 
     const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
-        <div style="padding: 16px 20px; background: #9B63E9; color: white;">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+        <div style="padding: 16px 20px; background: #6d71f0; color: white;">
           <strong style="font-size: 16px;">New Contact Message</strong>
         </div>
         <div style="padding: 20px;">

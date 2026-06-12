@@ -1,5 +1,6 @@
 // @ts-nocheck
 /** Branded client comms header/footer (freelancer → client emails). */
+import { LANCE_EMAIL_FONT_FAMILY } from "./email-styles.ts";
 
 export function escapeHtml(text: string | null | undefined): string {
   if (!text) return "";
@@ -61,7 +62,7 @@ export function normalizeLogoUrl(raw: string, supabaseUrl: string): string {
 }
 
 export function getDefaultClientHeader(logoUrl: string, businessName: string, primaryColor: string): string {
-  return `<div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+  return `<div style="font-family: ${LANCE_EMAIL_FONT_FAMILY}; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
   <div style="padding: 18px 20px; background: ${primaryColor}; color: white;">
     ${logoUrl ? `<img src="${logoUrl}" alt="${escapeHtml(businessName)}" style="height: 28px; max-width: 160px; object-fit: contain;" />` : `<strong style="font-size: 18px;">${escapeHtml(businessName)}</strong>`}
   </div>

@@ -2,6 +2,14 @@
 /** Shared Get Lance → user email helpers for Edge Functions. */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import {
+  LANCE_EMAIL_FONT_FAMILY,
+  LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX,
+  LANCE_EMAIL_LOGO_BLACK_WIDTH_PX,
+  LANCE_EMAIL_LOGO_WHITE_HEIGHT_PX,
+  LANCE_EMAIL_LOGO_WHITE_MAX_WIDTH_PX,
+  LANCE_EMAIL_LOGO_WHITE_WIDTH_PX,
+} from "./email-styles.ts";
 
 export const LANCE_PRODUCT_NAME = "Get Lance";
 
@@ -13,9 +21,6 @@ export const LANCE_EMAIL_LOGO_WHITE_URL = "https://www.getlance.app/email/lance-
 
 /** Black wordmark for light footers (PNG — SVG is blocked in Gmail/Outlook mobile). */
 export const LANCE_EMAIL_LOGO_BLACK_URL = "https://www.getlance.app/email/lance-logo-black.png";
-
-const LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX = 20;
-const LANCE_EMAIL_LOGO_BLACK_WIDTH_PX = 99;
 
 export function getResendFromEmail(): string {
   return RESEND_FROM_EMAIL;
@@ -54,16 +59,16 @@ export function getDefaultLanceHeader(primaryColor: string, logoUrl: string = LA
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
-<body style="margin:0;padding:0;background-color:#f3f4f6;">
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:${LANCE_EMAIL_FONT_FAMILY};">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f3f4f6;">
     <tr>
       <td align="center" style="padding:32px 20px;">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:640px;width:100%;">
           <tr>
-            <td style="font-family:Arial,Helvetica,sans-serif;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#ffffff;">
+            <td style="font-family:${LANCE_EMAIL_FONT_FAMILY};border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#ffffff;">
               <div style="padding:18px 20px;background:${safeColor};color:#ffffff;">
                 <a href="${safeBase}" target="_blank" rel="noopener" style="text-decoration:none;color:#ffffff;">
-                  <img src="${safeLogo}" alt="${safeName}" width="120" height="28" style="height:28px;max-width:160px;width:auto;object-fit:contain;display:block;border:0;" />
+                  <img src="${safeLogo}" alt="${safeName}" width="${LANCE_EMAIL_LOGO_WHITE_WIDTH_PX}" height="${LANCE_EMAIL_LOGO_WHITE_HEIGHT_PX}" style="height:${LANCE_EMAIL_LOGO_WHITE_HEIGHT_PX}px;max-width:${LANCE_EMAIL_LOGO_WHITE_MAX_WIDTH_PX}px;width:auto;object-fit:contain;display:block;border:0;" />
                 </a>
               </div>
               <div style="padding:24px 20px;font-size:15px;line-height:1.6;color:#111827;">`;
@@ -80,7 +85,7 @@ export function getDefaultLanceFooter(primaryColor: string, recipientEmail?: str
     : "";
   return `</div>
               <div style="padding:14px 20px;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb;">
-                <img src="${safeLogo}" alt="${safeName}" width="${LANCE_EMAIL_LOGO_BLACK_WIDTH_PX}" height="${LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX}" style="height:${LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX}px;max-width:100px;width:auto;display:block;margin-bottom:8px;border:0;" />
+                <img src="${safeLogo}" alt="${safeName}" width="${LANCE_EMAIL_LOGO_BLACK_WIDTH_PX}" height="${LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX}" style="height:${LANCE_EMAIL_LOGO_BLACK_HEIGHT_PX}px;max-width:80px;width:auto;display:block;margin-bottom:8px;border:0;" />
                 Sent by <span style="color:${safeColor};font-weight:600;">${safeName}</span>
                 <span style="color:#9ca3af;"> · </span>
                 <a href="${safeBase}/help" style="color:#6b7280;font-weight:normal;text-decoration:none;">Help</a>
@@ -105,7 +110,7 @@ export function getLanceSignature(primaryColor: string): string {
   const safeLogo = escapeHtml(LANCE_EMAIL_LOGO_BLACK_URL);
   const safeColor = escapeHtml(primaryColor);
   const safeName = escapeHtml(LANCE_PRODUCT_NAME);
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:640px;margin:16px auto 0;font-family:Arial,Helvetica,sans-serif;">
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:640px;margin:16px auto 0;font-family:${LANCE_EMAIL_FONT_FAMILY};">
   <tr>
     <td align="center" style="padding-top:16px;font-size:13px;line-height:1.5;color:#9ca3af;">
       <p style="margin:0 0 10px 0;">This email was sent with <a href="${escapeHtml(APP_BASE_URL)}" target="_blank" rel="noopener noreferrer" style="color:${safeColor};text-decoration:none;font-weight:600;">${safeName}</a></p>

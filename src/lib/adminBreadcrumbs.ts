@@ -10,7 +10,7 @@ export function getAdminBreadcrumbs(pathname: string): BreadcrumbSegment[] {
     '/admin/overview': 'Overview',
     '/admin/metrics': 'Metrics',
     '/admin/announcements': 'Announcements',
-    '/admin/comms': 'Comms & templates',
+    '/admin/comms': 'Email catalog',
     '/admin/branding': 'Branding',
     '/admin/icons': 'Icons',
     '/admin/help-content': 'Help content',

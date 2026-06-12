@@ -5,7 +5,7 @@ import { SlotIcon } from '@/contexts/IconSlotContext';
 const adminCards = [
   { path: '/admin/metrics', label: 'Metrics', slot: 'admin_metrics' as const, description: 'Users, revenue, trials, and churn' },
   { path: '/admin/announcements', label: 'Announcements', slot: 'admin_announcements' as const, description: 'Manage in-app announcements' },
-  { path: '/admin/comms', label: 'Comms & templates', slot: 'admin_comms' as const, description: 'Email and communication templates' },
+  { path: '/admin/comms', label: 'Email catalog', slot: 'admin_comms' as const, description: 'Preview all transactional emails' },
   { path: '/admin/branding', label: 'Branding', slot: 'admin_branding' as const, description: 'Logo and brand colors' },
   { path: '/admin/icons', label: 'Icons', slot: 'admin_icons' as const, description: 'Upload and assign slot icons' },
   { path: '/admin/help-content', label: 'Help content', slot: 'admin_help_content' as const, description: 'Help center articles' },

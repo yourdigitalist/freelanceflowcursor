@@ -66,7 +66,7 @@ function parseEmailCommsConfig(raw: string | null | undefined): { logoLight: str
 }
 
 function getDefaultClientHeader(logoUrl: string, businessName: string, primaryColor: string): string {
-  return `<div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+  return `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; max-width: 640px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
   <div style="padding: 18px 20px; background: ${primaryColor}; color: white;">
     ${logoUrl ? `<img src="${logoUrl}" alt="${escapeHtml(businessName)}" style="height: 28px; max-width: 160px; object-fit: contain;" />` : `<strong style="font-size: 18px;">${escapeHtml(businessName)}</strong>`}
   </div>
