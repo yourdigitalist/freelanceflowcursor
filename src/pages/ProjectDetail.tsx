@@ -1160,6 +1160,7 @@ export default function ProjectDetail() {
               total_duration_seconds: entry.total_duration_seconds,
               duration_minutes: entry.duration_minutes,
               billable: entry.billable ?? true,
+              billing_status: entry.billing_status,
               project_id: entry.project_id ?? id ?? null,
               task_id: entry.task_id,
             });

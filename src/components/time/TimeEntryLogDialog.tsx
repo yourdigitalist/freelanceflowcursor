@@ -8,6 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -53,6 +60,7 @@ export interface TimeEntryLogDialogEntry {
   total_duration_seconds: number | null;
   duration_minutes: number | null;
   billable: boolean;
+  billing_status?: string | null;
   project_id: string | null;
   task_id: string | null;
 }
@@ -77,6 +85,13 @@ interface TimeEntryLogDialogProps {
 }
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : 'Something went wrong');
+
+type BillableBillingStatus = 'unbilled' | 'billed' | 'paid';
+
+function normalizeBillableBillingStatus(value: string | null | undefined): BillableBillingStatus {
+  if (value === 'billed' || value === 'paid') return value;
+  return 'unbilled';
+}
 
 export function TimeEntryLogDialog({
   open,
@@ -104,6 +119,7 @@ export function TimeEntryLogDialog({
   const [dialogDescription, setDialogDescription] = useState('');
   const [dialogDate, setDialogDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [dialogBillable, setDialogBillable] = useState(true);
+  const [dialogBillingStatus, setDialogBillingStatus] = useState<BillableBillingStatus>('unbilled');
   const [dialogProjectQuery, setDialogProjectQuery] = useState('');
   const [dialogTaskQuery, setDialogTaskQuery] = useState('');
   const [dialogProjectPopoverOpen, setDialogProjectPopoverOpen] = useState(false);
@@ -159,6 +175,7 @@ export function TimeEntryLogDialog({
       setDialogDescription('');
       setDialogDate(defaultDate || format(new Date(), 'yyyy-MM-dd'));
       setDialogBillable(true);
+      setDialogBillingStatus('unbilled');
     };
 
     if (!entry) {
@@ -171,6 +188,9 @@ export function TimeEntryLogDialog({
     setDialogDescription(entry.description || '');
     setDialogDate(format(parseISO(entry.started_at || entry.start_time), 'yyyy-MM-dd'));
     setDialogBillable(entry.billable);
+    setDialogBillingStatus(
+      entry.billable ? normalizeBillableBillingStatus(entry.billing_status) : 'unbilled',
+    );
 
     const loadSegments = async () => {
       setLoadingSegments(true);
@@ -344,6 +364,9 @@ export function TimeEntryLogDialog({
       });
 
       if (entry) {
+        const billingStatus = dialogBillable
+          ? dialogBillingStatus
+          : 'not_billable';
         await supabase
           .from('time_entries')
           .update({
@@ -351,7 +374,8 @@ export function TimeEntryLogDialog({
             project_id: dialogProject,
             task_id: dialogTask || null,
             billable: dialogBillable,
-            billing_status: dialogBillable ? 'unbilled' : 'not_billable',
+            billing_status: billingStatus,
+            ...(billingStatus === 'unbilled' ? { invoice_id: null } : {}),
             hourly_rate: effectiveHourlyRate,
             start_time: firstStart.toISOString(),
             end_time: lastEnd.toISOString(),
@@ -696,6 +720,25 @@ export function TimeEntryLogDialog({
                 disabled={isBusy}
               />
             </div>
+            {isEditing && dialogBillable ? (
+              <div className="space-y-2">
+                <Label htmlFor="dialog_billing_status">Billing status</Label>
+                <Select
+                  value={dialogBillingStatus}
+                  onValueChange={(value) => setDialogBillingStatus(value as BillableBillingStatus)}
+                  disabled={isBusy}
+                >
+                  <SelectTrigger id="dialog_billing_status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unbilled">Unbilled</SelectItem>
+                    <SelectItem value="billed">Billed</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
           </form>
         </div>
         <DialogFooter
