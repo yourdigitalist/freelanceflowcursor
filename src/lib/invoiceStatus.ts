@@ -1,5 +1,18 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+/** Revert a sent invoice to draft so it can be edited and re-sent to the client. */
+export async function revertSentInvoiceToDraft(
+  supabase: SupabaseClient,
+  invoiceId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('invoices')
+    .update({ status: 'draft' })
+    .eq('id', invoiceId);
+
+  if (error) throw error;
+}
+
 /** Revert a mistakenly paid invoice to sent and restore linked time entries to billed. */
 export async function reopenPaidInvoice(
   supabase: SupabaseClient,

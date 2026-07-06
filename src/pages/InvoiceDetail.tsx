@@ -17,7 +17,7 @@ import { Plus, Trash2, Loader2, ListTodo, Wallet, Download, Save, RotateCcw } fr
 import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { detailPageBreadcrumb } from '@/lib/breadcrumbs';
 import { MenuDotsTrigger } from '@/components/ui/menu-dots-trigger';
-import { reopenPaidInvoice } from '@/lib/invoiceStatus';
+import { reopenPaidInvoice, revertSentInvoiceToDraft } from '@/lib/invoiceStatus';
 import {
   buildReceiptEmailMessage,
   formatInvoicePaymentMethod,
@@ -40,6 +40,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
@@ -296,6 +306,8 @@ export default function InvoiceDetail() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [markPaidDialogOpen, setMarkPaidDialogOpen] = useState(false);
   const [sendReceiptPromptOpen, setSendReceiptPromptOpen] = useState(false);
+  const [revertToDraftDialogOpen, setRevertToDraftDialogOpen] = useState(false);
+  const [revertingToDraft, setRevertingToDraft] = useState(false);
 
   // Edit mode: draft starts editable; after save or when sent/paid, read-only until "Edit Invoice" is clicked
   const [isEditMode, setIsEditMode] = useState(true);
@@ -1573,6 +1585,31 @@ export default function InvoiceDetail() {
       });
     }
   };
+
+  const handleRevertToDraft = async () => {
+    if (!id) return;
+    setRevertingToDraft(true);
+    try {
+      await revertSentInvoiceToDraft(supabase, id);
+      isDirtyRef.current = false;
+      setIsEditMode(true);
+      setRevertToDraftDialogOpen(false);
+      toast({
+        title: 'Invoice reverted to draft',
+        description: 'You can edit and use Send to Client to email an updated invoice.',
+      });
+      await fetchInvoice({ force: true });
+    } catch (error: any) {
+      toast({
+        title: 'Could not revert invoice',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setRevertingToDraft(false);
+    }
+  };
+
   const formatDisplayDate = (value: string | null | undefined) => formatLocaleDate(value, dateFormat);
   const companyLogo = profile?.business_logo && typeof profile.business_logo === 'string' ? profile.business_logo : '';
   const previewItems = items.map((it) => ({
@@ -1782,10 +1819,16 @@ export default function InvoiceDetail() {
                   </DropdownMenuItem>
                 )}
                 {invoice.status === 'sent' && (
-                  <DropdownMenuItem onClick={() => setMarkPaidDialogOpen(true)}>
-                    <SlotIcon slot="invoice_stat_paid" className="mr-2 h-4 w-4" />
-                    Mark as Paid
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem onClick={() => setMarkPaidDialogOpen(true)}>
+                      <SlotIcon slot="invoice_stat_paid" className="mr-2 h-4 w-4" />
+                      Mark as Paid
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setRevertToDraftDialogOpen(true)}>
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      Revert to draft
+                    </DropdownMenuItem>
+                  </>
                 )}
                 {invoice.status === 'paid' && (
                   <DropdownMenuItem onClick={handleReopenInvoice}>
@@ -1820,9 +1863,31 @@ export default function InvoiceDetail() {
           </div>
         </div>
 
-        {isEditMode && (invoice.status === 'sent' || invoice.status === 'paid') && (
+        {invoice.status === 'sent' && (
+          <div
+            role="alert"
+            className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-4 text-sm text-amber-900 dark:text-amber-100"
+          >
+            <p className="font-medium">This invoice was already sent</p>
+            <p className="mt-1 text-amber-800 dark:text-amber-200">
+              Your client has already received this invoice. The Send button will only send a payment reminder until you revert to draft.
+              To fix a mistake and email an updated invoice, revert to draft, edit, then use Send to Client.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3 border-amber-300 bg-white/80 hover:bg-white dark:border-amber-700 dark:bg-amber-950/60"
+              onClick={() => setRevertToDraftDialogOpen(true)}
+            >
+              Revert to draft
+            </Button>
+          </div>
+        )}
+
+        {isEditMode && invoice.status === 'paid' && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-4 text-sm text-amber-800 dark:text-amber-200">
-            This invoice has already been sent to your client. Changes you make here will not update the version they received. To send an updated copy, save your changes and use &quot;Send to Client&quot; again.
+            This invoice is marked as paid. Changes here will not update what your client received. Use Reopen invoice if you need to change its paid status.
           </div>
         )}
 
@@ -2797,6 +2862,24 @@ export default function InvoiceDetail() {
           setIsSendModalOpen(true);
         }}
       />
+
+      <AlertDialog open={revertToDraftDialogOpen} onOpenChange={setRevertToDraftDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revert invoice to draft?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This moves {invoice.invoice_number} back to draft so you can edit it and send an updated invoice to your client.
+              Your client may have already received the previous version.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={revertingToDraft}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleRevertToDraft()} disabled={revertingToDraft}>
+              {revertingToDraft ? 'Reverting…' : 'Revert to draft'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       </TooltipProvider>
     </AppLayout>
   );

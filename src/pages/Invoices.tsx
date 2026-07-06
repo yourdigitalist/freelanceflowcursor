@@ -29,7 +29,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2, Download, Upload, RotateCcw, Filter } from '@/components/icons';
-import { reopenPaidInvoice } from '@/lib/invoiceStatus';
+import { reopenPaidInvoice, revertSentInvoiceToDraft } from '@/lib/invoiceStatus';
 import {
   formatInvoicePaymentMethod,
   markInvoicePaid,
@@ -430,6 +430,23 @@ export default function Invoices() {
     } catch (error: any) {
       toast({
         title: 'Error updating invoice',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleRevertToDraft = async (inv: (typeof invoices)[0]) => {
+    try {
+      await revertSentInvoiceToDraft(supabase, inv.id);
+      toast({
+        title: 'Invoice reverted to draft',
+        description: 'Open the invoice to edit and send an updated copy to your client.',
+      });
+      fetchInvoices();
+    } catch (error: any) {
+      toast({
+        title: 'Could not revert invoice',
         description: error.message,
         variant: 'destructive',
       });
@@ -1240,10 +1257,16 @@ export default function Invoices() {
                               </DropdownMenuItem>
                             )}
                             {invoice.status === 'sent' && (
-                              <DropdownMenuItem onClick={() => handleStatusChange(invoice.id, 'paid')}>
-                                <SlotIcon slot="invoice_stat_paid" className="mr-2 h-4 w-4" />
-                                Mark as Paid
-                              </DropdownMenuItem>
+                              <>
+                                <DropdownMenuItem onClick={() => handleStatusChange(invoice.id, 'paid')}>
+                                  <SlotIcon slot="invoice_stat_paid" className="mr-2 h-4 w-4" />
+                                  Mark as Paid
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleRevertToDraft(invoice)}>
+                                  <RotateCcw className="mr-2 h-4 w-4" />
+                                  Revert to draft
+                                </DropdownMenuItem>
+                              </>
                             )}
                             {invoice.status === 'paid' && (
                               <DropdownMenuItem onClick={() => handleReopenInvoice(invoice)}>

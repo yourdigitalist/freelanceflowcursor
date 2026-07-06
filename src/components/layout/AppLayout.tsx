@@ -28,6 +28,8 @@ import { FeedbackTab } from './FeedbackTab';
 import { SidebarNavFlyout, type SidebarFlyoutLink } from './SidebarNavFlyout';
 import { SidebarNavCollapsedTooltip } from './SidebarNavCollapsedTooltip';
 import { shellNavIcon, shellNavLink, shellSubNavLink } from './shellNav';
+import { useInAppNotificationAlerts } from '@/hooks/useInAppNotificationAlerts';
+import { InAppNotificationAlerts } from '@/components/notifications/InAppNotificationAlerts';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -89,9 +91,10 @@ export function AppLayout({
   };
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const { alerts: inAppNotificationAlerts, dismiss: dismissInAppNotification } = useInAppNotificationAlerts(user?.id);
 
   useEffect(() => {
-    if (!user) {
+    if (!user?.id) {
       setUnreadNotifications(0);
       return;
     }
@@ -115,7 +118,7 @@ export function AppLayout({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user?.id]);
   useEffect(() => {
     if (location.pathname.startsWith('/clients')) setClientsOpen(true);
   }, [location.pathname]);
@@ -648,6 +651,7 @@ export function AppLayout({
             </header>
 
             <main className={cn('min-h-0 flex-1 overflow-y-auto py-4 lg:py-8', CONTENT_X)}>
+              <InAppNotificationAlerts alerts={inAppNotificationAlerts} onDismiss={dismissInAppNotification} />
               {children}
             </main>
 
