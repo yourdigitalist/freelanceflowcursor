@@ -28,6 +28,7 @@ import { MarkInvoicePaidDialog } from '@/components/invoices/MarkInvoicePaidDial
 import { SendReceiptPromptDialog } from '@/components/invoices/SendReceiptPromptDialog';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDate } from '@/lib/datetime';
+import { formatImportTimeframeLabel } from '@/lib/invoiceImport';
 import { formatStatusLabel, getStatusBadgeClass } from '@/lib/statusDisplay';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { endOfMonth, endOfWeek, format, startOfMonth, startOfWeek, subMonths } from 'date-fns';
@@ -310,7 +311,7 @@ export default function InvoiceDetail() {
   const [importSearch, setImportSearch] = useState('');
   const [importFromDate, setImportFromDate] = useState<string>(() => format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [importToDate, setImportToDate] = useState<string>(() => format(endOfMonth(new Date()), 'yyyy-MM-dd'));
-  const [importGrouping, setImportGrouping] = useState<'grouped' | 'detailed'>('grouped');
+  const [importGrouping, setImportGrouping] = useState<'grouped' | 'detailed' | 'single'>('grouped');
   const [importIncludeNotes, setImportIncludeNotes] = useState(false);
   const [importIncludeLineDate, setImportIncludeLineDate] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
@@ -319,6 +320,11 @@ export default function InvoiceDetail() {
   const preloadedDefaultsRef = useRef<string | null>(null);
   const sendModalDefaultsAppliedRef = useRef(false);
   const importFetchSkipRef = useRef(true);
+  const isDirtyRef = useRef(false);
+
+  const markInvoiceDirty = useCallback(() => {
+    isDirtyRef.current = true;
+  }, []);
 
   const getDefaultImportFilters = useCallback(
     () => ({
@@ -401,9 +407,10 @@ export default function InvoiceDetail() {
   }, []);
 
   useEffect(() => {
-    if (user && id) {
-      fetchInvoice();
-      fetchItems();
+    if (user?.id && id) {
+      isDirtyRef.current = false;
+      fetchInvoice({ force: true });
+      fetchItems({ force: true });
       fetchProfile();
       (async () => {
         const { data } = await supabase
@@ -415,10 +422,10 @@ export default function InvoiceDetail() {
       })();
       fetchTaxes();
     }
-  }, [user, id]);
+  }, [user?.id, id]);
 
   useEffect(() => {
-    if (!invoice || taxes.length === 0) return;
+    if (!invoice || taxes.length === 0 || isDirtyRef.current) return;
     const matchingTax = taxes.find((tax) => Number(tax.rate) === Number(invoice.tax_rate));
     setSelectedTaxId(matchingTax?.id ?? '');
   }, [invoice?.id, invoice?.tax_rate, taxes]);
@@ -435,7 +442,7 @@ export default function InvoiceDetail() {
     if (id) preloadedDefaultsRef.current = null;
   }, [id]);
   useEffect(() => {
-    if (!invoice || !profile || preloadedDefaultsRef.current === invoice.id) return;
+    if (!invoice || !profile || preloadedDefaultsRef.current === invoice.id || isDirtyRef.current) return;
     if (invoice.notes == null || invoice.notes === '') {
       setNotes(profile.invoice_notes_default || '');
     }
@@ -508,7 +515,9 @@ export default function InvoiceDetail() {
     }
   };
 
-  const fetchInvoice = async () => {
+  const fetchInvoice = async (options?: { force?: boolean }) => {
+    if (isDirtyRef.current && !options?.force) return;
+
     try {
       const { data, error } = await supabase
         .from('invoices')
@@ -542,7 +551,12 @@ export default function InvoiceDetail() {
     }
   };
 
-  const fetchItems = async () => {
+  const fetchItems = async (options?: { force?: boolean }) => {
+    if (isDirtyRef.current && !options?.force) {
+      setLoading(false);
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('invoice_items')
@@ -762,7 +776,48 @@ export default function InvoiceDetail() {
       };
       const newItems: ImportLinePayload[] = [];
       let missingRateCount = 0;
-      if (importGrouping === 'detailed') {
+      if (importGrouping === 'single') {
+        let totalHours = 0;
+        let totalAmount = 0;
+        const allEntryIds: string[] = [];
+        const notes: string[] = [];
+        let minDate = '';
+        let maxDate = '';
+        for (const entry of finalEntries) {
+          const hours = entry.total_duration_seconds != null ? entry.total_duration_seconds / 3600 : entry.duration_minutes / 60;
+          const rate = entry.hourly_rate ?? defaultHourlyRate;
+          if (entry.hourly_rate == null) missingRateCount += 1;
+          totalHours += hours;
+          totalAmount += hours * rate;
+          allEntryIds.push(entry.id);
+          const date = format(new Date(entry.start_time), 'yyyy-MM-dd');
+          if (!minDate || date < minDate) minDate = date;
+          if (!maxDate || date > maxDate) maxDate = date;
+          if (importIncludeNotes && entry.description?.trim()) {
+            notes.push(entry.description.trim());
+          }
+        }
+        const unitPrice = totalHours > 0 ? totalAmount / totalHours : defaultHourlyRate;
+        const uniqueNotes = Array.from(new Set(notes));
+        const notesSummary =
+          uniqueNotes.length === 0
+            ? ''
+            : uniqueNotes.length === 1
+              ? uniqueNotes[0]
+              : `${uniqueNotes[0]}${uniqueNotes.length > 1 ? ` (+${uniqueNotes.length - 1} more notes)` : ''}`;
+        newItems.push({
+          invoice_id: id,
+          description: formatImportTimeframeLabel(importFromDate, importToDate),
+          line_description: importIncludeNotes ? notesSummary : '',
+          line_date: importIncludeLineDate
+            ? (minDate === maxDate ? minDate : maxDate)
+            : undefined,
+          quantity: parseFloat(totalHours.toFixed(2)),
+          unit_price: parseFloat(unitPrice.toFixed(2)),
+          amount: parseFloat(totalAmount.toFixed(2)),
+          entryIds: allEntryIds,
+        });
+      } else if (importGrouping === 'detailed') {
         for (const entry of finalEntries) {
           const hours = entry.total_duration_seconds != null ? entry.total_duration_seconds / 3600 : entry.duration_minutes / 60;
           const rate = entry.hourly_rate ?? defaultHourlyRate;
@@ -882,7 +937,8 @@ export default function InvoiceDetail() {
         variant: skippedCount > 0 ? 'warning' : 'default',
       });
       setIsImportModalOpen(false);
-      fetchItems();
+      isDirtyRef.current = false;
+      fetchItems({ force: true });
     } catch (error: any) {
       toast({
         title: 'Error importing entries',
@@ -932,7 +988,7 @@ export default function InvoiceDetail() {
         description: 'Billing status moved from billed/paid back to unbilled.',
       });
       await fetchImportEntries();
-      await fetchItems();
+      await fetchItems({ force: true });
     } catch (error: any) {
       toast({
         title: 'Error unlinking entries',
@@ -983,7 +1039,7 @@ export default function InvoiceDetail() {
         .select();
       if (insertError) throw insertError;
       toast({ title: `Imported ${tasks.length} tasks as line items` });
-      fetchItems();
+      fetchItems({ force: true });
     } catch (e: any) {
       toast({ title: 'Error importing tasks', description: e.message, variant: 'destructive' });
     }
@@ -1022,7 +1078,7 @@ export default function InvoiceDetail() {
         .single();
       if (error) throw error;
       toast({ title: 'Project budget added as line item' });
-      fetchItems();
+      fetchItems({ force: true });
     } catch (e: any) {
       toast({ title: 'Error importing budget', description: e.message, variant: 'destructive' });
     }
@@ -1054,6 +1110,7 @@ export default function InvoiceDetail() {
   };
 
   const updateItem = async (itemId: string, field: string, value: string | number) => {
+    markInvoiceDirty();
     const updatedItems = items.map((item) => {
       if (item.id === itemId) {
         const updated = { ...item, [field]: value };
@@ -1161,7 +1218,8 @@ export default function InvoiceDetail() {
 
       toast({ title: 'Invoice saved' });
       setIsEditMode(false);
-      fetchInvoice();
+      isDirtyRef.current = false;
+      fetchInvoice({ force: true });
       return true;
     } catch (error: any) {
       toast({
@@ -1194,7 +1252,7 @@ export default function InvoiceDetail() {
       if (error) throw error;
       await markLinkedEntriesBilled();
       toast({ title: 'Invoice marked as sent' });
-      fetchInvoice();
+      fetchInvoice({ force: true });
     } catch (error: any) {
       toast({
         title: 'Error updating invoice',
@@ -1209,7 +1267,7 @@ export default function InvoiceDetail() {
     try {
       await markInvoicePaid(supabase, id, input);
       toast({ title: 'Invoice marked as paid' });
-      await fetchInvoice();
+      await fetchInvoice({ force: true });
       setSendReceiptPromptOpen(true);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Could not mark invoice as paid';
@@ -1301,7 +1359,7 @@ export default function InvoiceDetail() {
       setIsSendModalOpen(false);
       setEmailMessage('');
       setCcEmails([]);
-      fetchInvoice();
+      fetchInvoice({ force: true });
     } catch (error: any) {
       console.error('Send invoice error:', error);
       let message = error?.message ?? 'Please try again';
@@ -1506,7 +1564,7 @@ export default function InvoiceDetail() {
     try {
       await reopenPaidInvoice(supabase, id);
       toast({ title: 'Invoice reopened' });
-      fetchInvoice();
+      fetchInvoice({ force: true });
     } catch (error: any) {
       toast({
         title: 'Could not reopen invoice',
@@ -1540,11 +1598,18 @@ export default function InvoiceDetail() {
     const groupedCount = new Set(
       selectedImportEntries.map((entry) => `${entry.project_id}__${entry.task_id || 'none'}__${entry.hourly_rate ?? defaultHourlyRate}`),
     ).size;
+    const lineCount =
+      importGrouping === 'single'
+        ? (selectedImportEntries.length > 0 ? 1 : 0)
+        : importGrouping === 'grouped'
+          ? groupedCount
+          : selectedImportEntries.length;
     return {
       totalHours,
       totalAmount,
       groupedCount,
       entryCount: selectedImportEntries.length,
+      lineCount,
     };
   })();
 
@@ -1605,7 +1670,10 @@ export default function InvoiceDetail() {
               {isEditMode ? (
                 <Input
                   value={invoiceNumberEdit}
-                  onChange={(e) => setInvoiceNumberEdit(e.target.value)}
+                  onChange={(e) => {
+                    markInvoiceDirty();
+                    setInvoiceNumberEdit(e.target.value);
+                  }}
                   className="text-2xl font-bold h-9 max-w-[200px]"
                   placeholder="Invoice number"
                 />
@@ -1830,7 +1898,10 @@ export default function InvoiceDetail() {
                       id="issue_date_edit"
                       type="date"
                       value={issueDateEdit}
-                      onChange={(e) => setIssueDateEdit(e.target.value)}
+                      onChange={(e) => {
+                        markInvoiceDirty();
+                        setIssueDateEdit(e.target.value);
+                      }}
                     />
                   </div>
                   <div className="space-y-2">
@@ -1839,7 +1910,10 @@ export default function InvoiceDetail() {
                       id="due_date_edit"
                       type="date"
                       value={dueDateEdit}
-                      onChange={(e) => setDueDateEdit(e.target.value)}
+                      onChange={(e) => {
+                        markInvoiceDirty();
+                        setDueDateEdit(e.target.value);
+                      }}
                     />
                   </div>
                 </div>
@@ -2063,7 +2137,10 @@ export default function InvoiceDetail() {
                     {isEditMode ? (
                       <Select
                         value={selectedTaxId || 'none'}
-                        onValueChange={(v) => setSelectedTaxId(v === 'none' ? '' : v)}
+                        onValueChange={(v) => {
+                          markInvoiceDirty();
+                          setSelectedTaxId(v === 'none' ? '' : v);
+                        }}
                       >
                         <SelectTrigger className="w-40 h-8">
                           <SelectValue placeholder="Select tax" />
@@ -2104,7 +2181,10 @@ export default function InvoiceDetail() {
             {isEditMode ? (
               <Textarea
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={(e) => {
+                  markInvoiceDirty();
+                  setNotes(e.target.value);
+                }}
                 placeholder={profile?.invoice_notes_default ? 'Leave empty to use default from settings' : 'Add any notes or payment instructions...'}
                 rows={4}
               />
@@ -2128,7 +2208,10 @@ export default function InvoiceDetail() {
             {isEditMode ? (
               <Textarea
                 value={invoiceFooter}
-                onChange={(e) => setInvoiceFooter(e.target.value)}
+                onChange={(e) => {
+                  markInvoiceDirty();
+                  setInvoiceFooter(e.target.value);
+                }}
                 placeholder={profile?.invoice_footer ? 'Leave empty to use default from settings' : 'e.g. Thank you for your business!'}
                 rows={2}
               />
@@ -2152,7 +2235,10 @@ export default function InvoiceDetail() {
             {isEditMode ? (
               <Textarea
                 value={bankDetails}
-                onChange={(e) => setBankDetails(e.target.value)}
+                onChange={(e) => {
+                  markInvoiceDirty();
+                  setBankDetails(e.target.value);
+                }}
                 placeholder={profile?.invoice_bank_details_default ? 'Leave empty to use default from Invoice Settings' : 'Bank name, account number, routing, payment instructions...'}
                 rows={3}
               />
@@ -2386,6 +2472,7 @@ export default function InvoiceDetail() {
             <Select value={importGrouping} onValueChange={(v) => setImportGrouping(v as typeof importGrouping)}>
               <SelectTrigger className="h-9 w-full min-w-0"><SelectValue /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="single">Single line (all time)</SelectItem>
                 <SelectItem value="grouped">Grouped (project + task)</SelectItem>
                 <SelectItem value="detailed">Detailed (one line per entry)</SelectItem>
               </SelectContent>
@@ -2489,13 +2576,19 @@ export default function InvoiceDetail() {
               <span className="text-muted-foreground">{importSummary.totalHours.toFixed(2)}h</span>
               <span className="text-muted-foreground">{fmt(importSummary.totalAmount)}</span>
               <span className="text-muted-foreground">
-                {importGrouping === 'grouped' ? `${importSummary.groupedCount} grouped lines` : `${importSummary.entryCount} detailed lines`}
+                {importGrouping === 'single'
+                  ? `${importSummary.lineCount} single line`
+                  : importGrouping === 'grouped'
+                    ? `${importSummary.groupedCount} grouped lines`
+                    : `${importSummary.entryCount} detailed lines`}
               </span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {importGrouping === 'grouped'
-                ? 'Grouped import creates one invoice line per project/task/rate combination.'
-                : 'Detailed import creates one invoice line per selected time entry.'}
+              {importGrouping === 'single'
+                ? `Single-line import creates one invoice line named "${formatImportTimeframeLabel(importFromDate, importToDate)}".`
+                : importGrouping === 'grouped'
+                  ? 'Grouped import creates one invoice line per project/task/rate combination.'
+                  : 'Detailed import creates one invoice line per selected time entry.'}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               Entries stay <span className="font-medium">unbilled</span> until the invoice is sent. Unlink removes them from this invoice.
@@ -2504,9 +2597,7 @@ export default function InvoiceDetail() {
           <div className="flex justify-between items-center px-6 py-4 border-t shrink-0">
             <p className="text-sm text-muted-foreground">
               {selectedEntries.size} entries →{' '}
-              {importGrouping === 'grouped'
-                ? `${importSummary.groupedCount} invoice line${importSummary.groupedCount === 1 ? '' : 's'}`
-                : `${importSummary.entryCount} invoice line${importSummary.entryCount === 1 ? '' : 's'}`}
+              {importSummary.lineCount} invoice line{importSummary.lineCount === 1 ? '' : 's'}
             </p>
             <div className="flex gap-2">
               <Button
