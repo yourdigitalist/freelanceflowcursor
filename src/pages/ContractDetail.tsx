@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { normalizeOtpCode, readFunctionErrorMessage } from "@/lib/supabaseFunctions";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -105,6 +106,7 @@ export default function ContractDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const [contract, setContract] = useState<ContractWithRelations | null>(null);
   const [items, setItems] = useState<ContractService[]>([]);
   const [activeTab, setActiveTab] = useState("data");
@@ -808,7 +810,12 @@ export default function ContractDetail() {
 
   const handleArchiveContract = async () => {
     if (!contract) return;
-    if (!confirm(buildArchiveContractConfirmMessage(contract.identifier))) return;
+    const ok = await confirm({
+      title: "Archive contract?",
+      description: buildArchiveContractConfirmMessage(contract.identifier),
+      confirmLabel: "Archive",
+    });
+    if (!ok) return;
     const { error } = await archiveContract(contract.id);
     if (error) {
       toast({ title: "Could not archive contract", description: error.message, variant: "destructive" });
@@ -820,7 +827,12 @@ export default function ContractDetail() {
 
   const handleRestoreContract = async () => {
     if (!contract) return;
-    if (!confirm(buildRestoreContractConfirmMessage(contract.identifier))) return;
+    const ok = await confirm({
+      title: "Restore contract?",
+      description: buildRestoreContractConfirmMessage(contract.identifier),
+      confirmLabel: "Restore",
+    });
+    if (!ok) return;
     const { error } = await restoreContract(contract.id);
     if (error) {
       toast({ title: "Could not restore contract", description: error.message, variant: "destructive" });
@@ -1640,6 +1652,7 @@ export default function ContractDetail() {
           updateContract({ project_id: project.id });
         }}
       />
+      {ConfirmDialogHost}
     </AppLayout>
   );
 }

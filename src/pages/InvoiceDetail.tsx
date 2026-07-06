@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { Plus, Trash2, Loader2, ListTodo, Wallet, Download, Save, RotateCcw } from '@/components/icons';
 import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { detailPageBreadcrumb } from '@/lib/breadcrumbs';
@@ -308,6 +309,7 @@ export default function InvoiceDetail() {
   const [sendReceiptPromptOpen, setSendReceiptPromptOpen] = useState(false);
   const [revertToDraftDialogOpen, setRevertToDraftDialogOpen] = useState(false);
   const [revertingToDraft, setRevertingToDraft] = useState(false);
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   // Edit mode: draft starts editable; after save or when sent/paid, read-only until "Edit Invoice" is clicked
   const [isEditMode, setIsEditMode] = useState(true);
@@ -970,7 +972,11 @@ export default function InvoiceDetail() {
       });
       return;
     }
-    if (!window.confirm('Unlink selected time entries from this invoice? They will be marked as unbilled again.')) return;
+    const ok = await confirm({
+      title: 'Unlink time entries?',
+      description: 'Unlink selected time entries from this invoice? They will be marked as unbilled again.',
+    });
+    if (!ok) return;
     setUnlinkingImports(true);
     try {
       const { data: linkedRows, error: linkedError } = await supabase
@@ -1564,15 +1570,54 @@ export default function InvoiceDetail() {
   const isPaidReceipt = invoice?.status === 'paid';
   const paidDateDisplay = formatLocaleDate(invoice?.paid_date ?? undefined, dateFormat);
   const paymentMethodDisplay = formatInvoicePaymentMethod(invoice?.payment_method);
+  const confirmSaveBeforeSend = async (): Promise<boolean> => {
+    if (!isEditMode) return true;
+    const shouldSave = await confirm({
+      title: 'Save before sending?',
+      description: 'Save your invoice before sending? Your latest changes are not saved yet.',
+      confirmLabel: 'Save and continue',
+    });
+    if (!shouldSave) return false;
+    return saveInvoice();
+  };
+
+  const handleDeleteInvoice = async () => {
+    const ok = await confirm({
+      title: 'Delete invoice?',
+      description: 'Delete this invoice? This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok || !id) return;
+    try {
+      await supabase
+        .from('time_entries')
+        .update({ billing_status: 'unbilled', invoice_id: null })
+        .eq('invoice_id', id)
+        .in('billing_status', ['billed', 'paid']);
+      const { error } = await supabase.from('invoices').delete().eq('id', id);
+      if (error) throw error;
+      toast({ title: 'Invoice deleted' });
+      navigate('/invoices');
+    } catch (err: any) {
+      toast({ title: err?.message || 'Failed to delete', variant: 'destructive' });
+    }
+  };
+
   const handleReopenInvoice = async () => {
     if (!id) return;
     const paidDetails = [paidDateDisplay && `paid on ${paidDateDisplay}`, paymentMethodDisplay && `via ${paymentMethodDisplay}`]
       .filter(Boolean)
       .join(' ');
-    const msg = paidDetails
+    const description = paidDetails
       ? `Reopen this invoice? It was marked ${paidDetails}. It will show as sent again; any receipt already emailed stays with your client.`
       : 'Reopen this invoice? It will show as sent again; any receipt already emailed stays with your client.';
-    if (!window.confirm(msg)) return;
+    const ok = await confirm({
+      title: 'Reopen invoice?',
+      description,
+      confirmLabel: 'Reopen',
+    });
+    if (!ok) return;
     try {
       await reopenPaidInvoice(supabase, id);
       toast({ title: 'Invoice reopened' });
@@ -1744,18 +1789,21 @@ export default function InvoiceDetail() {
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={() => {
+                  onClick={async () => {
                     if (isEditMode) {
                       void saveInvoice();
                       return;
                     }
                     if (invoice.status === 'sent' || invoice.status === 'paid') {
-                      if (window.confirm('This invoice has already been sent. Any changes you make won\'t update the version the client received. To send an updated copy, save your changes and use "Send to Client" again. Continue to edit?')) {
-                        setIsEditMode(true);
-                      }
-                    } else {
-                      setIsEditMode(true);
+                      const ok = await confirm({
+                        title: 'Edit sent invoice?',
+                        description:
+                          'This invoice has already been sent. Any changes you make won\'t update the version the client received. To send an updated copy, save your changes and use "Send to Client" again.',
+                        confirmLabel: 'Continue editing',
+                      });
+                      if (!ok) return;
                     }
+                    setIsEditMode(true);
                   }}
                   title={isEditMode ? 'Save invoice' : 'Edit invoice'}
                 >
@@ -1777,14 +1825,8 @@ export default function InvoiceDetail() {
               <Button
                 size="sm"
                 onClick={async () => {
-                  if (isEditMode) {
-                    const shouldSave = window.confirm(
-                      'Save your invoice before sending? Your latest changes are not saved yet.',
-                    );
-                    if (!shouldSave) return;
-                    const ok = await saveInvoice();
-                    if (!ok) return;
-                  }
+                  const saved = await confirmSaveBeforeSend();
+                  if (!saved) return;
                   const isReceipt = invoice.status === 'paid';
                   const isReminder = invoice.status === 'sent' || invoice.status === 'paid';
                   if (isReceipt) {
@@ -1838,22 +1880,7 @@ export default function InvoiceDetail() {
                 )}
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
-                  onClick={async () => {
-                    if (!window.confirm('Delete this invoice? This cannot be undone.')) return;
-                    try {
-                      await supabase
-                        .from('time_entries')
-                        .update({ billing_status: 'unbilled', invoice_id: null })
-                        .eq('invoice_id', id)
-                        .in('billing_status', ['billed', 'paid']);
-                      const { error } = await supabase.from('invoices').delete().eq('id', id);
-                      if (error) throw error;
-                      toast({ title: 'Invoice deleted' });
-                      navigate('/invoices');
-                    } catch (err: any) {
-                      toast({ title: err?.message || 'Failed to delete', variant: 'destructive' });
-                    }
-                  }}
+                  onClick={() => void handleDeleteInvoice()}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete
@@ -1862,28 +1889,6 @@ export default function InvoiceDetail() {
             </DropdownMenu>
           </div>
         </div>
-
-        {invoice.status === 'sent' && (
-          <div
-            role="alert"
-            className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-4 text-sm text-amber-900 dark:text-amber-100"
-          >
-            <p className="font-medium">This invoice was already sent</p>
-            <p className="mt-1 text-amber-800 dark:text-amber-200">
-              Your client has already received this invoice. The Send button will only send a payment reminder until you revert to draft.
-              To fix a mistake and email an updated invoice, revert to draft, edit, then use Send to Client.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="mt-3 border-amber-300 bg-white/80 hover:bg-white dark:border-amber-700 dark:bg-amber-950/60"
-              onClick={() => setRevertToDraftDialogOpen(true)}
-            >
-              Revert to draft
-            </Button>
-          </div>
-        )}
 
         {isEditMode && invoice.status === 'paid' && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-4 text-sm text-amber-800 dark:text-amber-200">
@@ -2328,14 +2333,8 @@ export default function InvoiceDetail() {
               </Button>
               <Button size="sm" onClick={async () => {
                 setIsPreviewOpen(false);
-                if (isEditMode) {
-                  const shouldSave = window.confirm(
-                    'Save your invoice before sending? Your latest changes are not saved yet.',
-                  );
-                  if (!shouldSave) return;
-                  const ok = await saveInvoice();
-                  if (!ok) return;
-                }
+                const saved = await confirmSaveBeforeSend();
+                if (!saved) return;
                 setSendModalMode('send');
                 setCcEmails([]);
                 setIsSendModalOpen(true);
@@ -2880,6 +2879,7 @@ export default function InvoiceDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {ConfirmDialogHost}
       </TooltipProvider>
     </AppLayout>
   );

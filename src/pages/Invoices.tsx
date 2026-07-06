@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { Plus, Trash2, Download, Upload, RotateCcw, Filter } from '@/components/icons';
 import { reopenPaidInvoice, revertSentInvoiceToDraft } from '@/lib/invoiceStatus';
 import {
@@ -131,6 +132,7 @@ interface Invoice {
 export default function Invoices() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -457,10 +459,15 @@ export default function Invoices() {
     const paidOn = formatLocaleDate(inv.paid_date ?? undefined, dateFormat);
     const method = formatInvoicePaymentMethod(inv.payment_method);
     const paidDetails = [paidOn && `paid on ${paidOn}`, method && `via ${method}`].filter(Boolean).join(' ');
-    const msg = paidDetails
+    const description = paidDetails
       ? `Reopen invoice ${inv.invoice_number}? It was marked ${paidDetails}.`
       : `Reopen invoice ${inv.invoice_number}? It will show as sent again.`;
-    if (!window.confirm(msg)) return;
+    const ok = await confirm({
+      title: 'Reopen invoice?',
+      description,
+      confirmLabel: 'Reopen',
+    });
+    if (!ok) return;
     try {
       await reopenPaidInvoice(supabase, inv.id);
       toast({ title: 'Invoice reopened' });
@@ -475,7 +482,13 @@ export default function Invoices() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this invoice?')) return;
+    const ok = await confirm({
+      title: 'Delete invoice?',
+      description: 'Delete this invoice?',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
     
     try {
       await supabase
@@ -1324,6 +1337,7 @@ export default function Invoices() {
           setSendReceiptInvoice(null);
         }}
       />
+      {ConfirmDialogHost}
     </AppLayout>
   );
 }

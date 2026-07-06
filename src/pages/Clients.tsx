@@ -50,6 +50,7 @@ import {
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { Plus, Trash2, Grid, List, PanelLeft, Download, Upload, GripVertical, Filter } from '@/components/icons';
 import { downloadCsv, parseCsv, getClientsTemplateRows, CLIENTS_CSV_HEADERS } from '@/lib/csv';
 import { SlotIcon } from '@/contexts/IconSlotContext';
@@ -232,6 +233,7 @@ function DroppableColumn({
 export default function Clients() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const location = useLocation();
   const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
@@ -438,7 +440,13 @@ export default function Clients() {
 
   const handleArchive = async (id: string) => {
     const target = clients.find((c) => c.id === id);
-    if (!target || !confirm(buildArchiveConfirmMessage(target.name))) return;
+    if (!target) return;
+    const ok = await confirm({
+      title: 'Archive client?',
+      description: buildArchiveConfirmMessage(target.name),
+      confirmLabel: 'Archive',
+    });
+    if (!ok) return;
     try {
       const { error } = await archiveClient(id);
       if (error) throw error;
@@ -451,7 +459,13 @@ export default function Clients() {
 
   const handleRestore = async (id: string) => {
     const target = clients.find((c) => c.id === id);
-    if (!target || !confirm(buildRestoreConfirmMessage(target.name))) return;
+    if (!target) return;
+    const ok = await confirm({
+      title: 'Restore client?',
+      description: buildRestoreConfirmMessage(target.name),
+      confirmLabel: 'Restore',
+    });
+    if (!ok) return;
     try {
       const { error } = await restoreClient(id);
       if (error) throw error;
@@ -475,7 +489,13 @@ export default function Clients() {
         });
         return;
       }
-      if (!confirm(buildDeleteConfirmMessage())) return;
+      const ok = await confirm({
+        title: 'Delete client?',
+        description: buildDeleteConfirmMessage(),
+        confirmLabel: 'Delete',
+        destructive: true,
+      });
+      if (!ok) return;
       const { error } = await deleteClient(id);
       if (error) throw error;
       toast({ title: 'Client deleted successfully' });
@@ -1532,6 +1552,7 @@ export default function Clients() {
           </>
         )}
       </div>
+      {ConfirmDialogHost}
     </AppLayout>
   );
 }

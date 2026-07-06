@@ -28,6 +28,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { Plus, Play, Trash2, Filter, Download, Upload, List, Check } from '@/components/icons';
 
 import { SlotIcon } from '@/contexts/IconSlotContext';
@@ -150,6 +151,7 @@ interface DraftSegment {
 export default function TimeTracking() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -481,7 +483,13 @@ export default function TimeTracking() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this time entry?')) return;
+    const ok = await confirm({
+      title: 'Delete time entry?',
+      description: 'Delete this time entry?',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
     
     try {
       const { error } = await supabase
@@ -556,7 +564,14 @@ export default function TimeTracking() {
 
   const handleDeleteSelected = async () => {
     if (selectedEntryIds.size === 0) return;
-    if (!confirm(`Delete ${selectedEntryIds.size} selected entr${selectedEntryIds.size === 1 ? 'y' : 'ies'}?`)) return;
+    const count = selectedEntryIds.size;
+    const ok = await confirm({
+      title: `Delete ${count} entr${count === 1 ? 'y' : 'ies'}?`,
+      description: `Delete ${count} selected entr${count === 1 ? 'y' : 'ies'}?`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       const ids = Array.from(selectedEntryIds);
       for (const id of ids) {
@@ -592,7 +607,14 @@ export default function TimeTracking() {
 
   const handleDeleteAllFiltered = async () => {
     if (filteredEntries.length === 0) return;
-    if (!confirm(`Delete all ${filteredEntries.length} entr${filteredEntries.length === 1 ? 'y' : 'ies'} in this view? This cannot be undone.`)) return;
+    const count = filteredEntries.length;
+    const ok = await confirm({
+      title: `Delete all ${count} entr${count === 1 ? 'y' : 'ies'}?`,
+      description: `Delete all ${count} entr${count === 1 ? 'y' : 'ies'} in this view? This cannot be undone.`,
+      confirmLabel: 'Delete all',
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       const ids = filteredEntries.map((e) => e.id);
       for (const id of ids) {
@@ -1926,6 +1948,7 @@ export default function TimeTracking() {
           </div>
         )}
       </div>
+      {ConfirmDialogHost}
     </AppLayout>
   );
 }

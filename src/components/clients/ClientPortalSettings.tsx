@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import {
@@ -55,6 +56,7 @@ export function ClientPortalSettings({
   onClientUpdate: (patch: Partial<ClientPortalClient>) => void;
 }) {
   const { toast } = useToast();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const [enabled, setEnabled] = useState(Boolean(client.portal_enabled));
   const [portalToken, setPortalToken] = useState(client.portal_token || "");
   const [sections, setSections] = useState<ClientPortalSections>(() =>
@@ -249,7 +251,12 @@ export function ClientPortalSettings({
   };
 
   const regenerateToken = async () => {
-    if (!confirm("Regenerate the portal link? The old link will stop working.")) return;
+    const ok = await confirm({
+      title: "Regenerate portal link?",
+      description: "Regenerate the portal link? The old link will stop working.",
+      confirmLabel: "Regenerate",
+    });
+    if (!ok) return;
     const token = crypto.randomUUID();
     setPortalToken(token);
     try {
@@ -454,6 +461,7 @@ export function ClientPortalSettings({
           </Button>
         </CardContent>
       </Card>
+      {ConfirmDialogHost}
     </div>
   );
 }

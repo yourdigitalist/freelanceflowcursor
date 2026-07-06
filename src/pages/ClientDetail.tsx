@@ -39,6 +39,7 @@ import { EmptyValue, valueOrEmpty } from "@/components/ui/empty-value";
 import { TableStatusBadge } from "@/components/ui/table-status-badge";
 import { DataTableFrame } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -215,6 +216,7 @@ export default function ClientDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -607,7 +609,13 @@ export default function ClientDetail() {
   };
 
   const handleDeleteClientTimeEntry = async (entryId: string) => {
-    if (!window.confirm("Delete this time entry?")) return;
+    const ok = await confirm({
+      title: "Delete time entry?",
+      description: "Delete this time entry?",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
     const { error } = await supabase.from("time_entries").delete().eq("id", entryId);
     if (error) {
       toast({ title: "Failed to delete time entry", description: error.message, variant: "destructive" });
@@ -638,7 +646,13 @@ export default function ClientDetail() {
   }, [timeEntries]);
 
   const handleArchiveClient = async () => {
-    if (!client || !window.confirm(buildArchiveConfirmMessage(client.name))) return;
+    if (!client) return;
+    const ok = await confirm({
+      title: "Archive client?",
+      description: buildArchiveConfirmMessage(client.name),
+      confirmLabel: "Archive",
+    });
+    if (!ok) return;
     const { error } = await archiveClient(client.id);
     if (error) {
       toast({ title: "Failed to archive client", description: error.message, variant: "destructive" });
@@ -650,7 +664,13 @@ export default function ClientDetail() {
   };
 
   const handleRestoreClient = async () => {
-    if (!client || !window.confirm(buildRestoreConfirmMessage(client.name))) return;
+    if (!client) return;
+    const ok = await confirm({
+      title: "Restore client?",
+      description: buildRestoreConfirmMessage(client.name),
+      confirmLabel: "Restore",
+    });
+    if (!ok) return;
     const { error } = await restoreClient(client.id);
     if (error) {
       toast({ title: "Failed to restore client", description: error.message, variant: "destructive" });
@@ -673,7 +693,13 @@ export default function ClientDetail() {
         });
         return;
       }
-      if (!window.confirm(buildDeleteConfirmMessage())) return;
+      const ok = await confirm({
+        title: "Delete client?",
+        description: buildDeleteConfirmMessage(),
+        confirmLabel: "Delete",
+        destructive: true,
+      });
+      if (!ok) return;
       const { error } = await deleteClient(client.id);
       if (error) {
         toast({
@@ -1840,6 +1866,7 @@ export default function ClientDetail() {
           onSaved={() => void refreshClientData()}
         />
       </div>
+      {ConfirmDialogHost}
     </AppLayout>
   );
 }

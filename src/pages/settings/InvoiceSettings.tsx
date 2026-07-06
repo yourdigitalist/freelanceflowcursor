@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { markStartGuideItemComplete, notifyStartGuideRefresh } from '@/components/layout/startGuideUtils';
 import { Loader2, Plus, Trash2, Pencil, Check, X, ChevronDown } from '@/components/icons';
 import {
@@ -69,6 +70,7 @@ interface Tax {
 export default function InvoiceSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const dirtyContext = useSettingsDirty();
   const [profile, setProfile] = useState<InvoiceProfile | null>(null);
   const [appCommsDefaults, setAppCommsDefaults] = useState<{
@@ -283,7 +285,13 @@ export default function InvoiceSettings() {
   };
 
   const deleteTax = async (id: string) => {
-    if (!confirm('Delete this tax rate?')) return;
+    const ok = await confirm({
+      title: 'Delete tax rate?',
+      description: 'Delete this tax rate?',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
     
     try {
       const { error } = await supabase
@@ -805,6 +813,7 @@ export default function InvoiceSettings() {
           </Button>
         </div>
       </form>
+      {ConfirmDialogHost}
     </div>
   );
 }

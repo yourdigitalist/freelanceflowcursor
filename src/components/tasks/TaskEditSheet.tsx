@@ -25,6 +25,7 @@ import { PrioritySelect } from './PrioritySelect';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { format, parseISO } from 'date-fns';
 import { formatDuration } from '@/lib/time';
 import { formatLocaleDate, formatLocaleDateTime } from '@/lib/datetime';
@@ -70,6 +71,7 @@ export function TaskEditSheet({
 }: TaskEditSheetProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const { dateFormat, timeFormat } = useLocalePreferences();
   const [formData, setFormData] = useState({
     title: '',
@@ -181,11 +183,16 @@ export function TaskEditSheet({
                   variant="outline"
                   size="sm"
                   className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => {
-                    if (window.confirm('Delete this task? This cannot be undone.')) {
-                      onDelete(task.id);
-                      onClose();
-                    }
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: 'Delete task?',
+                      description: 'Delete this task? This cannot be undone.',
+                      confirmLabel: 'Delete',
+                      destructive: true,
+                    });
+                    if (!ok || !task) return;
+                    onDelete(task.id);
+                    onClose();
                   }}
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
@@ -387,6 +394,7 @@ export function TaskEditSheet({
           </div>
         </form>
       </SheetContent>
+      {ConfirmDialogHost}
     </Sheet>
   );
 }

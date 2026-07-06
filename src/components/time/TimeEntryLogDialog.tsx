@@ -18,6 +18,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { Plus, Trash2, Check } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/time';
@@ -91,6 +92,7 @@ export function TimeEntryLogDialog({
 }: TimeEntryLogDialogProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const [projects, setProjects] = useState<Project[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -410,7 +412,13 @@ export function TimeEntryLogDialog({
 
   const handleDelete = async () => {
     if (!entry?.id) return;
-    if (!confirm('Delete this time entry?')) return;
+    const ok = await confirm({
+      title: 'Delete time entry?',
+      description: 'Delete this time entry?',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
 
     setDeleting(true);
     try {
@@ -784,6 +792,7 @@ export function TimeEntryLogDialog({
         </div>
       </DialogContent>
     </Dialog>
+    {ConfirmDialogHost}
     </>
   );
 }

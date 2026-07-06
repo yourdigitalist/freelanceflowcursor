@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { useTimer } from '@/contexts/TimerContext';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { formatElapsed } from '@/contexts/TimerContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,7 @@ export function TimerBar() {
     logTimeFromTimer,
     discardTimerSegment,
   } = useTimer();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
   if (!user || draftSegments.length === 0) return null;
 
@@ -61,10 +63,15 @@ export function TimerBar() {
           <Button
             variant="secondary"
             size="icon-sm"
-            onClick={() => {
-              if (confirm('Discard this timer entry? This removes all tracked segments and closes the timer bar.')) {
-                discardTimerSegment();
-              }
+            onClick={async () => {
+              const ok = await confirm({
+                title: 'Discard timer?',
+                description:
+                  'Discard this timer entry? This removes all tracked segments and closes the timer bar.',
+                confirmLabel: 'Discard',
+                destructive: true,
+              });
+              if (ok) discardTimerSegment();
             }}
             title="Discard draft"
             className="text-destructive"
@@ -79,6 +86,7 @@ export function TimerBar() {
           </Button>
         </div>
       </div>
+      {ConfirmDialogHost}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { formatDuration } from '@/lib/time';
 import { resolveEffectiveHourlyRate } from '@/lib/billing';
 
@@ -133,6 +134,7 @@ const TimerContext = createContext<TimerContextValue | undefined>(undefined);
 export function TimerProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const [activeEntryId, setActiveEntryId] = useState<string | null>(() => loadStored()?.activeEntryId ?? null);
   const [draftSegments, setDraftSegments] = useState<DraftSegment[]>(() => loadStored()?.draftSegments ?? []);
   const [timerDescription, setTimerDescriptionState] = useState(() => loadStored()?.timerDescription ?? '');
@@ -409,9 +411,12 @@ export function TimerProvider({ children }: { children: ReactNode }) {
 
   const resumeEntry = useCallback(async (entryId: string) => {
     if (draftSegments.length > 0 && activeEntryId && activeEntryId !== entryId) {
-      const shouldReplace = window.confirm(
-        'You already have a timer draft in progress. Resume this entry instead and replace the current draft?'
-      );
+      const shouldReplace = await confirm({
+        title: 'Replace timer draft?',
+        description:
+          'You already have a timer draft in progress. Resume this entry instead and replace the current draft?',
+        confirmLabel: 'Replace draft',
+      });
       if (!shouldReplace) return;
     }
     const { data: entry, error } = await supabase
@@ -448,7 +453,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       title: 'Timer resumed',
       description: 'Continue tracking and save when done.',
     });
-  }, [activeEntryId, draftSegments.length, toast]);
+  }, [activeEntryId, draftSegments.length, toast, confirm]);
 
   const value: TimerContextValue = {
     activeEntryId,
@@ -471,7 +476,12 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     isLocalTimerRunning,
   };
 
-  return <TimerContext.Provider value={value}>{children}</TimerContext.Provider>;
+  return (
+    <TimerContext.Provider value={value}>
+      {children}
+      {ConfirmDialogHost}
+    </TimerContext.Provider>
+  );
 }
 
 export function useTimer() {
