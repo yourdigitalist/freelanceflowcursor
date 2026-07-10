@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { SlotIcon } from '@/contexts/IconSlotContext';
 import { differenceInDays, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { hasBillingAccess } from '@/lib/billingAccess';
+import { trackMetaInitiateCheckout, trackMetaSubscribe } from '@/lib/metaPixel';
 
 interface SubscriptionProfile {
   plan_type: string | null;
@@ -59,6 +60,7 @@ const plans = [
 export default function SubscriptionSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [profile, setProfile] = useState<SubscriptionProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
@@ -66,6 +68,20 @@ export default function SubscriptionSettings() {
   useEffect(() => {
     if (user) fetchProfile();
   }, [user]);
+
+  useEffect(() => {
+    const sessionId = searchParams.get('session_id');
+    if (!sessionId || !profile) return;
+
+    const planId = profile.plan_type === 'pro_annual' ? 'pro_annual' : 'pro_monthly';
+    trackMetaSubscribe(planId, `subscribe_checkout_${sessionId}`);
+
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      next.delete('session_id');
+      return next;
+    }, { replace: true });
+  }, [searchParams, profile, setSearchParams]);
 
   const fetchProfile = async () => {
     try {
@@ -97,6 +113,7 @@ export default function SubscriptionSettings() {
     }
     setUpgrading(true);
     try {
+      trackMetaInitiateCheckout(planId);
       const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
       if (sessionError || !session?.access_token) {
         toast({ title: 'Please sign in again', description: 'Your session may have expired.', variant: 'destructive' });

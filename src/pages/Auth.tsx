@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from '@/components/icons';
 import { PasswordStrengthInput } from '@/components/PasswordStrengthInput';
 import { evaluatePasswordStrength, passwordStrengthMessage } from '@/lib/passwordStrength';
+import { trackMetaLead } from '@/lib/metaPixel';
 
 const LANCE_LOGO_SRC = '/lance-logo-black-colour.png';
 import { SlotIcon } from '@/contexts/IconSlotContext';
@@ -147,6 +148,7 @@ export default function Auth() {
         variant: 'destructive',
       });
     } else {
+      trackMetaLead();
       sessionStorage.setItem(SIGNUP_PENDING_KEY, '1');
       sessionStorage.setItem(SIGNUP_EMAIL_KEY, email.trim());
       setResendEmail(email.trim());

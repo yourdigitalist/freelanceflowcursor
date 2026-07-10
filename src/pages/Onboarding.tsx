@@ -32,6 +32,11 @@ import { SlotIcon } from '@/contexts/IconSlotContext';
 import type { IconSlotKey } from '@/lib/iconSlots';
 import { currencies } from '@/lib/locale-data';
 import { cn } from '@/lib/utils';
+import {
+  trackMetaCompleteRegistration,
+  trackMetaStartTrial,
+  trackMetaSubscribe,
+} from '@/lib/metaPixel';
 
 const STRIPE_PRICE_MONTHLY = import.meta.env.VITE_STRIPE_PRICE_MONTHLY as string | undefined;
 const STRIPE_PRICE_ANNUAL = import.meta.env.VITE_STRIPE_PRICE_ANNUAL as string | undefined;
@@ -162,6 +167,11 @@ export default function Onboarding() {
 
   // Sync this user to Resend (marketing lists) once when they hit onboarding after signup
   useEffect(() => {
+    if (!user?.id) return;
+    trackMetaCompleteRegistration();
+  }, [user?.id]);
+
+  useEffect(() => {
     if (!user?.id || resendSyncAttemptedRef.current) return;
     resendSyncAttemptedRef.current = true;
     const syncToResend = async () => {
@@ -234,6 +244,7 @@ export default function Onboarding() {
           return;
         }
         clearCheckoutParams();
+        trackMetaSubscribe(selectedPlanId, `subscribe_checkout_${sessionId}`);
         navigate('/dashboard', { replace: true });
       } catch {
         checkoutCompleteAttemptedRef.current = false;
@@ -290,6 +301,7 @@ export default function Onboarding() {
         setLoading(false);
         return;
       }
+      trackMetaStartTrial(selectedPlanId);
       navigate('/dashboard', { replace: true });
     } catch {
       toast({ title: 'Something went wrong', variant: 'destructive' });
