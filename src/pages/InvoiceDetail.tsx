@@ -18,7 +18,7 @@ import { Plus, Trash2, Loader2, ListTodo, Wallet, Download, Save, RotateCcw } fr
 import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { detailPageBreadcrumb } from '@/lib/breadcrumbs';
 import { MenuDotsTrigger } from '@/components/ui/menu-dots-trigger';
-import { reopenPaidInvoice, revertSentInvoiceToDraft } from '@/lib/invoiceStatus';
+import { canSendPaymentReminder, isOutstandingInvoiceStatus, reopenPaidInvoice, revertSentInvoiceToDraft } from '@/lib/invoiceStatus';
 import {
   buildReceiptEmailMessage,
   formatInvoicePaymentMethod,
@@ -102,6 +102,8 @@ interface Invoice {
   status: string;
   paid_date?: string | null;
   payment_method?: string | null;
+  last_reminder_sent_at?: string | null;
+  last_reminder_automatic?: boolean | null;
   issue_date: string;
   due_date: string | null;
   subtotal: number;
@@ -446,7 +448,7 @@ export default function InvoiceDetail() {
 
   // When invoice is sent or paid, switch to read-only (user must click "Edit Invoice" to change)
   useEffect(() => {
-    if (invoice && (invoice.status === 'sent' || invoice.status === 'paid')) {
+    if (invoice && (isOutstandingInvoiceStatus(invoice.status) || invoice.status === 'paid')) {
       setIsEditMode(false);
     }
   }, [invoice?.id, invoice?.status]);
@@ -1364,6 +1366,7 @@ export default function InvoiceDetail() {
           message: emailMessage,
           subject: emailSubject.trim() || undefined,
           receipt: sendModalMode === 'receipt',
+          reminder: sendModalMode === 'reminder',
         },
       });
 
@@ -1373,7 +1376,14 @@ export default function InvoiceDetail() {
         await markLinkedEntriesBilled();
       }
 
-      toast({ title: sendModalMode === 'receipt' ? 'Receipt sent!' : 'Invoice sent successfully!' });
+      toast({
+        title:
+          sendModalMode === 'receipt'
+            ? 'Receipt sent!'
+            : sendModalMode === 'reminder'
+              ? 'Reminder sent!'
+              : 'Invoice sent successfully!',
+      });
       setIsSendModalOpen(false);
       setEmailMessage('');
       setCcEmails([]);
@@ -1773,6 +1783,11 @@ export default function InvoiceDetail() {
                       {paidDateDisplay && paymentMethodDisplay ? ' · ' : null}
                       {paymentMethodDisplay ? <>{paymentMethodDisplay}</> : null}
                     </p>
+                  ) : invoice.last_reminder_sent_at ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Reminder {invoice.last_reminder_automatic ? 'sent automatically' : 'sent manually'} on{' '}
+                      {formatLocaleDate(invoice.last_reminder_sent_at.slice(0, 10), dateFormat)}
+                    </p>
                   ) : null}
                 </div>
               )}
@@ -1794,7 +1809,7 @@ export default function InvoiceDetail() {
                       void saveInvoice();
                       return;
                     }
-                    if (invoice.status === 'sent' || invoice.status === 'paid') {
+                    if (isOutstandingInvoiceStatus(invoice.status) || invoice.status === 'paid') {
                       const ok = await confirm({
                         title: 'Edit sent invoice?',
                         description:
@@ -1828,7 +1843,7 @@ export default function InvoiceDetail() {
                   const saved = await confirmSaveBeforeSend();
                   if (!saved) return;
                   const isReceipt = invoice.status === 'paid';
-                  const isReminder = invoice.status === 'sent' || invoice.status === 'paid';
+                  const isReminder = canSendPaymentReminder(invoice.status) && !isReceipt;
                   if (isReceipt) {
                     setSendModalMode('receipt');
                     applySendModalDefaults('receipt');
@@ -1844,7 +1859,7 @@ export default function InvoiceDetail() {
                 }}
               >
                 <SlotIcon slot="action_send" className="mr-2 h-4 w-4 text-current" />
-                {invoice.status === 'paid' ? 'Send receipt' : invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send to Client'}
+                {invoice.status === 'paid' ? 'Send receipt' : isOutstandingInvoiceStatus(invoice.status) ? 'Send reminder' : 'Send to Client'}
               </Button>
             )}
             <DropdownMenu>
@@ -1860,7 +1875,7 @@ export default function InvoiceDetail() {
                     Mark as Sent
                   </DropdownMenuItem>
                 )}
-                {invoice.status === 'sent' && (
+                {isOutstandingInvoiceStatus(invoice.status) && (
                   <>
                     <DropdownMenuItem onClick={() => setMarkPaidDialogOpen(true)}>
                       <SlotIcon slot="invoice_stat_paid" className="mr-2 h-4 w-4" />
@@ -2689,18 +2704,18 @@ export default function InvoiceDetail() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {sendModalMode === 'receipt' ? 'Send receipt' : invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send Invoice'}
+              {sendModalMode === 'receipt' ? 'Send receipt' : sendModalMode === 'reminder' ? 'Send reminder' : 'Send Invoice'}
             </DialogTitle>
             <DialogDescription>
               {sendModalMode === 'receipt'
                 ? 'Send a receipt to your client confirming payment. The PDF is attached.'
-                : invoice.status === 'sent' || invoice.status === 'paid'
+                : sendModalMode === 'reminder'
                   ? 'Send a reminder email to your client with the invoice PDF attached.'
                   : 'Send this invoice to your client via email with a PDF attachment.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {(invoice.status === 'sent' || invoice.status === 'paid') && sendModalMode !== 'receipt' && profile?.reminder_enabled && (
+            {sendModalMode === 'reminder' && profile?.reminder_enabled && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-3 text-sm text-amber-800 dark:text-amber-200">
                 You have automatic reminders enabled. This is a manual reminder.
               </div>
@@ -2837,7 +2852,7 @@ export default function InvoiceDetail() {
               ) : (
                 <>
                   <SlotIcon slot="action_send" className="mr-2 h-4 w-4" />
-                  {sendModalMode === 'receipt' ? 'Send receipt' : invoice.status === 'sent' || invoice.status === 'paid' ? 'Send reminder' : 'Send Invoice'}
+                  {sendModalMode === 'receipt' ? 'Send receipt' : sendModalMode === 'reminder' ? 'Send reminder' : 'Send Invoice'}
                 </>
               )}
             </Button>

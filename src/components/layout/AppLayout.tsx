@@ -156,6 +156,7 @@ export function AppLayout({
   const showTimerBar = timer.draftSegments.length > 0;
   const showContracts = canAccessContracts({ isAdmin: profile?.is_admin === true });
   const showNotes = canAccessNotes({ isAdmin: profile?.is_admin === true });
+  const showProposals2 = profile?.is_admin === true;
   const closeMobileSidebar = () => setSidebarOpen(false);
 
   const handleSearchSubmit = (e: FormEvent) => {
@@ -548,6 +549,24 @@ export function AppLayout({
                 )}
               </Link>,
             )}
+            {showProposals2
+              ? wrapCollapsedNav(
+                  'Proposals 2',
+                  <Link
+                    to="/proposals-2"
+                    onClick={closeMobileSidebar}
+                    className={shellNavLink(location.pathname.startsWith('/proposals-2'), sidebarCollapsed)}
+                  >
+                    <SlotIcon slot="sidebar_proposals" className={shellNavIcon(location.pathname.startsWith('/proposals-2'))} />
+                    {!sidebarCollapsed && (
+                      <>
+                        Proposals 2
+                        <Badge className="shrink-0 bg-indigo-600 px-1.5 py-0 text-[10px] font-medium text-white hover:bg-indigo-600">Admin</Badge>
+                      </>
+                    )}
+                  </Link>,
+                )
+              : null}
             {showContracts
               ? wrapCollapsedNav(
                   'Contracts',

@@ -8,6 +8,7 @@ export function formatStatusLabel(status?: string | null): string {
 
   const overrides: Record<string, string> = {
     pending_signatures: "Pending signatures",
+    reminder_sent: "Reminder sent",
   };
   if (overrides[normalized]) return overrides[normalized];
 
@@ -34,6 +35,7 @@ export function getStatusBadgeClass(status?: string | null): string {
       return "bg-success/10 text-success border-success/20";
 
     case "sent":
+    case "reminder_sent":
     case "pending":
     case "pending_signatures":
     case "draft":
@@ -86,6 +88,12 @@ export function getTableStatusBadgeStyles(status?: string | null): { badge: stri
       return {
         badge: "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300",
         dot: "bg-blue-500",
+      };
+
+    case "reminder_sent":
+      return {
+        badge: "bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
+        dot: "bg-violet-500",
       };
 
     case "overdue":

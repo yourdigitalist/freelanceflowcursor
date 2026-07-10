@@ -228,7 +228,7 @@ serve(async (req) => {
 
     for (const row of (invoices || []).filter((x: any) => x.user_id === userId)) {
       const status = String(row.status || "");
-      if (!["sent", "overdue"].includes(status)) continue;
+      if (!["sent", "overdue", "reminder_sent"].includes(status)) continue;
       const due = String(row.due_date);
       const invoiceLabel = row.invoice_number ? `Invoice ${row.invoice_number}` : "Invoice";
       if (due === invoiceDueSoon) {

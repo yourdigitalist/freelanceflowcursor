@@ -30,7 +30,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useToast } from '@/hooks/use-toast';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { Plus, Trash2, Download, Upload, RotateCcw, Filter } from '@/components/icons';
-import { reopenPaidInvoice, revertSentInvoiceToDraft } from '@/lib/invoiceStatus';
+import { isOutstandingInvoiceStatus, reopenPaidInvoice, revertSentInvoiceToDraft } from '@/lib/invoiceStatus';
 import {
   formatInvoicePaymentMethod,
   markInvoicePaid,
@@ -701,7 +701,7 @@ export default function Invoices() {
       };
       const normalizeStatus = (s: string): string => {
         const lower = (s || 'draft').trim().toLowerCase();
-        if (['draft', 'sent', 'paid', 'overdue'].includes(lower)) return lower;
+        if (['draft', 'sent', 'paid', 'overdue', 'reminder_sent'].includes(lower)) return lower;
         if (lower === 'completed') return 'paid';
         if (lower === 'in progress' || lower === 'in_progress') return 'sent';
         return lower || 'draft';
@@ -793,9 +793,9 @@ export default function Invoices() {
   const invoiceSummary = useMemo(() => {
     const totalAmount = filteredInvoices.reduce((sum, i) => sum + Number(i.total), 0);
     const paidInvoices = filteredInvoices.filter((i) => i.status === 'paid');
-    const pendingInvoices = filteredInvoices.filter((i) => ['sent', 'draft'].includes(i.status));
+    const pendingInvoices = filteredInvoices.filter((i) => ['sent', 'draft', 'reminder_sent', 'overdue'].includes(i.status || ''));
     const overdueInvoices = filteredInvoices.filter((i) => i.status === 'overdue');
-    const sentCount = filteredInvoices.filter((i) => i.status === 'sent').length;
+    const sentCount = filteredInvoices.filter((i) => ['sent', 'reminder_sent'].includes(i.status || '')).length;
     const paidAmount = paidInvoices.reduce((sum, i) => sum + Number(i.total), 0);
     const pendingAmount = pendingInvoices.reduce((sum, i) => sum + Number(i.total), 0);
     const overdueAmount = overdueInvoices.reduce((sum, i) => sum + Number(i.total), 0);
@@ -1166,6 +1166,7 @@ export default function Invoices() {
                     <SelectItem value="all">All statuses</SelectItem>
                     <SelectItem value="draft">Draft</SelectItem>
                     <SelectItem value="sent">Sent</SelectItem>
+                    <SelectItem value="reminder_sent">Reminder sent</SelectItem>
                     <SelectItem value="paid">Paid</SelectItem>
                     <SelectItem value="overdue">Overdue</SelectItem>
                     <SelectItem value="cancelled">Cancelled</SelectItem>
@@ -1269,7 +1270,7 @@ export default function Invoices() {
                                 Mark as Sent
                               </DropdownMenuItem>
                             )}
-                            {invoice.status === 'sent' && (
+                            {isOutstandingInvoiceStatus(invoice.status) && (
                               <>
                                 <DropdownMenuItem onClick={() => handleStatusChange(invoice.id, 'paid')}>
                                   <SlotIcon slot="invoice_stat_paid" className="mr-2 h-4 w-4" />

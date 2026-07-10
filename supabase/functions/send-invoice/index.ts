@@ -223,7 +223,7 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { invoiceId, recipientEmail, senderName, senderEmail, message, subject: customSubject, cc, receipt, downloadOnly } = body;
+    const { invoiceId, recipientEmail, senderName, senderEmail, message, subject: customSubject, cc, receipt, downloadOnly, reminder } = body;
 
     if (!invoiceId) {
       throw new Error("Missing required field: invoiceId");
@@ -499,10 +499,23 @@ serve(async (req) => {
     console.log("Email sent successfully:", emailData);
 
     if (!isReceipt) {
-      await supabase
-        .from("invoices")
-        .update({ status: "sent" })
-        .eq("id", invoiceId);
+      const isReminder = reminder === true;
+      const now = new Date().toISOString();
+      if (isReminder) {
+        await supabase
+          .from("invoices")
+          .update({
+            status: "reminder_sent",
+            last_reminder_sent_at: now,
+            last_reminder_automatic: false,
+          })
+          .eq("id", invoiceId);
+      } else {
+        await supabase
+          .from("invoices")
+          .update({ status: "sent" })
+          .eq("id", invoiceId);
+      }
     }
 
     return new Response(

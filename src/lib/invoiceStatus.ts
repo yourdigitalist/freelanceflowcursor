@@ -1,5 +1,19 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+/** Invoice statuses that represent an outstanding (unpaid) invoice sent to the client. */
+export const OUTSTANDING_INVOICE_STATUSES = ['sent', 'overdue', 'reminder_sent'] as const;
+
+export function isOutstandingInvoiceStatus(status: string | null | undefined): boolean {
+  const key = (status || '').trim().toLowerCase();
+  return (OUTSTANDING_INVOICE_STATUSES as readonly string[]).includes(key);
+}
+
+/** Whether the user can send a payment reminder email for this invoice. */
+export function canSendPaymentReminder(status: string | null | undefined): boolean {
+  const key = (status || '').trim().toLowerCase();
+  return key === 'sent' || key === 'overdue' || key === 'reminder_sent' || key === 'paid';
+}
+
 /** Revert a sent invoice to draft so it can be edited and re-sent to the client. */
 export async function revertSentInvoiceToDraft(
   supabase: SupabaseClient,

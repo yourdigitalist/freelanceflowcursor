@@ -22,6 +22,8 @@ import Proposals from "./pages/Proposals";
 import Contracts from "./pages/Contracts";
 import InvoiceDetail from "./pages/InvoiceDetail";
 import ProposalDetail from "./pages/ProposalDetail";
+import Proposals2 from "./pages/Proposals2";
+import Proposals2Builder from "./pages/Proposals2Builder";
 import ContractDetail from "./pages/ContractDetail";
 import ContractTemplateDetail from "./pages/ContractTemplateDetail";
 import SettingsLayout from "./pages/SettingsLayout";
@@ -198,6 +200,33 @@ function NotesRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function Proposals2Route({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+    supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("user_id", user.id)
+      .single()
+      .then(({ data }) => setIsAdmin(data?.is_admin ?? false));
+  }, [user]);
+
+  if (loading || isAdmin === null) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
+
+  if (!user) return <Navigate to="/auth" replace />;
+  if (!isAdmin) return <Navigate to="/dashboard" replace />;
+
+  return <>{children}</>;
+}
+
 function OnboardingRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
@@ -269,6 +298,26 @@ function AppRoutes() {
       <Route path="/services" element={<ProtectedRoute><Services /></ProtectedRoute>} />
       <Route path="/proposals" element={<ProtectedRoute><Proposals /></ProtectedRoute>} />
       <Route path="/proposals/:id" element={<ProtectedRoute><ProposalDetail /></ProtectedRoute>} />
+      <Route
+        path="/proposals-2"
+        element={
+          <Proposals2Route>
+            <ProtectedRoute>
+              <Proposals2 />
+            </ProtectedRoute>
+          </Proposals2Route>
+        }
+      />
+      <Route
+        path="/proposals-2/:id/builder"
+        element={
+          <Proposals2Route>
+            <ProtectedRoute>
+              <Proposals2Builder />
+            </ProtectedRoute>
+          </Proposals2Route>
+        }
+      />
       <Route path="/contracts" element={<ContractsRoute><Contracts /></ContractsRoute>} />
       <Route path="/contracts/:id" element={<ContractsRoute><ContractDetail /></ContractsRoute>} />
       <Route path="/contracts/templates/:id" element={<ContractsRoute><ContractTemplateDetail /></ContractsRoute>} />

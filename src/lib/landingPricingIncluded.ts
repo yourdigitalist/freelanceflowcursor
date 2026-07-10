@@ -119,7 +119,7 @@ export const PRICING_EVERYTHING_INCLUDED: IncludedSection[] = [
       "Unlimited invoices",
       "Auto-generated invoice numbers",
       "Configurable numbering format — custom prefix, year toggle, padding, starting number, yearly reset",
-      "Invoice statuses — Draft, Sent, Overdue, Paid, Cancelled",
+      "Invoice statuses — Draft, Sent, Reminder sent, Overdue, Paid, Cancelled",
       "Manual line items — description, quantity, unit price, line date",
       "Import billable time entries as line items — one click",
       "Tax presets — create multiple rates, set a default",

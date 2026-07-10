@@ -1,3 +1,5 @@
+import type { ProposalLayoutDocument } from "@/lib/proposals2/layoutSchema";
+
 export type ProposalStatus = "draft" | "sent" | "read" | "accepted" | "archived";
 export type DiscountType = "amount" | "percent";
 export type PaymentStructure = "upfront" | "installments";
@@ -25,6 +27,7 @@ export type Proposal = {
   payment_methods: string[];
   installment_description: string | null;
   conditions_notes: string | null;
+  layout: ProposalLayoutDocument | null;
   sent_at: string | null;
   read_at: string | null;
   accepted_at: string | null;

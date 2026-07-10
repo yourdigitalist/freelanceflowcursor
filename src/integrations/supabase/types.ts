@@ -975,6 +975,8 @@ export type Database = {
           invoice_footer: string | null
           invoice_number: string
           issue_date: string
+          last_reminder_automatic: boolean | null
+          last_reminder_sent_at: string | null
           notes: string | null
           paid_date: string | null
           payment_method: string | null
@@ -996,6 +998,8 @@ export type Database = {
           invoice_footer?: string | null
           invoice_number: string
           issue_date?: string
+          last_reminder_automatic?: boolean | null
+          last_reminder_sent_at?: string | null
           notes?: string | null
           paid_date?: string | null
           project_id?: string | null
@@ -1016,6 +1020,8 @@ export type Database = {
           invoice_footer?: string | null
           invoice_number?: string
           issue_date?: string
+          last_reminder_automatic?: boolean | null
+          last_reminder_sent_at?: string | null
           notes?: string | null
           paid_date?: string | null
           project_id?: string | null
@@ -1644,6 +1650,7 @@ export type Database = {
           id: string
           identifier: string
           installment_description: string | null
+          layout: Json | null
           objective: string | null
           payment_methods: string[]
           payment_structure: string | null
@@ -1675,6 +1682,7 @@ export type Database = {
           id?: string
           identifier: string
           installment_description?: string | null
+          layout?: Json | null
           objective?: string | null
           payment_methods?: string[]
           payment_structure?: string | null
@@ -1706,6 +1714,7 @@ export type Database = {
           id?: string
           identifier?: string
           installment_description?: string | null
+          layout?: Json | null
           objective?: string | null
           payment_methods?: string[]
           payment_structure?: string | null

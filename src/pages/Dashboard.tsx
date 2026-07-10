@@ -377,7 +377,7 @@ export default function Dashboard() {
         { count: pendingContractsCount },
       ] = await Promise.all([
         supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-        supabase.from('invoices').select('total', { count: 'exact' }).eq('status', 'sent'),
+        supabase.from('invoices').select('total', { count: 'exact' }).in('status', ['sent', 'overdue', 'reminder_sent']),
         supabase.from('proposals').select('*', { count: 'exact', head: true }).in('status', ['sent', 'read']),
         supabase.from('contracts').select('*', { count: 'exact', head: true }).eq('status', 'pending_signatures'),
       ]);
@@ -520,7 +520,7 @@ export default function Dashboard() {
         supabase
           .from('invoices')
           .select('id, invoice_number, total, due_date, clients(name)')
-          .eq('status', 'sent')
+          .in('status', ['sent', 'overdue', 'reminder_sent'])
           .order('due_date', { ascending: true })
           .limit(10),
         supabase
