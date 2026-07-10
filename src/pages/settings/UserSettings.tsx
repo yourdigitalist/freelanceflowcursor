@@ -22,6 +22,7 @@ import { HelpCircle, Loader2 } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { useNavigate } from 'react-router-dom';
+import { syncAuthDisplayName } from '@/lib/syncAuthDisplayName';
 
 interface UserProfile {
   first_name: string | null;
@@ -66,6 +67,11 @@ export default function UserSettings() {
     };
     const { error } = await supabase.from('profiles').update(profileData).eq('user_id', user.id);
     if (error) throw error;
+    await syncAuthDisplayName({
+      firstName,
+      lastName,
+      fullName,
+    });
     toast({ title: 'Profile updated successfully' });
     await fetchProfile();
     dirtyContext?.setDirty(false);
@@ -91,6 +97,19 @@ export default function UserSettings() {
       if (error) throw error;
       setProfile(data);
       setPhone(data?.phone || '');
+
+      const authName = (user?.user_metadata?.full_name as string | undefined)?.trim();
+      const profileName =
+        [data?.first_name, data?.last_name].filter(Boolean).join(' ').trim() ||
+        data?.full_name?.trim() ||
+        '';
+      if (!authName && profileName) {
+        void syncAuthDisplayName({
+          firstName: data?.first_name ?? null,
+          lastName: data?.last_name ?? null,
+          fullName: data?.full_name ?? profileName,
+        });
+      }
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {
