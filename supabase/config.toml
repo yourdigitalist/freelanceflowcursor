@@ -95,3 +95,6 @@ verify_jwt = false
 
 [functions.preview-email-templates]
 verify_jwt = false
+
+[functions.send-meta-capi-event]
+verify_jwt = false

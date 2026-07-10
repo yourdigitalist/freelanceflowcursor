@@ -23,6 +23,9 @@ export default function SystemCheck() {
   const [checkingBilling, setCheckingBilling] = useState(false);
   const [billingResult, setBillingResult] = useState<string>('');
 
+  const [sendingMetaCapiTest, setSendingMetaCapiTest] = useState(false);
+  const [metaCapiTestResult, setMetaCapiTestResult] = useState<string>('');
+
   const getBestTestName = async () => {
     const metadataName = (user?.user_metadata?.full_name as string | undefined)?.trim();
     if (metadataName) return metadataName;
@@ -117,6 +120,45 @@ export default function SystemCheck() {
       });
     } finally {
       setSendingDeletedTest(false);
+    }
+  };
+
+  const sendMetaCapiTest = async () => {
+    setMetaCapiTestResult('');
+    setSendingMetaCapiTest(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!token || !supabaseUrl) throw new Error('Missing session or Supabase URL');
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/send-meta-capi-event`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          test_event_code: 'TEST69130',
+          event_name: 'PageView',
+          event_source_url: 'https://www.getlance.app/',
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+
+      setMetaCapiTestResult(`Sent ${json?.event_name} (event_id ${json?.event_id}). Check Meta Events Manager → Test events.`);
+      toast({
+        title: 'Meta CAPI test event sent',
+        description: 'Keep the Test events tab open in Events Manager to confirm receipt.',
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed';
+      setMetaCapiTestResult(message);
+      toast({
+        title: 'Meta CAPI test failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setSendingMetaCapiTest(false);
     }
   };
 
@@ -217,6 +259,23 @@ export default function SystemCheck() {
             <p>- Send a real invoice email to yourself (Invoices → Send).</p>
             <p>- Run a password reset (Auth → “Forgot password”).</p>
             <p>- Verify inbox placement across Gmail/Outlook/iCloud.</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Meta Conversions API</CardTitle>
+            <CardDescription>
+              Sends a server-side test event with code <code className="text-xs">TEST69130</code>. Keep Meta Events Manager → Test events open while running this.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button onClick={sendMetaCapiTest} disabled={sendingMetaCapiTest}>
+              {sendingMetaCapiTest ? 'Sending…' : 'Send Meta CAPI test event'}
+            </Button>
+            {metaCapiTestResult ? (
+              <p className="text-sm text-muted-foreground">Result: {metaCapiTestResult}</p>
+            ) : null}
           </CardContent>
         </Card>
 
