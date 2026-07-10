@@ -68,6 +68,7 @@ import { TimerProvider } from "@/contexts/TimerContext";
 import { IconSlotProvider } from "@/contexts/IconSlotContext";
 import { CrispChat } from "@/components/CrispChat";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
+import { MetaPixel } from "@/components/MetaPixel";
 import { Hotjar } from "@/components/Hotjar";
 import { canAccessContracts, canAccessNotes } from "@/lib/features";
 
@@ -390,6 +391,7 @@ const App = () => {
               <ErrorBoundary>
                 <RecoveryHashRedirect />
                 <GoogleAnalytics />
+                <MetaPixel />
                 <Hotjar />
                 <CrispChat />
                 <AppRoutes />
