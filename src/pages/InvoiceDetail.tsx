@@ -26,6 +26,7 @@ import {
   type MarkInvoicePaidInput,
 } from '@/lib/invoicePayment';
 import { MarkInvoicePaidDialog } from '@/components/invoices/MarkInvoicePaidDialog';
+import { InvoiceActivityLog } from '@/components/invoices/InvoiceActivityLog';
 import { SendReceiptPromptDialog } from '@/components/invoices/SendReceiptPromptDialog';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDate } from '@/lib/datetime';
@@ -104,6 +105,10 @@ interface Invoice {
   payment_method?: string | null;
   last_reminder_sent_at?: string | null;
   last_reminder_automatic?: boolean | null;
+  sent_at?: string | null;
+  last_sent_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
   issue_date: string;
   due_date: string | null;
   subtotal: number;
@@ -2334,6 +2339,8 @@ export default function InvoiceDetail() {
             )}
           </CardContent>
         </Card>
+
+        <InvoiceActivityLog invoice={invoice} dateFormat={dateFormat} />
       </div>
 
       {/* Preview Modal */}

@@ -511,9 +511,18 @@ serve(async (req) => {
           })
           .eq("id", invoiceId);
       } else {
+        const { data: existing } = await supabase
+          .from("invoices")
+          .select("sent_at")
+          .eq("id", invoiceId)
+          .maybeSingle();
         await supabase
           .from("invoices")
-          .update({ status: "sent" })
+          .update({
+            status: "sent",
+            sent_at: existing?.sent_at || now,
+            last_sent_at: now,
+          })
           .eq("id", invoiceId);
       }
     }

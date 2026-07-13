@@ -78,6 +78,11 @@ import { SlotIcon } from '@/contexts/IconSlotContext';
 
 import { getSiteUrl } from '@/lib/site-url';
 import { uploadReviewFile } from '@/lib/reviewFileUpload';
+import {
+  formatFileSize,
+  REVIEW_FILE_MAX_SIZE_BYTES,
+  REVIEW_FILE_MAX_SIZE_MB,
+} from '@/lib/reviewFileLimits';
 import { sendReviewRequestEmail } from '@/lib/sendReviewRequest';
 import { applyClientEmailToRecipients } from '@/lib/reviewRecipients';
 import { ProjectFormDialog } from '@/components/projects/ProjectFormDialog';
@@ -390,7 +395,12 @@ export default function ReviewRequests() {
       if (!editingRequest && requestFiles.length > 0 && requestId) {
         try {
           for (const file of requestFiles) {
-            await uploadReviewFile(file, requestId);
+            try {
+              await uploadReviewFile(file, requestId);
+            } catch (e) {
+              const message = e instanceof Error ? e.message : 'Upload failed';
+              throw new Error(`${file.name}: ${message}`);
+            }
           }
         } catch (e) {
           // Roll back: avoid creating an unsent approval with no files
@@ -506,8 +516,8 @@ export default function ReviewRequests() {
     doc: 'application/msword',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   };
-  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB (images and documents)
-  const MAX_FILE_SIZE_MB = 5;
+  const MAX_FILE_SIZE = REVIEW_FILE_MAX_SIZE_BYTES;
+  const MAX_FILE_SIZE_MB = REVIEW_FILE_MAX_SIZE_MB;
 
   const fileMatchesTypes = (file: File, allowedTypes: string[]) => {
     if (allowedTypes.includes(file.type)) return true;
@@ -592,9 +602,9 @@ export default function ReviewRequests() {
     setWordWarningOpen(false);
   };
 
-  const imageFiles = requestFiles.filter((f) => f.type.startsWith('image/'));
-  const pdfFiles = requestFiles.filter((f) => f.type === 'application/pdf');
-  const wordFiles = requestFiles.filter((f) => WORD_TYPES.includes(f.type));
+  const imageFiles = requestFiles.filter((f) => fileMatchesTypes(f, IMAGE_TYPES));
+  const pdfFiles = requestFiles.filter((f) => fileMatchesTypes(f, PDF_TYPES));
+  const wordFiles = requestFiles.filter((f) => fileMatchesTypes(f, WORD_TYPES));
 
   const filteredRequests = requests.filter((r) => {
     const matchesSearch =
@@ -1101,12 +1111,15 @@ export default function ReviewRequests() {
                           <p className="text-xs font-medium text-muted-foreground mb-1.5">Images ({imageFiles.length})</p>
                           <div className="flex flex-wrap gap-2">
                             {requestFiles.map((file, i) =>
-                              file.type.startsWith('image/') ? (
+                              fileMatchesTypes(file, IMAGE_TYPES) ? (
                                 <div key={i} className="flex items-center gap-2 rounded-lg border bg-background p-2">
                                   <div className="h-8 w-8 rounded overflow-hidden bg-background shrink-0">
                                     <FileThumbnail file={file} />
                                   </div>
-                                  <span className="text-sm truncate max-w-[120px]">{file.name}</span>
+                                  <div className="min-w-0 flex-1">
+                                    <span className="text-sm truncate block">{file.name}</span>
+                                    <span className="text-xs text-muted-foreground">{formatFileSize(file.size)}</span>
+                                  </div>
                                   <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setRequestFiles((prev) => prev.filter((_, j) => j !== i))}>
                                     <X className="h-3 w-3" />
                                   </Button>
@@ -1121,11 +1134,14 @@ export default function ReviewRequests() {
                           <p className="text-xs font-medium text-muted-foreground mb-1.5">PDF (Beta) – view & comment ({pdfFiles.length})</p>
                           <div className="space-y-1">
                             {requestFiles.map((file, i) =>
-                              file.type === 'application/pdf' ? (
+                              fileMatchesTypes(file, PDF_TYPES) ? (
                                 <div key={i} className="flex items-center justify-between rounded-lg border bg-background p-2">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <SlotIcon slot="approval_documents" className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                    <span className="text-sm truncate">{file.name}</span>
+                                    <div className="min-w-0">
+                                      <span className="text-sm truncate block">{file.name}</span>
+                                      <span className="text-xs text-muted-foreground">{formatFileSize(file.size)}</span>
+                                    </div>
                                   </div>
                                   <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setRequestFiles((prev) => prev.filter((_, j) => j !== i))}>
                                     <X className="h-3 w-3" />

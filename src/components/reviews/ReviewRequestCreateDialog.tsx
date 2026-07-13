@@ -34,6 +34,11 @@ import { getSiteUrl } from "@/lib/site-url";
 import { uploadReviewFile } from "@/lib/reviewFileUpload";
 import { sendReviewRequestEmail } from "@/lib/sendReviewRequest";
 import { applyClientEmailToRecipients } from "@/lib/reviewRecipients";
+import {
+  formatFileSize,
+  REVIEW_FILE_MAX_SIZE_BYTES,
+  REVIEW_FILE_MAX_SIZE_MB,
+} from "@/lib/reviewFileLimits";
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const PDF_TYPES = ["application/pdf"];
@@ -51,8 +56,8 @@ const EXT_TO_MIME: Record<string, string> = {
   doc: "application/msword",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 };
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const MAX_FILE_SIZE_MB = 5;
+const MAX_FILE_SIZE = REVIEW_FILE_MAX_SIZE_BYTES;
+const MAX_FILE_SIZE_MB = REVIEW_FILE_MAX_SIZE_MB;
 
 function FileThumbnail({ file }: { file: File }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -291,7 +296,12 @@ export function ReviewRequestCreateDialog({
       const requestId = data.id;
       try {
         for (const file of files) {
-          await uploadReviewFile(file, requestId);
+          try {
+            await uploadReviewFile(file, requestId);
+          } catch (uploadError) {
+            const message = uploadError instanceof Error ? uploadError.message : 'Upload failed';
+            throw new Error(`${file.name}: ${message}`);
+          }
         }
       } catch (uploadError) {
         await supabase.from("review_requests").delete().eq("id", requestId);
@@ -471,14 +481,17 @@ export function ReviewRequestCreateDialog({
                 <div className="border-2 border-dashed rounded-lg p-4 text-center">
                   <input type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp" onChange={(e) => { validateAndAddFiles(Array.from(e.target.files || []), IMAGE_TYPES, "image"); e.target.value = ""; }} className="hidden" id={`upload-images-${uploadId}`} />
                   <label htmlFor={`upload-images-${uploadId}`} className="cursor-pointer block text-sm font-medium">Images</label>
+                  <p className="text-xs text-muted-foreground mt-1">JPG, PNG, GIF, WebP (max {MAX_FILE_SIZE_MB}MB each)</p>
                 </div>
                 <div className="border-2 border-dashed rounded-lg p-4 text-center">
                   <input type="file" multiple accept=".pdf,application/pdf" onChange={(e) => { validateAndAddFiles(Array.from(e.target.files || []), PDF_TYPES, "PDF"); e.target.value = ""; }} className="hidden" id={`upload-pdf-${uploadId}`} />
                   <label htmlFor={`upload-pdf-${uploadId}`} className="cursor-pointer block text-sm font-medium">PDF</label>
+                  <p className="text-xs text-muted-foreground mt-1">Max {MAX_FILE_SIZE_MB}MB each</p>
                 </div>
                 <div className="border-2 border-dashed rounded-lg p-4 text-center">
                   <input type="file" multiple accept=".doc,.docx" onChange={handleWordFileChange} className="hidden" id={`upload-word-${uploadId}`} />
                   <label htmlFor={`upload-word-${uploadId}`} className="cursor-pointer block text-sm font-medium">Word</label>
+                  <p className="text-xs text-muted-foreground mt-1">Max {MAX_FILE_SIZE_MB}MB each</p>
                 </div>
               </div>
               {files.length > 0 && (
@@ -491,6 +504,7 @@ export function ReviewRequestCreateDialog({
                       <div className="flex items-center gap-2 min-w-0">
                         {file.type.startsWith("image/") ? <FileThumbnail file={file} /> : null}
                         <span className="truncate">{file.name}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(file.size)}</span>
                       </div>
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}>
                         <X className="h-3 w-3" />

@@ -981,6 +981,8 @@ export type Database = {
           paid_date: string | null
           payment_method: string | null
           project_id: string | null
+          sent_at: string | null
+          last_sent_at: string | null
           status: string | null
           subtotal: number | null
           tax_amount: number | null
@@ -1002,7 +1004,10 @@ export type Database = {
           last_reminder_sent_at?: string | null
           notes?: string | null
           paid_date?: string | null
+          payment_method?: string | null
           project_id?: string | null
+          sent_at?: string | null
+          last_sent_at?: string | null
           status?: string | null
           subtotal?: number | null
           tax_amount?: number | null
@@ -1024,7 +1029,10 @@ export type Database = {
           last_reminder_sent_at?: string | null
           notes?: string | null
           paid_date?: string | null
+          payment_method?: string | null
           project_id?: string | null
+          sent_at?: string | null
+          last_sent_at?: string | null
           status?: string | null
           subtotal?: number | null
           tax_amount?: number | null

@@ -29,9 +29,8 @@ const MAGIC_BYTES: Record<string, number[][]> = {
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
-// Rate limiting configuration
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-const RATE_LIMIT_MAX_UPLOADS = 20; // 20 files per user per hour
+const RATE_LIMIT_MAX_UPLOADS = 50; // per user per hour (batch approvals)
 
 function sanitizeFilename(filename: string): string {
   // Remove path traversal attempts and dangerous characters
@@ -255,8 +254,9 @@ serve(async (req) => {
 
     if (uploadError) {
       console.error('Upload error:', uploadError);
+      const detail = uploadError.message || 'Unknown storage error';
       return new Response(
-        JSON.stringify({ error: 'Failed to upload file' }),
+        JSON.stringify({ error: `Failed to upload file: ${detail}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
