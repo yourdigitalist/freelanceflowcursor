@@ -48,6 +48,9 @@ verify_jwt = false
 [functions.send-deadline-notifications]
 verify_jwt = false
 
+[functions.send-invoice-reminders]
+verify_jwt = false
+
 [functions.billing-health]
 verify_jwt = false
 

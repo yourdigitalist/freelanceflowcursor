@@ -80,9 +80,17 @@ import { getSiteUrl } from '@/lib/site-url';
 import { uploadReviewFile } from '@/lib/reviewFileUpload';
 import {
   formatFileSize,
-  REVIEW_FILE_MAX_SIZE_BYTES,
+  REVIEW_FILE_BATCH_WARN_BYTES,
   REVIEW_FILE_MAX_SIZE_MB,
+  totalFileSize,
 } from '@/lib/reviewFileLimits';
+import {
+  fileMatchesReviewTypes,
+  IMAGE_TYPES,
+  PDF_TYPES,
+  validateReviewFile,
+  WORD_TYPES,
+} from '@/lib/reviewFileValidation';
 import { sendReviewRequestEmail } from '@/lib/sendReviewRequest';
 import { applyClientEmailToRecipients } from '@/lib/reviewRecipients';
 import { ProjectFormDialog } from '@/components/projects/ProjectFormDialog';
@@ -500,37 +508,14 @@ export default function ReviewRequests() {
     }
   };
 
-  const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-  const PDF_TYPES = ['application/pdf'];
-  const WORD_TYPES = [
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  ];
-  const EXT_TO_MIME: Record<string, string> = {
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    png: 'image/png',
-    gif: 'image/gif',
-    webp: 'image/webp',
-    pdf: 'application/pdf',
-    doc: 'application/msword',
-    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  };
-  const MAX_FILE_SIZE = REVIEW_FILE_MAX_SIZE_BYTES;
   const MAX_FILE_SIZE_MB = REVIEW_FILE_MAX_SIZE_MB;
 
-  const fileMatchesTypes = (file: File, allowedTypes: string[]) => {
-    if (allowedTypes.includes(file.type)) return true;
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    if (!ext) return false;
-    const inferred = EXT_TO_MIME[ext];
-    return !!inferred && allowedTypes.includes(inferred);
-  };
+  const fileMatchesTypes = fileMatchesReviewTypes;
 
   const [wordWarningOpen, setWordWarningOpen] = useState(false);
   const pendingWordFilesRef = useRef<File[]>([]);
 
-  const validateAndAddFiles = (
+  const validateAndAddFiles = async (
     files: File[],
     allowedTypes: string[],
     typeLabel: string,
@@ -538,12 +523,13 @@ export default function ReviewRequests() {
     const validFiles: File[] = [];
     const errors: string[] = [];
     for (const file of files) {
-      if (file.size > MAX_FILE_SIZE) {
-        errors.push(`${file.name}: too large (max ${MAX_FILE_SIZE_MB}MB)`);
-        continue;
-      }
       if (!fileMatchesTypes(file, allowedTypes)) {
         errors.push(`${file.name}: not a valid ${typeLabel} type`);
+        continue;
+      }
+      const result = await validateReviewFile(file);
+      if (!result.ok) {
+        errors.push(result.error);
         continue;
       }
       validFiles.push(file);
@@ -556,29 +542,30 @@ export default function ReviewRequests() {
     }
   };
 
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    validateAndAddFiles(files, IMAGE_TYPES, 'image');
+    await validateAndAddFiles(files, IMAGE_TYPES, 'image');
     e.target.value = '';
   };
 
-  const handlePdfFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePdfFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    validateAndAddFiles(files, PDF_TYPES, 'PDF');
+    await validateAndAddFiles(files, PDF_TYPES, 'PDF');
     e.target.value = '';
   };
 
-  const handleWordFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleWordFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const valid: File[] = [];
     const errors: string[] = [];
     for (const file of files) {
-      if (file.size > MAX_FILE_SIZE) {
-        errors.push(`${file.name}: too large (max ${MAX_FILE_SIZE_MB}MB)`);
-        continue;
-      }
       if (!fileMatchesTypes(file, WORD_TYPES)) {
         errors.push(`${file.name}: not a valid Word document`);
+        continue;
+      }
+      const result = await validateReviewFile(file);
+      if (!result.ok) {
+        errors.push(result.error);
         continue;
       }
       valid.push(file);
@@ -605,6 +592,7 @@ export default function ReviewRequests() {
   const imageFiles = requestFiles.filter((f) => fileMatchesTypes(f, IMAGE_TYPES));
   const pdfFiles = requestFiles.filter((f) => fileMatchesTypes(f, PDF_TYPES));
   const wordFiles = requestFiles.filter((f) => fileMatchesTypes(f, WORD_TYPES));
+  const requestFilesTotalBytes = totalFileSize(requestFiles);
 
   const filteredRequests = requests.filter((r) => {
     const matchesSearch =
@@ -1075,9 +1063,12 @@ export default function ReviewRequests() {
               <>
                 <div className="space-y-3">
                   <Label>Files *</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Up to {MAX_FILE_SIZE_MB}MB per file. For large design exports, use JPEG or 2× resolution instead of PNG at 3×.
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-border hover:bg-muted/40 transition-colors">
-                      <input type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleImageFileChange} className="hidden" id="upload-images" />
+                      <input type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp" onChange={(e) => { void handleImageFileChange(e); }} className="hidden" id="upload-images" />
                       <label htmlFor="upload-images" className="cursor-pointer block">
                         <Image className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                         <p className="text-sm font-medium">Images</p>
@@ -1085,7 +1076,7 @@ export default function ReviewRequests() {
                       </label>
                     </div>
                     <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-border hover:bg-muted/40 transition-colors">
-                      <input type="file" multiple accept=".pdf,application/pdf" onChange={handlePdfFileChange} className="hidden" id="upload-pdf" />
+                      <input type="file" multiple accept=".pdf,application/pdf" onChange={(e) => { void handlePdfFileChange(e); }} className="hidden" id="upload-pdf" />
                       <label htmlFor="upload-pdf" className="cursor-pointer block">
                         <SlotIcon slot="approval_documents" className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                         <div className="text-sm font-medium flex items-center justify-center gap-1.5">
@@ -1096,7 +1087,7 @@ export default function ReviewRequests() {
                       </label>
                     </div>
                     <div className="border-2 border-dashed rounded-lg p-4 text-center hover:border-amber-500/30 border-amber-500/20 transition-colors">
-                      <input type="file" multiple accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleWordFileChange} className="hidden" id="upload-word" />
+                      <input type="file" multiple accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(e) => { void handleWordFileChange(e); }} className="hidden" id="upload-word" />
                       <label htmlFor="upload-word" className="cursor-pointer block">
                         <SlotIcon slot="approval_documents" className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                         <p className="text-sm font-medium">Word (doc/docx)</p>
@@ -1106,6 +1097,11 @@ export default function ReviewRequests() {
                   </div>
                   {requestFiles.length > 0 && (
                     <div className="space-y-3 pt-1">
+                      {requestFilesTotalBytes > REVIEW_FILE_BATCH_WARN_BYTES ? (
+                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                          Total {formatFileSize(requestFilesTotalBytes)} selected — uploads go directly to storage and may take a minute.
+                        </p>
+                      ) : null}
                       {imageFiles.length > 0 && (
                         <div>
                           <p className="text-xs font-medium text-muted-foreground mb-1.5">Images ({imageFiles.length})</p>

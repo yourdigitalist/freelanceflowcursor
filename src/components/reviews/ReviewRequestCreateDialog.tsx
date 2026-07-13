@@ -36,27 +36,18 @@ import { sendReviewRequestEmail } from "@/lib/sendReviewRequest";
 import { applyClientEmailToRecipients } from "@/lib/reviewRecipients";
 import {
   formatFileSize,
-  REVIEW_FILE_MAX_SIZE_BYTES,
+  REVIEW_FILE_BATCH_WARN_BYTES,
   REVIEW_FILE_MAX_SIZE_MB,
+  totalFileSize,
 } from "@/lib/reviewFileLimits";
+import {
+  fileMatchesReviewTypes,
+  IMAGE_TYPES,
+  PDF_TYPES,
+  validateReviewFile,
+  WORD_TYPES,
+} from "@/lib/reviewFileValidation";
 
-const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-const PDF_TYPES = ["application/pdf"];
-const WORD_TYPES = [
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-];
-const EXT_TO_MIME: Record<string, string> = {
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  gif: "image/gif",
-  webp: "image/webp",
-  pdf: "application/pdf",
-  doc: "application/msword",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-};
-const MAX_FILE_SIZE = REVIEW_FILE_MAX_SIZE_BYTES;
 const MAX_FILE_SIZE_MB = REVIEW_FILE_MAX_SIZE_MB;
 
 function FileThumbnail({ file }: { file: File }) {
@@ -172,24 +163,19 @@ export function ReviewRequestCreateDialog({
 
   const filteredProjects = projects.filter((p) => !clientId || p.client_id === clientId);
 
-  const fileMatchesTypes = (file: File, allowedTypes: string[]) => {
-    if (allowedTypes.includes(file.type)) return true;
-    const ext = file.name.split(".").pop()?.toLowerCase();
-    if (!ext) return false;
-    const inferred = EXT_TO_MIME[ext];
-    return !!inferred && allowedTypes.includes(inferred);
-  };
+  const fileMatchesTypes = fileMatchesReviewTypes;
 
-  const validateAndAddFiles = (incoming: File[], allowedTypes: string[], typeLabel: string) => {
+  const validateAndAddFiles = async (incoming: File[], allowedTypes: string[], typeLabel: string) => {
     const validFiles: File[] = [];
     const errors: string[] = [];
     for (const file of incoming) {
-      if (file.size > MAX_FILE_SIZE) {
-        errors.push(`${file.name}: too large (max ${MAX_FILE_SIZE_MB}MB)`);
-        continue;
-      }
       if (!fileMatchesTypes(file, allowedTypes)) {
         errors.push(`${file.name}: not a valid ${typeLabel} type`);
+        continue;
+      }
+      const result = await validateReviewFile(file);
+      if (!result.ok) {
+        errors.push(result.error);
         continue;
       }
       validFiles.push(file);
@@ -200,17 +186,18 @@ export function ReviewRequestCreateDialog({
     if (validFiles.length > 0) setFiles((prev) => [...prev, ...validFiles]);
   };
 
-  const handleWordFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleWordFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const incoming = Array.from(e.target.files || []);
     const valid: File[] = [];
     const errors: string[] = [];
     for (const file of incoming) {
-      if (file.size > MAX_FILE_SIZE) {
-        errors.push(`${file.name}: too large (max ${MAX_FILE_SIZE_MB}MB)`);
-        continue;
-      }
       if (!fileMatchesTypes(file, WORD_TYPES)) {
         errors.push(`${file.name}: not a valid Word document`);
+        continue;
+      }
+      const result = await validateReviewFile(file);
+      if (!result.ok) {
+        errors.push(result.error);
         continue;
       }
       valid.push(file);
@@ -335,9 +322,10 @@ export function ReviewRequestCreateDialog({
     }
   };
 
-  const imageFiles = files.filter((f) => f.type.startsWith("image/"));
-  const pdfFiles = files.filter((f) => f.type === "application/pdf");
-  const wordFiles = files.filter((f) => WORD_TYPES.includes(f.type));
+  const imageFiles = files.filter((f) => fileMatchesTypes(f, IMAGE_TYPES));
+  const pdfFiles = files.filter((f) => fileMatchesTypes(f, PDF_TYPES));
+  const wordFiles = files.filter((f) => fileMatchesTypes(f, WORD_TYPES));
+  const filesTotalBytes = totalFileSize(files);
   const uploadId = lockedClientId ? "client-detail" : "reviews";
 
   return (
@@ -477,25 +465,33 @@ export function ReviewRequestCreateDialog({
 
             <div className="space-y-3">
               <Label>Files *</Label>
+              <p className="text-xs text-muted-foreground">
+                Up to {MAX_FILE_SIZE_MB}MB per file. Large design PNGs? Export as JPEG or use 2× instead of 3× to reduce size.
+              </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="border-2 border-dashed rounded-lg p-4 text-center">
-                  <input type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp" onChange={(e) => { validateAndAddFiles(Array.from(e.target.files || []), IMAGE_TYPES, "image"); e.target.value = ""; }} className="hidden" id={`upload-images-${uploadId}`} />
+                  <input type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp" onChange={(e) => { void validateAndAddFiles(Array.from(e.target.files || []), IMAGE_TYPES, "image").then(() => { e.target.value = ""; }); }} className="hidden" id={`upload-images-${uploadId}`} />
                   <label htmlFor={`upload-images-${uploadId}`} className="cursor-pointer block text-sm font-medium">Images</label>
                   <p className="text-xs text-muted-foreground mt-1">JPG, PNG, GIF, WebP (max {MAX_FILE_SIZE_MB}MB each)</p>
                 </div>
                 <div className="border-2 border-dashed rounded-lg p-4 text-center">
-                  <input type="file" multiple accept=".pdf,application/pdf" onChange={(e) => { validateAndAddFiles(Array.from(e.target.files || []), PDF_TYPES, "PDF"); e.target.value = ""; }} className="hidden" id={`upload-pdf-${uploadId}`} />
+                  <input type="file" multiple accept=".pdf,application/pdf" onChange={(e) => { void validateAndAddFiles(Array.from(e.target.files || []), PDF_TYPES, "PDF").then(() => { e.target.value = ""; }); }} className="hidden" id={`upload-pdf-${uploadId}`} />
                   <label htmlFor={`upload-pdf-${uploadId}`} className="cursor-pointer block text-sm font-medium">PDF</label>
                   <p className="text-xs text-muted-foreground mt-1">Max {MAX_FILE_SIZE_MB}MB each</p>
                 </div>
                 <div className="border-2 border-dashed rounded-lg p-4 text-center">
-                  <input type="file" multiple accept=".doc,.docx" onChange={handleWordFileChange} className="hidden" id={`upload-word-${uploadId}`} />
+                  <input type="file" multiple accept=".doc,.docx" onChange={(e) => { void handleWordFileChange(e); }} className="hidden" id={`upload-word-${uploadId}`} />
                   <label htmlFor={`upload-word-${uploadId}`} className="cursor-pointer block text-sm font-medium">Word</label>
                   <p className="text-xs text-muted-foreground mt-1">Max {MAX_FILE_SIZE_MB}MB each</p>
                 </div>
               </div>
               {files.length > 0 && (
                 <div className="space-y-2 text-sm">
+                  {filesTotalBytes > REVIEW_FILE_BATCH_WARN_BYTES ? (
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      Total {formatFileSize(filesTotalBytes)} — upload may take a while. JPEG exports upload faster than large PNGs.
+                    </p>
+                  ) : null}
                   {imageFiles.length > 0 && <p>Images ({imageFiles.length})</p>}
                   {pdfFiles.length > 0 && <p>PDF ({pdfFiles.length})</p>}
                   {wordFiles.length > 0 && <p>Word ({wordFiles.length})</p>}

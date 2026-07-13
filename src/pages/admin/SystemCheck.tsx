@@ -26,6 +26,9 @@ export default function SystemCheck() {
   const [sendingMetaCapiTest, setSendingMetaCapiTest] = useState(false);
   const [metaCapiTestResult, setMetaCapiTestResult] = useState<string>('');
 
+  const [runningInvoiceReminders, setRunningInvoiceReminders] = useState(false);
+  const [invoiceRemindersResult, setInvoiceRemindersResult] = useState<string>('');
+
   const getBestTestName = async () => {
     const metadataName = (user?.user_metadata?.full_name as string | undefined)?.trim();
     if (metadataName) return metadataName;
@@ -162,6 +165,45 @@ export default function SystemCheck() {
     }
   };
 
+  const runInvoiceRemindersNow = async () => {
+    setInvoiceRemindersResult('');
+    setRunningInvoiceReminders(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!token || !supabaseUrl) throw new Error('Missing session or Supabase URL');
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/send-invoice-reminders`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+
+      const errCount = Array.isArray(json?.errors) ? json.errors.length : 0;
+      setInvoiceRemindersResult(
+        `Sent ${json?.sent ?? 0}, skipped ${json?.skipped ?? 0}, profiles checked ${json?.profiles_checked ?? '?'}` +
+          (errCount > 0 ? `, errors: ${json.errors.slice(0, 2).join('; ')}` : ''),
+      );
+      toast({
+        title: 'Invoice reminders job ran',
+        description: `Sent ${json?.sent ?? 0} reminder(s). Check invoices for status "Reminder sent".`,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed';
+      setInvoiceRemindersResult(message);
+      toast({
+        title: 'Invoice reminders failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setRunningInvoiceReminders(false);
+    }
+  };
+
   const runBillingHealthCheck = async () => {
     setBillingResult('');
     setCheckingBilling(true);
@@ -275,6 +317,23 @@ export default function SystemCheck() {
             </Button>
             {metaCapiTestResult ? (
               <p className="text-sm text-muted-foreground">Result: {metaCapiTestResult}</p>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Invoice payment reminders (cron)</CardTitle>
+            <CardDescription>
+              Runs the same job as the daily 08:30 UTC cron (`send-invoice-reminders`). Sends automatic client reminders for invoices matching your &quot;days before due&quot; setting today.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button onClick={runInvoiceRemindersNow} disabled={runningInvoiceReminders}>
+              {runningInvoiceReminders ? 'Running…' : 'Run invoice reminders now'}
+            </Button>
+            {invoiceRemindersResult ? (
+              <p className="text-sm text-muted-foreground">Result: {invoiceRemindersResult}</p>
             ) : null}
           </CardContent>
         </Card>

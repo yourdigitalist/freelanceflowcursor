@@ -304,7 +304,13 @@ serve(async (req) => {
   }
 
   return new Response(
-    JSON.stringify({ sent, skipped, errors: errors.slice(0, 20) }),
+    JSON.stringify({
+      ok: true,
+      sent,
+      skipped,
+      profiles_checked: (profiles || []).length,
+      errors: errors.slice(0, 20),
+    }),
     { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
 });
