@@ -1,25 +1,19 @@
 // @ts-nocheck
-// Daily cron: send deletion warnings (7+ days after trial end) and delete inactive accounts.
-// Excludes is_lifetime and admin users. Requires RESEND_API_KEY and CLEANUP_CRON_KEY.
+// Daily cron: 3-stage deletion warnings, soft-delete inactive accounts, permanent delete after restore window.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import { format } from "https://esm.sh/date-fns@3.6.0/format";
+import { format, differenceInCalendarDays } from "https://esm.sh/date-fns@3.6.0";
+import { LANCE_PRODUCT_NAME } from "../_shared/lance-email.ts";
 import {
-  buildLanceUserEmail,
-  escapeHtml,
-  getLanceFromAddress,
-  getLanceUserFirstName,
-  LANCE_EMAIL_LOGO_BLACK_URL,
-  LANCE_EMAIL_LOGO_WHITE_URL,
-  LANCE_PRODUCT_NAME,
-  loadLanceEmailComms,
-} from "../_shared/lance-email.ts";
+  generateDeletionExportToken,
+  sendDeletionWarningEmail,
+  softDeleteUserAccount,
+} from "../_shared/account-deletion.ts";
 import { deleteUserAccount } from "../_shared/delete-user-account.ts";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
-const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") || "").trim().replace(/\/$/, "");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,8 +25,15 @@ type WarningCandidate = {
   user_id: string;
   email: string;
   full_name: string | null;
-  trial_end_date: string;
   scheduled_deletion_at: string;
+};
+
+type ReminderCandidate = {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  scheduled_deletion_at: string;
+  deletion_export_token: string | null;
 };
 
 type DeletionCandidate = {
@@ -41,7 +42,30 @@ type DeletionCandidate = {
   full_name: string | null;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
+  deletion_export_token: string | null;
 };
+
+type PermanentDeletionCandidate = {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+};
+
+async function authorizeCronOrAdmin(req: Request, supabaseUrl: string, anonKey: string) {
+  const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) return false;
+  const token = authHeader.replace("Bearer ", "");
+  const cronKey = Deno.env.get("CLEANUP_CRON_KEY");
+  if (cronKey && token === cronKey) return true;
+
+  const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+  const { data: { user } } = await userClient.auth.getUser(token);
+  if (!user) return false;
+  const { data: profile } = await userClient.from("profiles").select("is_admin").eq("user_id", user.id).maybeSingle();
+  return profile?.is_admin === true;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -72,51 +96,25 @@ serve(async (req) => {
     });
   }
 
-  const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+  const authorized = await authorizeCronOrAdmin(req, supabaseUrl, anonKey);
+  if (!authorized) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const token = authHeader.replace("Bearer ", "");
-  const cronKey = Deno.env.get("CLEANUP_CRON_KEY");
-
-  if (!(cronKey && token === cronKey)) {
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-    const { data: { user } } = await userClient.auth.getUser(token);
-    if (!user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const { data: profile } = await userClient.from("profiles").select("is_admin").eq("user_id", user.id).maybeSingle();
-    if (!profile?.is_admin) {
-      return new Response(JSON.stringify({ error: "Admin required" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-  }
 
   const supabase = createClient(supabaseUrl, serviceKey);
-  const baseUrl = APP_BASE_URL || req.headers.get("origin") || "https://app.getlance.app";
-  const billingUrl = `${baseUrl.replace(/\/$/, "")}/settings/subscription`;
-  const lanceComms = await loadLanceEmailComms(supabase);
-  const primaryColor = lanceComms.primaryColor;
-  const logoUrl = LANCE_EMAIL_LOGO_WHITE_URL;
 
-  let warningsSent = 0;
-  let warningsFailed = 0;
-  let accountsDeleted = 0;
-  let deletionsFailed = 0;
+  let initialWarningsSent = 0;
+  let reminder3dSent = 0;
+  let reminder1dSent = 0;
+  let accountsSoftDeleted = 0;
+  let permanentDeletions = 0;
+  let failures = 0;
 
-  const { data: warningCandidates, error: warningError } = await supabase.rpc(
-    "get_deletion_warning_candidates",
-  );
+  const { data: warningCandidates, error: warningError } = await supabase.rpc("get_deletion_warning_candidates");
   if (warningError) {
-    console.error("get_deletion_warning_candidates error:", warningError);
     return new Response(JSON.stringify({ error: warningError.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -127,113 +125,173 @@ serve(async (req) => {
     const email = (row.email || "").trim();
     if (!email) continue;
 
-    const name = getLanceUserFirstName(row.full_name);
-    const deletionDate = row.scheduled_deletion_at
-      ? format(new Date(row.scheduled_deletion_at), "MMMM d, yyyy")
-      : "soon";
-    const subject = `Your ${LANCE_PRODUCT_NAME} account will be deleted soon`;
-    const body = `Hi ${name},
+    const scheduledAt = row.scheduled_deletion_at || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const deletionDate = format(new Date(scheduledAt), "MMMM d, yyyy");
+    const exportToken = generateDeletionExportToken();
 
-We will delete your ${LANCE_PRODUCT_NAME} account and all associated data in 7 days (${deletionDate}) unless you reactivate.
-
-Your trial ended and we have not received payment details. If you want to keep your clients, projects, invoices, and contracts, add your payment details before ${deletionDate}.
-
-Save my account: ${billingUrl}
-
-Thanks,
-The ${LANCE_PRODUCT_NAME} team`;
-
-    const safeName = escapeHtml(name);
-    const safeBilling = escapeHtml(billingUrl);
-    const safeBody = escapeHtml(body).replace(/\n/g, "<br>");
-    const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">${escapeHtml(subject)}</h2><p style="margin:0;color:#374151;">${safeBody}</p>
-<p style="margin:16px 0 0;"><a href="${safeBilling}" style="display:inline-block;background:${escapeHtml(primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Save my account</a></p>`;
-    const html = buildLanceUserEmail(lanceComms, contentHtml, {
-      user_name: safeName,
-      billing_url: safeBilling,
-      body_html: `<p>${safeBody}</p>`,
-      primary_color: primaryColor,
-      logo_url: logoUrl,
-      logo_footer_url: LANCE_EMAIL_LOGO_BLACK_URL,
-    }, email);
-
-    const { error: sendError } = await resend.emails.send({
-      from: getLanceFromAddress(),
+    const sendResult = await sendDeletionWarningEmail(supabase, resend, {
       to: email,
-      subject,
-      text: body,
-      html,
+      stage: "initial",
+      name: row.full_name || email.split("@")[0],
+      deletionDateLabel: deletionDate,
+      daysLeft: 7,
+      exportToken,
     });
 
-    if (sendError) {
-      console.error("Deletion warning send error:", sendError);
-      warningsFailed++;
+    if (!sendResult.ok) {
+      console.error("Initial deletion warning failed:", sendResult.error);
+      failures++;
       continue;
     }
 
-    const scheduledAt = row.scheduled_deletion_at || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const { error: updateError } = await supabase
       .from("profiles")
       .update({
         deletion_warning_sent: true,
         deletion_warning_sent_at: new Date().toISOString(),
         scheduled_deletion_at: scheduledAt,
+        deletion_export_token: exportToken,
       })
       .eq("user_id", row.user_id)
       .eq("is_lifetime", false);
 
     if (updateError) {
-      console.error("Failed to mark deletion warning sent:", updateError);
-      warningsFailed++;
+      console.error("Failed to mark initial warning:", updateError);
+      failures++;
     } else {
-      warningsSent++;
+      initialWarningsSent++;
     }
   }
 
-  const { data: deletionCandidates, error: deletionError } = await supabase.rpc(
-    "get_account_deletion_candidates",
-  );
-  if (deletionError) {
-    console.error("get_account_deletion_candidates error:", deletionError);
-    return new Response(
-      JSON.stringify({
-        warningsSent,
-        warningsFailed,
-        error: deletionError.message,
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
-    );
+  const { data: reminder3dCandidates, error: reminder3dError } = await supabase.rpc("get_deletion_reminder_3d_candidates");
+  if (reminder3dError) {
+    console.error("get_deletion_reminder_3d_candidates:", reminder3dError);
+  } else {
+    for (const row of (reminder3dCandidates || []) as ReminderCandidate[]) {
+      const email = (row.email || "").trim();
+      if (!email || !row.scheduled_deletion_at) continue;
+
+      const deletionDate = format(new Date(row.scheduled_deletion_at), "MMMM d, yyyy");
+      const daysLeft = Math.max(1, differenceInCalendarDays(new Date(row.scheduled_deletion_at), new Date()));
+
+      const sendResult = await sendDeletionWarningEmail(supabase, resend, {
+        to: email,
+        stage: "3d",
+        name: row.full_name || email.split("@")[0],
+        deletionDateLabel: deletionDate,
+        daysLeft,
+        exportToken: row.deletion_export_token,
+      });
+
+      if (!sendResult.ok) {
+        failures++;
+        continue;
+      }
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ deletion_reminder_3d_sent_at: new Date().toISOString() })
+        .eq("user_id", row.user_id);
+
+      if (updateError) failures++;
+      else reminder3dSent++;
+    }
   }
 
-  for (const row of (deletionCandidates || []) as DeletionCandidate[]) {
-    const result = await deleteUserAccount(supabase, {
-      userId: row.user_id,
-      email: row.email,
-      name: row.full_name,
-      stripeCustomerId: row.stripe_customer_id,
-      stripeSubscriptionId: row.stripe_subscription_id,
-      sendConfirmationEmail: true,
-    });
+  const { data: reminder1dCandidates, error: reminder1dError } = await supabase.rpc("get_deletion_reminder_1d_candidates");
+  if (reminder1dError) {
+    console.error("get_deletion_reminder_1d_candidates:", reminder1dError);
+  } else {
+    for (const row of (reminder1dCandidates || []) as ReminderCandidate[]) {
+      const email = (row.email || "").trim();
+      if (!email || !row.scheduled_deletion_at) continue;
 
-    if (!result.ok) {
-      console.error(`Failed to delete user ${row.user_id}:`, result.error);
-      deletionsFailed++;
-    } else {
-      accountsDeleted++;
+      const deletionDate = format(new Date(row.scheduled_deletion_at), "MMMM d, yyyy");
+      const daysLeft = Math.max(1, differenceInCalendarDays(new Date(row.scheduled_deletion_at), new Date()));
+
+      const sendResult = await sendDeletionWarningEmail(supabase, resend, {
+        to: email,
+        stage: "1d",
+        name: row.full_name || email.split("@")[0],
+        deletionDateLabel: deletionDate,
+        daysLeft,
+        exportToken: row.deletion_export_token,
+      });
+
+      if (!sendResult.ok) {
+        failures++;
+        continue;
+      }
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ deletion_reminder_1d_sent_at: new Date().toISOString() })
+        .eq("user_id", row.user_id);
+
+      if (updateError) failures++;
+      else reminder1dSent++;
+    }
+  }
+
+  const { data: deletionCandidates, error: deletionError } = await supabase.rpc("get_account_deletion_candidates");
+  if (deletionError) {
+    console.error("get_account_deletion_candidates:", deletionError);
+  } else {
+    for (const row of (deletionCandidates || []) as DeletionCandidate[]) {
+      const result = await softDeleteUserAccount(supabase, resend, {
+        userId: row.user_id,
+        email: row.email,
+        name: row.full_name,
+        stripeCustomerId: row.stripe_customer_id,
+        stripeSubscriptionId: row.stripe_subscription_id,
+      });
+
+      if (!result.ok) {
+        console.error(`Soft delete failed ${row.user_id}:`, result.error);
+        failures++;
+      } else {
+        accountsSoftDeleted++;
+      }
+    }
+  }
+
+  const { data: permanentCandidates, error: permanentError } = await supabase.rpc("get_permanent_deletion_candidates");
+  if (permanentError) {
+    console.error("get_permanent_deletion_candidates:", permanentError);
+  } else {
+    for (const row of (permanentCandidates || []) as PermanentDeletionCandidate[]) {
+      const result = await deleteUserAccount(supabase, {
+        userId: row.user_id,
+        email: row.email,
+        name: row.full_name,
+        stripeCustomerId: row.stripe_customer_id,
+        stripeSubscriptionId: row.stripe_subscription_id,
+        sendConfirmationEmail: true,
+      });
+
+      if (!result.ok) {
+        console.error(`Permanent delete failed ${row.user_id}:`, result.error);
+        failures++;
+      } else {
+        permanentDeletions++;
+      }
     }
   }
 
   return new Response(
     JSON.stringify({
-      warningsSent,
-      warningsFailed,
+      initialWarningsSent,
+      reminder3dSent,
+      reminder1dSent,
+      accountsSoftDeleted,
+      permanentDeletions,
+      failures,
       warningCandidates: (warningCandidates || []).length,
-      accountsDeleted,
-      deletionsFailed,
+      reminder3dCandidates: (reminder3dCandidates || []).length,
+      reminder1dCandidates: (reminder1dCandidates || []).length,
       deletionCandidates: (deletionCandidates || []).length,
+      permanentCandidates: (permanentCandidates || []).length,
+      product: LANCE_PRODUCT_NAME,
     }),
     { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );

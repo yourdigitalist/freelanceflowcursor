@@ -10,6 +10,7 @@ import {
 } from "../_shared/stripe-promotion-code.ts";
 import { stripeProfileUpdateForLifetimeUser } from "../_shared/profile-lifetime.ts";
 import { mapStripeSubscriptionStatus } from "../_shared/stripe-subscription-status.ts";
+import { DELETION_CLEAR_FIELDS } from "../_shared/account-deletion.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -121,6 +122,7 @@ serve(async (req) => {
             trial_start_date: trialStart,
             trial_end_date: trialEnd,
             ...(promotionCode ? { stripe_promotion_code: promotionCode } : {}),
+            ...(subscriptionStatus === "active" ? DELETION_CLEAR_FIELDS : {}),
           });
           await supabase.from("profiles").update(checkoutUpdate).eq("user_id", userId);
         } else {
@@ -164,6 +166,7 @@ serve(async (req) => {
           trial_end_date: trialEnd,
           ...(trialStart && { trial_start_date: trialStart }),
           ...(promotionCode ? { stripe_promotion_code: promotionCode } : {}),
+          ...(subscriptionStatus === "active" ? DELETION_CLEAR_FIELDS : {}),
         });
         await supabase.from("profiles").update(subscriptionUpdate).eq("user_id", profile.user_id);
         break;

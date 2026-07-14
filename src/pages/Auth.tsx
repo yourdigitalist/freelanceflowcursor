@@ -94,9 +94,12 @@ export default function Auth() {
     const { error } = await signIn(email, password);
     
     if (error) {
+      const banned = /ban/i.test(error.message);
       toast({
-        title: 'Error signing in',
-        description: error.message,
+        title: banned ? 'Account deactivated' : 'Error signing in',
+        description: banned
+          ? 'This account was deactivated after your trial ended. Email hello@getlance.app within 30 days to request a restore.'
+          : error.message,
         variant: 'destructive',
       });
     } else {

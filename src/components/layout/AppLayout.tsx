@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ShellImageWithSkeleton } from '@/components/ui/shell-image-skeleton';
 import { useTimer } from '@/contexts/TimerContext';
 import { TrialBanner } from './TrialBanner';
+import { ScheduledDeletionBanner } from './ScheduledDeletionBanner';
 import { TimerBar } from './TimerBar';
 import { StartGuide } from './StartGuide';
 import { FeedbackTab } from './FeedbackTab';
@@ -148,6 +149,15 @@ export function AppLayout({
   });
   const showTrialBanner =
     isOnTrial && profile?.is_lifetime !== true && !isBillingLocked && !trialBannerDismissed;
+  const scheduledDeletionAt = profile?.scheduled_deletion_at ? new Date(profile.scheduled_deletion_at) : null;
+  const showDeletionBanner =
+    !isBillingLocked
+    && profile?.is_lifetime !== true
+    && !profile?.account_soft_deleted_at
+    && (profile?.subscription_status || '').toLowerCase() !== 'active'
+    && !!scheduledDeletionAt
+    && scheduledDeletionAt > new Date();
+  const showTopBanner = showDeletionBanner || showTrialBanner;
   const handleTrialBannerDismiss = () => {
     setTrialBannerDismissed(true);
     try { localStorage.setItem('trial_banner_dismissed', 'true'); } catch { /* ignore localStorage */ }
@@ -382,15 +392,22 @@ export function AppLayout({
 
   return <div className="min-h-screen flex flex-col">
       {/* Trial Banner – when dismissed, sidebar lifts to top (no blank space) */}
-      {showTrialBanner && <TrialBanner onUpgrade={() => navigate('/settings/subscription')} onDismiss={handleTrialBannerDismiss} />}
+      {showDeletionBanner && scheduledDeletionAt ? (
+        <ScheduledDeletionBanner
+          scheduledAt={scheduledDeletionAt}
+          onSubscribe={() => navigate('/settings/subscription')}
+        />
+      ) : showTrialBanner ? (
+        <TrialBanner onUpgrade={() => navigate('/settings/subscription')} onDismiss={handleTrialBannerDismiss} />
+      ) : null}
 
       {/* Mobile sidebar backdrop */}
-      {sidebarOpen && <div className={cn("fixed inset-0 z-40 bg-black/50 lg:hidden", showTrialBanner && "top-[40px]")} onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && <div className={cn("fixed inset-0 z-40 bg-black/50 lg:hidden", showTopBanner && "top-[40px]")} onClick={() => setSidebarOpen(false)} />}
 
       <div
         className={cn(
           'flex min-h-0 flex-1',
-          showTrialBanner ? 'min-h-[calc(100vh-40px)]' : 'min-h-screen',
+          showTopBanner ? 'min-h-[calc(100vh-40px)]' : 'min-h-screen',
         )}
       >
         {/* Sidebar */}
@@ -398,8 +415,8 @@ export function AppLayout({
           className={cn(
             'group/sidebar z-50 flex shrink-0 flex-col bg-sidebar transition-all duration-200',
             'fixed bottom-0 left-0 lg:sticky lg:top-0',
-            showTrialBanner ? 'top-[40px]' : 'top-0',
-            showTrialBanner ? 'h-[calc(100vh-40px)]' : 'h-screen',
+            showTopBanner ? 'top-[40px]' : 'top-0',
+            showTopBanner ? 'h-[calc(100vh-40px)]' : 'h-screen',
             sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
             sidebarCollapsed ? cn(SHELL_SIDEBAR_COLLAPSED, 'overflow-visible') : SHELL_SIDEBAR_EXPANDED,
           )}

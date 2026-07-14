@@ -394,6 +394,20 @@ export default function UserSettings() {
         </Button>
       </div>
 
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle>Export your data</CardTitle>
+          <CardDescription>
+            Download a JSON copy of your clients, projects, invoices, time entries, and other account data.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button type="button" variant="outline" onClick={() => navigate('/export-account-data')}>
+            Export account data
+          </Button>
+        </CardContent>
+      </Card>
+
       <Card className="border-destructive/20 bg-destructive/5 shadow-sm">
         <CardHeader>
           <CardTitle className="text-destructive">Delete Account</CardTitle>

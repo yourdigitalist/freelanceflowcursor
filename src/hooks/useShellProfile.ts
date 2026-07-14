@@ -12,6 +12,9 @@ export type ShellProfile = {
   trial_end_date: string | null;
   is_lifetime: boolean | null;
   is_admin: boolean | null;
+  scheduled_deletion_at: string | null;
+  account_soft_deleted_at: string | null;
+  deletion_export_token: string | null;
 };
 
 const SHELL_PROFILE_KEY = ['shell_profile'] as const;
@@ -24,7 +27,7 @@ export function useShellProfile(userId: string | undefined) {
       const { data, error } = await supabase
         .from('profiles')
         .select(
-          'first_name, last_name, full_name, email, avatar_url, subscription_status, plan_type, trial_end_date, is_lifetime, is_admin',
+          'first_name, last_name, full_name, email, avatar_url, subscription_status, plan_type, trial_end_date, is_lifetime, is_admin, scheduled_deletion_at, account_soft_deleted_at, deletion_export_token',
         )
         .eq('user_id', userId)
         .single();

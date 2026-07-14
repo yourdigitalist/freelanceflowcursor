@@ -1259,6 +1259,11 @@ export type Database = {
           date_format: string | null
           deletion_warning_sent: boolean
           deletion_warning_sent_at: string | null
+          deletion_reminder_3d_sent_at: string | null
+          deletion_reminder_1d_sent_at: string | null
+          deletion_export_token: string | null
+          account_soft_deleted_at: string | null
+          restore_until: string | null
           scheduled_deletion_at: string | null
           email: string | null
           first_name: string | null
@@ -1341,6 +1346,11 @@ export type Database = {
           date_format?: string | null
           deletion_warning_sent?: boolean
           deletion_warning_sent_at?: string | null
+          deletion_reminder_3d_sent_at?: string | null
+          deletion_reminder_1d_sent_at?: string | null
+          deletion_export_token?: string | null
+          account_soft_deleted_at?: string | null
+          restore_until?: string | null
           email?: string | null
           first_name?: string | null
           full_name?: string | null
@@ -1423,6 +1433,11 @@ export type Database = {
           date_format?: string | null
           deletion_warning_sent?: boolean
           deletion_warning_sent_at?: string | null
+          deletion_reminder_3d_sent_at?: string | null
+          deletion_reminder_1d_sent_at?: string | null
+          deletion_export_token?: string | null
+          account_soft_deleted_at?: string | null
+          restore_until?: string | null
           email?: string | null
           first_name?: string | null
           full_name?: string | null
@@ -2292,6 +2307,11 @@ export type Database = {
       get_admin_users_list: { Args: never; Returns: Json }
       get_account_deletion_candidates: { Args: never; Returns: Json }
       get_deletion_warning_candidates: { Args: never; Returns: Json }
+      get_deletion_reminder_3d_candidates: { Args: never; Returns: Json }
+      get_deletion_reminder_1d_candidates: { Args: never; Returns: Json }
+      get_permanent_deletion_candidates: { Args: never; Returns: Json }
+      get_restorable_accounts: { Args: never; Returns: Json }
+      clear_profile_deletion_schedule: { Args: { p_user_id: string }; Returns: undefined }
       get_announcement_recipient_count: { Args: never; Returns: number }
       next_invoice_number: { Args: { p_user_id: string }; Returns: string }
     }

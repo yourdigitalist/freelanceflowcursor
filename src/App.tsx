@@ -46,6 +46,8 @@ import AdminIcons from "./pages/admin/AdminIcons";
 import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
 import AdminComms from "./pages/admin/AdminComms";
 import SystemCheck from "./pages/admin/SystemCheck";
+import AdminAccountRestore from "./pages/admin/AdminAccountRestore";
+import ExportAccountData from "./pages/ExportAccountData";
 import Notifications from "./pages/Notifications";
 import SearchResults from "./pages/SearchResults";
 import FeatureRequests from "./pages/FeatureRequests";
@@ -330,7 +332,8 @@ function AppRoutes() {
       <Route path="/contract/:token" element={<PublicContract />} />
       <Route path="/portal/:token" element={<PublicClientPortal />} />
       <Route path="/portal/:portalToken/invoice/:invoiceId" element={<PublicPortalInvoice />} />
-        <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+      <Route path="/export-account-data" element={<ExportAccountData />} />
+      <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
       <Route path="/search" element={<ProtectedRoute><SearchResults /></ProtectedRoute>} />
       <Route path="/help" element={<ProtectedRoute><Navigate to="/feature-requests" replace /></ProtectedRoute>} />
       <Route path="/feature-requests" element={<ProtectedRoute><FeatureRequests /></ProtectedRoute>} />
@@ -339,6 +342,7 @@ function AppRoutes() {
         <Route path="overview" element={<AdminOverview />} />
         <Route path="metrics" element={<AdminMetrics />} />
         <Route path="system-check" element={<SystemCheck />} />
+        <Route path="account-restore" element={<AdminAccountRestore />} />
         <Route path="announcements" element={<AdminAnnouncements />} />
         <Route path="comms" element={<AdminComms />} />
         <Route path="branding" element={<BrandingSettings />} />
