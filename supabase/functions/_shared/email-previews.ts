@@ -28,6 +28,47 @@ import {
   LANCE_EMAIL_FONT_FAMILY,
   normalizeAuthEmailHtml,
 } from "./email-styles.ts";
+import {
+  buildAccountDeletionUrls,
+  buildDeletionWarningCopy,
+  type DeletionEmailStage,
+} from "./account-deletion.ts";
+
+function buildDeletionWarningPreview(
+  lanceComms: LanceEmailComms,
+  input: {
+    stage: DeletionEmailStage;
+    userName: string;
+    deletionDateLabel: string;
+    daysLeft: number;
+  },
+  userEmail: string,
+): { subject: string; html: string } {
+  const { billingUrl, exportUrl } = buildAccountDeletionUrls("preview-export-token");
+  const { subject, body } = buildDeletionWarningCopy({
+    stage: input.stage,
+    name: input.userName,
+    deletionDateLabel: input.deletionDateLabel,
+    daysLeft: input.daysLeft,
+    billingUrl,
+    exportUrl,
+  });
+  const primaryColor = lanceComms.primaryColor;
+  const safeBilling = escapeHtml(billingUrl);
+  const safeExport = escapeHtml(exportUrl);
+  const safeBody = escapeHtml(body).replace(/\n/g, "<br>");
+  const contentHtml = `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">${escapeHtml(subject)}</h2>
+<p style="margin:0 0 16px;color:#374151;">${safeBody}</p>
+<p style="margin:0 0 8px;">
+  <a href="${safeBilling}" style="display:inline-block;background:${escapeHtml(primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-right:8px;">Save my account</a>
+  <a href="${safeExport}" style="display:inline-block;background:#ffffff;color:${escapeHtml(primaryColor)} !important;padding:11px 23px;border-radius:8px;text-decoration:none;font-weight:600;border:1px solid ${escapeHtml(primaryColor)};">Export my data</a>
+</p>`;
+  return {
+    subject,
+    html: buildLanceUserEmail(lanceComms, contentHtml, {}, userEmail),
+  };
+}
+
 
 const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") || "https://www.getlance.app").trim().replace(/\/$/, "");
 
@@ -285,30 +326,87 @@ export async function buildAllEmailPreviews(
     ),
   });
 
-  const deletionDate = "June 15, 2026";
-  const inactiveSubject = `Your ${LANCE_PRODUCT_NAME} account will be deleted soon`;
-  const inactiveBody = `Hi ${userName},\n\nWe will delete your ${LANCE_PRODUCT_NAME} account and all associated data in 7 days (${deletionDate}) unless you reactivate.\n\nYour trial ended and we have not received payment details. If you want to keep your clients, projects, invoices, and contracts, add your payment details before ${deletionDate}.\n\nSave my account: ${billingUrl}\n\nThanks,\nThe ${LANCE_PRODUCT_NAME} team`;
-  const safeInactiveBody = escapeHtml(inactiveBody).replace(/\n/g, "<br>");
+  const deletionDate = dueDateLabel;
+  const deletionStages: {
+    id: string;
+    stage: DeletionEmailStage;
+    name: string;
+    trigger: string;
+    daysLeft: number;
+  }[] = [
+    {
+      id: "lance-inactive-deletion-initial",
+      stage: "initial",
+      name: "Inactive account deletion (7 days notice)",
+      trigger: "Cron: cleanup-inactive-accounts (initial warning)",
+      daysLeft: 7,
+    },
+    {
+      id: "lance-inactive-deletion-3d",
+      stage: "3d",
+      name: "Inactive account deletion (3 days left)",
+      trigger: "Cron: cleanup-inactive-accounts (3-day reminder)",
+      daysLeft: 3,
+    },
+    {
+      id: "lance-inactive-deletion-1d",
+      stage: "1d",
+      name: "Inactive account deletion (final notice)",
+      trigger: "Cron: cleanup-inactive-accounts (1-day reminder)",
+      daysLeft: 1,
+    },
+  ];
+
+  for (const item of deletionStages) {
+    const preview = buildDeletionWarningPreview(
+      lanceComms,
+      {
+        stage: item.stage,
+        userName,
+        deletionDateLabel: deletionDate,
+        daysLeft: item.daysLeft,
+      },
+      userEmail,
+    );
+    templates.push({
+      id: item.id,
+      name: item.name,
+      category: "lance_to_user",
+      from: lanceFrom,
+      to: userEmail,
+      trigger: item.trigger,
+      subject: preview.subject,
+      html: preview.html,
+    });
+  }
+
+  const softDeletedSubject = `Your ${LANCE_PRODUCT_NAME} account has been deactivated`;
+  const restoreUntilLabel = "July 15, 2026";
+  const softDeletedBody = `Hi ${userName},
+
+Your ${LANCE_PRODUCT_NAME} account has been deactivated because your trial ended and no subscription was added.
+
+Your data is retained until ${restoreUntilLabel}. To restore your account, email hello@getlance.app from this address (${userEmail}) and we will reactivate it.
+
+After ${restoreUntilLabel}, your data will be permanently deleted.
+
+Thanks,
+The ${LANCE_PRODUCT_NAME} team`;
+  const safeSoftDeletedBody = escapeHtml(softDeletedBody).replace(/\n/g, "<br>");
+  const restoreMailto = escapeHtml(`mailto:hello@getlance.app?subject=${encodeURIComponent("Restore my Lance account")}`);
   templates.push({
-    id: "lance-inactive-deletion-warning",
-    name: "Inactive account deletion warning",
+    id: "lance-account-soft-deleted",
+    name: "Account deactivated (restore window)",
     category: "lance_to_user",
     from: lanceFrom,
     to: userEmail,
-    trigger: "Cron: cleanup-inactive-accounts (7 days before deletion)",
-    subject: inactiveSubject,
+    trigger: "Cron: cleanup-inactive-accounts (after scheduled deletion date)",
+    subject: softDeletedSubject,
     html: buildLanceUserEmail(
       lanceComms,
-      `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">${escapeHtml(inactiveSubject)}</h2><p style="margin:0;color:#374151;">${safeInactiveBody}</p>
-<p style="margin:16px 0 0;"><a href="${escapeHtml(billingUrl)}" style="display:inline-block;background:${escapeHtml(primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Save my account</a></p>`,
-      {
-        user_name: escapeHtml(userName),
-        billing_url: escapeHtml(billingUrl),
-        body_html: `<p>${safeInactiveBody}</p>`,
-        primary_color: primaryColor,
-        logo_url: LANCE_EMAIL_LOGO_WHITE_URL,
-        logo_footer_url: LANCE_EMAIL_LOGO_BLACK_URL,
-      },
+      `<h2 style="margin:0 0 12px;font-size:18px;color:${escapeHtml(primaryColor)};">${escapeHtml(softDeletedSubject)}</h2><p style="margin:0;color:#374151;">${safeSoftDeletedBody}</p>
+<p style="margin:16px 0 0;"><a href="${restoreMailto}" style="display:inline-block;background:${escapeHtml(primaryColor)};color:#ffffff !important;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Email to restore</a></p>`,
+      {},
       userEmail,
     ),
   });
