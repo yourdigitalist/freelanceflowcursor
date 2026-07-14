@@ -47,6 +47,30 @@ export type Database = {
         }
         Relationships: []
       }
+      app_features: {
+        Row: {
+          id: number
+          notes_access_mode: string
+          contracts_access_mode: string
+          proposals2_access_mode: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          notes_access_mode?: string
+          contracts_access_mode?: string
+          proposals2_access_mode?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          notes_access_mode?: string
+          contracts_access_mode?: string
+          proposals2_access_mode?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       app_comms_defaults: {
         Row: {
           announcement_custom_html: string | null

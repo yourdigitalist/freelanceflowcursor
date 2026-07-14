@@ -2733,19 +2733,35 @@
     wrapper.style.transform = mode === 'angled' ? 'perspective(1400px) rotateX(3deg)' : 'none';
   }
 
+  function trackLandingCta(el, location) {
+    try {
+      var top = window.top;
+      if (!top || typeof top.gtag !== 'function') return;
+      top.gtag('event', 'cta_click', {
+        cta_location: location,
+        cta_text: (el.textContent || '').trim().slice(0, 100),
+        link_url: el.getAttribute('href') || '',
+      });
+    } catch (_) {}
+  }
+
   // Ensure all auth CTAs always go to app signup/login in top window
   const topNavMap = [
-    { selector: '.btn-ghost', href: '/auth' },
-    { selector: '.btn-primary', href: '/auth?tab=signup' },
-    { selector: '.btn-hero', href: '/auth?tab=signup' },
-    { selector: '.btn-plan', href: '/auth?tab=signup' },
-    { selector: '.btn-cta-primary', href: '/auth?tab=signup' },
+    { selector: '.btn-ghost', href: '/auth', location: 'nav_login' },
+    { selector: '.btn-primary', href: '/auth?tab=signup', location: 'nav_signup' },
+    { selector: '.btn-hero', href: '/auth?tab=signup', location: 'hero' },
+    { selector: '.btn-plan', href: '/auth?tab=signup', location: 'pricing' },
+    { selector: '.btn-cta-primary', href: '/auth?tab=signup', location: 'footer_cta' },
   ];
-  topNavMap.forEach(({ selector, href }) => {
+  topNavMap.forEach(({ selector, href, location }) => {
     document.querySelectorAll(selector).forEach((el) => {
       if (el.tagName.toLowerCase() === 'a') {
         el.setAttribute('href', href);
         el.setAttribute('target', '_top');
+        if (!el.dataset.gaCtaBound) {
+          el.dataset.gaCtaBound = '1';
+          el.addEventListener('click', () => trackLandingCta(el, location));
+        }
       }
     });
   });

@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from '@/components/icons';
 import { PasswordStrengthInput } from '@/components/PasswordStrengthInput';
 import { evaluatePasswordStrength, passwordStrengthMessage } from '@/lib/passwordStrength';
+import { trackGaSignUp, trackGaSignUpFormStart } from '@/lib/googleAnalytics';
 import { trackMetaLead } from '@/lib/metaPixel';
 
 const LANCE_LOGO_SRC = '/lance-logo-black-colour.png';
@@ -152,6 +153,7 @@ export default function Auth() {
       });
     } else {
       trackMetaLead();
+      trackGaSignUp('email');
       sessionStorage.setItem(SIGNUP_PENDING_KEY, '1');
       sessionStorage.setItem(SIGNUP_EMAIL_KEY, email.trim());
       setResendEmail(email.trim());
@@ -461,7 +463,11 @@ export default function Auth() {
                 </TabsContent>
 
                 <TabsContent value="signup">
-                  <form onSubmit={handleSignUp} className="space-y-4">
+                  <form
+                    onSubmit={handleSignUp}
+                    onFocusCapture={() => trackGaSignUpFormStart()}
+                    className="space-y-4"
+                  >
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="signup-first-name">First Name</Label>

@@ -1,30 +1,40 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-
-const GA_MEASUREMENT_ID = 'G-F987NCEKDC';
-
-declare global {
-  interface Window {
-    dataLayer: IArguments[];
-    gtag: (...args: unknown[]) => void;
-  }
-}
+import {
+  GA_MEASUREMENT_ID,
+  trackGaViewLanding,
+  trackGaViewSignup,
+} from '@/lib/googleAnalytics';
 
 /** Sends page views on client-side route changes (base tag is in index.html). */
 export function GoogleAnalytics() {
   const location = useLocation();
   const isInitialLoad = useRef(true);
+  const lastSignupPath = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof window.gtag !== 'function') return;
 
+    const pagePath = `${location.pathname}${location.search}${location.hash}`;
+
     if (isInitialLoad.current) {
       isInitialLoad.current = false;
-      return;
+    } else {
+      window.gtag('config', GA_MEASUREMENT_ID, { page_path: pagePath });
     }
 
-    const pagePath = `${location.pathname}${location.search}${location.hash}`;
-    window.gtag('config', GA_MEASUREMENT_ID, { page_path: pagePath });
+    const path = location.pathname;
+    const isSignupAuth =
+      path === '/auth' && new URLSearchParams(location.search).get('tab') === 'signup';
+
+    if (path === '/' || path === '/lptest') {
+      trackGaViewLanding();
+    }
+
+    if (isSignupAuth && lastSignupPath.current !== pagePath) {
+      lastSignupPath.current = pagePath;
+      trackGaViewSignup();
+    }
   }, [location.pathname, location.search, location.hash]);
 
   return null;

@@ -7,6 +7,7 @@ const adminCards = [
   { path: '/admin/announcements', label: 'Announcements', slot: 'admin_announcements' as const, description: 'Manage in-app announcements' },
   { path: '/admin/comms', label: 'Email catalog', slot: 'admin_comms' as const, description: 'Preview all transactional emails' },
   { path: '/admin/branding', label: 'Branding', slot: 'admin_branding' as const, description: 'Logo and brand colors' },
+  { path: '/admin/features', label: 'Features', slot: 'admin_overview' as const, description: 'Toggle product areas for admins and users' },
   { path: '/admin/icons', label: 'Icons', slot: 'admin_icons' as const, description: 'Upload and assign slot icons' },
   { path: '/admin/help-content', label: 'Help content', slot: 'admin_help_content' as const, description: 'Help center articles' },
   { path: '/admin/feature-requests', label: 'Feature requests', slot: 'admin_feature_requests' as const, description: 'View and manage feature requests' },

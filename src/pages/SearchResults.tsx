@@ -8,8 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDate } from '@/lib/datetime';
-import { canAccessNotes } from '@/lib/features';
-import { useShellProfile } from '@/hooks/useShellProfile';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 
 interface ProjectResult {
   id: string;
@@ -64,8 +63,7 @@ export default function SearchResults() {
   const { dateFormat } = useLocalePreferences();
   const q = searchParams.get('q')?.trim() || '';
   const { user } = useAuth();
-  const { data: shellProfile } = useShellProfile(user?.id);
-  const showNotes = canAccessNotes({ isAdmin: shellProfile?.is_admin === true });
+  const { canAccessNotes: showNotes } = useFeatureAccess();
   const [projects, setProjects] = useState<ProjectResult[]>([]);
   const [clients, setClients] = useState<ClientResult[]>([]);
   const [invoices, setInvoices] = useState<InvoiceResult[]>([]);

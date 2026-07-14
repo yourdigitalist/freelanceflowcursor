@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Receipt, CheckCircle, ArrowRight, ChevronUp, ChevronDown, CheckSquare, Clock as ClockIcon, FileText } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import type { IconSlotKey } from '@/lib/iconSlots';
-import { canAccessNotes, getContractsAccessMode } from '@/lib/features';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { shellProfileDisplayName, useShellProfile } from '@/hooks/useShellProfile';
 import { formatLocaleDate } from '@/lib/datetime';
@@ -350,6 +350,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   const { data: shellProfile, isSuccess: profileReady } = useShellProfile(user?.id);
+  const { canAccessNotes, canAccessContracts } = useFeatureAccess();
 
   useEffect(() => {
     if (user) fetchDashboardData();
@@ -736,7 +737,7 @@ export default function Dashboard() {
           .select('id, description, updated_at, start_time, projects(name), tasks(title)')
           .order('updated_at', { ascending: false })
           .limit(4),
-        canAccessNotes({ isAdmin: shellProfile?.is_admin === true })
+        canAccessNotes
           ? supabase.from('notes').select('id, title, updated_at').order('updated_at', { ascending: false }).limit(4)
           : Promise.resolve({ data: [] as unknown[] }),
         supabase.from('invoices').select('id, invoice_number, updated_at').order('updated_at', { ascending: false }).limit(4),
@@ -898,8 +899,8 @@ export default function Dashboard() {
 
   const displayName = profileReady ? shellProfileDisplayName(shellProfile) : null;
   const firstName = displayName?.split(' ')[0] ?? null;
-  const showContracts = getContractsAccessMode() === 'on';
-  const showNotes = canAccessNotes({ isAdmin: shellProfile?.is_admin === true });
+  const showContracts = canAccessContracts;
+  const showNotes = canAccessNotes;
 
   const quickActions = [
     { label: 'Add client', slot: 'sidebar_clients' as IconSlotKey, to: '/clients?new=1' },

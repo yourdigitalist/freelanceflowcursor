@@ -47,6 +47,7 @@ import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
 import AdminComms from "./pages/admin/AdminComms";
 import SystemCheck from "./pages/admin/SystemCheck";
 import AdminAccountRestore from "./pages/admin/AdminAccountRestore";
+import AdminFeatures from "./pages/admin/AdminFeatures";
 import ExportAccountData from "./pages/ExportAccountData";
 import Notifications from "./pages/Notifications";
 import SearchResults from "./pages/SearchResults";
@@ -72,7 +73,7 @@ import { CrispChat } from "@/components/CrispChat";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import { MetaPixel } from "@/components/MetaPixel";
 import { Hotjar } from "@/components/Hotjar";
-import { canAccessContracts, canAccessNotes } from "@/lib/features";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 
 import { hasBillingAccess as profileHasBillingAccess } from '@/lib/billingAccess';
 
@@ -145,28 +146,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function ContractsRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const { isLoading: accessLoading, canAccessContracts } = useFeatureAccess();
 
-  useEffect(() => {
-    if (!user) {
-      setIsAdmin(false);
-      return;
-    }
-    supabase
-      .from("profiles")
-      .select("is_admin")
-      .eq("user_id", user.id)
-      .single()
-      .then(({ data }) => setIsAdmin(data?.is_admin ?? false));
-  }, [user]);
-
-  if (loading || isAdmin === null) {
+  if (loading || accessLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
 
   if (!user) return <Navigate to="/auth" replace />;
 
-  if (!canAccessContracts({ isAdmin })) {
+  if (!canAccessContracts) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -175,28 +163,15 @@ function ContractsRoute({ children }: { children: React.ReactNode }) {
 
 function NotesRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const { isLoading: accessLoading, canAccessNotes } = useFeatureAccess();
 
-  useEffect(() => {
-    if (!user) {
-      setIsAdmin(false);
-      return;
-    }
-    supabase
-      .from("profiles")
-      .select("is_admin")
-      .eq("user_id", user.id)
-      .single()
-      .then(({ data }) => setIsAdmin(data?.is_admin ?? false));
-  }, [user]);
-
-  if (loading || isAdmin === null) {
+  if (loading || accessLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
 
   if (!user) return <Navigate to="/auth" replace />;
 
-  if (!canAccessNotes({ isAdmin })) {
+  if (!canAccessNotes) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -205,27 +180,14 @@ function NotesRoute({ children }: { children: React.ReactNode }) {
 
 function Proposals2Route({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const { isLoading: accessLoading, canAccessProposals2 } = useFeatureAccess();
 
-  useEffect(() => {
-    if (!user) {
-      setIsAdmin(false);
-      return;
-    }
-    supabase
-      .from("profiles")
-      .select("is_admin")
-      .eq("user_id", user.id)
-      .single()
-      .then(({ data }) => setIsAdmin(data?.is_admin ?? false));
-  }, [user]);
-
-  if (loading || isAdmin === null) {
+  if (loading || accessLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
 
   if (!user) return <Navigate to="/auth" replace />;
-  if (!isAdmin) return <Navigate to="/dashboard" replace />;
+  if (!canAccessProposals2) return <Navigate to="/dashboard" replace />;
 
   return <>{children}</>;
 }
@@ -346,6 +308,7 @@ function AppRoutes() {
         <Route path="announcements" element={<AdminAnnouncements />} />
         <Route path="comms" element={<AdminComms />} />
         <Route path="branding" element={<BrandingSettings />} />
+        <Route path="features" element={<AdminFeatures />} />
         <Route path="icons" element={<AdminIcons />} />
         <Route path="help-content" element={<HelpContentSettings />} />
         <Route path="feature-requests" element={<FeatureRequestSettings />} />

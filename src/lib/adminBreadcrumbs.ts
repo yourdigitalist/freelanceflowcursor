@@ -12,6 +12,7 @@ export function getAdminBreadcrumbs(pathname: string): BreadcrumbSegment[] {
     '/admin/announcements': 'Announcements',
     '/admin/comms': 'Email catalog',
     '/admin/branding': 'Branding',
+    '/admin/features': 'Features',
     '/admin/icons': 'Icons',
     '/admin/help-content': 'Help content',
     '/admin/feature-requests': 'Feature requests',

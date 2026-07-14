@@ -17,6 +17,7 @@ const adminNavItems = [
   { path: '/admin/announcements', label: 'Announcements', slot: 'admin_announcements' as const },
   { path: '/admin/comms', label: 'Email catalog', slot: 'admin_comms' as const },
   { path: '/admin/branding', label: 'Branding', slot: 'admin_branding' as const },
+  { path: '/admin/features', label: 'Features', slot: 'admin_overview' as const },
   { path: '/admin/icons', label: 'Icons', slot: 'admin_icons' as const },
   { path: '/admin/help-content', label: 'Help content', slot: 'admin_help_content' as const },
   { path: '/admin/feature-requests', label: 'Feature requests', slot: 'admin_feature_requests' as const },

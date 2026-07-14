@@ -10,7 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Input } from '@/components/ui/input';
 import { Menu, ChevronDown, ChevronLeft, Search } from '@/components/icons';
 import { SlotIcon } from '@/contexts/IconSlotContext';
-import { canAccessContracts, canAccessNotes } from '@/lib/features';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { isClientDetailPath } from '@/lib/clientsNavigation';
 import { cn } from '@/lib/utils';
 import { useBranding } from '@/hooks/useBranding';
@@ -164,9 +164,10 @@ export function AppLayout({
   };
   const timer = useTimer();
   const showTimerBar = timer.draftSegments.length > 0;
-  const showContracts = canAccessContracts({ isAdmin: profile?.is_admin === true });
-  const showNotes = canAccessNotes({ isAdmin: profile?.is_admin === true });
-  const showProposals2 = profile?.is_admin === true;
+  const { canAccessContracts, canAccessNotes, canAccessProposals2 } = useFeatureAccess();
+  const showContracts = canAccessContracts;
+  const showNotes = canAccessNotes;
+  const showProposals2 = canAccessProposals2;
   const closeMobileSidebar = () => setSidebarOpen(false);
 
   const handleSearchSubmit = (e: FormEvent) => {
