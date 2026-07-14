@@ -354,7 +354,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user) fetchDashboardData();
-  }, [user]);
+  }, [user, canAccessContracts, canAccessNotes]);
 
   const toHours = (e: { duration_minutes?: number | null; total_duration_seconds?: number | null }) =>
     e.total_duration_seconds != null ? e.total_duration_seconds / 3600 : (e.duration_minutes || 0) / 60;
@@ -369,7 +369,7 @@ export default function Dashboard() {
       const soon = new Date(startOfToday());
       soon.setDate(soon.getDate() + SOON_DAYS);
       const soonStr = soon.toISOString().split('T')[0];
-      const showContracts = getContractsAccessMode() === 'on';
+      const showContractsInFetch = canAccessContracts;
 
       // ── Counts ────────────────────────────────────────────────────────────
       const [
@@ -531,7 +531,7 @@ export default function Dashboard() {
           .in('status', ['sent', 'read'])
           .order('expires_at', { ascending: true, nullsFirst: false })
           .limit(10),
-        showContracts
+        showContractsInFetch
           ? supabase
               .from('contracts')
               .select('id, identifier, client_name, sent_at, timeline_days, clients(name)')

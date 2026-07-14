@@ -1,9 +1,11 @@
+import { useAuth } from '@/lib/auth';
 import { useShellProfile } from '@/hooks/useShellProfile';
 import { useAppFeatures } from '@/hooks/useAppFeatures';
 import { canAccessByMode, getContractsAccessMode, getNotesAccessMode } from '@/lib/features';
 
 export function useFeatureAccess() {
-  const { data: profile, isLoading: profileLoading } = useShellProfile();
+  const { user } = useAuth();
+  const { data: profile, isLoading: profileLoading } = useShellProfile(user?.id);
   const { data: features, isLoading: featuresLoading } = useAppFeatures();
   const isAdmin = profile?.is_admin === true;
 
