@@ -92,6 +92,7 @@ import {
   type DateRangePreset,
   type StatusFilter,
 } from '@/lib/timeEntryFilters';
+import { getTimeEntryBillingStatusLabel } from '@/lib/timeEntryBillingStatus';
 import { TimeEntryLogDialog } from '@/components/time/TimeEntryLogDialog';
 import { TimeEntriesTable } from '@/components/time/TimeEntriesTable';
 import { ProjectFormDialog } from '@/components/projects/ProjectFormDialog';
@@ -228,7 +229,7 @@ export default function TimeTracking() {
   const [taskFilter, setTaskFilter] = useState<string>(() => searchParams.get('task') || 'all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
     const v = searchParams.get('status');
-    return v === 'unbilled' || v === 'billed' || v === 'paid' || v === 'not_billable' ? v : 'all';
+    return v === 'unbilled' || v === 'invoiced' || v === 'billed' || v === 'paid' || v === 'not_billable' ? v : 'all';
   });
   
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -526,7 +527,9 @@ export default function TimeTracking() {
       case 'paid':
         return <TableStatusBadge status="paid" />;
       case 'billed':
-        return <TableStatusBadge status="billed" label="Billed" />;
+        return <TableStatusBadge status="billed" label={getTimeEntryBillingStatusLabel('billed')} />;
+      case 'invoiced':
+        return <TableStatusBadge status="invoiced" label={getTimeEntryBillingStatusLabel('invoiced')} />;
       default:
         return <TableStatusBadge status="unbilled" label="Unbilled" />;
     }
@@ -912,7 +915,8 @@ export default function TimeTracking() {
         <SelectContent>
           <SelectItem value="all">All Status</SelectItem>
           <SelectItem value="unbilled">Unbilled</SelectItem>
-          <SelectItem value="billed">Billed</SelectItem>
+          <SelectItem value="invoiced">On invoice</SelectItem>
+          <SelectItem value="billed">Invoice sent</SelectItem>
           <SelectItem value="paid">Paid</SelectItem>
           <SelectItem value="not_billable">Not Billable</SelectItem>
         </SelectContent>

@@ -19,6 +19,7 @@ import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { detailPageBreadcrumb } from '@/lib/breadcrumbs';
 import { MenuDotsTrigger } from '@/components/ui/menu-dots-trigger';
 import { canSendPaymentReminder, isOutstandingInvoiceStatus, reopenPaidInvoice, revertSentInvoiceToDraft } from '@/lib/invoiceStatus';
+import { billingStatusForInvoiceLink, getTimeEntryBillingStatusLabel } from '@/lib/timeEntryBillingStatus';
 import {
   buildReceiptEmailMessage,
   formatInvoicePaymentMethod,
@@ -930,9 +931,12 @@ export default function InvoiceDetail() {
 
       const { error: updateError } = await supabase
         .from('time_entries')
-        .update({ invoice_id: id })
+        .update({
+          invoice_id: id,
+          billing_status: billingStatusForInvoiceLink(invoice?.status),
+        })
         .in('id', finalEntries.map((entry) => entry.id))
-        .eq('billing_status', 'unbilled');
+        .in('billing_status', ['unbilled', 'invoiced']);
 
       if (updateError) throw updateError;
 
@@ -1264,7 +1268,7 @@ export default function InvoiceDetail() {
       .from('time_entries')
       .update({ billing_status: 'billed' })
       .eq('invoice_id', id)
-      .eq('billing_status', 'unbilled');
+      .in('billing_status', ['unbilled', 'invoiced']);
   };
 
   const markAsSent = async () => {
@@ -1609,7 +1613,7 @@ export default function InvoiceDetail() {
         .from('time_entries')
         .update({ billing_status: 'unbilled', invoice_id: null })
         .eq('invoice_id', id)
-        .in('billing_status', ['billed', 'paid']);
+        .in('billing_status', ['billed', 'paid', 'invoiced']);
       const { error } = await supabase.from('invoices').delete().eq('id', id);
       if (error) throw error;
       toast({ title: 'Invoice deleted' });

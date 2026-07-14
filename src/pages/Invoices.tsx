@@ -495,7 +495,7 @@ export default function Invoices() {
         .from('time_entries')
         .update({ billing_status: 'unbilled', invoice_id: null })
         .eq('invoice_id', id)
-        .in('billing_status', ['billed', 'paid']);
+        .in('billing_status', ['billed', 'paid', 'invoiced']);
       const { error } = await supabase
         .from('invoices')
         .delete()

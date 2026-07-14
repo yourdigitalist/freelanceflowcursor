@@ -11,7 +11,7 @@ import {
 
 export type TimeframeFilter = 'all' | 'today' | 'week' | 'month' | 'last30';
 export type DateRangePreset = 'all' | 'this_week' | 'this_month' | 'last_6_months' | 'ytd' | 'custom';
-export type StatusFilter = 'all' | 'unbilled' | 'billed' | 'paid' | 'not_billable';
+export type StatusFilter = 'all' | 'unbilled' | 'invoiced' | 'billed' | 'paid' | 'not_billable';
 
 export interface TimeEntryFilterable {
   started_at?: string | null;
@@ -119,6 +119,7 @@ export function applyTimeEntryFilters<T extends TimeEntryFilterable>(
     if (statusFilter !== 'all') {
       if (statusFilter === 'not_billable' && entry.billable) return false;
       if (statusFilter === 'unbilled' && (entry.billing_status !== 'unbilled' || !entry.billable)) return false;
+      if (statusFilter === 'invoiced' && entry.billing_status !== 'invoiced') return false;
       if (statusFilter === 'billed' && entry.billing_status !== 'billed') return false;
       if (statusFilter === 'paid' && entry.billing_status !== 'paid') return false;
     }

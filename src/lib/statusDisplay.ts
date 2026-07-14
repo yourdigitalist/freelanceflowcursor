@@ -84,6 +84,7 @@ export function getTableStatusBadgeStyles(status?: string | null): { badge: stri
     case "pending":
     case "pending_signatures":
     case "read":
+    case "invoiced":
     case "billed":
       return {
         badge: "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300",

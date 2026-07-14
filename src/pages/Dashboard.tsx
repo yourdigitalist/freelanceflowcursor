@@ -169,10 +169,11 @@ const JUMP_BACK_KIND_LABEL: Record<RecentItem['kind'], string> = {
   invoice: 'Invoice',
 };
 
+import { isUnbilledBillingStatus } from '@/lib/timeEntryBillingStatus';
+
 function isUnbilledTimeEntry(e: { billable: boolean | null; billing_status: string | null }): boolean {
   if (e.billable === false) return false;
-  const status = (e.billing_status || 'unbilled').toLowerCase();
-  return status === 'unbilled';
+  return isUnbilledBillingStatus(e.billing_status);
 }
 
 function startOfToday(): Date {

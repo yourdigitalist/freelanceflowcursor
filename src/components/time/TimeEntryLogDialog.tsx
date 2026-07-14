@@ -28,6 +28,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { Plus, Trash2, Check } from '@/components/icons';
 import { cn } from '@/lib/utils';
+import {
+  type BillableBillingStatus,
+  getTimeEntryBillingStatusLabel,
+  normalizeBillableBillingStatus,
+} from '@/lib/timeEntryBillingStatus';
 import { formatDuration } from '@/lib/time';
 import { resolveEffectiveHourlyRate } from '@/lib/billing';
 import { format, parseISO, differenceInSeconds } from 'date-fns';
@@ -85,13 +90,6 @@ interface TimeEntryLogDialogProps {
 }
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : 'Something went wrong');
-
-type BillableBillingStatus = 'unbilled' | 'billed' | 'paid';
-
-function normalizeBillableBillingStatus(value: string | null | undefined): BillableBillingStatus {
-  if (value === 'billed' || value === 'paid') return value;
-  return 'unbilled';
-}
 
 export function TimeEntryLogDialog({
   open,
@@ -733,7 +731,8 @@ export function TimeEntryLogDialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="unbilled">Unbilled</SelectItem>
-                    <SelectItem value="billed">Billed</SelectItem>
+                    <SelectItem value="invoiced">{getTimeEntryBillingStatusLabel('invoiced')}</SelectItem>
+                    <SelectItem value="billed">{getTimeEntryBillingStatusLabel('billed')}</SelectItem>
                     <SelectItem value="paid">Paid</SelectItem>
                   </SelectContent>
                 </Select>

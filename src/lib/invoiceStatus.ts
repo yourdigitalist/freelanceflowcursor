@@ -25,6 +25,14 @@ export async function revertSentInvoiceToDraft(
     .eq('id', invoiceId);
 
   if (error) throw error;
+
+  const { error: entriesError } = await supabase
+    .from('time_entries')
+    .update({ billing_status: 'invoiced' })
+    .eq('invoice_id', invoiceId)
+    .eq('billing_status', 'billed');
+
+  if (entriesError) throw entriesError;
 }
 
 /** Revert a mistakenly paid invoice to sent and restore linked time entries to billed. */

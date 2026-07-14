@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { useProfileCurrency } from "@/hooks/useProfileCurrency";
 import { DEFAULT_CLIENT_AVATAR_COLOR } from "@/lib/clientAvatarColors";
 import { CLIENT_CRM_STAGES, getClientStageLabel } from "@/lib/clientCrmStages";
+import { getTimeEntryBillingStatusLabel } from "@/lib/timeEntryBillingStatus";
 import {
   buildClientDbPayload,
   clientFormSnapshot,
@@ -602,7 +603,9 @@ export default function ClientDetail() {
       case "paid":
         return <TableStatusBadge status="paid" />;
       case "billed":
-        return <TableStatusBadge status="billed" label="Billed" />;
+        return <TableStatusBadge status="billed" label={getTimeEntryBillingStatusLabel("billed")} />;
+      case "invoiced":
+        return <TableStatusBadge status="invoiced" label={getTimeEntryBillingStatusLabel("invoiced")} />;
       default:
         return <TableStatusBadge status="unbilled" label="Unbilled" />;
     }
@@ -628,6 +631,7 @@ export default function ClientDetail() {
   const timeBillingSummary = useMemo(() => {
     const summary = {
       unbilledSeconds: 0,
+      invoicedSeconds: 0,
       billedSeconds: 0,
       paidSeconds: 0,
       notBillableSeconds: 0,
@@ -640,6 +644,7 @@ export default function ClientDetail() {
       }
       if (entry.billing_status === "paid") summary.paidSeconds += seconds;
       else if (entry.billing_status === "billed") summary.billedSeconds += seconds;
+      else if (entry.billing_status === "invoiced") summary.invoicedSeconds += seconds;
       else summary.unbilledSeconds += seconds;
     }
     return summary;
