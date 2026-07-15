@@ -7,7 +7,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName?: string, firstName?: string, lastName?: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, fullName?: string, firstName?: string, lastName?: string, captchaToken?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signInWithMagicLink: (email: string) => Promise<{ error: Error | null; message?: string }>;
   signOut: () => Promise<void>;
@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, fullName?: string, firstName?: string, lastName?: string) => {
+  const signUp = async (email: string, password: string, fullName?: string, firstName?: string, lastName?: string, captchaToken?: string) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -67,7 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           first_name: firstName ?? (fullName ? fullName.split(/\s+/)[0] : undefined),
           last_name: lastName ?? (fullName ? fullName.split(/\s+/).slice(1).join(' ') : undefined),
         },
-        emailRedirectTo: `${getSiteUrl() || window.location.origin}/`
+        emailRedirectTo: `${getSiteUrl() || window.location.origin}/`,
+        ...(captchaToken ? { captchaToken } : {}),
       }
     });
     return { error };

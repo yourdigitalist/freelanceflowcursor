@@ -14,6 +14,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
+import { requireEmailVerified } from "@/lib/emailVerification";
 import type { Json } from "@/integrations/supabase/types";
 import {
   DEFAULT_PORTAL_SECTIONS,
@@ -55,6 +57,7 @@ export function ClientPortalSettings({
   client: ClientPortalClient;
   onClientUpdate: (patch: Partial<ClientPortalClient>) => void;
 }) {
+  const { user } = useAuth();
   const { toast } = useToast();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const [enabled, setEnabled] = useState(Boolean(client.portal_enabled));
@@ -287,6 +290,15 @@ export function ClientPortalSettings({
       } catch {
         return;
       }
+    }
+    const verify = requireEmailVerified(user);
+    if (!verify.ok) {
+      toast({
+        title: "Email verification required",
+        description: verify.message,
+        variant: "destructive",
+      });
+      return;
     }
     setSending(true);
     try {

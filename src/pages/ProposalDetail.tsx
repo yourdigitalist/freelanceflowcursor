@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { requireEmailVerified } from "@/lib/emailVerification";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -503,6 +504,15 @@ export default function ProposalDetail() {
       toast({
         title: "Email required",
         description: "Please enter the recipient email address",
+        variant: "destructive",
+      });
+      return;
+    }
+    const verify = requireEmailVerified(user);
+    if (!verify.ok) {
+      toast({
+        title: "Email verification required",
+        description: verify.message,
         variant: "destructive",
       });
       return;

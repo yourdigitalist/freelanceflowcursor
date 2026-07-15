@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { requireEmailVerified } from "@/lib/emailVerification";
 
 export type SendReviewRequestResult = {
   success: boolean;
@@ -14,6 +15,11 @@ export async function sendReviewRequestEmail(
 ): Promise<SendReviewRequestResult> {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
+  const sessionUser = sessionData.session?.user;
+  const verify = requireEmailVerified(sessionUser);
+  if (!verify.ok) {
+    throw new Error(verify.message);
+  }
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey =
     import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;

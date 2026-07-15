@@ -10,6 +10,7 @@ import {
   parseEmailCommsConfig,
   replaceTokens,
 } from "../_shared/client-email-comms.ts";
+import { isEmailVerified, emailVerificationRequiredResponse } from "../_shared/require-verified-email.ts";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
@@ -55,6 +56,10 @@ serve(async (req) => {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    if (!isEmailVerified(user)) {
+      return emailVerificationRequiredResponse(corsHeaders);
     }
 
     const { clientId, origin, recipientEmail } = await req.json();

@@ -9,6 +9,7 @@ import { Resend } from "https://esm.sh/resend@2.0.0";
 import { getLanceSignature } from "../_shared/lance-email.ts";
 import { formatLocaleDate } from "../_shared/format-locale-date.ts";
 import { formatInvoicePaymentMethod } from "../_shared/format-invoice-payment.ts";
+import { isEmailVerified, emailVerificationRequiredResponse } from "../_shared/require-verified-email.ts";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
@@ -224,6 +225,10 @@ serve(async (req) => {
 
     const body = await req.json();
     const { invoiceId, recipientEmail, senderName, senderEmail, message, subject: customSubject, cc, receipt, downloadOnly, reminder } = body;
+
+    if (!downloadOnly && !isEmailVerified(user)) {
+      return emailVerificationRequiredResponse(corsHeaders);
+    }
 
     if (!invoiceId) {
       throw new Error("Missing required field: invoiceId");

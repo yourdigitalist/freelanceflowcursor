@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ShellImageWithSkeleton } from '@/components/ui/shell-image-skeleton';
 import { useTimer } from '@/contexts/TimerContext';
 import { TrialBanner } from './TrialBanner';
+import { EmailVerificationBanner } from './EmailVerificationBanner';
 import { ScheduledDeletionBanner } from './ScheduledDeletionBanner';
 import { TimerBar } from './TimerBar';
 import { StartGuide } from './StartGuide';
@@ -31,6 +32,7 @@ import { SidebarNavCollapsedTooltip } from './SidebarNavCollapsedTooltip';
 import { shellNavIcon, shellNavLink, shellSubNavLink } from './shellNav';
 import { useInAppNotificationAlerts } from '@/hooks/useInAppNotificationAlerts';
 import { InAppNotificationAlerts } from '@/components/notifications/InAppNotificationAlerts';
+import { isEmailVerified } from '@/lib/emailVerification';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -149,6 +151,8 @@ export function AppLayout({
   });
   const showTrialBanner =
     isOnTrial && profile?.is_lifetime !== true && !isBillingLocked && !trialBannerDismissed;
+  const showEmailVerificationBanner =
+    !!user && !isEmailVerified(user) && !isBillingLocked;
   const scheduledDeletionAt = profile?.scheduled_deletion_at ? new Date(profile.scheduled_deletion_at) : null;
   const showDeletionBanner =
     !isBillingLocked
@@ -157,7 +161,7 @@ export function AppLayout({
     && (profile?.subscription_status || '').toLowerCase() !== 'active'
     && !!scheduledDeletionAt
     && scheduledDeletionAt > new Date();
-  const showTopBanner = showDeletionBanner || showTrialBanner;
+  const showTopBanner = showDeletionBanner || showEmailVerificationBanner || showTrialBanner;
   const handleTrialBannerDismiss = () => {
     setTrialBannerDismissed(true);
     try { localStorage.setItem('trial_banner_dismissed', 'true'); } catch { /* ignore localStorage */ }
@@ -398,6 +402,8 @@ export function AppLayout({
           scheduledAt={scheduledDeletionAt}
           onSubscribe={() => navigate('/settings/subscription')}
         />
+      ) : showEmailVerificationBanner ? (
+        <EmailVerificationBanner />
       ) : showTrialBanner ? (
         <TrialBanner onUpgrade={() => navigate('/settings/subscription')} onDismiss={handleTrialBannerDismiss} />
       ) : null}

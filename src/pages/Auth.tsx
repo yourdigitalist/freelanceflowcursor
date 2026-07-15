@@ -12,12 +12,12 @@ import { PasswordStrengthInput } from '@/components/PasswordStrengthInput';
 import { evaluatePasswordStrength, passwordStrengthMessage } from '@/lib/passwordStrength';
 import { trackGaSignUp, trackGaSignUpFormStart } from '@/lib/googleAnalytics';
 import { trackMetaLead } from '@/lib/metaPixel';
+import { TurnstileWidget, isTurnstileEnabled } from '@/components/TurnstileWidget';
 
 const LANCE_LOGO_SRC = '/lance-logo-black-colour.png';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import type { IconSlotKey } from '@/lib/iconSlots';
 
-const SIGNUP_PENDING_KEY = 'signup_pending';
 const SIGNUP_EMAIL_KEY = 'signup_email';
 const AUTH_LAST_EMAIL_KEY = 'lance_auth_last_email';
 
@@ -52,6 +52,7 @@ export default function Auth() {
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [magicLinkLoading, setMagicLinkLoading] = useState(false);
   const [signupPassword, setSignupPassword] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // After showing magic link success, allow re-entering email after a few seconds
@@ -66,9 +67,7 @@ export default function Auth() {
   const setAuthTab = (value: string) => setSearchParams((p) => { p.set('tab', value); return p; }, { replace: true });
 
   useEffect(() => {
-    const pending = sessionStorage.getItem(SIGNUP_PENDING_KEY);
-    if (pending || searchParams.get('confirm') === 'email') {
-      if (pending) sessionStorage.removeItem(SIGNUP_PENDING_KEY);
+    if (searchParams.get('confirm') === 'email') {
       setShowConfirmEmailMessage(true);
     }
   }, [searchParams]);
@@ -121,6 +120,15 @@ export default function Auth() {
       return;
     }
 
+    if (isTurnstileEnabled() && !turnstileToken) {
+      toast({
+        title: 'Verification required',
+        description: 'Complete the security check before creating your account.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsLoading(true);
     
     const formData = new FormData(e.currentTarget);
@@ -143,7 +151,7 @@ export default function Auth() {
 
     persistAuthEmail(email);
 
-    const { error } = await signUp(email, password, fullName, firstName, lastName);
+    const { error } = await signUp(email, password, fullName, firstName, lastName, turnstileToken ?? undefined);
     
     if (error) {
       toast({
@@ -154,15 +162,8 @@ export default function Auth() {
     } else {
       trackMetaLead();
       trackGaSignUp('email');
-      sessionStorage.setItem(SIGNUP_PENDING_KEY, '1');
       sessionStorage.setItem(SIGNUP_EMAIL_KEY, email.trim());
-      setResendEmail(email.trim());
-      setShowConfirmEmailMessage(true);
-      setAuthTab('signup');
-      toast({
-        title: 'Check your email',
-        description: "If this is a new account, we sent a confirmation link. If you already signed up before, try Sign In or Reset password.",
-      });
+      navigate('/onboarding', { replace: true });
     }
     
     setIsLoading(false);
@@ -328,7 +329,7 @@ export default function Auth() {
             {showConfirmEmailMessage && (
               <div className="mx-6 mt-8 mb-1 px-5 pt-10 pb-5 rounded-xl bg-primary/10 border border-primary/20 text-sm space-y-4">
                 <p className="text-center text-foreground leading-relaxed pt-0.5">
-                  We sent a <strong>confirmation link</strong> to your email. Open it to verify your account, then continue onboarding.
+                  Open the <strong>confirmation link</strong> in your email to verify your account.
                 </p>
                 <form onSubmit={handleResendConfirmation} className="flex flex-col gap-3">
                   {resendEmail ? (
@@ -529,10 +530,18 @@ export default function Auth() {
                         )
                       </Label>
                     </div>
+                    <TurnstileWidget
+                      onToken={setTurnstileToken}
+                      onExpire={() => setTurnstileToken(null)}
+                    />
                     <Button
                       type="submit"
                       className="w-full bg-[#9b63e9] hover:bg-[#7a45cc]"
-                      disabled={isLoading || !evaluatePasswordStrength(signupPassword).isStrongEnough}
+                      disabled={
+                        isLoading
+                        || !evaluatePasswordStrength(signupPassword).isStrongEnough
+                        || (isTurnstileEnabled() && !turnstileToken)
+                      }
                     >
                       {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       Create Account

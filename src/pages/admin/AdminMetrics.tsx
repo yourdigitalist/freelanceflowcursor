@@ -46,6 +46,7 @@ import {
   isOrganicUser,
   isTrialExpiringSoon,
   isTrialUser,
+  isUnconfirmedUser,
   matchesCouponFilter,
 } from '@/lib/adminMetrics';
 import { cn } from '@/lib/utils';
@@ -175,9 +176,10 @@ function UserTagsCell({
   row: AdminUserRow;
   ghosted: boolean;
 }) {
-  const showOnboarding = !row.onboarding_completed;
+  const unconfirmed = isUnconfirmedUser(row);
+  const showOnboarding = !row.onboarding_completed && !unconfirmed;
   const showCoupon = hasBetaPromotionCode(row);
-  const hasTags = showOnboarding || ghosted || showCoupon;
+  const hasTags = unconfirmed || showOnboarding || ghosted || showCoupon;
 
   if (!hasTags) {
     return <span className="text-muted-foreground text-xs">—</span>;
@@ -185,9 +187,9 @@ function UserTagsCell({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {showOnboarding ? (
-        <Badge variant="outline" className="text-[10px]">
-          Onboarding
+      {unconfirmed ? (
+        <Badge variant="destructive" className="text-[10px]">
+          Unconfirmed
         </Badge>
       ) : null}
       {ghosted ? (
@@ -344,6 +346,9 @@ export default function AdminMetrics() {
       if (statusFilter === 'ghosted' && !isGhostedUser(row.last_sign_in_at)) {
         return false;
       }
+      if (statusFilter === 'unconfirmed' && !isUnconfirmedUser(row)) {
+        return false;
+      }
 
       return matchesUserSearch(row, q);
     });
@@ -410,6 +415,11 @@ export default function AdminMetrics() {
     [visibleUsers],
   );
 
+  const unconfirmedUsers = useMemo(
+    () => visibleUsers.filter((row) => isUnconfirmedUser(row)),
+    [visibleUsers],
+  );
+
   const activeFilterCount = statusFilter === 'all' ? 0 : 1;
   const activeCouponFilterCount = couponFilter === 'all' ? 0 : 1;
 
@@ -472,11 +482,18 @@ export default function AdminMetrics() {
         <>
           <section className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Users</h2>
-            <PageSummaryBar columns={5}>
+            <PageSummaryBar columns={6}>
               <PageSummaryStat
                 label="Total signups"
                 value={String(metrics.total_signups)}
                 hideDot
+              />
+              <PageSummaryStat
+                label="Unconfirmed email"
+                value={String(metrics.unconfirmed_signups ?? 0)}
+                subtitle={`${metrics.unconfirmed_signups_this_week ?? 0} this week · ${metrics.unconfirmed_signups_this_month ?? 0} this month`}
+                status="pending_signatures"
+                onClick={() => setStatusFilter('unconfirmed')}
               />
               <PageSummaryStat
                 label="This week"
@@ -585,6 +602,47 @@ export default function AdminMetrics() {
             </PageSummaryBar>
           </section>
         </>
+      ) : null}
+
+      {unconfirmedUsers.length > 0 ? (
+        <Card className="border-rose-200/80 bg-rose-50/40 dark:border-rose-900/50 dark:bg-rose-950/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Awaiting email confirmation</CardTitle>
+            <CardDescription>
+              Signed up with name and email but have not clicked the confirmation link yet.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <DataTableFrame>
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Signed up</TableHead>
+                    <TableHead>Confirmation sent</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {unconfirmedUsers.map((row) => (
+                    <TableRow key={row.user_id}>
+                      <TableCell className="font-medium">{displayName(row)}</TableCell>
+                      <TableCell className="text-muted-foreground">{row.email || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground whitespace-nowrap">
+                        {format(new Date(row.created_at), 'dd MMM yyyy')}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground whitespace-nowrap">
+                        {row.confirmation_sent_at
+                          ? formatDistanceToNow(new Date(row.confirmation_sent_at), { addSuffix: true })
+                          : '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </DataTableFrame>
+          </CardContent>
+        </Card>
       ) : null}
 
       {hotlistUsers.length > 0 ? (
@@ -740,6 +798,7 @@ export default function AdminMetrics() {
                             <SelectItem value="past_due">Past due</SelectItem>
                             <SelectItem value="canceled">Canceled</SelectItem>
                             <SelectItem value="expiring_7d">Trial expiring (7d)</SelectItem>
+                            <SelectItem value="unconfirmed">Unconfirmed email</SelectItem>
                             <SelectItem value="ghosted">Ghosted (30d+)</SelectItem>
                           </SelectContent>
                         </Select>

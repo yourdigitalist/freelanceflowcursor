@@ -62,4 +62,9 @@ export function trackGaSignUpFormStart(): void {
 
 export function trackGaSignUp(method = 'email'): void {
   trackGaEvent('sign_up', { method });
+  trackGaEvent('sign_up_started', { method });
+}
+
+export function trackGaSignUpConfirmed(method = 'email'): void {
+  trackGaOnce('signup_confirmed', 'sign_up_confirmed', { method });
 }

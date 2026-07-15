@@ -5,6 +5,9 @@ export type AdminMetricsSummary = {
   total_signups: number;
   signups_this_week: number;
   signups_this_month: number;
+  unconfirmed_signups: number;
+  unconfirmed_signups_this_week: number;
+  unconfirmed_signups_this_month: number;
   trial_users: number;
   paying_users: number;
   past_due_users: number;
@@ -38,6 +41,9 @@ export type AdminUserRow = {
   onboarding_completed: boolean;
   last_sign_in_at: string | null;
   stripe_promotion_code: string | null;
+  email_confirmed: boolean;
+  email_confirmed_at: string | null;
+  confirmation_sent_at: string | null;
 };
 
 export type AdminUserListTab = 'all' | 'coupons' | 'trials';
@@ -58,7 +64,8 @@ export type AdminUserFilter =
   | 'canceled'
   | 'past_due'
   | 'expiring_7d'
-  | 'ghosted';
+  | 'ghosted'
+  | 'unconfirmed';
 
 export function formatAdminMoney(amount: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -136,6 +143,10 @@ export function isGhostedUser(lastSignIn: string | null, days = 30): boolean {
   const last = new Date(lastSignIn).getTime();
   if (Number.isNaN(last)) return true;
   return Date.now() - last > days * 24 * 60 * 60 * 1000;
+}
+
+export function isUnconfirmedUser(row: AdminUserRow): boolean {
+  return row.email_confirmed === false;
 }
 
 export function isTrialExpiringSoon(trialEnd: string | null, withinDays = 7): boolean {

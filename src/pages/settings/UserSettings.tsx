@@ -23,6 +23,8 @@ import { SlotIcon } from '@/contexts/IconSlotContext';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { useNavigate } from 'react-router-dom';
 import { syncAuthDisplayName } from '@/lib/syncAuthDisplayName';
+import { isEmailVerified } from '@/lib/emailVerification';
+import { Badge } from '@/components/ui/badge';
 
 interface UserProfile {
   first_name: string | null;
@@ -34,7 +36,7 @@ interface UserProfile {
 }
 
 export default function UserSettings() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, resendConfirmationEmail } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const dirtyContext = useSettingsDirty();
@@ -45,6 +47,7 @@ export default function UserSettings() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [resendVerificationLoading, setResendVerificationLoading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -249,6 +252,30 @@ export default function UserSettings() {
     }
   };
 
+  const handleResendVerification = async () => {
+    const email = user?.email?.trim();
+    if (!email) return;
+    setResendVerificationLoading(true);
+    try {
+      const { error } = await resendConfirmationEmail(email);
+      if (error) throw error;
+      toast({
+        title: 'Verification email sent',
+        description: 'Check your inbox (and spam) for the link.',
+      });
+    } catch (error: unknown) {
+      toast({
+        title: 'Could not send verification email',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setResendVerificationLoading(false);
+    }
+  };
+
+  const emailVerified = isEmailVerified(user);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -363,13 +390,43 @@ export default function UserSettings() {
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="email">Email</Label>
+              {emailVerified ? (
+                <Badge variant="secondary" className="text-emerald-700 bg-emerald-50 border-emerald-200">
+                  Verified
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="text-amber-800 bg-amber-50 border-amber-200">
+                  Not verified
+                </Badge>
+              )}
+            </div>
             <Input
               id="email"
               name="email"
               type="email"
-              defaultValue={profile?.email || ''}
+              defaultValue={profile?.email || user?.email || ''}
+              readOnly
+              className="bg-muted/40"
             />
+            {!emailVerified && (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pt-1">
+                <p className="text-sm text-muted-foreground">
+                  Verify your email before sending invoices and other client emails.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResendVerification}
+                  disabled={resendVerificationLoading || !user?.email}
+                >
+                  {resendVerificationLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Verify email
+                </Button>
+              </div>
+            )}
           </div>
           <div className="space-y-2 min-w-0">
             <Label htmlFor="phone">Phone Number</Label>

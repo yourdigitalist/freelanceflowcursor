@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useAuth } from '@/lib/auth';
+import { requireEmailVerified } from '@/lib/emailVerification';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1354,6 +1355,16 @@ export default function InvoiceDetail() {
       toast({
         title: 'Invoice not paid',
         description: 'Mark the invoice as paid before sending a receipt.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const verify = requireEmailVerified(user);
+    if (!verify.ok) {
+      toast({
+        title: 'Email verification required',
+        description: verify.message,
         variant: 'destructive',
       });
       return;
