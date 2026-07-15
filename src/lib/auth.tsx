@@ -8,10 +8,10 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signUp: (email: string, password: string, fullName?: string, firstName?: string, lastName?: string, captchaToken?: string) => Promise<{ error: Error | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signInWithMagicLink: (email: string) => Promise<{ error: Error | null; message?: string }>;
+  signIn: (email: string, password: string, captchaToken?: string) => Promise<{ error: Error | null }>;
+  signInWithMagicLink: (email: string, captchaToken?: string) => Promise<{ error: Error | null; message?: string }>;
   signOut: () => Promise<void>;
-  resetPassword: (email: string) => Promise<{ error: Error | null }>;
+  resetPassword: (email: string, captchaToken?: string) => Promise<{ error: Error | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
   resendConfirmationEmail: (email: string) => Promise<{ error: Error | null }>;
 }
@@ -74,17 +74,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const signIn = async (email: string, password: string, captchaToken?: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+      options: {
+        ...(captchaToken ? { captchaToken } : {}),
+      },
+    });
     return { error };
   };
 
-  const signInWithMagicLink = async (email: string) => {
+  const signInWithMagicLink = async (email: string, captchaToken?: string) => {
     const baseUrl = getSiteUrl() || (typeof window !== 'undefined' ? window.location.origin : '');
     const { data, error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: {
         emailRedirectTo: baseUrl ? `${baseUrl}/dashboard` : undefined,
+        ...(captchaToken ? { captchaToken } : {}),
       },
     });
     // Supabase may return success but with a message (e.g. rate limit)
@@ -107,11 +114,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  const resetPassword = async (email: string) => {
+  const resetPassword = async (email: string, captchaToken?: string) => {
     const base = (getSiteUrl() || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
     const redirectTo = base ? `${base}/reset-password` : undefined;
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       ...(redirectTo ? { redirectTo } : {}),
+      ...(captchaToken ? { captchaToken } : {}),
     });
     return { error };
   };

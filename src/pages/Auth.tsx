@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import type HCaptcha from '@hcaptcha/react-hcaptcha';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,7 @@ import { PasswordStrengthInput } from '@/components/PasswordStrengthInput';
 import { evaluatePasswordStrength, passwordStrengthMessage } from '@/lib/passwordStrength';
 import { trackGaSignUp, trackGaSignUpFormStart } from '@/lib/googleAnalytics';
 import { trackMetaLead } from '@/lib/metaPixel';
-import { TurnstileWidget, isTurnstileEnabled } from '@/components/TurnstileWidget';
+import { HCaptchaWidget, isHCaptchaEnabled } from '@/components/HCaptchaWidget';
 
 const LANCE_LOGO_SRC = '/lance-logo-black-colour.png';
 import { SlotIcon } from '@/contexts/IconSlotContext';
@@ -52,7 +53,12 @@ export default function Auth() {
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [magicLinkLoading, setMagicLinkLoading] = useState(false);
   const [signupPassword, setSignupPassword] = useState('');
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [signupCaptchaToken, setSignupCaptchaToken] = useState<string | null>(null);
+  const [signInCaptchaToken, setSignInCaptchaToken] = useState<string | null>(null);
+  const [resetCaptchaToken, setResetCaptchaToken] = useState<string | null>(null);
+  const signupCaptchaRef = useRef<HCaptcha>(null);
+  const signInCaptchaRef = useRef<HCaptcha>(null);
+  const resetCaptchaRef = useRef<HCaptcha>(null);
   const navigate = useNavigate();
 
   // After showing magic link success, allow re-entering email after a few seconds
@@ -82,8 +88,22 @@ export default function Auth() {
     }
   }, []);
 
+  const requireCaptchaToken = (token: string | null): token is string => {
+    if (isHCaptchaEnabled() && !token) {
+      toast({
+        title: 'Verification required',
+        description: 'Complete the security check before continuing.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    return true;
+  };
+
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!requireCaptchaToken(signInCaptchaToken)) return;
+
     setIsLoading(true);
     
     const formData = new FormData(e.currentTarget);
@@ -91,9 +111,11 @@ export default function Auth() {
     const password = formData.get('password') as string;
     persistAuthEmail(email);
 
-    const { error } = await signIn(email, password);
+    const { error } = await signIn(email, password, signInCaptchaToken ?? undefined);
     
     if (error) {
+      signInCaptchaRef.current?.resetCaptcha();
+      setSignInCaptchaToken(null);
       const banned = /ban/i.test(error.message);
       toast({
         title: banned ? 'Account deactivated' : 'Error signing in',
@@ -120,7 +142,7 @@ export default function Auth() {
       return;
     }
 
-    if (isTurnstileEnabled() && !turnstileToken) {
+    if (isHCaptchaEnabled() && !signupCaptchaToken) {
       toast({
         title: 'Verification required',
         description: 'Complete the security check before creating your account.',
@@ -151,9 +173,11 @@ export default function Auth() {
 
     persistAuthEmail(email);
 
-    const { error } = await signUp(email, password, fullName, firstName, lastName, turnstileToken ?? undefined);
+    const { error } = await signUp(email, password, fullName, firstName, lastName, signupCaptchaToken ?? undefined);
     
     if (error) {
+      signupCaptchaRef.current?.resetCaptcha();
+      setSignupCaptchaToken(null);
       toast({
         title: 'Error signing up',
         description: error.message,
@@ -171,13 +195,17 @@ export default function Auth() {
 
   const handleForgotPassword = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!requireCaptchaToken(resetCaptchaToken)) return;
+
     setIsLoading(true);
 
     const email = authEmail.trim();
     persistAuthEmail(email);
-    const { error } = await resetPassword(email);
+    const { error } = await resetPassword(email, resetCaptchaToken ?? undefined);
 
     if (error) {
+      resetCaptchaRef.current?.resetCaptcha();
+      setResetCaptchaToken(null);
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const hint =
         /redirect|url|not allowed/i.test(error.message)
@@ -203,12 +231,16 @@ export default function Auth() {
 
   const handleMagicLink = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!requireCaptchaToken(signInCaptchaToken)) return;
+
     const email = authEmail.trim();
     if (!email) return;
     persistAuthEmail(email);
     setMagicLinkLoading(true);
-    const { error, message } = await signInWithMagicLink(email);
+    const { error, message } = await signInWithMagicLink(email, signInCaptchaToken ?? undefined);
     if (error) {
+      signInCaptchaRef.current?.resetCaptcha();
+      setSignInCaptchaToken(null);
       toast({
         title: 'Could not send magic link',
         description: message ?? error.message,
@@ -413,7 +445,16 @@ export default function Auth() {
                         required
                       />
                     </div>
-                    <Button type="submit" className="w-full bg-[#9b63e9] hover:bg-[#7a45cc]" disabled={isLoading}>
+                    <HCaptchaWidget
+                      ref={signInCaptchaRef}
+                      onToken={setSignInCaptchaToken}
+                      onExpire={() => setSignInCaptchaToken(null)}
+                    />
+                    <Button
+                      type="submit"
+                      className="w-full bg-[#9b63e9] hover:bg-[#7a45cc]"
+                      disabled={isLoading || (isHCaptchaEnabled() && !signInCaptchaToken)}
+                    >
                       {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       Sign In
                     </Button>
@@ -454,7 +495,11 @@ export default function Auth() {
                           className="flex-1"
                           disabled={magicLinkLoading}
                         />
-                        <Button type="submit" variant="secondary" disabled={magicLinkLoading}>
+                        <Button
+                          type="submit"
+                          variant="secondary"
+                          disabled={magicLinkLoading || (isHCaptchaEnabled() && !signInCaptchaToken)}
+                        >
                           {magicLinkLoading && <Loader2 className="h-4 w-4 animate-spin" />}
                           Send link
                         </Button>
@@ -530,9 +575,10 @@ export default function Auth() {
                         )
                       </Label>
                     </div>
-                    <TurnstileWidget
-                      onToken={setTurnstileToken}
-                      onExpire={() => setTurnstileToken(null)}
+                    <HCaptchaWidget
+                      ref={signupCaptchaRef}
+                      onToken={setSignupCaptchaToken}
+                      onExpire={() => setSignupCaptchaToken(null)}
                     />
                     <Button
                       type="submit"
@@ -540,7 +586,7 @@ export default function Auth() {
                       disabled={
                         isLoading
                         || !evaluatePasswordStrength(signupPassword).isStrongEnough
-                        || (isTurnstileEnabled() && !turnstileToken)
+                        || (isHCaptchaEnabled() && !signupCaptchaToken)
                       }
                     >
                       {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -619,16 +665,29 @@ export default function Auth() {
                       required
                     />
                   </div>
+                  <HCaptchaWidget
+                    ref={resetCaptchaRef}
+                    onToken={setResetCaptchaToken}
+                    onExpire={() => setResetCaptchaToken(null)}
+                  />
                   <div className="flex gap-2">
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => setShowForgotPassword(false)}
+                      onClick={() => {
+                        setShowForgotPassword(false);
+                        setResetCaptchaToken(null);
+                        resetCaptchaRef.current?.resetCaptcha();
+                      }}
                       className="flex-1"
                     >
                       Cancel
                     </Button>
-                    <Button type="submit" className="flex-1" disabled={isLoading}>
+                    <Button
+                      type="submit"
+                      className="flex-1"
+                      disabled={isLoading || (isHCaptchaEnabled() && !resetCaptchaToken)}
+                    >
                       {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       Send Link
                     </Button>
