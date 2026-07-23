@@ -12,6 +12,7 @@ const settingsNav = [
   { path: '/settings/business', label: 'Company', slot: 'settings_business' as const },
   { path: '/settings/locale', label: 'Locale', slot: 'settings_locale' as const },
   { path: '/settings/invoices', label: 'Invoice Settings', slot: 'settings_invoices' as const },
+  { path: '/settings/payments', label: 'Client payments', slot: 'settings_payments' as const },
   { path: '/settings/proposals', label: 'Proposal Settings', slot: 'sidebar_proposals' as const },
   { path: '/settings/notifications', label: 'Notification Settings', slot: 'settings_notifications' as const },
   { path: '/settings/subscription', label: 'Billing and Subscription', slot: 'settings_subscription' as const },

@@ -32,6 +32,7 @@ import UserSettings from "./pages/settings/UserSettings";
 import BusinessSettings from "./pages/settings/BusinessSettings";
 import LocaleSettings from "./pages/settings/LocaleSettings";
 import InvoiceSettings from "./pages/settings/InvoiceSettings";
+import PaymentSettings from "./pages/settings/PaymentSettings";
 import ProposalSettings from "./pages/settings/ProposalSettings";
 import SubscriptionSettings from "./pages/settings/SubscriptionSettings";
 import StorageSettings from "./pages/settings/StorageSettings";
@@ -64,6 +65,7 @@ import NotFound from "./pages/NotFound";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import LpTest from "./pages/LpTest";
+import DesignersLanding from "./pages/DesignersLanding";
 import BrandGuidelines from "./pages/BrandGuidelines";
 import { BrandingApply } from "@/components/BrandingApply";
 import { RecoveryHashRedirect } from "@/components/RecoveryHashRedirect";
@@ -246,6 +248,7 @@ function AppRoutes() {
       <Route path="/brand-guidelines" element={<BrandGuidelines />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/lptest" element={<LpTest />} />
+      <Route path="/designers" element={<DesignersLanding />} />
       <Route path="/onboarding" element={<OnboardingRoute><Onboarding /></OnboardingRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
@@ -319,6 +322,7 @@ function AppRoutes() {
         <Route path="profile" element={<UserSettings />} />
         <Route path="business" element={<BusinessSettings />} />
         <Route path="invoices" element={<InvoiceSettings />} />
+        <Route path="payments" element={<PaymentSettings />} />
         <Route path="proposals" element={<ProposalSettings />} />
         <Route path="locale" element={<LocaleSettings />} />
         <Route path="notifications" element={<NotificationSettings />} />

@@ -10,6 +10,12 @@ import { getLanceSignature } from "../_shared/lance-email.ts";
 import { formatLocaleDate } from "../_shared/format-locale-date.ts";
 import { formatInvoicePaymentMethod } from "../_shared/format-invoice-payment.ts";
 import { isEmailVerified, emailVerificationRequiredResponse } from "../_shared/require-verified-email.ts";
+import {
+  appBaseUrl,
+  ensureInvoicePaymentSession,
+  getConnectStripe,
+  isConnectReady,
+} from "../_shared/stripe-connect.ts";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 const RESEND_FROM_EMAIL = (Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev").trim();
@@ -242,7 +248,7 @@ serve(async (req) => {
     // Fetch user profile with business details, logo, currency, number_format, bank, and invoice display options
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display, number_format, date_format, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, bank_name, bank_account_number, bank_routing_number, payment_instructions, client_email_primary_color, client_email_header_html, client_email_footer_html")
+      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display, number_format, date_format, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, bank_name, bank_account_number, bank_routing_number, payment_instructions, client_email_primary_color, client_email_header_html, client_email_footer_html, stripe_connect_account_id, stripe_connect_charges_enabled, stripe_connect_fees_acknowledged_at")
       .eq("user_id", user.id)
       .single();
 
@@ -255,7 +261,7 @@ serve(async (req) => {
       .from("invoices")
       .select(`
         *,
-        clients(name, email, phone, company, tax_id, address, street, street2, city, state, postal_code, country),
+        clients(name, email, phone, company, tax_id, address, street, street2, city, state, postal_code, country, portal_token, portal_enabled),
         projects(name)
       `)
       .eq("id", invoiceId)
@@ -449,6 +455,51 @@ serve(async (req) => {
     const replyToEmail = (profile?.business_email || senderEmail || profile?.email || "").trim();
     const primaryColor = (profile?.client_email_primary_color || "#9B63E9").trim();
     const footerTpl = (profile?.client_email_footer_html || "").trim();
+
+    let payNowUrl: string | null = null;
+    if (!isReceipt && isConnectReady(profile || {}) && Number(invoice.total || 0) > 0) {
+      try {
+        const stripe = getConnectStripe();
+        const base = appBaseUrl(req);
+        const clientPortal = invoice.clients as {
+          portal_token?: string | null;
+          portal_enabled?: boolean | null;
+        } | null;
+        const portalToken =
+          clientPortal?.portal_enabled && clientPortal?.portal_token
+            ? clientPortal.portal_token
+            : null;
+        const successUrl = portalToken
+          ? `${base}/portal/${portalToken}/invoice/${invoiceId}?payment=success`
+          : `${base}/settings/payments?invoice_paid=1`;
+        const cancelUrl = portalToken
+          ? `${base}/portal/${portalToken}/invoice/${invoiceId}?payment=cancelled`
+          : `${base}/invoices/${invoiceId}`;
+        const session = await ensureInvoicePaymentSession({
+          stripe,
+          supabase,
+          invoice,
+          userId: user.id,
+          connectAccountId: profile.stripe_connect_account_id,
+          currency: (profile?.currency || "USD").toLowerCase(),
+          successUrl,
+          cancelUrl,
+        });
+        payNowUrl = session?.url || null;
+      } catch (payErr) {
+        console.warn("Could not create Stripe payment link for invoice email:", payErr);
+      }
+    }
+
+    const payNowBlock = payNowUrl
+      ? `
+        <p style="margin: 24px 0;">
+          <a href="${escapeHtml(payNowUrl)}" style="display: inline-block; background: ${primaryColor}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px;">Pay now</a>
+        </p>
+        <p style="color: #999; font-size: 12px;">Secure card payment powered by Stripe. Or copy this link: ${escapeHtml(payNowUrl)}</p>
+      `
+      : "";
+
     const coreHtml = isReceipt
       ? `
         <h2 style="color: #10B981; margin-top: 0;">Receipt – Invoice ${safeInvoiceNumber}</h2>
@@ -457,6 +508,7 @@ serve(async (req) => {
       : `
         <h2 style="color: ${primaryColor}; margin-top: 0;">Invoice ${safeInvoiceNumber}</h2>
         ${safeMessage ? `<div style="color: #333; white-space: pre-wrap;">${safeMessage}</div>` : "<p style=\"color: #666;\">Please find your invoice attached.</p>"}
+        ${payNowBlock}
       `;
     const tokens = {
       business_name: escapeHtml(fromDisplayName),

@@ -191,6 +191,7 @@ serve(async (req) => {
         due_date,
         total,
         status,
+        stripe_payment_url,
         clients(name, email),
         projects(name)
       `)
@@ -242,10 +243,20 @@ serve(async (req) => {
         const footerTpl = (profile.client_email_footer_html || "").trim();
         const safeInvoiceNumber = escapeHtml(rawInvoiceNumber);
         const safeMessage = escapeHtml(resolvedMessage);
+        const payUrl = (invoice as { stripe_payment_url?: string | null }).stripe_payment_url;
+        const payNowBlock = payUrl
+          ? `
+        <p style="margin: 24px 0;">
+          <a href="${escapeHtml(payUrl)}" style="display: inline-block; background: ${primaryColor}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px;">Pay now</a>
+        </p>
+        <p style="color: #999; font-size: 12px;">Secure card payment powered by Stripe.</p>
+      `
+          : "";
 
         const coreHtml = `
         <h2 style="color: ${primaryColor}; margin-top: 0;">Reminder: Invoice ${safeInvoiceNumber}</h2>
         ${safeMessage ? `<div style="color: #333; white-space: pre-wrap;">${safeMessage}</div>` : "<p style=\"color: #666;\">Please find your invoice attached.</p>"}
+        ${payNowBlock}
       `;
         const tokens = {
           business_name: escapeHtml(fromDisplayName),

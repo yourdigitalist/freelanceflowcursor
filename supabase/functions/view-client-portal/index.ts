@@ -239,10 +239,10 @@ serve(async (req) => {
     if (invoiceId && typeof invoiceId === "string") {
       const { data: inv } = await supabase
         .from("invoices")
-        .select("id, invoice_number, status")
+        .select("id, invoice_number, status, stripe_payment_url, paid_date")
         .eq("id", invoiceId)
         .eq("client_id", clientId)
-        .in("status", ["sent", "paid", "overdue"])
+        .in("status", ["sent", "paid", "overdue", "reminder_sent"])
         .maybeSingle();
       result.invoice_meta = inv || null;
     }

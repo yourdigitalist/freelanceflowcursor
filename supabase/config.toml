@@ -36,6 +36,16 @@ verify_jwt = false
 [functions.stripe-webhook]
 verify_jwt = false
 
+# Stripe Connect (test-mode invoice collection) — separate from SaaS billing
+[functions.create-connect-account-link]
+verify_jwt = false
+[functions.disconnect-connect-account]
+verify_jwt = false
+[functions.create-invoice-payment-session]
+verify_jwt = false
+[functions.stripe-connect-webhook]
+verify_jwt = false
+
 [functions.generate-client-summary]
 verify_jwt = false
 

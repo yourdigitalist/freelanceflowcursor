@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
-import { Plus, Trash2, Loader2, ListTodo, Wallet, Download, Save, RotateCcw } from '@/components/icons';
+import { Plus, Trash2, Loader2, ListTodo, Wallet, Download, Save, RotateCcw, ExternalLink } from '@/components/icons';
 import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { detailPageBreadcrumb } from '@/lib/breadcrumbs';
 import { MenuDotsTrigger } from '@/components/ui/menu-dots-trigger';
@@ -315,6 +315,7 @@ export default function InvoiceDetail() {
   // Preview modal state
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [markPaidDialogOpen, setMarkPaidDialogOpen] = useState(false);
+  const [creatingPaymentLink, setCreatingPaymentLink] = useState(false);
   const [sendReceiptPromptOpen, setSendReceiptPromptOpen] = useState(false);
   const [revertToDraftDialogOpen, setRevertToDraftDialogOpen] = useState(false);
   const [revertingToDraft, setRevertingToDraft] = useState(false);
@@ -1341,6 +1342,41 @@ export default function InvoiceDetail() {
     }
   };
 
+  const handleCreatePaymentLink = async () => {
+    if (!id) return;
+    setCreatingPaymentLink(true);
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
+      if (sessionError || !session?.access_token) {
+        toast({ title: 'Please sign in again', variant: 'destructive' });
+        return;
+      }
+      const { data, error } = await supabase.functions.invoke('create-invoice-payment-session', {
+        body: { invoiceId: id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const url = data?.url as string | undefined;
+      if (!url) throw new Error('No payment URL returned');
+      await navigator.clipboard.writeText(url);
+      toast({
+        title: 'Pay now link copied',
+        description: 'Share this Stripe Checkout link with your client. Connect must be ready in Settings → Client payments.',
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast({
+        title: 'Could not create payment link',
+        description: message.includes('not ready') || message.includes('Connect')
+          ? `${message} Open Settings → Client payments to connect Stripe (test).`
+          : message,
+        variant: 'destructive',
+      });
+    } finally {
+      setCreatingPaymentLink(false);
+    }
+  };
+
   const handleSendInvoice = async () => {
     if (!recipientEmail) {
       toast({
@@ -1900,6 +1936,17 @@ export default function InvoiceDetail() {
                     <DropdownMenuItem onClick={() => setMarkPaidDialogOpen(true)}>
                       <SlotIcon slot="invoice_stat_paid" className="mr-2 h-4 w-4" />
                       Mark as Paid
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => void handleCreatePaymentLink()}
+                      disabled={creatingPaymentLink}
+                    >
+                      {creatingPaymentLink ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                      )}
+                      Create / copy Pay now link
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setRevertToDraftDialogOpen(true)}>
                       <RotateCcw className="mr-2 h-4 w-4" />

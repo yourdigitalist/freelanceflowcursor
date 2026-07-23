@@ -16,6 +16,8 @@ export function getSettingsBreadcrumbs(pathname: string): BreadcrumbSegment[] {
       return [settingsRoot, { label: 'Locale' }];
     case '/settings/invoices':
       return [settingsRoot, { label: 'Invoice Settings' }];
+    case '/settings/payments':
+      return [settingsRoot, { label: 'Client payments' }];
     case '/settings/proposals':
       return [settingsRoot, { label: 'Proposal Settings' }];
     case '/settings/notifications':
