@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useAuth } from '@/lib/auth';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { requireEmailVerified } from '@/lib/emailVerification';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -279,6 +280,7 @@ const pickEmailTemplate = (...candidates: (string | null | undefined)[]) => {
 export default function InvoiceDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { isAdmin } = useFeatureAccess();
   const { dateFormat } = useLocalePreferences();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -1937,17 +1939,19 @@ export default function InvoiceDetail() {
                       <SlotIcon slot="invoice_stat_paid" className="mr-2 h-4 w-4" />
                       Mark as Paid
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => void handleCreatePaymentLink()}
-                      disabled={creatingPaymentLink}
-                    >
-                      {creatingPaymentLink ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <ExternalLink className="mr-2 h-4 w-4" />
-                      )}
-                      Create / copy Pay now link
-                    </DropdownMenuItem>
+                    {isAdmin ? (
+                      <DropdownMenuItem
+                        onClick={() => void handleCreatePaymentLink()}
+                        disabled={creatingPaymentLink}
+                      >
+                        {creatingPaymentLink ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                        )}
+                        Create / copy Pay now link
+                      </DropdownMenuItem>
+                    ) : null}
                     <DropdownMenuItem onClick={() => setRevertToDraftDialogOpen(true)}>
                       <RotateCcw className="mr-2 h-4 w-4" />
                       Revert to draft

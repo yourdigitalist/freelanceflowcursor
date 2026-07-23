@@ -237,14 +237,27 @@ serve(async (req) => {
     }
 
     if (invoiceId && typeof invoiceId === "string") {
-      const { data: inv } = await supabase
+      let inv: Record<string, unknown> | null = null;
+      const withPay = await supabase
         .from("invoices")
         .select("id, invoice_number, status, stripe_payment_url, paid_date")
         .eq("id", invoiceId)
         .eq("client_id", clientId)
         .in("status", ["sent", "paid", "overdue", "reminder_sent"])
         .maybeSingle();
-      result.invoice_meta = inv || null;
+      if (withPay.error && /stripe_payment_url|column.*does not exist|42703/i.test(String(withPay.error.message))) {
+        const fallback = await supabase
+          .from("invoices")
+          .select("id, invoice_number, status, paid_date")
+          .eq("id", invoiceId)
+          .eq("client_id", clientId)
+          .in("status", ["sent", "paid", "overdue", "reminder_sent"])
+          .maybeSingle();
+        inv = fallback.data || null;
+      } else {
+        inv = withPay.data || null;
+      }
+      result.invoice_meta = inv;
     }
 
     return new Response(JSON.stringify(result), {

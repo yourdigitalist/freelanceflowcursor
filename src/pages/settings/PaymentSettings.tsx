@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -23,6 +24,7 @@ interface PaymentsProfile {
 
 export default function PaymentSettings() {
   const { user } = useAuth();
+  const { isAdmin, isLoading: accessLoading } = useFeatureAccess();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [profile, setProfile] = useState<PaymentsProfile | null>(null);
@@ -31,7 +33,7 @@ export default function PaymentSettings() {
   const [feesAcked, setFeesAcked] = useState(false);
 
   const fetchProfile = useCallback(async () => {
-    if (!user) return;
+    if (!user || !isAdmin) return;
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -55,15 +57,20 @@ export default function PaymentSettings() {
     } finally {
       setLoading(false);
     }
-  }, [user, toast]);
+  }, [user, isAdmin, toast]);
 
   useEffect(() => {
+    if (accessLoading) return;
+    if (!isAdmin) {
+      setLoading(false);
+      return;
+    }
     void fetchProfile();
-  }, [fetchProfile]);
+  }, [accessLoading, isAdmin, fetchProfile]);
 
   useEffect(() => {
     const connect = searchParams.get('connect');
-    if (!connect || !user) return;
+    if (!connect || !user || !isAdmin) return;
 
     const sync = async () => {
       setBusy(true);
@@ -105,7 +112,11 @@ export default function PaymentSettings() {
     };
 
     void sync();
-  }, [searchParams, user, fetchProfile, setSearchParams, toast]);
+  }, [searchParams, user, isAdmin, fetchProfile, setSearchParams, toast]);
+
+  if (!accessLoading && !isAdmin) {
+    return <Navigate to="/settings/invoices" replace />;
+  }
 
   const invokeAuthed = async (fn: string, body: Record<string, unknown>) => {
     const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();

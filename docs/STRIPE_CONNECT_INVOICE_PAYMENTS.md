@@ -57,6 +57,8 @@ supabase db push
 
 ## Freelancer UX
 
+**Admin-only for now.** Settings → **Client payments** is hidden for non-admins; Connect APIs return 403 for non-admins. Normal invoice send/PDF/email is unchanged for everyone.
+
 1. Settings → **Client payments**
 2. Tick acknowledgement (Stripe fees, not Lance) + link to [stripe.com/pricing](https://stripe.com/pricing)
 3. **Connect Stripe (test)** → Stripe onboarding

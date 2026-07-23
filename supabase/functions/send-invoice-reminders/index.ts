@@ -183,7 +183,7 @@ serve(async (req) => {
     const daysBefore = Math.max(1, Number(profile.reminder_days_before) || 1);
     const targetDueDate = addDays(today, daysBefore);
 
-    const { data: invoices, error: invoicesError } = await supabase
+    let invoicesQuery = await supabase
       .from("invoices")
       .select(`
         id,
@@ -199,10 +199,32 @@ serve(async (req) => {
       .in("status", ["sent", "overdue"])
       .eq("due_date", targetDueDate);
 
-    if (invoicesError) {
-      errors.push(`user ${userId}: ${invoicesError.message}`);
+    if (
+      invoicesQuery.error &&
+      /stripe_payment_url|column.*does not exist|42703/i.test(String(invoicesQuery.error.message))
+    ) {
+      invoicesQuery = await supabase
+        .from("invoices")
+        .select(`
+          id,
+          invoice_number,
+          due_date,
+          total,
+          status,
+          clients(name, email),
+          projects(name)
+        `)
+        .eq("user_id", userId)
+        .in("status", ["sent", "overdue"])
+        .eq("due_date", targetDueDate);
+    }
+
+    if (invoicesQuery.error) {
+      errors.push(`user ${userId}: ${invoicesQuery.error.message}`);
       continue;
     }
+
+    const invoices = invoicesQuery.data;
 
     for (const invoice of invoices || []) {
       const clientEmail = (invoice.clients?.email || "").trim();

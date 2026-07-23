@@ -245,10 +245,11 @@ serve(async (req) => {
 
     console.log(`Fetching invoice ${invoiceId} for user ${user.id}`);
 
-    // Fetch user profile with business details, logo, currency, number_format, bank, and invoice display options
+    // Fetch user profile with business details, logo, currency, number_format, bank, and invoice display options.
+    // Connect columns are fetched separately so missing migration / Connect setup never breaks normal invoice send.
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display, number_format, date_format, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, bank_name, bank_account_number, bank_routing_number, payment_instructions, client_email_primary_color, client_email_header_html, client_email_footer_html, stripe_connect_account_id, stripe_connect_charges_enabled, stripe_connect_fees_acknowledged_at")
+      .select("full_name, email, business_name, business_logo, business_email, business_phone, business_address, business_street, business_street2, business_city, business_state, business_postal_code, business_country, tax_id, invoice_footer, invoice_notes_default, currency, currency_display, number_format, date_format, invoice_show_quantity, invoice_show_rate, invoice_show_line_description, invoice_show_line_date, bank_name, bank_account_number, bank_routing_number, payment_instructions, client_email_primary_color, client_email_header_html, client_email_footer_html, is_admin")
       .eq("user_id", user.id)
       .single();
 
@@ -457,35 +458,49 @@ serve(async (req) => {
     const footerTpl = (profile?.client_email_footer_html || "").trim();
 
     let payNowUrl: string | null = null;
-    if (!isReceipt && isConnectReady(profile || {}) && Number(invoice.total || 0) > 0) {
+    // Admin-only Connect Pay now — never blocks or changes the normal invoice email for other users.
+    if (
+      !isReceipt &&
+      profile?.is_admin === true &&
+      Number(invoice.total || 0) > 0
+    ) {
       try {
-        const stripe = getConnectStripe();
-        const base = appBaseUrl(req);
-        const clientPortal = invoice.clients as {
-          portal_token?: string | null;
-          portal_enabled?: boolean | null;
-        } | null;
-        const portalToken =
-          clientPortal?.portal_enabled && clientPortal?.portal_token
-            ? clientPortal.portal_token
-            : null;
-        const successUrl = portalToken
-          ? `${base}/portal/${portalToken}/invoice/${invoiceId}?payment=success`
-          : `${base}/settings/payments?invoice_paid=1`;
-        const cancelUrl = portalToken
-          ? `${base}/portal/${portalToken}/invoice/${invoiceId}?payment=cancelled`
-          : `${base}/invoices/${invoiceId}`;
-        const session = await ensureInvoicePaymentSession({
-          stripe,
-          supabase,
-          invoice,
-          userId: user.id,
-          connectAccountId: profile.stripe_connect_account_id,
-          currency: (profile?.currency || "USD").toLowerCase(),
-          successUrl,
-          cancelUrl,
-        });
-        payNowUrl = session?.url || null;
+        const { data: connectProfile } = await supabase
+          .from("profiles")
+          .select(
+            "stripe_connect_account_id, stripe_connect_charges_enabled, stripe_connect_fees_acknowledged_at, currency",
+          )
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (isConnectReady(connectProfile || {})) {
+          const stripe = getConnectStripe();
+          const base = appBaseUrl(req);
+          const clientPortal = invoice.clients as {
+            portal_token?: string | null;
+            portal_enabled?: boolean | null;
+          } | null;
+          const portalToken =
+            clientPortal?.portal_enabled && clientPortal?.portal_token
+              ? clientPortal.portal_token
+              : null;
+          const successUrl = portalToken
+            ? `${base}/portal/${portalToken}/invoice/${invoiceId}?payment=success`
+            : `${base}/settings/payments?invoice_paid=1`;
+          const cancelUrl = portalToken
+            ? `${base}/portal/${portalToken}/invoice/${invoiceId}?payment=cancelled`
+            : `${base}/invoices/${invoiceId}`;
+          const session = await ensureInvoicePaymentSession({
+            stripe,
+            supabase,
+            invoice,
+            userId: user.id,
+            connectAccountId: connectProfile!.stripe_connect_account_id!,
+            currency: (connectProfile?.currency || profile?.currency || "USD").toLowerCase(),
+            successUrl,
+            cancelUrl,
+          });
+          payNowUrl = session?.url || null;
+        }
       } catch (payErr) {
         console.warn("Could not create Stripe payment link for invoice email:", payErr);
       }

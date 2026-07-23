@@ -48,9 +48,16 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { data: profile } = await supabase
       .from("profiles")
-      .select("stripe_connect_account_id")
+      .select("is_admin, stripe_connect_account_id")
       .eq("user_id", user.id)
       .maybeSingle();
+
+    if (profile?.is_admin !== true) {
+      return new Response(JSON.stringify({ error: "Admin only" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const accountId = profile?.stripe_connect_account_id as string | null;
     if (accountId) {

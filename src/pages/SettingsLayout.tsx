@@ -6,13 +6,14 @@ import { getSettingsBreadcrumbs } from '@/lib/settingsBreadcrumbs';
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import { useAuth } from '@/lib/auth';
 import { useBillingLock } from '@/hooks/useBillingLock';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 
 const settingsNav = [
   { path: '/settings/profile', label: 'Profile', slot: 'settings_profile' as const },
   { path: '/settings/business', label: 'Company', slot: 'settings_business' as const },
   { path: '/settings/locale', label: 'Locale', slot: 'settings_locale' as const },
   { path: '/settings/invoices', label: 'Invoice Settings', slot: 'settings_invoices' as const },
-  { path: '/settings/payments', label: 'Client payments', slot: 'settings_payments' as const },
+  { path: '/settings/payments', label: 'Client payments', slot: 'settings_payments' as const, adminOnly: true as const },
   { path: '/settings/proposals', label: 'Proposal Settings', slot: 'sidebar_proposals' as const },
   { path: '/settings/notifications', label: 'Notification Settings', slot: 'settings_notifications' as const },
   { path: '/settings/subscription', label: 'Billing and Subscription', slot: 'settings_subscription' as const },
@@ -23,6 +24,8 @@ export default function SettingsLayout() {
   const location = useLocation();
   const { user } = useAuth();
   const { isBillingLocked } = useBillingLock(user?.id);
+  const { isAdmin } = useFeatureAccess();
+  const visibleNav = settingsNav.filter((item) => !('adminOnly' in item && item.adminOnly) || isAdmin);
 
   if (isBillingLocked) {
     return (
@@ -37,7 +40,7 @@ export default function SettingsLayout() {
       <div className="flex flex-col lg:flex-row gap-8 max-w-5xl">
         <aside className="lg:w-56 shrink-0 min-w-0">
           <nav className="rounded-xl border bg-card p-2 space-y-0.5">
-            {settingsNav.map(({ path, label, slot }) => {
+            {visibleNav.map(({ path, label, slot }) => {
               const isActive = location.pathname === path;
               return (
                 <Link

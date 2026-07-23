@@ -68,11 +68,18 @@ serve(async (req) => {
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select(
-        "currency, stripe_connect_account_id, stripe_connect_charges_enabled, stripe_connect_fees_acknowledged_at",
+        "is_admin, currency, stripe_connect_account_id, stripe_connect_charges_enabled, stripe_connect_fees_acknowledged_at",
       )
       .eq("user_id", user.id)
       .maybeSingle();
     if (profileError) throw profileError;
+
+    if (profile?.is_admin !== true) {
+      return new Response(JSON.stringify({ error: "Admin only" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (!isConnectReady(profile || {})) {
       return new Response(
