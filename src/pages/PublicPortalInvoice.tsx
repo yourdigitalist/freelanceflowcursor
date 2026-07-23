@@ -8,14 +8,23 @@ import { getClientPortalPath } from "@/lib/clientPortal";
 import { loadClientPortalData } from "@/lib/loadClientPortal";
 import { ArrowLeft } from "@/components/icons";
 import { formatStatusLabel, getStatusBadgeClass } from "@/lib/statusDisplay";
+import { isOutstandingInvoiceStatus } from "@/lib/invoiceStatus";
+
+type InvoiceMeta = {
+  invoice_number?: string;
+  status?: string;
+  stripe_payment_url?: string | null;
+};
 
 export default function PublicPortalInvoice() {
   const { portalToken, invoiceId } = useParams<{ portalToken: string; invoiceId: string }>();
   const [searchParams] = useSearchParams();
   const portalFromQuery = searchParams.get("portal") || portalToken || "";
+  const paymentParam = searchParams.get("payment");
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [status, setStatus] = useState<string | null>(null);
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
@@ -35,7 +44,7 @@ export default function PublicPortalInvoice() {
           setLoading(false);
           return;
         }
-        const inv = meta.invoice_meta as { invoice_number?: string; status?: string } | null;
+        const inv = meta.invoice_meta as InvoiceMeta | null;
         if (!inv) {
           setError("Invoice not available");
           setLoading(false);
@@ -43,6 +52,7 @@ export default function PublicPortalInvoice() {
         }
         setInvoiceNumber(inv.invoice_number || "");
         setStatus(inv.status || null);
+        setPaymentUrl(inv.stripe_payment_url || null);
 
         const { data, error: pdfErr } = await supabase.functions.invoke("view-invoice-pdf", {
           body: { portalToken, invoiceId, inline: false },
@@ -77,6 +87,10 @@ export default function PublicPortalInvoice() {
   };
 
   const backHref = portalFromQuery ? getClientPortalPath(portalFromQuery) : undefined;
+  const showPay =
+    Boolean(paymentUrl) &&
+    status !== "paid" &&
+    isOutstandingInvoiceStatus(status || "sent");
 
   if (loading) {
     return (
@@ -115,10 +129,22 @@ export default function PublicPortalInvoice() {
               {formatStatusLabel(status)}
             </Badge>
           ) : null}
+          {paymentParam === "success" ? (
+            <Badge className="bg-emerald-600 hover:bg-emerald-600">Payment received</Badge>
+          ) : null}
         </div>
-        <Button variant="outline" size="sm" onClick={handleDownload} disabled={downloading}>
-          Download PDF
-        </Button>
+        <div className="flex items-center gap-2">
+          {showPay ? (
+            <Button size="sm" asChild>
+              <a href={paymentUrl!} target="_blank" rel="noopener noreferrer">
+                Pay now
+              </a>
+            </Button>
+          ) : null}
+          <Button variant="outline" size="sm" onClick={handleDownload} disabled={downloading}>
+            Download PDF
+          </Button>
+        </div>
       </div>
       <iframe title={`Invoice ${invoiceNumber}`} src={pdfUrl} className="w-full h-[calc(100vh-56px)] border-0" />
     </div>

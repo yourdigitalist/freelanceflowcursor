@@ -2,6 +2,8 @@
 
 Standard SaaS flow: **Checkout** for subscribing, **Customer Billing Portal** for managing (update payment, cancel, invoices). Your app already uses both; ensure the following.
 
+> **Client invoice Pay now** (Stripe Connect) is separate and uses **test keys only** — see [STRIPE_CONNECT_INVOICE_PAYMENTS.md](./STRIPE_CONNECT_INVOICE_PAYMENTS.md). Do not put Connect secrets in `STRIPE_SECRET_KEY`.
+
 ## 1. Environment variables
 
 **Frontend (`.env`):**
@@ -66,7 +68,9 @@ Checkout has **promotion codes** enabled (`allow_promotion_codes: true`). Custom
 
 So you do **not** need to change any code: the coupon applies automatically after the trial. If you still see a charge, check that (a) the coupon is 100% off (or covers the full amount), (b) the promotion code was applied at checkout (you should see the discount on the Checkout summary), and (c) the coupon is valid for your price (currency, product).
 
-## 6. Trial reminder emails (optional)
+## 7. Client invoice payments (Stripe Connect, test mode)
+
+Separate from SaaS billing. See **[STRIPE_CONNECT_INVOICE_PAYMENTS.md](./STRIPE_CONNECT_INVOICE_PAYMENTS.md)**. Uses `STRIPE_CONNECT_SECRET_KEY` (`sk_test_…` only) so live subscription keys and ads are untouched.
 
 The **webhook** (section 3) is what keeps your app’s subscription and trial data in sync when users complete checkout or when Stripe updates subscriptions. Your “FreelanceFlow subscription sync” endpoint is that webhook—once it’s configured and the signing secret is in Supabase, you’re done on the Stripe side.
 

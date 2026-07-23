@@ -87,6 +87,7 @@ const DEFAULT_ICONS: Record<IconSlotKey, IconComponent> = {
   settings_business: Building2,
   settings_locale: Globe,
   settings_invoices: Receipt,
+  settings_payments: DollarSign,
   settings_notifications: Bell,
   settings_subscription: CreditCard,
   settings_storage: HardDrive,

@@ -1,5 +1,5 @@
 # Lance - Complete User Guide
-**Last Updated:** May 26, 2026
+**Last Updated:** July 17, 2026
 
 ---
 
@@ -13,17 +13,18 @@
 7. [Invoices](#invoices)
 8. [Services](#services)
 9. [Proposals](#proposals)
-10. [Contracts](#contracts)
-11. [Approvals](#approvals)
-12. [Notes](#notes)
-13. [Notifications](#notifications)
-14. [Search](#search)
-15. [Feature Requests](#feature-requests)
-16. [Settings](#settings)
-17. [Admin Features](#admin-features)
-18. [Client Portal](#client-portal)
-19. [Common Workflows](#common-workflows)
-20. [Limits & Constraints](#limits--constraints)
+10. [Proposals 2](#proposals-2)
+11. [Contracts](#contracts)
+12. [Approvals](#approvals)
+13. [Notes](#notes)
+14. [Notifications](#notifications)
+15. [Search](#search)
+16. [Feature Requests](#feature-requests)
+17. [Settings](#settings)
+18. [Admin Features](#admin-features)
+19. [Client Portal](#client-portal)
+20. [Common Workflows](#common-workflows)
+21. [Limits & Constraints](#limits--constraints)
 
 ---
 
@@ -46,98 +47,86 @@
 3. Click the confirmation link in the email
 4. You'll be redirected to complete onboarding
 
+**Security:**
+- If hCaptcha is enabled, you'll complete a CAPTCHA challenge on sign-up and sign-in
+- This protects against automated account creation
+
 **Alternative Sign-In Methods:**
 - **Magic Link**: Enter your email and receive a login link (no password needed)
 - **Forgot Password**: Request a password reset link via email
 
 ---
 
-### Onboarding Process (4 Steps)
+### Onboarding (Single Screen)
 
-After confirming your email, you'll complete a guided onboarding process:
+After confirming your email, you'll complete a quick onboarding screen:
 
-#### Step 1: What Do You Do?
+#### What You'll Enter
 
-Choose your professional role:
-- Freelancer
-- Consultant
-- Designer
-- Developer or Engineer
-- Agency
-- Coach or Trainer
-- Photographer or Videographer
-- Other
+**Required:**
+- **Business Name** — Your company or freelance business name
+- **Default Currency** — Searchable dropdown (defaults to USD)
 
-**Click Continue** when you've made your selection.
+**What Happens When You Click "Start Free Trial":**
+1. Your business name and currency are saved to your profile
+2. A **15-day free trial** begins immediately — **no credit card required**
+3. Your account is set up with the annual plan as default
+4. You're redirected to your **Dashboard**
+5. Full access to all features during the trial
 
-#### Step 2: What Will You Use Lance For First?
+**Important Notes:**
+- You do **not** need to enter payment details to start
+- Billing is powered by Stripe (shown at bottom of onboarding screen)
+- You can add a payment method later in Settings → Billing and Subscription
+- **Sign Out** is available if you need to stop the process
 
-Select your primary need:
-- Dashboard
-- Clients
-- Projects
-- Time Tracking
-- Notes
-- Invoices
-- Client Approvals
-- Notifications
-
-**Click Continue** to proceed.
-
-#### Step 3: Business Setup (Optional)
-
-Enter your business information:
-- **Business Name** (required to continue)
-- **Default Currency** - Searchable dropdown with currency options (defaults to USD)
-
-**Click Continue** to move to the final step.
-
-#### Step 4: Choose Your Plan
-
-Select a subscription plan:
-
-**Monthly Plan**: $29/month
-- 15-day free trial
-- No charge today
-- Full feature access
-
-**Annual Plan**: $290/year (Recommended)
-- 15-day free trial
-- Save 2 months compared to monthly
-- Full feature access
-
-**All Plans Include:**
-- Unlimited clients & projects
-- Time tracking
-- Invoicing & PDFs
-- Client approvals
-- Notes & notifications
-- Full dashboard analytics
-
-**Click Continue to Payment** - You'll be taken to Stripe's secure checkout page.
-
-**After Payment:**
-- Your trial begins immediately
-- You won't be charged for 15 days
-- You'll be automatically redirected to your Dashboard
-- You can cancel anytime before the trial ends
-
-**Sign Out Option:** Available during onboarding if you need to stop the process.
+**Email Verification:**
+- If you haven't confirmed your email yet, you'll see a verification banner at the top of the app
+- Click **Resend** in the banner to get a new confirmation email
+- Some features work before verification, but confirming your email is recommended
 
 ---
 
 ### Trial & Subscription
 
 **Free Trial:**
-- **Duration**: 15 days from checkout
+- **Duration**: 15 days from when you click "Start Free Trial"
 - **Access**: Full feature access during trial
-- **Billing**: Automatic charge after trial ends unless you cancel
-- **Cancel**: Visit Settings > Subscription to manage
+- **Payment**: No credit card required to start
+- **After trial ends**: If you haven't added a payment method, your subscription pauses and app access is limited to the billing page
+- **Add payment**: Visit Settings → Billing and Subscription anytime during or after trial
 
-**After Trial Expires:**
-- Without an active subscription, you'll be redirected to the Subscription settings page
-- You can only access the subscription management page
-- Activate your subscription to regain full access
+**Subscription Plans** (choose in Settings → Billing and Subscription):
+
+| Plan | Price | Billing |
+|------|-------|---------|
+| **Pro Monthly** | $29/month | Billed monthly |
+| **Pro Annual** | $290/year | Billed annually (save ~2 months vs monthly) |
+
+**Managing Your Subscription:**
+- **Upgrade/change plan** → Stripe Checkout
+- **Manage billing** → Stripe Customer Portal (update card, view invoices, cancel)
+- **Cancel** → Via Stripe Customer Portal; access continues until period ends
+
+**After Trial Expires (without payment method):**
+- Subscription status becomes **Paused**
+- You'll be redirected to the Billing and Subscription page
+- You can only access the subscription management page until you add payment
+- Add a payment method to regain full access
+
+**Billing Lock:**
+When your trial has expired and you don't have an active subscription:
+- A billing lock screen appears
+- Only the subscription page is accessible
+- All other routes redirect to Settings → Billing and Subscription
+- Your data is preserved — nothing is deleted immediately
+
+**Scheduled Account Deletion:**
+If your trial expires and you don't subscribe:
+- After 7+ days, you'll receive warning emails (3 days and 1 day before deletion)
+- Emails include a link to export your data
+- If no action is taken, your account is soft-deleted
+- Admins can restore soft-deleted accounts within 30 days
 
 ---
 
@@ -159,21 +148,40 @@ After logging in, you'll see the main sidebar navigation:
 | - Timesheet | Weekly/monthly calendar view | - |
 | - Timer | Start/stop timer | - |
 | - All Logs | Complete time entry history | - |
+| **Notes** | Internal notes workspace | — | Visible when feature enabled |
 | **Invoices** | Invoice management | - |
-| **Proposals** | Proposal builder and tracking | Beta |
-| **Contracts** | Contract management | Beta |
+| **Proposals** | Proposal builder and tracking | **New** (purple) |
+| **Proposals 2** | Visual drag-and-drop proposal builder | **Admin** (indigo) | Visible when feature enabled |
+| **Contracts** | Contract management | **New** (purple) | Visible when feature enabled |
 | **Services** | Service catalog | - |
-| **Approvals** | Client approval requests | Beta |
-| **Notifications** | Notification feed | Unread count |
+| **Approvals** | Client approval requests | **New** (purple) |
+
+### Feature Visibility
+
+Some sidebar items are controlled by admin feature toggles:
+
+| Feature | Default Access | Who Sees It |
+|---------|---------------|-------------|
+| **Notes** | Admins only | Admins (can be set to all users) |
+| **Contracts** | Admins only | Admins (can be set to all users) |
+| **Proposals 2** | Off | Admins only when enabled |
+
+If you don't see Notes, Contracts, or Proposals 2 in your sidebar, the feature may not be enabled for your account yet.
 
 ### Additional Features (Not in Sidebar)
 
-- **Notes** - Access via Dashboard quick actions or search
-- **Search** - Global search bar in header
-- **Settings** - User menu in top right
-- **Feature Requests** - User menu
-- **Help Center** - External Crisp help docs
-- **Admin** - Only visible to administrators
+- **Notifications** — Bell icon in top bar with unread count badge
+- **Search** — Global search bar in header
+- **Settings** — User menu in top right
+- **Feature Requests** — User menu
+- **Help Center** — External Crisp help docs
+- **Admin** — User menu (admins only)
+
+### Top Banners (shown in priority order)
+
+1. **Scheduled Deletion Banner** — If your account is scheduled for deletion due to inactivity; includes export link
+2. **Email Verification Banner** — If your email isn't confirmed yet; includes resend button
+3. **Trial Banner** — During your active trial; shows days remaining and upgrade link
 
 ### Other UI Elements
 
@@ -914,6 +922,7 @@ At the top of the page:
 - All
 - Draft
 - Sent
+- Reminder Sent
 - Paid
 - Overdue
 
@@ -990,6 +999,12 @@ Full invoice editing and management interface.
 - Click **Edit Invoice** button to enable editing
 - Client can view via email or portal
 - Cannot be deleted
+
+**Reminder Sent**:
+- Automatic payment reminder was sent to client
+- Set by the daily invoice reminder cron (if enabled in your settings)
+- Also set when you manually send a reminder email
+- Same editability as Sent status
 
 **Paid**:
 - Read-only by default
@@ -1229,7 +1244,7 @@ Services can be added to:
 
 ## Proposals
 
-**NEW FEATURE (May 2026) - BETA**
+**NEW FEATURE (May 2026)**
 
 Create and send professional proposals to clients.
 
@@ -1471,9 +1486,104 @@ These pre-fill new proposals for consistency and speed.
 
 ---
 
+## Proposals 2
+
+**ADMIN BETA (July 2026)**
+
+Visual drag-and-drop proposal builder — a next-generation alternative to legacy proposals. Currently available to admin accounts when the feature is enabled.
+
+### Access
+
+- **Sidebar:** "Proposals 2" with **Admin** badge (indigo)
+- **Routes:** `/proposals-2` (list), `/proposals-2/:id/builder` (builder)
+- **Visibility:** Controlled by admin feature toggle (default: off, admins only when enabled)
+
+### Proposal List (`/proposals-2`)
+
+Shows proposals created with the visual builder (identified by having a layout document).
+
+Each proposal displays:
+- Identifier (P-YYYY-#####)
+- Client name
+- Status badge
+- Total amount
+- Last modified date
+
+### Creating a Proposal
+
+1. Click **New Proposal** on the Proposals 2 list
+2. Select a **Client** (required)
+3. Optionally link a **Project**
+4. You're taken to the visual builder
+
+### Visual Builder (`/proposals-2/:id/builder`)
+
+Drag-and-drop document editor with a live preview.
+
+#### Layout Structure
+
+- **Containers** — 1 or 2 column layouts
+- **Blocks** — Drag blocks into containers to build your proposal
+
+#### Available Blocks
+
+| Block | Purpose |
+|-------|---------|
+| **Heading** | H1, H2, or H3 with customizable font size, color, weight, alignment |
+| **Paragraph** | Text content with styling options |
+| **Image** | Upload or link an image with border radius control |
+| **Divider** | Horizontal line separator |
+| **Proposal Meta** | Shows proposal identifier and project name |
+| **Client & Business** | Displays client and your business details |
+| **Services Table** | Line items with name, description, quantity, price |
+| **Totals** | Subtotal, discount, and total |
+| **Conditions** | Timeline, payment terms, validity, and notes |
+| **Acceptance** | Client accept button (shown on public view) |
+| **Spacer** | Vertical spacing between blocks |
+
+#### Builder Controls
+
+- **Drag and drop** blocks between containers
+- **Inspector panel** — Click a block to edit its properties in the right sidebar
+- **Theme color** — Set main brand color for the document
+- **Autosave** — Changes save automatically
+- **Preview** — See how the client will view the proposal
+
+#### Adding Services
+
+Services can be added via the Services Table block:
+- Pull from your service catalog
+- Add custom line items
+- Set quantities and prices
+- Totals block auto-calculates
+
+### Sending & Client Experience
+
+Sending works the same as legacy proposals:
+1. Click **Send to Client** in the builder
+2. Client receives email with link to `/proposal/:token`
+3. Public view renders the visual layout
+4. Client can **Accept Proposal**
+5. Acceptance triggers notification and enables contract import
+
+### Relationship to Legacy Proposals
+
+- Proposals 2 and legacy proposals share the same `proposals` database table
+- Legacy proposals have no layout document; Proposals 2 proposals have a `layout` JSONB field
+- Both use the same public URL format (`/proposal/:token`)
+- Both support acceptance and contract import
+- Legacy proposals at `/proposals` are unaffected
+
+### PDF Download
+
+- Download PDF from the builder or public view
+- PDF content matches the visual layout
+
+---
+
 ## Contracts
 
-**NEW FEATURE (May 2026) - BETA**
+**NEW FEATURE (May 2026)**
 
 Create, send, and manage legally binding contracts with dual-party signing.
 
@@ -2079,7 +2189,7 @@ Deleting the last file in an approval request will delete the entire request (al
 
 Personal note-taking workspace with rich text editing.
 
-**Access:** Via Dashboard quick actions or search results (not in main sidebar).
+**Access:** Sidebar navigation (when feature is enabled for your account). Default: admins only. Can be enabled for all users via Admin → Features.
 
 ### Notes Interface
 
@@ -2632,11 +2742,14 @@ Sidebar with categories:
 - Profile
 - Company
 - Locale
-- Invoices
-- Proposals
-- Notifications
-- Subscription
+- Invoice Settings
+- Proposal Settings
+- Notification Settings
+- Billing and Subscription
 - Storage
+
+**Billing Lock:**
+If your trial has expired without a subscription, the settings sidebar is hidden and only the Billing and Subscription page is shown.
 
 **Dirty State Warning:**
 If you have unsaved changes and try to navigate away, you'll see a warning dialog.
@@ -2672,22 +2785,33 @@ Manage your personal information and account.
 
 #### Account Management
 
+**Export Your Data:**
+- Click **Export Data** to download a JSON file of all your account data
+- Includes clients, projects, invoices, proposals, contracts, time entries, notes, and more
+- Also available via link in account deletion warning emails
+
 **Delete Account:**
-- **Permanent action** - Cannot be undone
+- **Permanent action** after the 30-day restore window
 - **To delete:**
   1. Click "Delete Account"
   2. Type **DELETE** to confirm
   3. Confirm deletion
-- **What happens:**
-  - All your data deleted:
-    - Clients, projects, tasks
-    - Time entries, invoices
-    - Proposals, contracts
-    - Notes, approvals
-    - All files and uploads
+- **What happens immediately:**
+  - Your account is soft-deleted (banned from login)
   - Subscription cancelled
   - Email sent confirming deletion
+  - Data preserved for 30 days
+- **Within 30 days:**
+  - An admin can restore your account via Admin → Account Restore
+  - You can contact support to request restoration
+- **After 30 days:**
+  - All data is permanently deleted
   - Cannot be recovered
+
+**Email Verification:**
+- If your email isn't confirmed, you'll see a badge on your profile
+- Click **Resend verification email** to get a new confirmation link
+- Confirming your email enables full marketing communication preferences
 
 **Actions:**
 - **Save Changes** - Update profile
@@ -2995,12 +3119,15 @@ Template for reminder emails
 Template for reminder message body
 
 **How It Works:**
-1. Cron job checks invoices daily
+1. Cron job runs daily at 08:30 UTC
 2. Finds invoices matching criteria:
-   - Status: Sent (not paid)
-   - Due date = today + reminder days
-3. Sends email using reminder templates
-4. Reminder sent once (deduplicated)
+   - Status: Sent (not paid, not already reminded)
+   - Due date within configured reminder window
+   - `reminder_enabled` is true on your profile
+3. Sends email with PDF attachment using reminder templates
+4. Invoice status changes to **Reminder Sent**
+5. `last_reminder_sent_at` and `last_reminder_automatic` recorded on invoice
+6. Overdue invoices are also marked automatically
 
 #### Taxes
 
@@ -3321,7 +3448,7 @@ Manage your Lance subscription and billing.
 - Within your 15-day trial period
 - Shows days remaining
 - Trial end date displayed
-- "You won't be charged until your trial ends"
+- No credit card required during trial
 - Full access to all features
 
 **Active:**
@@ -3329,8 +3456,14 @@ Manage your Lance subscription and billing.
 - Full feature access
 - Billing date shown
 
+**Paused:**
+- Trial ended without a payment method on file
+- Subscription paused by Stripe (not cancelled)
+- App access restricted to this billing page
+- Add a payment method to reactivate
+
 **Past Due:**
-- Payment failed
+- Payment failed on an active subscription
 - Access may be restricted
 - Update payment method required
 
@@ -3345,10 +3478,11 @@ Manage your Lance subscription and billing.
 **During Trial:**
 - Days left displayed prominently
 - Trial end date
+- No credit card required to start
 - What happens when trial ends:
-  - Automatic charge to payment method
-  - Continues as paid subscription
-  - Cancel before trial ends to avoid charge
+  - If you've added a payment method → automatic charge, continues as paid subscription
+  - If no payment method → subscription pauses, app access restricted to billing page
+  - Add payment anytime during or after trial to continue
 
 **Trial Reminders:**
 You'll receive email reminders:
@@ -3377,8 +3511,8 @@ You'll receive email reminders:
 - Unlimited tasks
 - Time tracking (timer + logs)
 - Invoicing with PDF generation
-- Proposals (Beta)
-- Contracts (Beta, access may vary)
+- Proposals
+- Contracts (when feature enabled)
 - Services catalog
 - Client approvals
 - Notes workspace
@@ -3630,86 +3764,116 @@ Non-admin users attempting to access `/admin/*` are redirected to Dashboard.
 ### Admin Navigation
 
 **Admin Sidebar** (separate from main app navigation):
-- Overview
-- Landing Content
+- Metrics
+- Account Restore
 - Announcements
-- Comms & Templates
+- Email Catalog (Comms & Templates)
 - Branding
+- Features
 - Icons
 - Help Content
 - Feature Requests
 - Feedback
 
-**Hidden Route** (not in sidebar but accessible):
-- System Check (`/admin/system-check`)
+**Hidden Routes** (routed but not in sidebar):
+- Overview (`/admin/overview`) — index redirect target with section cards
+- System Check (`/admin/system-check`) — health monitoring and test tools
 
 ---
 
 ### Admin Overview (`/admin/overview`)
 
-**Dashboard for administrators** with links to all admin sections:
+**Dashboard for administrators** with cards linking to all admin sections:
 
 **Cards for:**
-- Landing Content - Edit marketing website
-- Announcements - Broadcast to users
-- Comms & Templates - Email template management
-- Branding - App logo and colors
-- Icons - Custom icon system
-- Help Content - Help article CMS
-- Feature Requests - Moderate user requests
-- Feedback - View user feedback
-- System Check - Health monitoring
+- Announcements — Broadcast to users
+- Email Catalog — Email template management
+- Branding — App logo and colors
+- Features — Feature flag toggles
+- Icons — Custom icon system
+- Help Content — Help article CMS
+- Feature Requests — Moderate user requests
+- Feedback — View user feedback
 
 Click any card to navigate to that admin section.
 
 ---
 
-### Landing Content (`/admin/landing-content`)
+### Admin Metrics (`/admin/metrics`)
 
-**Marketing website content management system (CMS).**
+**Revenue and user analytics dashboard.**
 
-**Edit Landing Page Sections:**
+#### Key Metrics
 
-**Hero Section:**
-- Headline
-- Subheadline
-- Call-to-action button text
-- Hero image
+- **MRR** (Monthly Recurring Revenue) — calculated from active subscriptions
+- **ARR** (Annual Recurring Revenue) — MRR × 12
+- **Total users** — all registered accounts
+- **Paying users** — active subscriptions
+- **Trial users** — currently in trial period
+- **Unconfirmed signups** — registered but email not verified
 
-**Features Section:**
-- Feature list items
-- Feature descriptions
-- Feature icons
+#### User Cohorts
 
-**Pricing Section:**
-- Plan names
-- Plan prices
-- Plan features
-- Trial copy
+Filter and view users by:
+- **Trial** — in free trial
+- **Paying** — active subscription
+- **Ghosted** — trial expired, no subscription
+- **Unconfirmed** — email not verified
+- **Coupon/Beta** — used a promotion code
+- **Organic** — no promotion code
 
-**Trial Banner:**
-- Trial duration text
-- Trial benefits
+#### Revenue Details
 
-**Social Proof:**
-- Testimonials
-- Customer logos
-- Statistics
+- Excludes beta promotion codes from revenue calculations
+- Shows plan type (monthly vs annual) per user
+- Promotion code tags displayed on user rows
 
-**Footer:**
-- Footer links
-- Company information
-- Social media links
+---
 
-**Format:**
-Large JSON-based editor or form fields (implementation varies).
+### Admin Features (`/admin/features`)
 
-**Actions:**
-- **Save Changes** - Publish to landing page
-- **Preview** - See changes before saving
-- **Discard** - Reset unsaved changes
+**Control which product areas are visible to users.**
 
-**Note:** Changes affect public-facing landing page at `/`.
+Toggle each feature between three access modes:
+
+| Mode | Effect |
+|------|--------|
+| **Off** | Hidden for everyone |
+| **Admins only** | Visible only to admin accounts |
+| **All users** | Visible to everyone |
+
+**Features:**
+
+| Feature | Default | Description |
+|---------|---------|-------------|
+| **Notes** | Admins only | Internal notes workspace in sidebar |
+| **Contracts** | Admins only | Contracts list, templates, and signing |
+| **Proposals 2** | Off | Visual drag-and-drop proposal builder |
+
+Changes take effect immediately without a deploy.
+
+---
+
+### Admin Account Restore (`/admin/account-restore`)
+
+**Restore soft-deleted user accounts within the 30-day window.**
+
+#### Restorable Accounts List
+
+Shows accounts that were soft-deleted and are within the restore window:
+- User email
+- Deletion date
+- Restore deadline (30 days from deletion)
+- Days remaining
+
+#### Restoring an Account
+
+1. Find the account in the list
+2. Click **Restore**
+3. Account is unbanned and data is fully accessible
+4. User can log in again with their original credentials
+
+**After 30 days:** Accounts are permanently deleted and cannot be restored.
 
 ---
 
@@ -4672,6 +4836,33 @@ Client cannot edit (except in contract signing flow).
 
 ## Common Workflows
 
+### New User Signup Workflow
+
+**From signup to first use:**
+
+1. **Sign Up** at `/auth?tab=signup`
+   - Enter name, email, password
+   - Accept terms
+   - Complete hCaptcha (if enabled)
+
+2. **Confirm Email**
+   - Check inbox for confirmation link
+   - Click link to verify
+
+3. **Onboarding** (single screen)
+   - Enter business name
+   - Select default currency
+   - Click **Start Free Trial** (no credit card needed)
+
+4. **Dashboard**
+   - Full access for 15 days
+   - Use Start Guide checklist for setup tips
+
+5. **Add Payment** (when ready)
+   - Settings → Billing and Subscription
+   - Choose monthly or annual plan
+   - Complete Stripe Checkout
+
 ### Complete Freelance Project Workflow
 
 **From lead to payment:**
@@ -4925,20 +5116,34 @@ Client cannot edit (except in contract signing flow).
 
 | Item | Details |
 |------|---------|
-| **Free Trial** | 15 days |
-| **Monthly Plan** | $29/month |
-| **Annual Plan** | $290/year (2 months free vs monthly) |
-| **After Trial** | App access blocked except subscription page |
-| **Payment Methods** | Via Stripe (credit/debit cards, etc.) |
+| **Free Trial** | 15 days, no credit card required |
+| **Monthly Plan** | $29/month (Pro Monthly) |
+| **Annual Plan** | $290/year (Pro Annual, save ~2 months vs monthly) |
+| **After Trial (no payment)** | Subscription pauses; app access blocked except billing page |
+| **After Trial (with payment)** | Automatic charge; full access continues |
+| **Payment Methods** | Via Stripe Checkout and Customer Portal |
+| **Account Deletion** | Soft delete with 30-day admin restore window |
+| **Inactive Cleanup** | Warning emails at 3 days and 1 day before deletion |
 
-### Feature Limits
+### Feature Access
 
-| Feature | Limit/Note |
-|---------|------------|
-| **Contracts Access** | May be admin-only depending on configuration |
-| **Team Workspaces** | Not available (single user per account) |
-| **Search Results** | 10 per category max |
-| **Time Entry List** | 200 most recent displayed |
+| Feature | Default Access | Notes |
+|---------|---------------|-------|
+| **Notes** | Admins only | Toggleable via Admin → Features |
+| **Contracts** | Admins only | Toggleable via Admin → Features |
+| **Proposals 2** | Off | Admin beta; toggleable via Admin → Features |
+| **Team Workspaces** | Not available | Single user per account |
+| **Search Results** | 10 per category max | |
+| **Time Entry List** | 200 most recent displayed | |
+
+### Invoice Reminders
+
+| Item | Details |
+|------|---------|
+| **Auto-reminders** | Daily cron sends payment reminders to clients |
+| **Enable/disable** | Settings → Invoice Settings → Reminder toggle |
+| **Days before due** | Configurable in invoice settings |
+| **Status change** | Invoice status becomes "Reminder Sent" after auto-reminder |
 
 ### Technical Constraints
 
@@ -5024,10 +5229,13 @@ Client cannot edit (except in contract signing flow).
 ### Admin Help
 
 If you're having technical issues:
-- Check **Admin > System Check** (admins only)
+- Check **Admin → System Check** (admins only)
 - Run billing health check
-- Test email delivery
+- Test email delivery (trial reminders, invoice reminders)
+- Test Meta Conversions API
 - Review system status
+- Check **Admin → Metrics** for user cohort and revenue data
+- Use **Admin → Account Restore** for soft-deleted accounts
 
 ---
 

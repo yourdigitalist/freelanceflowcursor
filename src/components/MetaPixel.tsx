@@ -20,8 +20,8 @@ export function MetaPixel() {
     const path = location.pathname;
     const isSignupAuth = path === '/auth' && new URLSearchParams(location.search).get('tab') === 'signup';
 
-    if (path === '/' || path === '/lptest') {
-      trackMetaViewContent('Landing');
+    if (path === '/' || path === '/lptest' || path === '/designers') {
+      trackMetaViewContent(path === '/designers' ? 'Landing Designers' : 'Landing');
     }
 
     if (isSignupAuth && lastLeadPath.current !== `${path}${location.search}`) {

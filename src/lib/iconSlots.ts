@@ -61,6 +61,7 @@ export const ICON_SLOT_GROUPS = [
       { key: 'settings_business', label: 'Company' },
       { key: 'settings_locale', label: 'Locale' },
       { key: 'settings_invoices', label: 'Invoices' },
+      { key: 'settings_payments', label: 'Client payments' },
       { key: 'settings_notifications', label: 'Notifications' },
       { key: 'settings_subscription', label: 'Billing' },
       { key: 'settings_storage', label: 'Storage' },

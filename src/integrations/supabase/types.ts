@@ -1008,6 +1008,11 @@ export type Database = {
           sent_at: string | null
           last_sent_at: string | null
           status: string | null
+          stripe_checkout_session_id: string | null
+          stripe_payment_amount_cents: number | null
+          stripe_payment_currency: string | null
+          stripe_payment_intent_id: string | null
+          stripe_payment_url: string | null
           subtotal: number | null
           tax_amount: number | null
           tax_rate: number | null
@@ -1033,6 +1038,11 @@ export type Database = {
           sent_at?: string | null
           last_sent_at?: string | null
           status?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_payment_amount_cents?: number | null
+          stripe_payment_currency?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_payment_url?: string | null
           subtotal?: number | null
           tax_amount?: number | null
           tax_rate?: number | null
@@ -1058,6 +1068,11 @@ export type Database = {
           sent_at?: string | null
           last_sent_at?: string | null
           status?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_payment_amount_cents?: number | null
+          stripe_payment_currency?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_payment_url?: string | null
           subtotal?: number | null
           tax_amount?: number | null
           tax_rate?: number | null
@@ -1330,6 +1345,11 @@ export type Database = {
           reminder_days_before: number | null
           reminder_enabled: boolean | null
           reminder_subject_default: string | null
+          stripe_connect_account_id: string | null
+          stripe_connect_charges_enabled: boolean
+          stripe_connect_connected_at: string | null
+          stripe_connect_details_submitted: boolean
+          stripe_connect_fees_acknowledged_at: string | null
           stripe_customer_id: string | null
           stripe_promotion_code: string | null
           stripe_subscription_id: string | null
@@ -1417,6 +1437,11 @@ export type Database = {
           reminder_enabled?: boolean | null
           reminder_subject_default?: string | null
           scheduled_deletion_at?: string | null
+          stripe_connect_account_id?: string | null
+          stripe_connect_charges_enabled?: boolean
+          stripe_connect_connected_at?: string | null
+          stripe_connect_details_submitted?: boolean
+          stripe_connect_fees_acknowledged_at?: string | null
           stripe_customer_id?: string | null
           stripe_promotion_code?: string | null
           stripe_subscription_id?: string | null
@@ -1504,6 +1529,11 @@ export type Database = {
           reminder_enabled?: boolean | null
           reminder_subject_default?: string | null
           scheduled_deletion_at?: string | null
+          stripe_connect_account_id?: string | null
+          stripe_connect_charges_enabled?: boolean
+          stripe_connect_connected_at?: string | null
+          stripe_connect_details_submitted?: boolean
+          stripe_connect_fees_acknowledged_at?: string | null
           stripe_customer_id?: string | null
           stripe_promotion_code?: string | null
           stripe_subscription_id?: string | null

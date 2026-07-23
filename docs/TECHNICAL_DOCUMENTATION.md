@@ -1,21 +1,25 @@
 # Lance - Technical Documentation
-**Last Updated:** May 26, 2026
+**Last Updated:** July 17, 2026
 
 ---
 
 ## Table of Contents
 1. [Tech Stack](#tech-stack)
 2. [Architecture Patterns](#architecture-patterns)
-3. [Environment Variables](#environment-variables)
-4. [Database Schema](#database-schema)
-5. [Routes & Protection Logic](#routes--protection-logic)
-6. [Edge Functions](#edge-functions)
-7. [State Management](#state-management)
-8. [API Integrations](#api-integrations)
-9. [File Structure](#file-structure)
-10. [Build & Deployment](#build--deployment)
-11. [Technical Constraints](#technical-constraints)
-12. [What's New Since April 2026](#whats-new-since-april-2026)
+3. [Feature Flags & Access Control](#feature-flags--access-control)
+4. [Environment Variables](#environment-variables)
+5. [Database Schema](#database-schema)
+6. [Routes & Protection Logic](#routes--protection-logic)
+7. [Edge Functions](#edge-functions)
+8. [State Management](#state-management)
+9. [API Integrations](#api-integrations)
+10. [Analytics & Observability](#analytics--observability)
+11. [Account Lifecycle](#account-lifecycle)
+12. [Proposals 2 Architecture](#proposals-2-architecture)
+13. [File Structure](#file-structure)
+14. [Build & Deployment](#build--deployment)
+15. [Technical Constraints](#technical-constraints)
+16. [What's New Since May 2026](#whats-new-since-may-2026)
 
 ---
 
@@ -85,17 +89,24 @@
 1. **Route Protection** (`ProtectedRoute`):
    - Requires authenticated user
    - Checks `onboarding_completed` status
-   - Validates active subscription or valid trial
-   - Redirects to `/settings/subscription` if trial expired
+   - Validates billing access via `hasBillingAccess()` (`src/lib/billingAccess.ts`):
+     - `is_lifetime = true` → always granted
+     - `subscription_status = 'active'` → granted
+     - `subscription_status = 'trial'` with future `trial_end_date` → granted
+   - Redirects to `/settings/subscription` if billing locked (except when already on that route)
+   - Refreshes profile on window focus and visibility change
 
 2. **Admin Gate** (`AdminLayout`):
    - Checks `profiles.is_admin` flag
    - Redirects non-admins to `/dashboard`
 
-3. **Feature Flags**:
-   - `VITE_CONTRACTS_ACCESS_MODE`: Controls contract feature visibility
-   - Options: `off`, `admin`, `on`
-   - Default: `admin` (only admins see contracts)
+3. **Feature Flags** (DB-driven via `app_features` table):
+   - `notes_access_mode`, `contracts_access_mode`, `proposals2_access_mode`
+   - Options per feature: `off`, `admin`, `on`
+   - Defaults: Notes `admin`, Contracts `admin`, Proposals 2 `off`
+   - Env fallbacks: `VITE_NOTES_ACCESS_MODE`, `VITE_CONTRACTS_ACCESS_MODE` (deprecated)
+   - Admin UI: `/admin/features` (`AdminFeatures.tsx`)
+   - Route guards: `NotesRoute`, `ContractsRoute`, `Proposals2Route`
 
 ### Data Flow Pattern
 
@@ -132,6 +143,50 @@ Response
 
 ---
 
+## Feature Flags & Access Control
+
+### Source of Truth
+
+**Primary:** `app_features` table (single row, `id = 1`)  
+**Migration:** `supabase/migrations/20260714100000_app_features.sql`
+
+| Column | Default | Feature |
+|--------|---------|---------|
+| `notes_access_mode` | `admin` | Notes workspace (`/notes`) |
+| `contracts_access_mode` | `admin` | Contracts (`/contracts/*`) |
+| `proposals2_access_mode` | `off` | Proposals 2 builder (`/proposals-2/*`) |
+
+### Access Modes (`FeatureAccessMode`)
+
+| Mode | Behavior |
+|------|----------|
+| `off` | Hidden for everyone; routes redirect to `/dashboard` |
+| `admin` | Visible only when `profiles.is_admin = true` |
+| `on` | Visible to all authenticated users |
+
+### Code Paths
+
+| Layer | File | Purpose |
+|-------|------|---------|
+| Types & helpers | `src/lib/features.ts` | `canAccessByMode()`, `resolveAppFeatures()`, `FEATURE_DEFINITIONS` |
+| DB fetch | `src/hooks/useAppFeatures.ts` | React Query, 60s stale time |
+| Consumer | `src/hooks/useFeatureAccess.ts` | `canAccessNotes`, `canAccessContracts`, `canAccessProposals2` |
+| Route guards | `src/App.tsx` | `NotesRoute`, `ContractsRoute`, `Proposals2Route` |
+| Sidebar | `src/components/layout/AppLayout.tsx` | Conditionally renders nav items |
+| Admin UI | `src/pages/admin/AdminFeatures.tsx` | Toggle access modes without deploy |
+
+### Env Fallbacks (deprecated)
+
+Used only when `app_features` row is unavailable:
+
+| Variable | Default | Feature |
+|----------|---------|---------|
+| `VITE_NOTES_ACCESS_MODE` | `admin` | Notes |
+| `VITE_CONTRACTS_ACCESS_MODE` | `admin` | Contracts |
+| Proposals 2 | — | Always `off` if DB unavailable |
+
+---
+
 ## Environment Variables
 
 ### Frontend Variables (`.env` / Vercel)
@@ -144,27 +199,37 @@ Response
 | `VITE_SITE_URL` | ⚠️ | Production site URL for emails/shared links (fallback: `window.location.origin`) |
 | `VITE_STRIPE_PRICE_MONTHLY` | ✅ | Stripe Price ID - $29/mo Early Access Monthly |
 | `VITE_STRIPE_PRICE_ANNUAL` | ✅ | Stripe Price ID - $290/yr Early Access Annual |
-| `VITE_CONTRACTS_ACCESS_MODE` | ⚠️ | `off` / `admin` / `on` - contracts feature gating (default: `admin`) |
+| `VITE_CONTRACTS_ACCESS_MODE` | ⚠️ | **Deprecated** — use `app_features` table; fallback: `off` / `admin` / `on` (default: `admin`) |
+| `VITE_NOTES_ACCESS_MODE` | ⚠️ | **Deprecated** — use `app_features` table; fallback: `off` / `admin` / `on` (default: `admin`) |
+| `VITE_HCAPTCHA_SITE_KEY` | ⚠️ | hCaptcha site key for auth flows; disabled when unset |
 | `VITE_CRISP_WEBSITE_ID` | ⚠️ | Crisp chat widget ID (has default fallback) |
 | `VITE_SUPABASE_PROJECT_ID` | ⚠️ | Optional reference |
 
 ### Edge Function Secrets (Supabase Dashboard)
 
 **Required for production:**
-- `STRIPE_SECRET_KEY` - Stripe API secret key
-- `STRIPE_WEBHOOK_SECRET` - Webhook signing secret
+- `STRIPE_SECRET_KEY` - Stripe API secret key (Lance SaaS subscriptions)
+- `STRIPE_WEBHOOK_SECRET` - Webhook signing secret (SaaS billing)
+- `STRIPE_CONNECT_SECRET_KEY` - **Test** Connect key only (`sk_test_…`) for invoice Pay now — never live; see `docs/STRIPE_CONNECT_INVOICE_PAYMENTS.md`
+- `STRIPE_CONNECT_WEBHOOK_SECRET` - Connect webhook signing secret (test)
 - `RESEND_API_KEY` - Resend email API key
 - `RESEND_FROM_EMAIL` - Default from address
 - `APP_BASE_URL` - Base URL for email links
-- `NOTIFICATIONS_CRON_KEY` - Cron job authorization
+- `NOTIFICATIONS_CRON_KEY` - Cron job authorization (trial reminders, deadlines, invoice reminders)
+- `CLEANUP_CRON_KEY` - Cron job authorization (inactive account cleanup)
 - `SUPABASE_SERVICE_ROLE_KEY` - For service role operations
 - `SUPABASE_URL` - Project URL for Edge Functions
+
+**Optional:**
+- `META_CAPI_ACCESS_TOKEN` - Meta Conversions API (admin test tool in System Check)
+- `GEMINI_API_KEY` - AI client summary (`generate-client-summary`)
+- `CUSTOMJS_ENDPOINT_URL`, `CUSTOMJS_API_KEY` - Invoice PDF generation via CustomJS
 
 ---
 
 ## Database Schema
 
-**Total Migrations:** 69 SQL files in `supabase/migrations/`
+**Total Migrations:** 90 SQL files in `supabase/migrations/`
 
 ### Core Tables
 
@@ -185,9 +250,21 @@ Response
 **Financial:**
 - `hourly_rate`, `currency`
 - `stripe_customer_id`, `stripe_subscription_id`
-- `subscription_status` (trial, active, past_due, cancelled, etc.)
-- `plan_type` (monthly, annual)
+- `subscription_status` (trial, active, past_due, paused, cancelled, etc.)
+- `plan_type` (pro_monthly, pro_annual)
 - `trial_start_date`, `trial_end_date`
+- `is_lifetime` (boolean) - bypasses billing lock and account cleanup; service_role only can set `true`
+- `stripe_promotion_code` - beta/coupon tracking for admin metrics
+
+**Account Lifecycle:**
+- `scheduled_deletion_at` - inactivity deletion schedule
+- `deletion_reminder_3d_sent_at`, `deletion_reminder_1d_sent_at` - deletion warning emails sent
+- `deletion_export_token` - token for pre-deletion data export
+- `account_soft_deleted_at`, `restore_until` - soft delete + 30-day admin restore window
+
+**Invoice Reminders:**
+- `reminder_enabled` (boolean) - auto client payment reminders
+- `reminder_days_before` - days before due date to send reminder
 
 **Settings:**
 - `onboarding_completed` (boolean)
@@ -287,12 +364,15 @@ Response
 
 - `id`, `user_id`, `client_id`, `project_id`
 - `invoice_number` (generated via RPC)
-- `status` (draft, sent, paid, overdue, cancelled)
+- `status` (draft, sent, reminder_sent, paid, overdue, cancelled)
 - `issue_date`, `due_date`, `paid_date`
+- `sent_at`, `last_sent_at` - send tracking
+- `last_reminder_sent_at`, `last_reminder_automatic` - auto-reminder metadata
 - `subtotal`, `tax_amount`, `discount_amount`, `total`
 - `notes`, `footer`, `bank_details`
 - `email_subject`, `email_message`
 - `currency`
+- `payment_method` - payment method displayed on invoice
 
 #### `invoice_items`
 
@@ -342,6 +422,7 @@ Response
 - `subtotal`, `discount_amount`, `total`
 - `accepted_at`
 - `client_snapshot` (JSONB) - frozen client data
+- `layout` (JSONB) - Proposals 2 visual document schema (null = legacy proposal)
 
 #### `proposal_services` (Line items)
 
@@ -494,6 +575,13 @@ Response
 
 - Rate limiting metadata
 
+#### `app_features` (Feature Flags — July 2026)
+
+- `id` (PK, always `1`)
+- `notes_access_mode`, `contracts_access_mode`, `proposals2_access_mode`
+- `updated_at`
+- Single-row table; managed via `/admin/features`
+
 ### Storage Buckets
 
 | Bucket Name | Public | Purpose |
@@ -530,6 +618,7 @@ Response
 | `/contract/:token` | `PublicContract` | Public contract view/sign (gated by env) |
 | `/portal/:token` | `PublicClientPortal` | Client portal hub |
 | `/portal/:portalToken/invoice/:invoiceId` | `PublicPortalInvoice` | Portal invoice detail |
+| `/export-account-data` | `ExportAccountData` | Data export (auth or `?token=` from deletion email) |
 
 ### Onboarding Route
 
@@ -544,35 +633,41 @@ Response
 **Requirements:**
 1. User authenticated
 2. `onboarding_completed = true`
-3. Active subscription OR valid trial (not expired)
-4. If trial expired → redirect to `/settings/subscription` (except when already on that route)
+3. `hasBillingAccess(profile)` OR route is `/settings/subscription`:
+   - `is_lifetime = true` → access granted
+   - `subscription_status = 'active'` → access granted
+   - `subscription_status = 'trial'` with future `trial_end_date` → access granted
+4. If billing locked → redirect to `/settings/subscription` (except when already on that route)
+5. Profile re-checked on window focus and visibility change
 
 **Routes:**
 
-| Path Pattern | Pages |
-|--------------|-------|
-| `/dashboard` | Dashboard overview |
-| `/clients/*` | `/clients` (CRM board), `/clients/list`, `/clients/active` |
-| `/projects/*` | `/projects` (list), `/projects/:id` (detail with tasks) |
-| `/time/*` | `/time` (timesheet), `/time/timer`, `/time/history` (was `/time/logs`) |
-| `/notes` | Notes workspace |
-| `/invoices/*` | `/invoices` (list), `/invoices/:id` (detail) |
-| `/services` | Services catalog |
-| `/proposals/*` | `/proposals` (list), `/proposals/:id` (detail) |
-| `/reviews/*` | `/reviews` (list), `/reviews/:id` (detail) |
-| `/notifications` | Notification feed |
-| `/search` | Global search results |
-| `/feature-requests` | Feature request portal |
-| `/settings/*` | Settings pages (profile, company, locale, invoices, proposals, notifications, subscription, storage) |
+| Path Pattern | Pages | Extra Gate |
+|--------------|-------|------------|
+| `/dashboard` | Dashboard overview | — |
+| `/clients/*` | `/clients` (CRM board), `/clients/list`, `/clients/active`, `/clients/:id` | — |
+| `/projects/*` | `/projects` (list), `/projects/:id` (detail with tasks) | — |
+| `/time/*` | `/time` (timesheet), `/time/timer`, `/time/history` | — |
+| `/notes` | Notes workspace | `NotesRoute` |
+| `/invoices/*` | `/invoices` (list), `/invoices/:id` (detail) | — |
+| `/services` | Services catalog | — |
+| `/proposals/*` | `/proposals` (list), `/proposals/:id` (detail) | — |
+| `/proposals-2` | Proposals 2 list | `Proposals2Route` |
+| `/proposals-2/:id/builder` | Proposals 2 drag-and-drop builder | `Proposals2Route` |
+| `/reviews/*` | `/reviews` (list), `/reviews/:id` (detail) | — |
+| `/notifications` | Notification feed | — |
+| `/search` | Global search results | — |
+| `/feature-requests` | Feature request portal | — |
+| `/settings/*` | Settings pages (see below) | Billing lock hides sidebar except subscription |
 
 **Contracts Routes (Conditional):**
 
 | Route | Additional Gate |
 |-------|----------------|
 | `/contracts/*` | `ContractsRoute` inside `ProtectedRoute` |
-| `/contracts/templates/:id` | Requires `canAccessContracts({ isAdmin })` based on `VITE_CONTRACTS_ACCESS_MODE` |
+| `/contracts/templates/:id` | Requires `canAccessContracts` from `app_features` |
 
-**Logic:**
+**Logic (via `app_features` table):**
 - `off`: No one can access
 - `admin`: Only `profiles.is_admin = true`
 - `on`: All authenticated users
@@ -586,16 +681,18 @@ Response
 | Route | Page |
 |-------|------|
 | `/admin` (index) | Redirects to `/admin/overview` |
-| `/admin/overview` | Admin dashboard |
-| `/admin/landing-content` | Landing page CMS |
+| `/admin/overview` | Admin dashboard (cards to sections) |
+| `/admin/metrics` | Revenue, MRR/ARR, user cohorts, unconfirmed signups |
+| `/admin/system-check` | Health checks (trial reminders, billing, Meta CAPI, invoice reminders) |
+| `/admin/account-restore` | Restore soft-deleted accounts (30-day window) |
 | `/admin/announcements` | Broadcast announcements |
 | `/admin/comms` | System email templates |
 | `/admin/branding` | App branding settings |
+| `/admin/features` | Feature flag toggles (notes, contracts, proposals2) |
 | `/admin/icons` | Icon slot management |
 | `/admin/help-content` | Help articles CMS |
 | `/admin/feature-requests` | Moderate feature requests |
 | `/admin/feedback` | View user feedback |
-| `/admin/system-check` | System health checks (routed but not in sidebar) |
 
 ### Route Redirects
 
@@ -620,6 +717,7 @@ Fetch profile (onboarding_completed, subscription_status, trial_end_date)
 onboarding_completed = false? → Redirect to /onboarding
     ↓
 Check billing access:
+  - is_lifetime = true → ✅ Access granted
   - subscription_status = 'active' → ✅ Access granted
   - subscription_status = 'trial' AND trial_end_date >= today → ✅ Access granted
   - Otherwise → ❌ No billing access
@@ -633,7 +731,8 @@ No billing access AND not on /settings/subscription? → Redirect to /settings/s
 
 ## Edge Functions
 
-**Location:** `supabase/functions/`
+**Location:** `supabase/functions/`  
+**Total:** 41 Edge Functions
 
 **Configuration:** `supabase/config.toml` sets `verify_jwt = false` for most functions; JWT validation done inside functions where needed.
 
@@ -641,25 +740,36 @@ No billing access AND not on /settings/subscription? → Redirect to /settings/s
 
 | Function | Purpose |
 |----------|---------|
-| `create-checkout-session` | Creates Stripe Checkout session for subscription with 15-day trial |
-| `create-portal-session` | Generates Stripe Customer Portal URL |
-| `complete-onboarding-after-checkout` | Post-checkout callback; sets `onboarding_completed`, updates trial/subscription data |
+| `create-checkout-session` | Creates Stripe Checkout session for subscription upgrade (15-day trial if applicable) |
+| `create-portal-session` | Generates Stripe Customer Portal URL for billing management |
+| `start-free-trial` | **Onboarding:** Creates Stripe customer + subscription with 15-day trial, no payment method required; sets `onboarding_completed` |
+| `complete-onboarding-after-checkout` | Post-Stripe-Checkout fallback; sets `onboarding_completed`, updates trial/subscription data |
 | `stripe-webhook` | Handles Stripe events: `customer.subscription.*`, updates `profiles` subscription status |
 | `billing-health` | Admin diagnostic: checks subscription states, Stripe sync |
+| `sync-stripe-promotion-codes` | Admin backfill of `profiles.stripe_promotion_code` from Stripe |
 
 ### Account Management
 
 | Function | Purpose |
 |----------|---------|
-| `delete-account` | Deletes user account + all related data (cascades via RLS/triggers); sends confirmation email |
+| `delete-account` | User-initiated account deletion; bans user, soft-deletes data, sends confirmation email |
+| `restore-account` | Admin restore of soft-deleted account within 30-day window |
+| `export-account-data` | JSON export of all user data (auth or deletion token) |
+| `cleanup-inactive-accounts` | **Cron:** Inactivity warnings (3d/1d), soft delete, permanent delete after restore window |
 | `send-account-deleted` | Sends "account deleted" confirmation via Resend |
 
 ### Invoices
 
 | Function | Purpose |
 |----------|---------|
-| `send-invoice` | Generates PDF with jsPDF, sends email via Resend with attachment |
+| `send-invoice` | Generates PDF (CustomJS), sends email via Resend with attachment; adds Stripe **Pay now** when Connect is ready |
+| `send-invoice-reminders` | **Cron:** Automatic client payment reminders based on `profiles.reminder_enabled` |
 | `view-invoice-pdf` | Public/signed URL for viewing invoice PDF (for portal) |
+| `create-connect-account-link` | Stripe Connect Standard onboarding (test keys only) |
+| `disconnect-connect-account` | Clears Connect linkage on profile |
+| `create-invoice-payment-session` | Checkout Session on connected account for an invoice |
+| `stripe-connect-webhook` | Marks invoices paid; syncs Connect account status (test) |
+| `preview-email-templates` | Admin email template previews |
 
 ### Reviews / Approvals
 
@@ -702,28 +812,31 @@ No billing access AND not on /settings/subscription? → Redirect to /settings/s
 
 | Function | Purpose |
 |----------|---------|
-| `send-trial-reminders` | Cron job: sends trial expiry emails (5 days, 1 day, day-of); also callable by admin for testing |
-| `send-deadline-notifications` | Cron job: sends due/overdue notifications for projects, tasks, invoices, contracts |
+| `send-trial-reminders` | **Cron:** Sends trial expiry emails (5 days, 1 day, day-of); also callable by admin for testing |
+| `send-deadline-notifications` | **Cron:** Sends due/overdue notifications for projects, tasks, invoices, contracts |
 | `send-announcement` | Admin broadcasts announcement to users |
 | `send-feedback-notification` | Notifies admin of new feedback submission |
 | `send-contact-message` | Contact form submission (landing page) |
-| `sync-users-to-resend` | Syncs user email + marketing preferences to Resend audience; runs on onboarding + pref changes |
+| `send-meta-capi-event` | Meta Conversions API (admin test tool) |
+| `sync-users-to-resend` | Syncs user email + marketing preferences to Resend audience |
 
 ### Miscellaneous
 
 | Function | Purpose |
 |----------|---------|
-| `generate-client-summary` | Optional AI-powered client summary (may use OpenAI/LLM) |
+| `generate-client-summary` | AI-powered client summary via Gemini |
 
 ### Cron Jobs (pg_cron)
 
 Set up via migrations:
 
-| Schedule | Function | Purpose |
-|----------|----------|---------|
-| Every 12 hours | `send-trial-reminders` | Check for upcoming trial expirations |
-| Every 6 hours | `send-deadline-notifications` | Check for due/overdue items |
-| Daily at 2 AM | `sync-users-to-resend` | Sync marketing preferences |
+| Schedule | Function | Secret | Purpose |
+|----------|----------|--------|---------|
+| Every 12 hours | `send-trial-reminders` | `NOTIFICATIONS_CRON_KEY` | Trial expiry emails |
+| Every 6 hours | `send-deadline-notifications` | `NOTIFICATIONS_CRON_KEY` | Due/overdue items |
+| Daily 2 AM UTC | `sync-users-to-resend` | — | Marketing preference sync |
+| Daily 08:30 UTC | `send-invoice-reminders` | `NOTIFICATIONS_CRON_KEY` | Client payment reminders |
+| Daily 10:00 UTC | `cleanup-inactive-accounts` | `CLEANUP_CRON_KEY` | Inactive account lifecycle |
 
 ---
 
@@ -747,6 +860,11 @@ Set up via migrations:
 | `useBranding` | `src/hooks/useBranding.ts` | Fetches app-wide branding from `app_branding` table (React Query) |
 | `useIconSlots` | `src/hooks/useIconSlots.ts` | Fetches icon slot mappings (React Query) |
 | `useLandingContent` | `src/hooks/useLandingContent.ts` | Fetches landing page CMS content (React Query) |
+| `useAppFeatures` | `src/hooks/useAppFeatures.ts` | Fetches `app_features` row (React Query, 60s stale) |
+| `useFeatureAccess` | `src/hooks/useFeatureAccess.ts` | Resolves `canAccessNotes`, `canAccessContracts`, `canAccessProposals2` |
+| `useBillingLock` | `src/hooks/useBillingLock.ts` | Determines if user is billing-locked (sidebar hidden) |
+| `useShellProfile` | `src/hooks/useShellProfile.ts` | Profile data for app shell (name, avatar, plan badge) |
+| `useInAppNotificationAlerts` | `src/hooks/useInAppNotificationAlerts.ts` | Real-time notification toast alerts |
 | `useLanceServiceAgreementDisclaimer` | `src/hooks/useLanceServiceAgreementDisclaimer.ts` | Manages contract disclaimer acceptance (localStorage) |
 | `use-mobile` | `src/hooks/use-mobile.tsx` | Responsive breakpoint detection |
 | `use-toast` | shadcn pattern | Toast notification wrapper |
@@ -780,7 +898,7 @@ Most data fetching uses direct Supabase client calls with local React state.
 - **Database**: PostgreSQL with PostgREST auto-API
 - **Storage**: Multi-bucket file storage with signed URLs
 - **Realtime**: Notifications channel for live badge count
-- **Edge Functions**: 30+ Deno functions for server-side logic
+- **Edge Functions**: 41 Deno functions for server-side logic
 
 **Client Config:**
 ```typescript
@@ -803,10 +921,19 @@ export const supabase = createClient(
 ### Stripe
 
 **Integration Points:**
-- **Checkout:** `create-checkout-session` Edge Function creates session with trial
-- **Customer Portal:** `create-portal-session` generates portal link for subscription management
+- **Onboarding trial:** `start-free-trial` creates customer + subscription with 15-day trial, no payment method
+- **Checkout:** `create-checkout-session` Edge Function for subscription upgrade/change
+- **Customer Portal:** `create-portal-session` generates portal link for billing management
 - **Webhooks:** `stripe-webhook` handles subscription lifecycle events
 - **Price IDs:** Configured via `VITE_STRIPE_PRICE_MONTHLY` and `VITE_STRIPE_PRICE_ANNUAL`
+- **Promotion codes:** `profiles.stripe_promotion_code`; beta codes excluded from admin revenue metrics
+
+**Subscription States Synced to `profiles.subscription_status`:**
+- `trial` — active trial period
+- `active` — paid subscription
+- `paused` — trial ended without payment method (Stripe `missing_payment_method` behavior)
+- `past_due` — payment failed
+- `cancelled` — subscription cancelled
 
 **Events Handled:**
 - `customer.subscription.created`
@@ -846,6 +973,158 @@ export const supabase = createClient(
 - Widget ID: `VITE_CRISP_WEBSITE_ID`
 - Default ID baked into code as fallback
 - External help center: `https://get-lance.crisp.help/en/`
+- Hidden on public client routes (`src/lib/publicClientRoutes.ts`)
+
+### hCaptcha
+
+**Purpose:** Bot protection on auth flows
+
+**Implementation:**
+- `HCaptchaWidget.tsx` component — disabled when `VITE_HCAPTCHA_SITE_KEY` unset
+- Used in `Auth.tsx` for sign-in, sign-up, magic link, password reset
+- Secret key configured in Supabase Auth → Attack Protection (not in frontend env)
+
+---
+
+## Analytics & Observability
+
+### Google Analytics 4
+
+- **ID:** `G-F987NCEKDC` (in `index.html` + `src/lib/googleAnalytics.ts`)
+- **Component:** `GoogleAnalytics.tsx` — SPA page views, landing/signup events, confirmed signup once
+
+### Meta Pixel
+
+- **ID:** `1377760630866019`
+- **Component:** `MetaPixel.tsx` — PageView, ViewContent (landing), Lead (signup tab)
+- **In-app events** (`src/lib/metaPixel.ts`): CompleteRegistration, StartTrial, InitiateCheckout, Subscribe, Purchase
+
+### Meta Conversions API
+
+- **Edge function:** `send-meta-capi-event` (admin test tool in System Check)
+- **Secret:** `META_CAPI_ACCESS_TOKEN`
+
+### Hotjar / ContentSquare
+
+- **Component:** `Hotjar.tsx` — loads only in **production**, excludes public client routes
+- **Script:** ContentSquare UXA script
+- Documented in Privacy policy
+
+### Crisp (see API Integrations above)
+
+---
+
+## Account Lifecycle
+
+### Onboarding Flow (Current)
+
+**Single screen** (`src/pages/Onboarding.tsx`):
+1. Business name (required)
+2. Currency (searchable, default USD)
+3. **Start free trial** → calls `start-free-trial` edge function with `VITE_STRIPE_PRICE_ANNUAL`
+4. No Stripe Checkout during onboarding; no payment method required
+5. Syncs user to Resend after email verified
+6. Meta events: CompleteRegistration, StartTrial
+
+### Billing States
+
+| State | `subscription_status` | App Access |
+|-------|----------------------|------------|
+| Active trial | `trial` (future `trial_end_date`) | Full access |
+| Active subscription | `active` | Full access |
+| Trial ended, no PM | `paused` | Billing lock → `/settings/subscription` only |
+| Past due | `past_due` | Billing lock |
+| Lifetime | `is_lifetime = true` | Full access (bypasses all billing checks) |
+
+### Trial Mechanics
+
+- **Duration:** 15 days from `start-free-trial` call
+- **No credit card required** at signup
+- Stripe `trial_settings.end_behavior.missing_payment_method: "pause"` → subscription pauses at trial end if no payment method added
+- User adds payment via Settings → Billing → Stripe Checkout or Customer Portal
+
+### Account Deletion Lifecycle
+
+| Stage | Mechanism | Details |
+|-------|-----------|---------|
+| User-initiated | `UserSettings` → `delete-account` | Type DELETE to confirm; immediate soft delete |
+| Inactivity warnings | `cleanup-inactive-accounts` cron | 7+ days post-trial without active sub |
+| 3-day / 1-day reminders | Same cron | Includes data export token link |
+| Soft delete | Ban user; set `account_soft_deleted_at`, `restore_until` (+30 days) | Data preserved |
+| Admin restore | `AdminAccountRestore` → `restore-account` | Within 30-day window |
+| Permanent delete | After restore window via cron | Irreversible |
+| Data export | `/export-account-data` or `?token=` from warning email | JSON export of all user data |
+
+### UI Banners (priority order in `AppLayout`)
+
+1. **Scheduled deletion** — `ScheduledDeletionBanner` when `scheduled_deletion_at` is set
+2. **Email verification** — `EmailVerificationBanner` until email confirmed
+3. **Trial** — `TrialBanner` during active trial
+
+### Billing Lock UI
+
+When `isBillingLocked()` is true:
+- Settings sidebar hidden
+- Only subscription content shown via `BillingLockLayout`
+- All other routes redirect to `/settings/subscription`
+
+---
+
+## Proposals 2 Architecture
+
+### Overview
+
+Visual drag-and-drop proposal builder running alongside legacy proposals. Uses the same `proposals` table with a `layout` JSONB column to distinguish Proposals 2 records.
+
+### Routes
+
+| Route | Component | Purpose |
+|-------|-----------|---------|
+| `/proposals-2` | `Proposals2.tsx` | List (filters `layout IS NOT NULL`) |
+| `/proposals-2/:id/builder` | `Proposals2Builder.tsx` | Visual builder |
+
+### Gating
+
+- `proposals2_access_mode` in `app_features` (default `off`)
+- Sidebar badge: **Admin** (indigo)
+
+### Layout Schema (`src/lib/proposals2/layoutSchema.ts`)
+
+**Document:** `version: 1`, `theme.mainColor`, `containers[]` (1–2 columns)
+
+**Block types:**
+- `heading` — H1/H2/H3 with text styling
+- `paragraph` — Rich text with styling
+- `image` — Image with alt, border radius
+- `divider` — Horizontal rule
+- `proposal-meta` — Identifier, project name
+- `client-business` — Client and business details
+- `services-table` — Line items with optional description/quantity
+- `totals` — Subtotal, discount, total
+- `conditions` — Terms, timeline, payment structure
+- `acceptance` — Client accept button (public view)
+- `spacer` — Vertical spacing
+
+### Key Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `ProposalLayoutEditor` | `src/components/proposals2/` | Drag-and-drop editor canvas |
+| `ProposalRenderer` | `src/components/proposals2/` | Renders layout for preview/public view |
+| `ProposalBuilderInspector` | `src/components/proposals2/` | Block property editor sidebar |
+| Builder utils | `src/lib/proposals2/builderUtils.ts` | Layout manipulation helpers |
+
+### Data Flow
+
+1. New draft created in `proposals` table with `layout: null`
+2. Builder initializes default layout on first open
+3. Autosave writes `layout` JSONB to `proposals` row
+4. Public view at `/proposal/:token` renders via `ProposalRenderer`
+5. Acceptance flow unchanged (uses `accept-proposal` edge function)
+
+### Go-Live Status
+
+See `docs/PROPOSALS2_GO_LIVE_CHECKLIST.md` for rollout gates. Currently admin-beta only.
 
 ---
 
@@ -870,10 +1149,13 @@ export const supabase = createClient(
 │   │   ├── Invoices.tsx
 │   │   ├── InvoiceDetail.tsx
 │   │   ├── Services.tsx        # NEW
-│   │   ├── Proposals.tsx       # NEW
-│   │   ├── ProposalDetail.tsx  # NEW
-│   │   ├── Contracts.tsx       # NEW
-│   │   ├── ContractDetail.tsx  # NEW
+│   │   ├── Proposals.tsx       # Legacy proposals
+│   │   ├── ProposalDetail.tsx  # Legacy proposal editor
+│   │   ├── Proposals2.tsx      # Proposals 2 list
+│   │   ├── Proposals2Builder.tsx  # Proposals 2 builder
+│   │   ├── Contracts.tsx
+│   │   ├── ContractDetail.tsx
+│   │   ├── ExportAccountData.tsx  # Data export page
 │   │   ├── ReviewRequests.tsx
 │   │   ├── ReviewRequestDetail.tsx
 │   │   ├── ClientReview.tsx    # Public
@@ -885,17 +1167,19 @@ export const supabase = createClient(
 │   │   ├── SearchResults.tsx
 │   │   ├── FeatureRequests.tsx
 │   │   ├── settings/
-│   │   │   ├── ProfileSettings.tsx
-│   │   │   ├── CompanySettings.tsx
+│   │   │   ├── UserSettings.tsx          # Profile (was ProfileSettings)
+│   │   │   ├── BusinessSettings.tsx      # Company
 │   │   │   ├── LocaleSettings.tsx
 │   │   │   ├── InvoiceSettings.tsx
-│   │   │   ├── ProposalSettings.tsx  # NEW
+│   │   │   ├── ProposalSettings.tsx
 │   │   │   ├── NotificationSettings.tsx
 │   │   │   ├── SubscriptionSettings.tsx
 │   │   │   └── StorageSettings.tsx
 │   │   ├── admin/
 │   │   │   ├── AdminOverview.tsx
-│   │   │   ├── LandingContentSettings.tsx
+│   │   │   ├── AdminMetrics.tsx          # Revenue & user cohorts
+│   │   │   ├── AdminAccountRestore.tsx   # Soft-delete restore
+│   │   │   ├── AdminFeatures.tsx         # Feature flag toggles
 │   │   │   ├── AdminAnnouncements.tsx
 │   │   │   ├── AdminComms.tsx
 │   │   │   ├── BrandingSettings.tsx
@@ -941,6 +1225,10 @@ export const supabase = createClient(
 │   │
 │   ├── lib/
 │   │   ├── auth.tsx             # AuthProvider + hooks
+│   │   ├── billingAccess.ts     # hasBillingAccess(), isBillingLocked()
+│   │   ├── features.ts          # Feature flag types and helpers
+│   │   ├── metaPixel.ts         # Meta Pixel event tracking
+│   │   ├── googleAnalytics.ts   # GA4 event tracking
 │   │   ├── utils.ts             # cn(), etc.
 │   │   ├── billing.ts           # Billing helpers
 │   │   ├── userStorage.ts       # Storage limit logic
@@ -948,7 +1236,8 @@ export const supabase = createClient(
 │   │   ├── csvHelpers.ts        # CSV import/export
 │   │   ├── locale-data.ts       # Currency/timezone data
 │   │   ├── site-url.ts          # URL generation
-│   │   └── ...
+│   │   ├── publicClientRoutes.ts # Routes where Crisp/Hotjar hidden
+│   │   └── proposals2/          # Proposals 2 layout schema & utils
 │   │
 │   ├── integrations/supabase/
 │   │   ├── client.ts            # Supabase client instance
@@ -959,8 +1248,8 @@ export const supabase = createClient(
 │   └── index.css                # Global styles + design system
 │
 ├── supabase/
-│   ├── migrations/              # 69 SQL migration files
-│   ├── functions/               # 30+ Edge Functions (Deno)
+│   ├── migrations/              # 90 SQL migration files
+│   ├── functions/               # 41 Edge Functions (Deno)
 │   └── config.toml              # Edge Function config
 │
 ├── scripts/
@@ -1065,7 +1354,7 @@ supabase secrets set RESEND_API_KEY="re_..."
 | Constraint | Value | Enforcement |
 |------------|-------|-------------|
 | User storage | **200 MB** | UI warning + tracking in `StorageSettings.tsx` |
-| Profile photo | **500 KB** | Form validation in `ProfileSettings.tsx` |
+| Profile photo | **500 KB** | Form validation in `UserSettings.tsx` |
 | Business logo | **1 MB** | Form validation in `CompanySettings.tsx` |
 | Proposal cover | **10 MB** | Form validation in `ProposalSettings.tsx` |
 | Trial period | **15 days** | Set in Stripe checkout session |
@@ -1077,12 +1366,15 @@ supabase secrets set RESEND_API_KEY="re_..."
 
 | Rule | Implementation |
 |------|----------------|
-| **Billing gate** | Expired trial blocks all routes except `/settings/subscription` via `ProtectedRoute` |
+| **Billing gate** | Expired trial / paused sub blocks all routes except `/settings/subscription` via `ProtectedRoute` |
+| **Lifetime bypass** | `is_lifetime = true` bypasses billing lock and account cleanup crons |
 | **Contract lock** | After `sent_at` is set, core fields immutable via DB trigger |
 | **Invoice numbering** | Atomic via `next_invoice_number()` RPC with row lock on `profiles` |
+| **Invoice reminders** | Auto-sent via cron when `profiles.reminder_enabled = true`; status → `reminder_sent` |
 | **Client archiving** | Soft delete with `archived_at`; hard delete only if no related records |
 | **Follow-up title** | Required, minimum 1 character (DB constraint) |
-| **Contracts access** | Gated by `VITE_CONTRACTS_ACCESS_MODE` env variable |
+| **Feature access** | Gated by `app_features` table (`off` / `admin` / `on`) |
+| **Account deletion** | 30-day soft-delete restore window; permanent delete after |
 | **One user per account** | No team/workspace features in current version |
 
 ### Performance Considerations
@@ -1098,122 +1390,128 @@ supabase secrets set RESEND_API_KEY="re_..."
 
 ---
 
-## What's New Since April 2026
+## What's New Since May 2026
 
-### Major Features Added (May 2026)
+### June 2026
 
-1. **Services Catalog** (`/services`)
-   - Reusable service offerings
-   - Pricing + recurring billing info
-   - Default task checklists
-   - Used in proposals and contracts
+1. **Lifetime Access (`is_lifetime`)**
+   - Grandfathered existing users at migration cutover
+   - Bypasses billing lock, trial banner, scheduled deletion, cleanup crons
+   - Only `service_role` can set `true`
 
-2. **Proposals (Beta)** (`/proposals`, `/proposals/:id`)
-   - Full proposal builder with cover images
-   - Public proposal viewing (`/proposal/:token`)
-   - Client acceptance flow
-   - Proposal settings page
-   - Auto-generated identifiers: `P-YYYY-#####`
-   - Payment structure options (upfront/installments)
-   - Client snapshot for historical accuracy
+2. **Simplified Onboarding**
+   - Replaced 4-step flow with single screen
+   - `start-free-trial` edge function: 15-day trial without payment method
+   - No Stripe Checkout during onboarding
+   - Default annual plan (`VITE_STRIPE_PRICE_ANNUAL`)
 
-3. **Contracts (Beta)** (`/contracts`, `/contracts/:id`)
-   - Contract templates system
-   - Dual-party signing workflow
-   - OTP verification for client signatures
-   - Import from accepted proposals
-   - Contract locking after send
-   - Auto-generated identifiers: `C-YYYY-#####`
-   - Public contract view/sign (`/contract/:token`)
-   - Feature flag system (`VITE_CONTRACTS_ACCESS_MODE`)
-   - Lance Service Agreement disclaimer
+3. **Admin Metrics Dashboard** (`/admin/metrics`)
+   - RPCs: `get_admin_metrics()`, `get_admin_users_list()`
+   - MRR/ARR, user cohorts (trial, paying, ghosted, unconfirmed)
+   - Beta promotion code exclusion from revenue
+   - Unconfirmed signup tracking
 
-4. **Client Portal** (`/portal/:token`)
-   - Token-based client access (no login)
-   - Configurable sections per client
-   - Portal settings in client detail
-   - Sections: Details, Invoices, Proposals, Contracts, Approvals, Time
-   - Portal invoice detail view
+4. **Note Tags** (`note_tags` migration)
+   - Tag support on notes workspace
 
-5. **Client Follow-Ups** (`client_follow_ups` table)
-   - Multiple follow-up tasks per client
-   - Replace single `next_follow_up_at` field
-   - Title, details, due date, remind date
-   - Mark complete workflow
-   - Displayed on dashboard
+5. **Stripe Promotion Codes**
+   - `profiles.stripe_promotion_code` column
+   - `sync-stripe-promotion-codes` edge function for admin backfill
+   - Beta codes excluded from revenue metrics
 
-6. **Client Enhancements**
-   - Client archiving (soft delete with `archived_at`)
-   - Client logo upload (`client-logos` bucket)
-   - AI client summary generation
-   - Client snapshot in proposals/contracts
+6. **Contract Client Confirm Before Sign**
+   - Clients can confirm details before OTP signing flow
 
-7. **Invoice Improvements**
-   - Invoice ↔ time entry links table (audit trail)
-   - Atomic invoice numbering via RPC
-   - Invoice number: `next_invoice_number()` function with row lock
+### July 2026
 
-8. **Notifications System**
-   - Cron jobs for deadline notifications
-   - Trial reminder automation
-   - Realtime channel for unread count
-   - Event key deduplication
+7. **Feature Flags System** (`app_features` table)
+   - DB-driven toggles for Notes, Contracts, Proposals 2
+   - Admin UI at `/admin/features`
+   - Replaces env-only `VITE_CONTRACTS_ACCESS_MODE`
 
-9. **Admin Features**
-   - Landing Content settings page
-   - Comms & Templates management
-   - System Check page (trial reminders, billing health)
+8. **Proposals 2** (Admin Beta)
+   - Visual drag-and-drop builder (`/proposals-2`, `/proposals-2/:id/builder`)
+   - `proposals.layout` JSONB column
+   - Block-based document schema (heading, paragraph, services-table, totals, etc.)
+   - See `docs/PROPOSALS2_GO_LIVE_CHECKLIST.md`
 
-10. **Other**
-    - Brand Guidelines public page
-    - Email template rebrand ("Get Lance")
-    - Proposal settings page
-    - Storage limit increased to 200 MB
-    - Contract deadline notifications
-    - Marketing preferences sync to Resend
+9. **Invoice Auto-Reminders**
+   - `send-invoice-reminders` cron (daily 08:30 UTC)
+   - New status: `reminder_sent`
+   - `profiles.reminder_enabled`, `profiles.reminder_days_before`
+   - `invoices.last_reminder_sent_at`, `last_reminder_automatic`
 
-### Database Changes
+10. **Account Lifecycle Management**
+    - `cleanup-inactive-accounts` cron (daily 10:00 UTC)
+    - Soft delete with 30-day restore window
+    - `AdminAccountRestore` page
+    - `export-account-data` page and edge function
+    - `restore-account` edge function
+    - Deletion warning emails with export token
+
+11. **Analytics Integrations**
+    - Google Analytics 4 (`G-F987NCEKDC`)
+    - Meta Pixel (`1377760630866019`) with in-app events
+    - Meta Conversions API (`send-meta-capi-event`)
+    - Hotjar/ContentSquare (production only, excludes public routes)
+
+12. **hCaptcha on Auth**
+    - Optional bot protection via `VITE_HCAPTCHA_SITE_KEY`
+    - All auth flows: sign-in, sign-up, magic link, password reset
+
+13. **Admin Unconfirmed Signups**
+    - Tracking and metrics for users who haven't confirmed email
+
+14. **Invoice Send Timestamps**
+    - `sent_at`, `last_sent_at` on invoices
+
+15. **Time Entry Invoiced Status**
+    - Billing status tracking for invoiced time entries
+
+### Database Changes (May–July 2026)
 
 **New Tables:**
-- `services`
-- `proposals`, `proposal_services`
-- `contracts`, `contract_services`, `contract_templates`, `contract_sign_tokens`
-- `client_follow_ups`
-- `invoice_time_entry_links`
+- `app_features` (July)
 
 **New Columns:**
-- `clients`: `archived_at`, `logo_url`, `portal_enabled`, `portal_token`, `portal_sections`
-- `profiles`: Multiple proposal default fields
-- Various snapshot and lock fields on proposals/contracts
+- `profiles`: `is_lifetime`, `stripe_promotion_code`, deletion lifecycle fields, `reminder_enabled`, `reminder_days_before`
+- `proposals`: `layout` (JSONB)
+- `invoices`: `reminder_sent` status, `last_reminder_sent_at`, `last_reminder_automatic`, `sent_at`, `last_sent_at`, `payment_method`
 
-**New Buckets:**
-- `client-logos`
-- `proposal-images`
+**New RPCs:**
+- `get_admin_metrics()` — extended with unconfirmed signups
+- `get_admin_users_list()` — email confirmation fields
+- `get_restorable_accounts()` — admin restore list
+- `get_deletion_reminder_3d_candidates()`, `get_deletion_reminder_1d_candidates()`
+- `get_permanent_deletion_candidates()`
+- `is_beta_promotion_code()`
+- `clear_profile_deletion_schedule()`
 
-**New Functions:**
-- `next_invoice_number()` - Atomic numbering
-- `prevent_contract_updates_after_send()` - Contract lock trigger
+### Routes Added (May–July 2026)
 
-### Routes Added
+- `/proposals-2`, `/proposals-2/:id/builder`
+- `/export-account-data`
+- `/admin/metrics`, `/admin/account-restore`, `/admin/features`
 
-- `/services`
-- `/proposals`, `/proposals/:id`
-- `/proposal/:token` (public)
-- `/contracts`, `/contracts/:id`, `/contracts/templates/:id`
-- `/contract/:token` (public)
-- `/portal/:token`
-- `/portal/:portalToken/invoice/:invoiceId`
-- `/settings/proposals`
-- `/admin/landing-content`
-- `/admin/comms`
-- `/admin/system-check`
+### Routes Removed
 
-### Edge Functions Added
+- `/admin/landing-content` (CMS table exists but admin page removed)
 
-- Proposal: `send-proposal`, `view-proposal`, `accept-proposal`
-- Contract: `send-contract-otp`, `verify-contract-otp`, `get-contract`, `update-contract-client-details`, `cancel-contract`
-- Portal: `view-client-portal`, `send-client-portal-link`
-- Misc: `generate-client-summary`
+### Edge Functions Added (May–July 2026)
+
+- `start-free-trial` — Onboarding trial without payment method
+- `send-invoice-reminders` — Automatic client payment reminders
+- `cleanup-inactive-accounts` — Inactive account lifecycle
+- `restore-account` — Admin account restore
+- `export-account-data` — User data export
+- `send-meta-capi-event` — Meta Conversions API
+- `sync-stripe-promotion-codes` — Promotion code backfill
+- `preview-email-templates` — Admin email previews
+- `billing-health` — Subscription diagnostic
+- `send-account-deleted` — Deletion confirmation email
+- `send-contact-message` — Landing contact form
+- `send-feedback-notification` — Admin feedback notification
+- `delete-review-comment` — Client comment deletion
 
 ---
 
@@ -1247,6 +1545,9 @@ supabase secrets set RESEND_API_KEY="re_..."
 - **Public functions** validate tokens server-side
 - **OTP codes** expire after 15 minutes (configurable)
 - **Contract lock** prevents tampering after send
+- **hCaptcha** optional bot protection on auth flows
+- **Account soft-delete** preserves data for 30-day restore window
+- **Deletion export tokens** time-limited for data export
 - **Rate limiting** table exists but enforcement TBD
 
 ### Future Technical Debt

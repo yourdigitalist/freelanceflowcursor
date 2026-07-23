@@ -31,7 +31,7 @@ export function GoogleAnalytics() {
     const isSignupAuth =
       path === '/auth' && new URLSearchParams(location.search).get('tab') === 'signup';
 
-    if (path === '/' || path === '/lptest') {
+    if (path === '/' || path === '/lptest' || path === '/designers') {
       trackGaViewLanding();
     }
 

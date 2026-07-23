@@ -77,24 +77,33 @@ async function persistDraftSegmentsToDb(
 
   if (fetchError) return { error: fetchError.message };
 
-  const existingStarts = new Set((existing || []).map((s) => s.start_time));
+  // Compare by epoch ms — PostgREST may return "+00:00" while we insert "Z".
+  const existingStartMs = new Set(
+    (existing || []).map((s) => new Date(s.start_time).getTime()),
+  );
 
   for (const seg of segments) {
     const endMs = seg.endMs ?? nowMs;
-    const startIso = new Date(seg.startMs).toISOString();
-    if (existingStarts.has(startIso)) continue;
+    if (existingStartMs.has(seg.startMs)) continue;
 
     const durationSeconds = Math.max(0, Math.round((endMs - seg.startMs) / 1000));
     if (durationSeconds <= 0) continue;
 
     const { error } = await supabase.from('time_entry_segments').insert({
       time_entry_id: entryId,
-      start_time: startIso,
+      start_time: new Date(seg.startMs).toISOString(),
       end_time: new Date(endMs).toISOString(),
       duration_seconds: durationSeconds,
     });
-    if (error) return { error: error.message };
-    existingStarts.add(startIso);
+    if (error) {
+      // Concurrent pause/save or timezone-format races: unique index means already saved.
+      if (error.code === '23505') {
+        existingStartMs.add(seg.startMs);
+        continue;
+      }
+      return { error: error.message };
+    }
+    existingStartMs.add(seg.startMs);
   }
 
   return { error: null };
@@ -145,6 +154,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   const timerStartMsRef = useRef<number | null>(null);
   const draftSegmentsRef = useRef(draftSegments);
   const stopInFlightRef = useRef<Promise<void> | null>(null);
+  const saveInFlightRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     draftSegmentsRef.current = draftSegments;
@@ -246,6 +256,10 @@ export function TimerProvider({ children }: { children: ReactNode }) {
 
   const stopTimer = useCallback(async () => {
     if (!activeEntryId || !user) return;
+    if (stopInFlightRef.current) {
+      await stopInFlightRef.current;
+      return;
+    }
 
     const runStop = async () => {
       const prev = draftSegmentsRef.current;
@@ -265,6 +279,10 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Close draft before the network call so concurrent pauses see it as stopped.
+      setDraftSegments([...prev.slice(0, -1), closedSegment]);
+      draftSegmentsRef.current = [...prev.slice(0, -1), closedSegment];
+
       const { error } = await supabase.from('time_entry_segments').insert({
         time_entry_id: activeEntryId,
         start_time: new Date(closedSegment.startMs).toISOString(),
@@ -272,6 +290,8 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         duration_seconds: durationSeconds,
       });
       if (error) {
+        setDraftSegments(prev);
+        draftSegmentsRef.current = prev;
         toast({
           title: 'Could not pause timer',
           description: error.message,
@@ -297,7 +317,6 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         })
         .eq('id', activeEntryId);
 
-      setDraftSegments([...prev.slice(0, -1), closedSegment]);
       toast({
         title: 'Timer paused',
         description: 'Use the bar at the bottom to resume, or open the Timer page to save your entry.',
@@ -318,81 +337,94 @@ export function TimerProvider({ children }: { children: ReactNode }) {
 
   const logTimeFromTimer = useCallback(async () => {
     if (!activeEntryId || !user) return;
+    if (saveInFlightRef.current) {
+      await saveInFlightRef.current;
+      return;
+    }
     if (stopInFlightRef.current) {
       await stopInFlightRef.current;
     }
 
-    const segments = draftSegmentsRef.current;
-    if (segments.length === 0) return;
+    const runSave = async () => {
+      const segments = draftSegmentsRef.current;
+      if (segments.length === 0) return;
 
-    const now = Date.now();
-    const localTotalSec = computeDraftTotalSeconds(segments, now);
-    if (localTotalSec <= 0) {
-      toast({
-        title: 'Nothing to save',
-        description: 'Track some time before saving.',
-        variant: 'destructive',
-      });
-      return;
-    }
+      const now = Date.now();
+      const localTotalSec = computeDraftTotalSeconds(segments, now);
+      if (localTotalSec <= 0) {
+        toast({
+          title: 'Nothing to save',
+          description: 'Track some time before saving.',
+          variant: 'destructive',
+        });
+        return;
+      }
 
+      try {
+        const { error: persistError } = await persistDraftSegmentsToDb(activeEntryId, segments, now);
+        if (persistError) {
+          throw new Error(persistError);
+        }
+
+        const { data: dbSegments, error: fetchError } = await supabase
+          .from('time_entry_segments')
+          .select('end_time, duration_seconds')
+          .eq('time_entry_id', activeEntryId);
+        if (fetchError) throw fetchError;
+
+        const dbTotalSec = (dbSegments || []).reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
+        const totalSec = dbTotalSec > 0 ? dbTotalSec : localTotalSec;
+        if (totalSec <= 0) {
+          throw new Error('Timed duration could not be saved. Please try again.');
+        }
+
+        const latestEnd = (dbSegments || [])
+          .map((s) => s.end_time)
+          .sort()
+          .at(-1) ?? new Date(now).toISOString();
+        const effectiveHourlyRate = await resolveEffectiveHourlyRate({
+          userId: user.id,
+          projectId: timerProject || null,
+        });
+        const { error: updateError } = await supabase
+          .from('time_entries')
+          .update({
+            description: timerDescription || null,
+            project_id: timerProject || null,
+            task_id: timerTask || null,
+            billable: timerBillable,
+            billing_status: timerBillable ? 'unbilled' : 'not_billable',
+            hourly_rate: effectiveHourlyRate,
+            end_time: latestEnd,
+          })
+          .eq('id', activeEntryId);
+        if (updateError) throw updateError;
+
+        setDraftSegments([]);
+        setActiveEntryId(null);
+        setTimerDescriptionState('');
+        setTimerProjectState('');
+        setTimerTaskState('');
+        setTimerBillableState(true);
+        toast({
+          title: 'Time entry saved',
+          description: formatDurationFromSeconds(totalSec) + ' logged.',
+        });
+        window.dispatchEvent(new CustomEvent(TIMER_ENTRY_SAVED_EVENT));
+      } catch (error: unknown) {
+        toast({
+          title: 'Error saving time',
+          description: error instanceof Error ? error.message : 'Something went wrong.',
+          variant: 'destructive',
+        });
+      }
+    };
+
+    saveInFlightRef.current = runSave();
     try {
-      const { error: persistError } = await persistDraftSegmentsToDb(activeEntryId, segments, now);
-      if (persistError) {
-        throw new Error(persistError);
-      }
-
-      const { data: dbSegments, error: fetchError } = await supabase
-        .from('time_entry_segments')
-        .select('end_time, duration_seconds')
-        .eq('time_entry_id', activeEntryId);
-      if (fetchError) throw fetchError;
-
-      const dbTotalSec = (dbSegments || []).reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
-      const totalSec = dbTotalSec > 0 ? dbTotalSec : localTotalSec;
-      if (totalSec <= 0) {
-        throw new Error('Timed duration could not be saved. Please try again.');
-      }
-
-      const latestEnd = (dbSegments || [])
-        .map((s) => s.end_time)
-        .sort()
-        .at(-1) ?? new Date(now).toISOString();
-      const effectiveHourlyRate = await resolveEffectiveHourlyRate({
-        userId: user.id,
-        projectId: timerProject || null,
-      });
-      const { error: updateError } = await supabase
-        .from('time_entries')
-        .update({
-          description: timerDescription || null,
-          project_id: timerProject || null,
-          task_id: timerTask || null,
-          billable: timerBillable,
-          billing_status: timerBillable ? 'unbilled' : 'not_billable',
-          hourly_rate: effectiveHourlyRate,
-          end_time: latestEnd,
-        })
-        .eq('id', activeEntryId);
-      if (updateError) throw updateError;
-
-      setDraftSegments([]);
-      setActiveEntryId(null);
-      setTimerDescriptionState('');
-      setTimerProjectState('');
-      setTimerTaskState('');
-      setTimerBillableState(true);
-      toast({
-        title: 'Time entry saved',
-        description: formatDurationFromSeconds(totalSec) + ' logged.',
-      });
-      window.dispatchEvent(new CustomEvent(TIMER_ENTRY_SAVED_EVENT));
-    } catch (error: unknown) {
-      toast({
-        title: 'Error saving time',
-        description: error instanceof Error ? error.message : 'Something went wrong.',
-        variant: 'destructive',
-      });
+      await saveInFlightRef.current;
+    } finally {
+      saveInFlightRef.current = null;
     }
   }, [activeEntryId, timerDescription, timerProject, timerTask, timerBillable, user, toast]);
 
