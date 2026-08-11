@@ -3,7 +3,7 @@
 export type InvoiceNumberReset = 'never' | 'yearly' | 'monthly';
 
 export const INVOICE_NUMBER_FORMAT_TAGS = [
-  { tag: '{{number}}', label: 'Number (sequence)' },
+  { tag: '{{number}}', label: 'Number (in reset period)' },
   { tag: '{{month}}', label: 'Month (MM)' },
   { tag: '{{year}}', label: 'Year (YYYY)' },
   { tag: '{{yy}}', label: 'Year (YY)' },
@@ -77,6 +77,21 @@ export const INVOICE_NUMBER_FORMAT_PRESETS: InvoiceNumberFormatPreset[] = [
     prefix: '',
   },
 ];
+
+export const INVOICE_DUE_DAYS_PRESETS = [
+  { days: 0, label: 'Due on receipt', description: 'Same day as issue date' },
+  { days: 7, label: 'Net 7', description: '7 days after issue' },
+  { days: 14, label: 'Net 14', description: '14 days after issue' },
+  { days: 15, label: 'Net 15', description: '15 days after issue' },
+  { days: 30, label: 'Net 30', description: '30 days after issue' },
+  { days: 45, label: 'Net 45', description: '45 days after issue' },
+  { days: 60, label: 'Net 60', description: '60 days after issue' },
+] as const;
+
+export function matchInvoiceDueDaysPreset(days: number): string {
+  const found = INVOICE_DUE_DAYS_PRESETS.find((p) => p.days === days);
+  return found ? String(found.days) : 'custom';
+}
 
 export function legacyInvoiceNumberFormat(includeYear: boolean): string {
   return includeYear ? '{{prefix}}{{year}}{{number}}' : '{{prefix}}{{number}}';

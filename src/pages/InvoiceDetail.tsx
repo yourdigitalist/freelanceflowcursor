@@ -2081,10 +2081,6 @@ export default function InvoiceDetail() {
                         setIssueDateEdit(e.target.value);
                       }}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Defaults to the day this invoice was created
-                      {invoice.created_at ? ` (${formatDisplayDate(invoice.created_at.slice(0, 10))})` : ''}.
-                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="due_date_edit">Due Date</Label>

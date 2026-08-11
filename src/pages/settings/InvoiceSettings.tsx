@@ -40,9 +40,11 @@ import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import { compareBooleans, compareNullableNumbers, compareStrings } from '@/lib/tableSort';
 import { TablePagination } from '@/components/ui/table-pagination';
 import {
+  INVOICE_DUE_DAYS_PRESETS,
   INVOICE_NUMBER_FORMAT_PRESETS,
   INVOICE_NUMBER_FORMAT_TAGS,
   legacyInvoiceNumberFormat,
+  matchInvoiceDueDaysPreset,
   matchInvoiceFormatPreset,
   previewInvoiceNumber,
   type InvoiceNumberReset,
@@ -127,6 +129,7 @@ export default function InvoiceSettings() {
   const [invoicePadding, setInvoicePadding] = useState(4);
   const [invoiceStart, setInvoiceStart] = useState(1);
   const [invoiceDueDays, setInvoiceDueDays] = useState(30);
+  const [invoiceDuePreset, setInvoiceDuePreset] = useState('30');
   const [invoiceNextPreview, setInvoiceNextPreview] = useState(1);
 
   useEffect(() => {
@@ -285,6 +288,7 @@ export default function InvoiceSettings() {
         setInvoiceStart(data.invoice_number_start ?? 1);
         setInvoiceNextPreview((data as InvoiceProfile).invoice_number_next ?? data.invoice_number_start ?? 1);
         setInvoiceDueDays((data as InvoiceProfile).invoice_due_days ?? 30);
+        setInvoiceDuePreset(matchInvoiceDueDaysPreset((data as InvoiceProfile).invoice_due_days ?? 30));
       }
     } catch (error) {
       console.error('Error fetching invoice settings:', error);
@@ -516,11 +520,13 @@ export default function InvoiceSettings() {
                 onChange={(e) => {
                   const next = e.target.value;
                   setInvoiceFormat(next);
-                  setInvoiceFormatPreset(
-                    INVOICE_NUMBER_FORMAT_PRESETS.some((p) => p.format === next.trim())
-                      ? matchInvoiceFormatPreset(next)
-                      : 'custom',
-                  );
+                  const matched = INVOICE_NUMBER_FORMAT_PRESETS.find((p) => p.format === next.trim());
+                  setInvoiceFormatPreset(matched?.id ?? 'custom');
+                  if (matched) {
+                    setInvoiceReset(matched.reset);
+                  } else if (/\{\{\s*month\s*\}\}/i.test(next) && invoiceReset !== 'monthly') {
+                    setInvoiceReset('monthly');
+                  }
                   dirtyContext?.setDirty(true);
                 }}
                 placeholder="{{number}}/{{month}}/{{year}}"
@@ -545,7 +551,7 @@ export default function InvoiceSettings() {
               <p className="text-xs text-muted-foreground">Optional. Inserted wherever you use the {'{{prefix}}'} tag.</p>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="invoice_number_start">Starting number</Label>
                 <Input
@@ -574,53 +580,97 @@ export default function InvoiceSettings() {
                 />
                 <p className="text-xs text-muted-foreground">2 → 02, 4 → 0001</p>
               </div>
-              <div className="space-y-2">
-                <Label>Reset sequence</Label>
-                <Select
-                  value={invoiceReset}
-                  onValueChange={(v) => {
-                    setInvoiceReset(v as InvoiceNumberReset);
-                    setInvoiceFormatPreset('custom');
-                    dirtyContext?.setDirty(true);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="monthly">Every month</SelectItem>
-                    <SelectItem value="yearly">Every year</SelectItem>
-                    <SelectItem value="never">Never (keep counting)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>When does {'{{number}}'} reset?</Label>
+              <Select
+                value={invoiceReset}
+                onValueChange={(v) => {
+                  setInvoiceReset(v as InvoiceNumberReset);
+                  dirtyContext?.setDirty(true);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="monthly">
+                    Every month — count restarts each month (e.g. 01/09/2026 after August)
+                  </SelectItem>
+                  <SelectItem value="yearly">
+                    Every year — count restarts each January
+                  </SelectItem>
+                  <SelectItem value="never">
+                    Never — keep counting across all invoices
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                For formats like 02/08/2026, choose <span className="font-medium text-foreground">Every month</span> so the first part is “invoice # within this month,” not your lifetime total.
+              </p>
             </div>
           </CardContent>
         </Card>
 
         <Card className="border-0 shadow-sm">
           <CardHeader>
-            <CardTitle>Payment Terms</CardTitle>
-            <CardDescription>Default due date for new invoices</CardDescription>
+            <CardTitle>Default due date</CardTitle>
+            <CardDescription>
+              Applied automatically when you create a new invoice (create dialog and client page).
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="invoice_due_days">Due days after issue date</Label>
-              <Input
-                id="invoice_due_days"
-                type="number"
-                min={0}
-                max={365}
-                value={invoiceDueDays}
-                onChange={(e) => {
-                  setInvoiceDueDays(Math.min(365, Math.max(0, Math.floor(Number(e.target.value) || 0))));
+              <Label>Payment terms</Label>
+              <Select
+                value={invoiceDuePreset}
+                onValueChange={(v) => {
+                  setInvoiceDuePreset(v);
+                  if (v !== 'custom') {
+                    setInvoiceDueDays(Number(v));
+                  }
                   dirtyContext?.setDirty(true);
                 }}
-              />
-              <p className="text-xs text-muted-foreground">
-                New invoices use today as the issue (creation) date and set due date to that plus this many days (e.g. 7 → net 7).
-              </p>
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose payment terms" />
+                </SelectTrigger>
+                <SelectContent>
+                  {INVOICE_DUE_DAYS_PRESETS.map((preset) => (
+                    <SelectItem key={preset.days} value={String(preset.days)}>
+                      {preset.label} — {preset.description}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="custom">Custom number of days…</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+            {invoiceDuePreset === 'custom' ? (
+              <div className="space-y-2">
+                <Label htmlFor="invoice_due_days">Custom days after issue date</Label>
+                <Input
+                  id="invoice_due_days"
+                  type="number"
+                  min={0}
+                  max={365}
+                  value={invoiceDueDays}
+                  onChange={(e) => {
+                    const next = Math.min(365, Math.max(0, Math.floor(Number(e.target.value) || 0)));
+                    setInvoiceDueDays(next);
+                    setInvoiceDuePreset(matchInvoiceDueDaysPreset(next));
+                    dirtyContext?.setDirty(true);
+                  }}
+                />
+              </div>
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              Example: issue date today → due date{' '}
+              <span className="font-medium text-foreground">
+                {invoiceDueDays === 0 ? 'same day' : `${invoiceDueDays} day${invoiceDueDays === 1 ? '' : 's'} later`}
+              </span>
+              .
+            </p>
           </CardContent>
         </Card>
 
