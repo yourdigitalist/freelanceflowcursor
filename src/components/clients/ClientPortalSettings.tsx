@@ -19,12 +19,14 @@ import { requireEmailVerified } from "@/lib/emailVerification";
 import type { Json } from "@/integrations/supabase/types";
 import {
   DEFAULT_PORTAL_SECTIONS,
+  getClientPortalTimeUrl,
   getClientPortalUrl,
   parsePortalSections,
   type ClientPortalSections,
   type PortalTimeVisibility,
 } from "@/lib/clientPortal";
 import { getSiteUrl } from "@/lib/site-url";
+import { format } from "date-fns";
 
 type ClientPortalClient = {
   id: string;
@@ -73,6 +75,7 @@ export function ClientPortalSettings({
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendEmail, setSendEmail] = useState(client.email || "");
+  const [shareMonth, setShareMonth] = useState(() => format(new Date(), "yyyy-MM"));
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -241,6 +244,31 @@ export function ClientPortalSettings({
     toast({ title: "Portal link copied" });
   };
 
+  const copyTimeMonthLink = async () => {
+    if (!portalToken) return;
+    if (!sections.time) {
+      toast({
+        title: "Enable the Time section first",
+        description: "Turn on Time under Visible sections so the link opens the timesheet.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (isDirty) {
+      try {
+        await saveAll();
+      } catch {
+        return;
+      }
+    }
+    const url = getClientPortalTimeUrl(portalToken, { month: shareMonth, view: "month" });
+    await navigator.clipboard.writeText(url);
+    toast({
+      title: "Time view link copied",
+      description: `Opens the Time tab for ${shareMonth} in month view.`,
+    });
+  };
+
   const openPreview = async () => {
     if (!portalUrl) return;
     if (isDirty) {
@@ -386,6 +414,33 @@ export function ClientPortalSettings({
                   Regenerate link
                 </Button>
               </div>
+
+              {sections.time ? (
+                <div className="space-y-2 rounded-lg border p-4">
+                  <Label className="text-sm font-medium">Share a specific month’s time view</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Copy a link that opens the Time tab for the month you choose (month view). Example:{' '}
+                    <span className="font-mono">?tab=time&amp;month=2026-06&amp;view=month</span>
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <div className="space-y-1">
+                      <Label htmlFor="portal-share-month" className="text-xs text-muted-foreground">
+                        Month
+                      </Label>
+                      <Input
+                        id="portal-share-month"
+                        type="month"
+                        value={shareMonth}
+                        onChange={(e) => setShareMonth(e.target.value)}
+                        className="w-full sm:w-[180px]"
+                      />
+                    </div>
+                    <Button type="button" variant="outline" onClick={() => void copyTimeMonthLink()} disabled={saving}>
+                      Copy time link
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="space-y-2 rounded-lg border p-4">
                 <Label className="text-sm font-medium">Send link to client</Label>

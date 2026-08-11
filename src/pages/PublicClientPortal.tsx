@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ClientAvatar } from "@/components/clients/ClientAvatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { appendPortalParam, formatPortalMoney, parsePortalSections, resolveMoneyCurrency } from "@/lib/clientPortal";
 import { loadClientPortalData } from "@/lib/loadClientPortal";
+import { useToast } from "@/hooks/use-toast";
 import { TableStatusBadge } from "@/components/ui/table-status-badge";
 import { EmptyValue, valueOrEmpty } from "@/components/ui/empty-value";
 import { DataTableFrame } from "@/components/ui/table";
@@ -32,7 +34,6 @@ import {
   startOfWeek,
   subWeeks,
 } from "date-fns";
-import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -119,19 +120,33 @@ function PortalTimeSection({
   entries,
   dateFormat,
   initialMonth,
+  initialView,
+  onNavChange,
+  showCopyLink,
 }: {
   entries: TimeEntryRow[];
   dateFormat: string;
   initialMonth?: string | null;
+  initialView?: string | null;
+  onNavChange?: (opts: { month: string; view: "week" | "month" }) => void;
+  showCopyLink?: boolean;
 }) {
+  const { toast } = useToast();
   const fmtDate = (value: Date | string | null | undefined) => formatLocaleDate(value, dateFormat);
   const initialAnchor = parsePortalMonthParam(initialMonth) ?? new Date();
-  const [timeView, setTimeView] = useState<"week" | "month">("month");
+  const [timeView, setTimeView] = useState<"week" | "month">(initialView === "week" ? "week" : "month");
   const [timeAnchor, setTimeAnchor] = useState(initialAnchor);
   const [selectedTimeDay, setSelectedTimeDay] = useState(initialAnchor);
   const [monthDayFilter, setMonthDayFilter] = useState<Date | null>(null);
   const [timeMonthPickerOpen, setTimeMonthPickerOpen] = useState(false);
   const [timeWeekPickerOpen, setTimeWeekPickerOpen] = useState(false);
+
+  useEffect(() => {
+    onNavChange?.({
+      month: format(startOfMonth(timeAnchor), "yyyy-MM"),
+      view: timeView,
+    });
+  }, [timeAnchor, timeView, onNavChange]);
 
   const weekRange = useMemo(
     () => ({
@@ -472,6 +487,23 @@ function PortalTimeSection({
           <Button variant={timeView === "month" ? "default" : "outline"} size="sm" onClick={() => switchTimeView("month")}>
             Month
           </Button>
+          {showCopyLink ? (
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(window.location.href);
+                  toast({ title: "Link copied", description: "Share this URL to open the same time view." });
+                } catch {
+                  toast({ title: "Could not copy link", variant: "destructive" });
+                }
+              }}
+            >
+              Copy link to this view
+            </Button>
+          ) : null}
         </div>
       </div>
       {timeView === "week" ? (
@@ -686,6 +718,7 @@ export default function PublicClientPortal() {
   const isPreview = searchParams.get("preview") === "1";
   const tabParam = searchParams.get("tab");
   const monthParam = searchParams.get("month");
+  const viewParam = searchParams.get("view");
   const [data, setData] = useState<PortalData | null>(null);
   const [state, setState] = useState<"loading" | "unavailable" | "live">("loading");
   const [unavailableMessage, setUnavailableMessage] = useState<string | null>(null);
@@ -707,6 +740,23 @@ export default function PublicClientPortal() {
     };
     void load();
   }, [token, isPreview]);
+
+  const handleTimeNavChange = useCallback(
+    ({ month, view }: { month: string; view: "week" | "month" }) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          const same = next.get("month") === month && next.get("view") === view;
+          if (same) return prev;
+          next.set("month", month);
+          next.set("view", view);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   if (state === "loading") {
     return (
@@ -1071,6 +1121,9 @@ export default function PublicClientPortal() {
                   entries={data.time_entries || []}
                   dateFormat={portalDateFormat}
                   initialMonth={monthParam}
+                  initialView={viewParam}
+                  onNavChange={handleTimeNavChange}
+                  showCopyLink={isPreview}
                 />
               </TabsContent>
             ) : null}

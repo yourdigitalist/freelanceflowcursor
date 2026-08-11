@@ -1313,11 +1313,15 @@ export type Database = {
           invoice_email_message_default: string | null
           invoice_email_subject_default: string | null
           invoice_footer: string | null
+          invoice_due_days: number | null
           invoice_include_year: boolean | null
           invoice_notes_default: string | null
+          invoice_number_format: string | null
+          invoice_number_last_month: number | null
           invoice_number_last_year: number | null
           invoice_number_next: number | null
           invoice_number_padding: number | null
+          invoice_number_reset: string | null
           invoice_number_reset_yearly: boolean | null
           invoice_number_start: number | null
           invoice_prefix: string | null
@@ -1404,11 +1408,15 @@ export type Database = {
           invoice_email_message_default?: string | null
           invoice_email_subject_default?: string | null
           invoice_footer?: string | null
+          invoice_due_days?: number | null
           invoice_include_year?: boolean | null
           invoice_notes_default?: string | null
+          invoice_number_format?: string | null
+          invoice_number_last_month?: number | null
           invoice_number_last_year?: number | null
           invoice_number_next?: number | null
           invoice_number_padding?: number | null
+          invoice_number_reset?: string | null
           invoice_number_reset_yearly?: boolean | null
           invoice_number_start?: number | null
           invoice_prefix?: string | null
@@ -1496,11 +1504,15 @@ export type Database = {
           invoice_email_message_default?: string | null
           invoice_email_subject_default?: string | null
           invoice_footer?: string | null
+          invoice_due_days?: number | null
           invoice_include_year?: boolean | null
           invoice_notes_default?: string | null
+          invoice_number_format?: string | null
+          invoice_number_last_month?: number | null
           invoice_number_last_year?: number | null
           invoice_number_next?: number | null
           invoice_number_padding?: number | null
+          invoice_number_reset?: string | null
           invoice_number_reset_yearly?: boolean | null
           invoice_number_start?: number | null
           invoice_prefix?: string | null

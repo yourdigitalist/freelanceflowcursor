@@ -33,6 +33,7 @@ import { InvoiceActivityLog } from '@/components/invoices/InvoiceActivityLog';
 import { SendReceiptPromptDialog } from '@/components/invoices/SendReceiptPromptDialog';
 import { useLocalePreferences } from '@/hooks/useLocalePreferences';
 import { formatLocaleDate } from '@/lib/datetime';
+import { isDuplicateInvoiceNumberError } from '@/lib/invoiceNumbering';
 import { formatImportTimeframeLabel } from '@/lib/invoiceImport';
 import { formatStatusLabel, getStatusBadgeClass } from '@/lib/statusDisplay';
 import { SlotIcon } from '@/contexts/IconSlotContext';
@@ -1231,10 +1232,29 @@ export default function InvoiceDetail() {
       const total = subtotal + taxAmount;
 
       // Save invoice (including editable invoice number and dates)
+      const nextInvoiceNumber = invoiceNumberEdit.trim() || invoice?.invoice_number;
+      if (nextInvoiceNumber && user?.id) {
+        const { data: existing } = await supabase
+          .from('invoices')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('invoice_number', nextInvoiceNumber)
+          .neq('id', id!)
+          .maybeSingle();
+        if (existing) {
+          toast({
+            title: 'Invoice number already exists',
+            description: `Another invoice already uses “${nextInvoiceNumber}”. Choose a different number.`,
+            variant: 'destructive',
+          });
+          return false;
+        }
+      }
+
       const { error } = await supabase
         .from('invoices')
         .update({
-          invoice_number: invoiceNumberEdit.trim() || invoice?.invoice_number,
+          invoice_number: nextInvoiceNumber,
           issue_date: issueDate,
           due_date: dueDate,
           subtotal,
@@ -1256,8 +1276,10 @@ export default function InvoiceDetail() {
       return true;
     } catch (error: any) {
       toast({
-        title: 'Error saving invoice',
-        description: error.message,
+        title: isDuplicateInvoiceNumberError(error) ? 'Invoice number already exists' : 'Error saving invoice',
+        description: isDuplicateInvoiceNumberError(error)
+          ? 'Another invoice already uses this number. Choose a different number.'
+          : error.message,
         variant: 'destructive',
       });
       return false;
@@ -2059,6 +2081,10 @@ export default function InvoiceDetail() {
                         setIssueDateEdit(e.target.value);
                       }}
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Defaults to the day this invoice was created
+                      {invoice.created_at ? ` (${formatDisplayDate(invoice.created_at.slice(0, 10))})` : ''}.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="due_date_edit">Due Date</Label>

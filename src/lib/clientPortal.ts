@@ -50,6 +50,25 @@ export function getClientPortalUrl(portalToken: string): string {
   return `${base}${getClientPortalPath(portalToken)}`;
 }
 
+/** Deep link into a client's time tab for a specific month (YYYY-MM) and view. */
+export function getClientPortalTimeUrl(
+  portalToken: string,
+  options?: { month?: string; view?: "week" | "month"; preview?: boolean },
+): string {
+  const url = new URL(getClientPortalUrl(portalToken));
+  url.searchParams.set("tab", "time");
+  if (options?.month && /^\d{4}-\d{2}$/.test(options.month)) {
+    url.searchParams.set("month", options.month);
+  }
+  if (options?.view === "week" || options?.view === "month") {
+    url.searchParams.set("view", options.view);
+  }
+  if (options?.preview) {
+    url.searchParams.set("preview", "1");
+  }
+  return url.toString();
+}
+
 export function portalQueryParam(portalToken: string | null | undefined): string {
   if (!portalToken) return "";
   return `portal=${encodeURIComponent(portalToken)}`;

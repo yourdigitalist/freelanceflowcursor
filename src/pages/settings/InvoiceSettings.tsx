@@ -19,6 +19,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Table,
   TableBody,
   TableCell,
@@ -32,6 +39,14 @@ import { useTableSort } from '@/hooks/useTableSort';
 import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import { compareBooleans, compareNullableNumbers, compareStrings } from '@/lib/tableSort';
 import { TablePagination } from '@/components/ui/table-pagination';
+import {
+  INVOICE_NUMBER_FORMAT_PRESETS,
+  INVOICE_NUMBER_FORMAT_TAGS,
+  legacyInvoiceNumberFormat,
+  matchInvoiceFormatPreset,
+  previewInvoiceNumber,
+  type InvoiceNumberReset,
+} from '@/lib/invoiceNumbering';
 
 const MERGE_TAGS = [
   { tag: '{{client_name}}', label: 'Client Name' },
@@ -49,6 +64,10 @@ interface InvoiceProfile {
   invoice_number_start: number | null;
   invoice_number_padding: number | null;
   invoice_number_reset_yearly: boolean | null;
+  invoice_number_format: string | null;
+  invoice_number_reset: string | null;
+  invoice_number_next: number | null;
+  invoice_due_days: number | null;
   invoice_notes_default: string | null;
   invoice_footer: string | null;
   invoice_bank_details_default: string | null;
@@ -101,8 +120,14 @@ export default function InvoiceSettings() {
   const [editingTax, setEditingTax] = useState<Tax | null>(null);
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [reminderDaysBefore, setReminderDaysBefore] = useState(1);
-  const [invoiceIncludeYear, setInvoiceIncludeYear] = useState(true);
-  const [invoiceResetYearly, setInvoiceResetYearly] = useState(true);
+  const [invoicePrefix, setInvoicePrefix] = useState('INV');
+  const [invoiceFormat, setInvoiceFormat] = useState(legacyInvoiceNumberFormat(true));
+  const [invoiceFormatPreset, setInvoiceFormatPreset] = useState('inv_year_number');
+  const [invoiceReset, setInvoiceReset] = useState<InvoiceNumberReset>('yearly');
+  const [invoicePadding, setInvoicePadding] = useState(4);
+  const [invoiceStart, setInvoiceStart] = useState(1);
+  const [invoiceDueDays, setInvoiceDueDays] = useState(30);
+  const [invoiceNextPreview, setInvoiceNextPreview] = useState(1);
 
   useEffect(() => {
     if (user) {
@@ -115,16 +140,72 @@ export default function InvoiceSettings() {
     }
   }, [user]);
 
+  const applyFormatPreset = (presetId: string) => {
+    setInvoiceFormatPreset(presetId);
+    if (presetId === 'custom') {
+      dirtyContext?.setDirty(true);
+      return;
+    }
+    const preset = INVOICE_NUMBER_FORMAT_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+    setInvoiceFormat(preset.format);
+    setInvoiceReset(preset.reset);
+    setInvoicePadding(preset.padding);
+    if (preset.prefix !== undefined && preset.prefix !== null) {
+      setInvoicePrefix(preset.prefix);
+    }
+    dirtyContext?.setDirty(true);
+  };
+
+  const insertFormatTag = (tag: string) => {
+    const input = document.getElementById('invoice_number_format') as HTMLInputElement | null;
+    if (input) {
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? input.value.length;
+      const next = input.value.slice(0, start) + tag + input.value.slice(end);
+      setInvoiceFormat(next);
+      setInvoiceFormatPreset('custom');
+      dirtyContext?.setDirty(true);
+      requestAnimationFrame(() => {
+        input.focus();
+        const pos = start + tag.length;
+        input.setSelectionRange(pos, pos);
+      });
+      return;
+    }
+    setInvoiceFormat((prev) => prev + tag);
+    setInvoiceFormatPreset('custom');
+    dirtyContext?.setDirty(true);
+  };
+
+  const formatPreview = useMemo(
+    () =>
+      previewInvoiceNumber({
+        format: invoiceFormat,
+        prefix: invoicePrefix,
+        padding: invoicePadding,
+        nextNumber: invoiceNextPreview || invoiceStart,
+      }),
+    [invoiceFormat, invoicePrefix, invoicePadding, invoiceNextPreview, invoiceStart],
+  );
+
   const save = async () => {
     if (!formRef.current || !user) return;
     const formData = new FormData(formRef.current);
+    const startNum = Math.max(1, Math.floor(invoiceStart || 1));
+    const padding = Math.min(6, Math.max(1, Math.floor(invoicePadding || 4)));
+    const dueDays = Math.min(365, Math.max(0, Math.floor(invoiceDueDays || 0)));
+    const formatValue = invoiceFormat.trim() || legacyInvoiceNumberFormat(true);
     const profileData = {
       hourly_rate: parseFloat(formData.get('hourly_rate') as string) || 0,
-      invoice_prefix: (formData.get('invoice_prefix') as string)?.trim() ?? null,
-      invoice_include_year: invoiceIncludeYear,
-      invoice_number_start: Math.max(1, Math.floor(Number(formData.get('invoice_number_start')) || 1)),
-      invoice_number_padding: Math.min(6, Math.max(1, Math.floor(Number(formData.get('invoice_number_padding')) || 4))),
-      invoice_number_reset_yearly: invoiceResetYearly,
+      invoice_prefix: invoicePrefix.trim(),
+      invoice_include_year: formatValue.includes('{{year}}') || formatValue.includes('{{yy}}'),
+      invoice_number_start: startNum,
+      invoice_number_padding: padding,
+      invoice_number_reset_yearly: invoiceReset === 'yearly',
+      invoice_number_format: formatValue,
+      invoice_number_reset: invoiceReset,
+      invoice_due_days: dueDays,
       invoice_notes_default: formData.get('invoice_notes_default') as string || null,
       invoice_footer: formData.get('invoice_footer') as string || null,
       invoice_bank_details_default: formData.get('invoice_bank_details_default') as string || null,
@@ -154,7 +235,7 @@ export default function InvoiceSettings() {
   }, [dirtyContext]);
 
   const fetchProfile = async () => {
-    const withBankDefault = 'hourly_rate, invoice_prefix, invoice_include_year, invoice_number_start, invoice_number_padding, invoice_number_reset_yearly, invoice_notes_default, invoice_footer, invoice_bank_details_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_days_before, reminder_subject_default, reminder_body_default';
+    const withBankDefault = 'hourly_rate, invoice_prefix, invoice_include_year, invoice_number_start, invoice_number_padding, invoice_number_reset_yearly, invoice_number_format, invoice_number_reset, invoice_number_next, invoice_due_days, invoice_notes_default, invoice_footer, invoice_bank_details_default, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_days_before, reminder_subject_default, reminder_body_default';
     const withoutBankDefault = 'hourly_rate, invoice_prefix, invoice_include_year, invoice_number_start, invoice_number_padding, invoice_number_reset_yearly, invoice_notes_default, invoice_footer, invoice_email_message_default, invoice_email_subject_default, reminder_enabled, reminder_days_before, reminder_subject_default, reminder_body_default';
     try {
       const { data: initialData, error } = await supabase
@@ -165,7 +246,7 @@ export default function InvoiceSettings() {
       let data = initialData;
 
       if (error) {
-        const tryFallback = /column.*does not exist|invoice_bank_details_default|42703/i.test(String(error.message));
+        const tryFallback = /column.*does not exist|invoice_bank_details_default|invoice_number_format|invoice_due_days|42703/i.test(String(error.message));
         if (tryFallback) {
           const fallback = await supabase
             .from('profiles')
@@ -173,7 +254,7 @@ export default function InvoiceSettings() {
             .eq('user_id', user!.id)
             .maybeSingle();
           if (!fallback.error) {
-            data = fallback.data;
+            data = fallback.data as typeof data;
           } else {
             throw fallback.error;
           }
@@ -185,8 +266,25 @@ export default function InvoiceSettings() {
       if (data) {
         setReminderEnabled(!!data.reminder_enabled);
         setReminderDaysBefore(data.reminder_days_before ?? 1);
-        setInvoiceIncludeYear(data.invoice_include_year !== false);
-        setInvoiceResetYearly(data.invoice_number_reset_yearly !== false);
+        const prefix = data.invoice_prefix ?? 'INV';
+        setInvoicePrefix(prefix);
+        const format =
+          (data as InvoiceProfile).invoice_number_format?.trim() ||
+          legacyInvoiceNumberFormat(data.invoice_include_year !== false);
+        setInvoiceFormat(format);
+        setInvoiceFormatPreset(matchInvoiceFormatPreset((data as InvoiceProfile).invoice_number_format));
+        const resetRaw = (data as InvoiceProfile).invoice_number_reset;
+        const reset: InvoiceNumberReset =
+          resetRaw === 'monthly' || resetRaw === 'never' || resetRaw === 'yearly'
+            ? resetRaw
+            : data.invoice_number_reset_yearly === false
+              ? 'never'
+              : 'yearly';
+        setInvoiceReset(reset);
+        setInvoicePadding(data.invoice_number_padding ?? 4);
+        setInvoiceStart(data.invoice_number_start ?? 1);
+        setInvoiceNextPreview((data as InvoiceProfile).invoice_number_next ?? data.invoice_number_start ?? 1);
+        setInvoiceDueDays((data as InvoiceProfile).invoice_due_days ?? 30);
       }
     } catch (error) {
       console.error('Error fetching invoice settings:', error);
@@ -372,56 +470,156 @@ export default function InvoiceSettings() {
           <CardHeader>
             <CardTitle>Invoice Number</CardTitle>
             <CardDescription>
-              How new invoice numbers are generated. Useful for migrations (set starting number) and branding (prefix).
+              Choose a common format or build your own with tags. Invoice numbers must be unique for your account.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
+              <Label>Common formats</Label>
+              <Select value={invoiceFormatPreset} onValueChange={applyFormatPreset}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a format" />
+                </SelectTrigger>
+                <SelectContent>
+                  {INVOICE_NUMBER_FORMAT_PRESETS.map((preset) => (
+                    <SelectItem key={preset.id} value={preset.id}>
+                      <span className="font-medium">{preset.label}</span>
+                      <span className="text-muted-foreground"> — {preset.description}</span>
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="custom">Custom format…</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="invoice_number_format">Number format</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" className="h-8">
+                      Insert tag <ChevronDown className="ml-1 h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {INVOICE_NUMBER_FORMAT_TAGS.map(({ tag, label }) => (
+                      <DropdownMenuItem key={tag} onSelect={() => insertFormatTag(tag)}>
+                        {label} <span className="ml-2 font-mono text-xs text-muted-foreground">{tag}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <Input
+                id="invoice_number_format"
+                value={invoiceFormat}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setInvoiceFormat(next);
+                  setInvoiceFormatPreset(
+                    INVOICE_NUMBER_FORMAT_PRESETS.some((p) => p.format === next.trim())
+                      ? matchInvoiceFormatPreset(next)
+                      : 'custom',
+                  );
+                  dirtyContext?.setDirty(true);
+                }}
+                placeholder="{{number}}/{{month}}/{{year}}"
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Example preview: <span className="font-mono font-medium text-foreground">{formatPreview}</span>
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="invoice_prefix">Prefix</Label>
               <Input
                 id="invoice_prefix"
-                name="invoice_prefix"
-                defaultValue={profile?.invoice_prefix ?? 'INV'}
-                placeholder="INV (leave empty for numbers only)"
+                value={invoicePrefix}
+                onChange={(e) => {
+                  setInvoicePrefix(e.target.value);
+                  dirtyContext?.setDirty(true);
+                }}
+                placeholder="INV (used by {{prefix}} tag)"
               />
-              <p className="text-xs text-muted-foreground">Optional. Default: INV. Leave empty for plain numbers.</p>
+              <p className="text-xs text-muted-foreground">Optional. Inserted wherever you use the {'{{prefix}}'} tag.</p>
             </div>
-            <div className="flex items-center justify-between rounded-lg border p-4">
-              <div>
-                <Label className="text-base">Include year</Label>
-                <p className="text-xs text-muted-foreground">Add YYYY to the number (e.g. INV2026-0001)</p>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="invoice_number_start">Starting number</Label>
+                <Input
+                  id="invoice_number_start"
+                  type="number"
+                  min={1}
+                  value={invoiceStart}
+                  onChange={(e) => {
+                    setInvoiceStart(Math.max(1, Math.floor(Number(e.target.value) || 1)));
+                    dirtyContext?.setDirty(true);
+                  }}
+                />
               </div>
-              <Switch checked={invoiceIncludeYear} onCheckedChange={setInvoiceIncludeYear} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="invoice_number_start">Starting number</Label>
-              <Input
-                id="invoice_number_start"
-                name="invoice_number_start"
-                type="number"
-                min={1}
-                defaultValue={profile?.invoice_number_start ?? 1}
-              />
-              <p className="text-xs text-muted-foreground">Next invoice will use this if sequence is reset.</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="invoice_number_padding">Number padding</Label>
-              <Input
-                id="invoice_number_padding"
-                name="invoice_number_padding"
-                type="number"
-                min={1}
-                max={6}
-                defaultValue={profile?.invoice_number_padding ?? 4}
-              />
-              <p className="text-xs text-muted-foreground">Digits (1–6). 4 → 0001, 6 → 000001.</p>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border p-4">
-              <div>
-                <Label className="text-base">Reset sequence yearly</Label>
-                <p className="text-xs text-muted-foreground">Start from starting number each year</p>
+              <div className="space-y-2">
+                <Label htmlFor="invoice_number_padding">Number padding</Label>
+                <Input
+                  id="invoice_number_padding"
+                  type="number"
+                  min={1}
+                  max={6}
+                  value={invoicePadding}
+                  onChange={(e) => {
+                    setInvoicePadding(Math.min(6, Math.max(1, Math.floor(Number(e.target.value) || 1))));
+                    dirtyContext?.setDirty(true);
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">2 → 02, 4 → 0001</p>
               </div>
-              <Switch checked={invoiceResetYearly} onCheckedChange={setInvoiceResetYearly} />
+              <div className="space-y-2">
+                <Label>Reset sequence</Label>
+                <Select
+                  value={invoiceReset}
+                  onValueChange={(v) => {
+                    setInvoiceReset(v as InvoiceNumberReset);
+                    setInvoiceFormatPreset('custom');
+                    dirtyContext?.setDirty(true);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">Every month</SelectItem>
+                    <SelectItem value="yearly">Every year</SelectItem>
+                    <SelectItem value="never">Never (keep counting)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle>Payment Terms</CardTitle>
+            <CardDescription>Default due date for new invoices</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="invoice_due_days">Due days after issue date</Label>
+              <Input
+                id="invoice_due_days"
+                type="number"
+                min={0}
+                max={365}
+                value={invoiceDueDays}
+                onChange={(e) => {
+                  setInvoiceDueDays(Math.min(365, Math.max(0, Math.floor(Number(e.target.value) || 0))));
+                  dirtyContext?.setDirty(true);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                New invoices use today as the issue (creation) date and set due date to that plus this many days (e.g. 7 → net 7).
+              </p>
             </div>
           </CardContent>
         </Card>

@@ -39,6 +39,7 @@ import {
 import { MarkInvoicePaidDialog } from '@/components/invoices/MarkInvoicePaidDialog';
 import { SendReceiptPromptDialog } from '@/components/invoices/SendReceiptPromptDialog';
 import { formatLocaleDate } from '@/lib/datetime';
+import { isDuplicateInvoiceNumberError } from '@/lib/invoiceNumbering';
 
 import { SlotIcon } from '@/contexts/IconSlotContext';
 import {
@@ -166,6 +167,7 @@ export default function Invoices() {
     invoice_notes_default: string | null;
     invoice_footer: string | null;
     invoice_bank_details_default: string | null;
+    invoice_due_days: number;
   } | null>(null);
   const { dateFormat } = useLocalePreferences();
   const [createClientDialogOpen, setCreateClientDialogOpen] = useState(false);
@@ -180,7 +182,7 @@ export default function Invoices() {
     (async () => {
       const { data } = await supabase
         .from('profiles')
-        .select('business_name, business_email, business_phone, business_street, business_city, business_country, business_address, tax_id, invoice_notes_default, invoice_footer, invoice_bank_details_default')
+        .select('business_name, business_email, business_phone, business_street, business_city, business_country, business_address, tax_id, invoice_notes_default, invoice_footer, invoice_bank_details_default, invoice_due_days')
         .eq('user_id', user.id)
         .maybeSingle();
       const missing: string[] = [];
@@ -193,6 +195,7 @@ export default function Invoices() {
         invoice_notes_default: data?.invoice_notes_default ?? null,
         invoice_footer: data?.invoice_footer ?? null,
         invoice_bank_details_default: data?.invoice_bank_details_default ?? null,
+        invoice_due_days: Math.min(365, Math.max(0, Number((data as { invoice_due_days?: number | null } | null)?.invoice_due_days ?? 30))),
       });
       setInvoiceSetupMissing(missing);
     })();
@@ -380,8 +383,10 @@ export default function Invoices() {
       navigate(`/invoices/${data.id}`);
     } catch (error: any) {
       toast({
-        title: 'Error creating invoice',
-        description: error.message,
+        title: isDuplicateInvoiceNumberError(error) ? 'Invoice number already exists' : 'Error creating invoice',
+        description: isDuplicateInvoiceNumberError(error)
+          ? 'Another invoice already uses this number. Try again to get the next available number.'
+          : error.message,
         variant: 'destructive',
       });
     }
@@ -980,6 +985,7 @@ export default function Invoices() {
                       name="issue_date"
                       type="date"
                       defaultValue={format(new Date(), 'yyyy-MM-dd')}
+                      key={`issue-${isDialogOpen}-${invoiceCreateDefaults?.invoice_due_days ?? 30}`}
                       required
                     />
                   </div>
@@ -989,7 +995,11 @@ export default function Invoices() {
                       id="due_date"
                       name="due_date"
                       type="date"
-                      defaultValue={format(addDays(new Date(), 30), 'yyyy-MM-dd')}
+                      defaultValue={format(
+                        addDays(new Date(), invoiceCreateDefaults?.invoice_due_days ?? 30),
+                        'yyyy-MM-dd',
+                      )}
+                      key={`due-${isDialogOpen}-${invoiceCreateDefaults?.invoice_due_days ?? 30}`}
                       required
                     />
                   </div>
