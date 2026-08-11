@@ -584,13 +584,17 @@ export default function InvoiceSettings() {
 
             <div className="space-y-2">
               <Label>When does {'{{number}}'} reset?</Label>
-              <Select
-                value={invoiceReset}
-                onValueChange={(v) => {
-                  setInvoiceReset(v as InvoiceNumberReset);
-                  dirtyContext?.setDirty(true);
-                }}
-              >
+                <Select
+                  value={invoiceReset}
+                  onValueChange={(v) => {
+                    const next = v as InvoiceNumberReset;
+                    setInvoiceReset(next);
+                    if (next === 'monthly' && invoicePadding > 2) {
+                      setInvoicePadding(2);
+                    }
+                    dirtyContext?.setDirty(true);
+                  }}
+                >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
