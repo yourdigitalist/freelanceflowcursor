@@ -309,7 +309,7 @@ export default function Auth() {
           <div className="space-y-2 mb-12">
             <h1 className="text-4xl font-extrabold tracking-[-0.03em] text-[#1a1a2e]">
               <span className="block">Your entire freelance stack.</span>
-              <span className="block">$29/month.</span>
+              <span className="block">$15/month.</span>
             </h1>
             <p className="text-sm leading-relaxed text-[#64647a] max-w-md">
               Stop paying for five apps to run one business. Lance gives designers, developers, and freelancers a single workspace for clients, projects, time tracking, approvals, and invoices.

@@ -7,8 +7,8 @@ Standard SaaS flow: **Checkout** for subscribing, **Customer Billing Portal** fo
 ## 1. Environment variables
 
 **Frontend (`.env`):**
-- `VITE_STRIPE_PRICE_MONTHLY` – Stripe Price ID for monthly plan (e.g. `price_xxx`)
-- `VITE_STRIPE_PRICE_ANNUAL` – Stripe Price ID for annual plan
+- `VITE_STRIPE_PRICE_MONTHLY` – Stripe Price ID for monthly plan (`price_1UBs1dI2gIUhPQNBu7JURP21`, $15/mo)
+- `VITE_STRIPE_PRICE_ANNUAL` – Stripe Price ID for annual plan (`price_1UBs2gI2gIUhPQNBHJargkYf`, $150/yr)
 
 **Supabase Edge Function secrets** (Dashboard → Project Settings → Edge Functions → Secrets):
 - `STRIPE_SECRET_KEY` – Stripe secret key (e.g. `sk_live_xxx` or `sk_test_xxx`)

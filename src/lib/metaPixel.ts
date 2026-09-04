@@ -4,8 +4,8 @@ export const META_PIXEL_ID = '1377760630866019';
 export const META_CURRENCY = 'USD';
 
 export const META_PLAN_VALUES: Record<string, number> = {
-  pro_monthly: 29,
-  pro_annual: 290,
+  pro_monthly: 15,
+  pro_annual: 150,
 };
 
 const STORAGE_PREFIX = 'lance_meta_';
@@ -17,7 +17,7 @@ declare global {
 }
 
 export function getMetaPlanValue(planId: string): number {
-  return META_PLAN_VALUES[planId] ?? 29;
+  return META_PLAN_VALUES[planId] ?? 15;
 }
 
 export function trackMetaEvent(

@@ -197,8 +197,8 @@ Used only when `app_features` row is unavailable:
 | `VITE_SUPABASE_ANON_KEY` | ✅ | Public anon key for client + Edge Function `apikey` header |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | ✅ | Alternative name for anon key (code accepts both) |
 | `VITE_SITE_URL` | ⚠️ | Production site URL for emails/shared links (fallback: `window.location.origin`) |
-| `VITE_STRIPE_PRICE_MONTHLY` | ✅ | Stripe Price ID - $29/mo Early Access Monthly |
-| `VITE_STRIPE_PRICE_ANNUAL` | ✅ | Stripe Price ID - $290/yr Early Access Annual |
+| `VITE_STRIPE_PRICE_MONTHLY` | ✅ | Stripe Price ID - $15/mo Early Access Monthly |
+| `VITE_STRIPE_PRICE_ANNUAL` | ✅ | Stripe Price ID - $150/yr Early Access Annual |
 | `VITE_CONTRACTS_ACCESS_MODE` | ⚠️ | **Deprecated** — use `app_features` table; fallback: `off` / `admin` / `on` (default: `admin`) |
 | `VITE_NOTES_ACCESS_MODE` | ⚠️ | **Deprecated** — use `app_features` table; fallback: `off` / `admin` / `on` (default: `admin`) |
 | `VITE_HCAPTCHA_SITE_KEY` | ⚠️ | hCaptcha site key for auth flows; disabled when unset |

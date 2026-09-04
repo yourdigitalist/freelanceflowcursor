@@ -1,5 +1,5 @@
-export const ADMIN_MONTHLY_PRICE = 29;
-export const ADMIN_ANNUAL_PRICE = 290;
+export const ADMIN_MONTHLY_PRICE = 15;
+export const ADMIN_ANNUAL_PRICE = 150;
 
 export type AdminMetricsSummary = {
   total_signups: number;

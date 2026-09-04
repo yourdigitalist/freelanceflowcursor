@@ -355,7 +355,7 @@ export function FeedbackTab() {
                     </div>
                   </div>
                   <PillGroup
-                    label="How does our pricing feel? It's $29 per month or $290 anually."
+                    label="How does our pricing feel? It's $15 per month or $150 annually."
                     options={PRICING_FEEL}
                     value={pricingFeel}
                     onChange={setPricingFeel}

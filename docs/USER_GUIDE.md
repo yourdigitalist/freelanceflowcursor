@@ -100,8 +100,8 @@ After confirming your email, you'll complete a quick onboarding screen:
 
 | Plan | Price | Billing |
 |------|-------|---------|
-| **Pro Monthly** | $29/month | Billed monthly |
-| **Pro Annual** | $290/year | Billed annually (save ~2 months vs monthly) |
+| **Pro Monthly** | $15/month | Billed monthly |
+| **Pro Annual** | $150/year | Billed annually (save ~2 months vs monthly) |
 
 **Managing Your Subscription:**
 - **Upgrade/change plan** → Stripe Checkout
@@ -3493,15 +3493,15 @@ You'll receive email reminders:
 #### Plan Options
 
 **Early Access Monthly**
-- **$29 per month**
+- **$15 per month**
 - Billed monthly
 - 15-day free trial for new subscriptions
 - Cancel anytime
 
 **Early Access Annual**
-- **$290 per year**
+- **$150 per year**
 - Billed annually
-- **Save 2 months** compared to monthly ($348 vs $290)
+- **Save 2 months** compared to monthly ($180 vs $150)
 - 15-day free trial for new subscriptions
 - Better value
 
@@ -5117,8 +5117,8 @@ Client cannot edit (except in contract signing flow).
 | Item | Details |
 |------|---------|
 | **Free Trial** | 15 days, no credit card required |
-| **Monthly Plan** | $29/month (Pro Monthly) |
-| **Annual Plan** | $290/year (Pro Annual, save ~2 months vs monthly) |
+| **Monthly Plan** | $15/month (Pro Monthly) |
+| **Annual Plan** | $150/year (Pro Annual, save ~2 months vs monthly) |
 | **After Trial (no payment)** | Subscription pauses; app access blocked except billing page |
 | **After Trial (with payment)** | Automatic charge; full access continues |
 | **Payment Methods** | Via Stripe Checkout and Customer Portal |

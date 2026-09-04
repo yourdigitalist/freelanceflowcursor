@@ -564,13 +564,13 @@ export default function AdminMetrics() {
               <PageSummaryStat
                 label="Monthly plan"
                 value={String(metrics.monthly_subscribers)}
-                subtitle="Active subscribers at $29/mo"
+                subtitle="Active subscribers at $15/mo"
                 status="active"
               />
               <PageSummaryStat
                 label="Annual plan"
                 value={String(metrics.annual_subscribers)}
-                subtitle="Active subscribers at $290/yr"
+                subtitle="Active subscribers at $150/yr"
                 status="active"
               />
             </PageSummaryBar>

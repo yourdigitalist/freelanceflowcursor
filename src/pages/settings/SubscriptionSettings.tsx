@@ -29,7 +29,7 @@ const plans = [
   {
     id: 'pro_monthly',
     name: 'Early Access Monthly',
-    price: '$29',
+    price: '$15',
     period: '/month',
     priceId: STRIPE_PRICE_MONTHLY,
     description: 'Full access. 15-day free trial.',
@@ -43,7 +43,7 @@ const plans = [
   {
     id: 'pro_annual',
     name: 'Early Access Annual',
-    price: '$290',
+    price: '$150',
     period: '/year',
     priceId: STRIPE_PRICE_ANNUAL,
     description: '2 months free. 15-day free trial.',
